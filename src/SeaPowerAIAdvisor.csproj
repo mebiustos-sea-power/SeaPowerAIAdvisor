@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>SeaPowerAIAdvisor</AssemblyName>
+    <RootNamespace>SeaPowerAIAdvisor</RootNamespace>
+    <Version>0.2.0</Version>
+    <FindDependenciesOfExternallyResolvedReferences>false</FindDependenciesOfExternallyResolvedReferences>
+    <AssemblyVersion>0.2.0.0</AssemblyVersion>
+    <FileVersion>0.2.0.0</FileVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="AnchorChain" HintPath="$(AnchorChainDir)\AnchorChain.dll" Private="false" ExternallyResolved="true" />
+    <Reference Include="BepInEx" HintPath="$(SeaPowerDir)\BepInEx\core\BepInEx.dll" Private="false" ExternallyResolved="true" />
+    <Reference Include="0Harmony" HintPath="$(SeaPowerDir)\BepInEx\core\0Harmony.dll" Private="false" ExternallyResolved="true" />
+    <Reference Include="Seapower-Scripts" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\Seapower-Scripts.dll" Private="false" ExternallyResolved="true" />
+    <Reference Include="Noesis.NoesisGUI" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\Noesis.NoesisGUI.dll" Private="false" ExternallyResolved="true" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\UnityEngine.CoreModule.dll" Private="false" ExternallyResolved="true" />
+    <Reference Include="UnityEngine.InputLegacyModule" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\UnityEngine.InputLegacyModule.dll" Private="false" ExternallyResolved="true" />
+  </ItemGroup>
+  <ItemGroup><EmbeddedResource Include="Views\Advisor.xaml" LogicalName="SeaPowerAIAdvisor.Advisor.xaml" /></ItemGroup>
+  <Target Name="CheckGameReferences" BeforeTargets="ResolveReferences">
+    <Error Condition="!Exists('$(SeaPowerDir)\Sea Power_Data\Managed\Seapower-Scripts.dll')" Text="Set SeaPowerDir in Directory.Build.local.props." />
+    <Error Condition="!Exists('$(AnchorChainDir)\AnchorChain.dll')" Text="Set AnchorChainDir in Directory.Build.local.props." />
+  </Target>
+</Project>

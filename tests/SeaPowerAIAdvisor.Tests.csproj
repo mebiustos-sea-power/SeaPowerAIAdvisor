@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><OutputType>Exe</OutputType><AssemblyName>SeaPowerAIAdvisor.Tests</AssemblyName></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\src\PrototypeConversation.cs" Link="PrototypeConversation.cs" />
+    <Compile Include="..\src\SituationSnapshot.cs" Link="SituationSnapshot.cs" />
+    <Compile Include="..\src\CampaignSituationReader.cs" Link="CampaignSituationReader.cs" />
+    <Compile Include="..\src\SituationFormatter.cs" Link="SituationFormatter.cs" />
+    <Reference Include="Newtonsoft.Json" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\Newtonsoft.Json.dll" Private="true" />
+    <Reference Include="Mono.Cecil" HintPath="$(SeaPowerDir)\BepInEx\core\Mono.Cecil.dll" Private="true" />
+  </ItemGroup>
+</Project>
