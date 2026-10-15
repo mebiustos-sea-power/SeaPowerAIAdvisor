@@ -1,0 +1,34 @@
+<Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Margin="14"
+      TextElement.Foreground="{DynamicResource Brush.Foreground.Highlight}">
+  <Grid.RowDefinitions>
+    <RowDefinition Height="Auto" />
+    <RowDefinition Height="Auto" />
+    <RowDefinition Height="*" />
+    <RowDefinition Height="Auto" />
+    <RowDefinition Height="100" />
+    <RowDefinition Height="Auto" />
+    <RowDefinition Height="Auto" />
+  </Grid.RowDefinitions>
+  <TextBlock Text="状況の確認と日本語相談の試作です。外部への送信はありません。"
+             FontSize="13" TextWrapping="Wrap" Margin="0,0,0,8" />
+  <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
+    <Button x:Name="Capture" Content="状況を取得・確認" Height="30" Padding="10,0" />
+    <Button x:Name="Conversation" Content="会話に戻る" Height="30" Padding="10,0" Margin="8,0,0,0" />
+  </StackPanel>
+  <TextBox x:Name="Transcript" Grid.Row="2" IsReadOnly="True" AcceptsReturn="True"
+           TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+           FontSize="14" Padding="10" MinHeight="120" />
+  <TextBlock Grid.Row="3" Text="質問" FontSize="13" Margin="0,10,0,5" />
+  <TextBox x:Name="Question" Grid.Row="4" AcceptsReturn="True" AcceptsTab="False"
+           TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+           FontSize="15" Padding="8" ToolTip="日本語を入力できます。Enterは改行、送信は下のボタンです。" />
+  <Grid Grid.Row="5" Margin="0,10,0,0">
+    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+    <TextBlock Text="Enter：改行　／　送信：仮回答" FontSize="12" VerticalAlignment="Center" />
+    <Button x:Name="Clear" Grid.Column="1" Content="会話を消去" Height="30" Padding="10,0" Margin="8,0,0,0" />
+    <Button x:Name="Send" Grid.Column="2" Content="送信" MinWidth="70" Height="30" Margin="8,0,0,0" />
+  </Grid>
+  <TextBlock x:Name="Status" Grid.Row="6" Text="「状況を取得・確認」で、参照する情報を確認できます。"
+             FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0" />
+</Grid>

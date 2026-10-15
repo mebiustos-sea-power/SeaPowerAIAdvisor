@@ -1,0 +1,4 @@
+<Project><PropertyGroup>
+  <SeaPowerDir>C:\path\to\Sea Power</SeaPowerDir>
+  <AnchorChainDir>C:\path\to\3380210757</AnchorChainDir>
+</PropertyGroup></Project>

@@ -1,0 +1,6 @@
+**/bin/
+**/obj/
+artifacts/
+dist/
+Directory.Build.local.props
+docs/agent-memory.md
