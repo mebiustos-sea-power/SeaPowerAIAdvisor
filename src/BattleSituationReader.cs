@@ -19,6 +19,8 @@ internal sealed class BattleSituationReader
         var contacts = new JArray();
         var capabilities = new JArray();
         var threats = new JArray();
+        var bases = new JArray();
+        var aviation = new BattleAviationReader(knowledge.References, now.Year);
         foreach (var mapUnit in Sequence(knownUnits))
         {
             var vehicle = Required(mapUnit, "Unit");
@@ -26,17 +28,31 @@ internal sealed class BattleSituationReader
             var identity = Member(vehicle, "Object");
             if (identity != null && ownObjects.Any(o => ReferenceEquals(o, identity)))
             {
+                var kind = Code(Required(identity, "_type"));
+                var parameters = Required(identity, "_obp");
+                var subtype = kind == "landunit" ? Code(Required(parameters, "_landUnitSubType")) : null;
+                var category = subtype == null ? "mobile_platform" :
+                    new[] { "airbase", "port", "installation", "bridge", "oilrig" }.Contains(subtype) ? "base" : "ground_unit";
+                var deck = Member(parameters, "_flightDeck");
                 units.Add(new JObject
                 {
                     ["id"] = "own_unit_" + (units.Count + 1).ToString(CultureInfo.InvariantCulture),
                     ["display_name"] = Reactive<string>(identity, "Name"),
-                    ["kind"] = Code(Member(identity, "_type")),
+                    ["kind"] = kind, ["unit_category"] = category,
+                    ["ground_kind"] = subtype == null ? JValue.CreateNull() : new JValue(subtype),
                     ["position"] = Position(Required(Required(identity, "Position"), "Value")),
                     ["heading_deg"] = Number(Required(Required(identity, "Heading"), "Value")),
                     ["speed_knots"] = Number(Required(identity, "_velocityInKnots"))
                 });
                 var row = (JObject)units.Last!;
                 capabilities.Add(knowledge.CaptureOwn(identity, (string)row["id"]!, (string)row["display_name"]!));
+                if (category == "base")
+                {
+                    var b = (JObject)row.DeepClone();
+                    b["has_aviation_facility"] = deck != null;
+                    bases.Add(b);
+                }
+                if (deck != null) aviation.Capture(deck, (string)row["id"]!, (string)row["display_name"]!);
                 continue;
             }
             var positionEstimate = Member(vehicle, "PositionEstimate");
@@ -103,6 +119,9 @@ internal sealed class BattleSituationReader
             ["friendly_units"] = units,
             ["unit_capabilities"] = capabilities,
             ["contact_threat_references"] = threats,
+            ["friendly_bases"] = bases,
+            ["hosted_air_units"] = aviation.Units,
+            ["aviation_hosts"] = aviation.Hosts,
             ["weapon_references"] = knowledge.References.SnapshotWeapons(),
             ["observed_contacts"] = contacts,
             ["published_reports"] = reports

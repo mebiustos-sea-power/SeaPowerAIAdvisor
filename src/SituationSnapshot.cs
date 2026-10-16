@@ -16,9 +16,11 @@ internal sealed class SituationSnapshot
     internal IReadOnlyList<PublishedReport> Reports { get; }
     internal VictorySnapshot Victory { get; }
     internal FriendlyAviationSnapshot Aviation { get; }
+    internal CampaignGroundSnapshot Ground { get; }
     internal SituationSnapshot(DateTime at, string side, IEnumerable<FriendlyForce> forces, IEnumerable<ObservedContact> contacts,
-        IEnumerable<ObservedBase> bases, IEnumerable<PublishedOrder> orders, IEnumerable<PublishedReport> reports, VictorySnapshot victory, FriendlyAviationSnapshot aviation)
+        IEnumerable<ObservedBase> bases, IEnumerable<PublishedOrder> orders, IEnumerable<PublishedReport> reports, VictorySnapshot victory, FriendlyAviationSnapshot aviation, CampaignGroundSnapshot? ground = null)
     {
+        Ground = ground ?? CampaignGroundSnapshot.Empty;
         Victory = victory ?? throw new ArgumentNullException(nameof(victory));
         Aviation = aviation ?? throw new ArgumentNullException(nameof(aviation));
         At = at; Side = side; Forces = Array.AsReadOnly(forces.ToArray()); Contacts = Array.AsReadOnly(contacts.ToArray());

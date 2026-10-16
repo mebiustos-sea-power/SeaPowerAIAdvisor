@@ -28,7 +28,7 @@ internal sealed class AdvisorQuerySession : IAdvisorQuerySession
         if (maxRounds < 1 || maxRounds > MaximumRounds) throw new ArgumentOutOfRangeException(nameof(maxRounds));
         MaxRounds = maxRounds;
         Prompts = prompts ?? AdvisorPrompts.Current;
-        this.information = information ?? AdvisorInformation.All;
+        this.information = information ?? AdvisorInformation.Default;
         information = this.information;
         this.snapshot = snapshot ?? throw new ArgumentNullException(nameof(snapshot));
         for (var f = 0; f < snapshot.Forces.Count; f++)
@@ -55,7 +55,7 @@ internal sealed class AdvisorQuerySession : IAdvisorQuerySession
             (f.SourceUnitIndex.Value < 0 || f.SourceUnitIndex.Value >= snapshot.Aviation.Units.Count)))
             throw new InvalidOperationException("An own flight has no matching air unit.");
         initial = AdvisorInputBuilder.Header(language, question, Prompts, false);
-        initial["schema_version"] = 2;
+        initial["schema_version"] = 3;
         initial["interaction_mode"] = "on_demand";
         initial["consultation_id"] = Id;
         initial["situation"] = new JObject
@@ -66,7 +66,7 @@ internal sealed class AdvisorQuerySession : IAdvisorQuerySession
             {
                 ["included"] = new JArray("victory_conditions", "overview"),
                 ["available_on_request"] = new JArray("friendly_task_forces", "friendly_ships", "friendly_air_units", "friendly_air_flights", "observed_contacts", "public_bases", "base_observations", "published_orders", "recent_player_reports"),
-                ["not_included"] = new JArray("friendly_ground_forces", "friendly_base_stocks", "detailed_air_missions", "air_sortie_feasibility", "detailed_routes", "detailed_weapon_capabilities"),
+                ["not_included"] = new JArray("detailed_air_missions", "air_sortie_feasibility", "detailed_routes", "detailed_weapon_capabilities"),
                 ["report_limit"] = CampaignSituationReader.ReportLimit,
                 ["reference_scope"] = "this_consultation"
             },
@@ -74,6 +74,8 @@ internal sealed class AdvisorQuerySession : IAdvisorQuerySession
             ["overview"] = new JObject
             {
                 ["friendly_force_count"] = snapshot.Forces.Count,
+                ["friendly_base_detail_count"] = snapshot.Ground.Bases().Count,
+                ["friendly_ground_unit_count"] = snapshot.Ground.Units().Count,
                 ["friendly_ship_count"] = ships.Count,
                 ["convoy_count"] = snapshot.Forces.Count(f => f.IsConvoy),
                 ["friendly_air_unit_count"] = snapshot.Aviation.Units.Count,
@@ -101,6 +103,8 @@ internal sealed class AdvisorQuerySession : IAdvisorQuerySession
         {
             overview.Remove("friendly_air_unit_count"); overview.Remove("friendly_air_flight_count"); initial.Remove("aviation_semantics");
         }
+        if (!information.Allows(InformationKind.CampaignOwnBases)) overview.Remove("friendly_base_detail_count");
+        if (!information.Allows(InformationKind.CampaignGroundUnits)) overview.Remove("friendly_ground_unit_count");
         if (!information.Allows(InformationKind.CampaignContacts)) overview.Remove("observed_contact_count");
         if (!information.Allows(InformationKind.CampaignOrders)) overview.Remove("published_order_count");
         if (!information.Allows(InformationKind.CampaignReports)) overview.Remove("retained_report_count");
@@ -232,6 +236,26 @@ internal sealed class AdvisorQuerySession : IAdvisorQuerySession
                     ["current_owner_side_id"] = b.OwnerSide == null ? JValue.CreateNull() : new JValue(b.OwnerSide),
                     ["observation_status"] = observations.ContainsKey(i) ? "in_snapshot" : "not_in_snapshot"
                 }, information)));
+            case "get_bases":
+                Allowed(query, "query", "ids");
+                return new JArray(Ids(query, "ids").Select(id =>
+                {
+                    var row = snapshot.Ground.Bases().OfType<JObject>().SingleOrDefault(b => (string?)b["id"] == id)
+                        ?? throw Invalid("unknown_id", "Only this snapshot's own base details are available here.");
+                    return CampaignInformation.Base(row, information);
+                }));
+            case "list_ground_units":
+                Allowed(query, "query", "offset", "limit");
+                return Page(query, snapshot.Ground.Units().OfType<JObject>().Select(row =>
+                {
+                    row.Remove("strength"); row.Remove("maximum_strength"); row.Remove("strength_meaning");
+                    return CampaignInformation.Ground(row, information);
+                }));
+            case "get_ground_units":
+                Allowed(query, "query", "ids");
+                return new JArray(Ids(query, "ids").Select(id => CampaignInformation.Ground(
+                    snapshot.Ground.Units().OfType<JObject>().SingleOrDefault(u => (string?)u["id"] == id)
+                        ?? throw Invalid("unknown_id", "Only own snapshot-local ground-unit IDs are available."), information)));
             case "get_base_observations":
                 Allowed(query, "query", "ids");
                 return new JArray(Ids(query, "ids").Select(id =>

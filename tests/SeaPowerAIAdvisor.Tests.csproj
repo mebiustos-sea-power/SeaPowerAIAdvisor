@@ -9,6 +9,8 @@
     <Compile Include="..\src\BattleValue.cs" Link="BattleValue.cs" />
     <Compile Include="..\src\BattleCapabilityReader.cs" Link="BattleCapabilityReader.cs" />
     <Compile Include="..\src\BattleReferenceCatalog.cs" Link="BattleReferenceCatalog.cs" />
+    <Compile Include="..\src\BattleAviationReader.cs" Link="BattleAviationReader.cs" />
+    <Compile Include="..\src\BattleInformation.cs" Link="BattleInformation.cs" />
     <Compile Include="..\src\BattleSnapshot.cs" Link="BattleSnapshot.cs" />
     <Compile Include="..\src\BattleQuerySession.cs" Link="BattleQuerySession.cs" />
     <Compile Include="..\src\BattleSituationReader.cs" Link="BattleSituationReader.cs" />
@@ -40,6 +42,7 @@
     <Compile Include="..\src\AdvisorProgress.cs" Link="AdvisorProgress.cs" />
     <Compile Include="..\src\SituationSnapshot.cs" Link="SituationSnapshot.cs" />
     <Compile Include="..\src\FriendlyAviationSnapshot.cs" Link="FriendlyAviationSnapshot.cs" />
+    <Compile Include="..\src\CampaignGroundReader.cs" Link="CampaignGroundReader.cs" />
     <Compile Include="..\src\CampaignAirReader.cs" Link="CampaignAirReader.cs" />
     <Compile Include="..\src\AdvisorPrompts.cs" Link="AdvisorPrompts.cs" />
     <Compile Include="..\src\VictorySnapshot.cs" Link="VictorySnapshot.cs" />

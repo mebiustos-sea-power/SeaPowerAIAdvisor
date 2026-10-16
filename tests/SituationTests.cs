@@ -353,6 +353,7 @@ internal static class SituationTests
         internal readonly Dictionary<string, OwnSpec> Specs = new();
         internal int Calls;
         internal readonly Dictionary<string, OwnAircraftSpec> AircraftSpecs = new(StringComparer.Ordinal);
+        public string AmmoName(string key) => "表示兵装：" + key;
         public OwnSpec Ship(string ini) { Calls++; return Specs[ini]; }
         public OwnAircraftSpec Aircraft(string ini) => AircraftSpecs[ini];
         public string DisplayName(string ini) => AircraftSpecs[ini].DisplayName;

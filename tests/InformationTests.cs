@@ -6,10 +6,11 @@ using Newtonsoft.Json.Linq;
 using SeaPowerAIAdvisor;
 using static SeaPowerAIAdvisor.InformationKind;
 
-internal static class InformationTests
+internal static partial class InformationTests
 {
     internal static void Run(Action<string, Action> check)
     {
+        RunPersistence(check);
         check("Information selection defaults on, persists dependencies and rejects invalid settings", () =>
         {
             Require(AdvisorInformation.Items.All(i => AdvisorOptions.Parse("{}").Information.Allows(i.Kind)), "Old installations disabled data by default");
@@ -54,6 +55,7 @@ internal static class InformationTests
     }
     internal static void RunCampaign(string campaignPath, Action<string, Action> check)
     {
+        RunGroundCampaign(campaignPath, check);
         var snapshot = QueryTests.Capture(new SituationTests.Fixture(Assembly.LoadFrom(campaignPath)));
         check("Campaign exclusions apply to overview, catalog, tools and direct requests while objectives remain available", () =>
         {
