@@ -17,6 +17,8 @@
   "action.capture": "Situation",
   "action.input": "AI input (JSON)",
   "profile.name": "Advisor name",
+  "profile.role": "Role",
+  "profile.error.role_invalid": "Role must be up to 80 characters on a single line.",
   "profile.path": "Settings file",
   "profile.ime": "Finish composing text before saving.",
   "profile.error.profile_missing": "profile.json is missing.",

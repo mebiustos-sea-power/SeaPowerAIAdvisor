@@ -17,6 +17,8 @@
   "action.capture": "状況確認",
   "action.input": "AI入力（JSON）",
   "profile.name": "アドバイザー名",
+  "profile.role": "役職",
+  "profile.error.role_invalid": "役職は改行せず80文字以内で入力してください。",
   "profile.path": "設定ファイル",
   "profile.ime": "文字の変換を確定してから保存してください。",
   "profile.error.profile_missing": "profile.jsonがありません。",

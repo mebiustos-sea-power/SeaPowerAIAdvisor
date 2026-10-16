@@ -31,11 +31,11 @@ internal sealed class AdvisorWindow
     private readonly TextBox question;
     private readonly ScrollViewer transcriptScroll;
     private readonly AdvisorTranscriptView transcript;
-    private readonly TextBox diagnosticOutput, profileName, profilePersonality, modelName;
+    private readonly TextBox diagnosticOutput, profileName, profileRole, profilePersonality, modelName;
     private readonly PasswordBox apiKey;
     private AdvisorSettingsDraft? connectionDraft;
     private readonly RadioButton defaultAdvisor, customAdvisor;
-    private readonly TextBlock advisorName, activity, portraitError, profilePreviewError, profileStatus;
+    private readonly TextBlock advisorName, advisorRole, activity, portraitError, profilePreviewError, profileStatus;
     private readonly Image portraitImage, profilePreview;
     private readonly FrameworkElement conversationPane, settingsPane;
     private readonly TabControl settingsTabs;
@@ -88,6 +88,8 @@ internal sealed class AdvisorWindow
         diagnosticStatus = Named<TextBlock>(content, "DiagnosticStatus");
         diagnosticOutput = Named<TextBox>(content, "DiagnosticOutput");
         profileName = Named<TextBox>(content, "ProfileName");
+        profileRole = Named<TextBox>(content, "ProfileRole");
+        profileRole.MaxLength = AdvisorProfile.MaxRoleLength;
         profilePersonality = Named<TextBox>(content, "ProfilePersonality");
         profilePersonality.MaxLength = AdvisorProfile.MaxPersonalityLength;
         defaultAdvisor = Named<RadioButton>(content, "DefaultAdvisor");
@@ -95,6 +97,7 @@ internal sealed class AdvisorWindow
         choosePortrait = Named<Button>(content, "ChoosePortrait");
         choosePortrait.Click += (_, _) => guard(ChoosePortrait);
         advisorName = Named<TextBlock>(content, "AdvisorName");
+        advisorRole = Named<TextBlock>(content, "AdvisorRole");
         activity = Named<TextBlock>(content, "Activity");
         portraitError = Named<TextBlock>(content, "PortraitError");
         profilePreviewError = Named<TextBlock>(content, "ProfilePreviewError");
@@ -143,7 +146,7 @@ internal sealed class AdvisorWindow
         questionInput = new QuestionInputController(question, () => active != null, StartConsultation, guard);
         question.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(question));
         question.LostKeyboardFocus += (_, _) => guard(() => typing.Release(question));
-        foreach (var input in new[] { profileName, profilePersonality, modelName, maxQueryRounds, diagnosticOutput, Named<TextBox>(content, "ProfilePath") })
+        foreach (var input in new[] { profileName, profileRole, profilePersonality, modelName, maxQueryRounds, diagnosticOutput, Named<TextBox>(content, "ProfilePath") })
         {
             input.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(input));
             input.LostKeyboardFocus += (_, _) => guard(() => typing.Release(input));
@@ -174,7 +177,7 @@ internal sealed class AdvisorWindow
         });
         defaultAdvisor.Checked += (_, _) => guard(ChangeProfileMode);
         customAdvisor.Checked += (_, _) => guard(ChangeProfileMode);
-        try { AdvisorProfile.EnsureCreated(profileDirectory, DefaultPortrait); }
+        try { AdvisorProfile.EnsureCreated(profileDirectory, DefaultPortrait, text["advisor.role"]); }
         catch (AdvisorProfileException failure) { ProfileError(failure); }
         ShowConversation();
     }
@@ -652,6 +655,8 @@ internal sealed class AdvisorWindow
     {
         profileName.Text = profileDraft.UseDefault ? AdvisorProfile.DefaultName : profileDraft.CustomName;
         profileName.IsReadOnly = profileDraft.UseDefault;
+        profileRole.Text = profileDraft.UseDefault ? text["advisor.role"] : profileDraft.CustomRole;
+        profileRole.IsReadOnly = profileDraft.UseDefault;
         choosePortrait.Visibility = profileDraft.UseDefault ? Visibility.Collapsed : Visibility.Visible;
         choosePortrait.IsEnabled = portraitSelection == null;
     }
@@ -659,7 +664,11 @@ internal sealed class AdvisorWindow
     private void ChangeProfileMode()
     {
         if (updatingProfile) return;
-        if (!profileName.IsReadOnly) profileDraft.CustomName = profileName.Text ?? "";
+        if (!profileName.IsReadOnly)
+        {
+            profileDraft.CustomName = profileName.Text ?? "";
+            profileDraft.CustomRole = profileRole.Text ?? "";
+        }
         profileDraft.Personality = profilePersonality.Text ?? "";
         profileDraft.UseDefault = defaultAdvisor.IsChecked == true;
         profilePersonality.Text = profileDraft.Personality;
@@ -752,7 +761,11 @@ internal sealed class AdvisorWindow
         if (portraitSelection != null || connectionDraft == null || optionsDraft == null) return;
         CancelConnectionTest();
         SetSettingsStatus(string.Empty);
-        if (!profileName.IsReadOnly) profileDraft.CustomName = profileName.Text ?? "";
+        if (!profileName.IsReadOnly)
+        {
+            profileDraft.CustomName = profileName.Text ?? "";
+            profileDraft.CustomRole = profileRole.Text ?? "";
+        }
         profileDraft.Personality = profilePersonality.Text ?? "";
         ReadConnectionDraft();
         try
@@ -798,6 +811,8 @@ internal sealed class AdvisorWindow
         appliedProfile = profile;
         speakerName = profile.DisplayName;
         advisorName.Text = profile.DisplayName;
+        advisorRole.Text = profile.UseDefault ? text["advisor.role"] : profile.CustomRole;
+        advisorRole.Visibility = advisorRole.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         ResetProfileEditor(profile);
         ShowConversation(false);
     }
