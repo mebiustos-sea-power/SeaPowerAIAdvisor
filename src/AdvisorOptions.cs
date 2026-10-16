@@ -1,0 +1,85 @@
+using System;
+using System.IO;
+using System.Linq;
+using System.Text;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+
+namespace SeaPowerAIAdvisor;
+
+// Immutable, provider-independent behavior settings. One snapshot is used for an entire consultation.
+internal sealed class AdvisorOptions
+{
+    internal int MaxQueryRounds { get; }
+    internal bool CampaignEnabled { get; }
+    internal AdvisorOptions(int maxQueryRounds = AdvisorQueryLimits.DefaultMaxRounds, bool campaignEnabled = false)
+    {
+        if (maxQueryRounds < 1 || maxQueryRounds > AdvisorQueryLimits.MaximumRounds)
+            throw new AdvisorOptionsException("query_rounds_invalid");
+        MaxQueryRounds = maxQueryRounds; CampaignEnabled = campaignEnabled;
+    }
+    internal byte[] Data() => Encoding.UTF8.GetBytes(new JObject
+    {
+        ["max_query_rounds"] = MaxQueryRounds, ["campaign_advisor_enabled"] = CampaignEnabled
+    }.ToString(Formatting.Indented) + Environment.NewLine);
+
+    internal static AdvisorOptions Parse(string json)
+    {
+        try
+        {
+            using var source = new StringReader(json);
+            using var reader = new JsonTextReader(source) { DateParseHandling = DateParseHandling.None, MaxDepth = 4 };
+            var value = JObject.Load(reader, new JsonLoadSettings { DuplicatePropertyNameHandling = DuplicatePropertyNameHandling.Error });
+            if (reader.Read() || value.Properties().Any(p => p.Name != "max_query_rounds" && p.Name != "campaign_advisor_enabled"))
+                throw new AdvisorOptionsException("options_invalid");
+            var rounds = AdvisorQueryLimits.DefaultMaxRounds;
+            if (value["max_query_rounds"] != null && (value["max_query_rounds"]!.Type != JTokenType.Integer ||
+                !int.TryParse(value["max_query_rounds"]!.ToString(), out rounds)))
+                throw new AdvisorOptionsException("query_rounds_invalid");
+            if (value["campaign_advisor_enabled"] != null && value["campaign_advisor_enabled"]!.Type != JTokenType.Boolean)
+                throw new AdvisorOptionsException("options_invalid");
+            return new AdvisorOptions(rounds, (bool?)value["campaign_advisor_enabled"] ?? false);
+        }
+        catch (JsonException) { throw new AdvisorOptionsException("options_invalid"); }
+    }
+}
+
+internal sealed class AdvisorOptionsStore
+{
+    internal string Path { get; }
+    internal AdvisorOptions Current { get; private set; }
+    internal static string PathIn(string directory) => System.IO.Path.Combine(directory, "SeaPowerAIAdvisor", "options.json");
+    internal AdvisorOptionsStore(string path) { Path = path; Current = Read(); }
+    internal AdvisorOptions Read()
+    {
+        if (Directory.Exists(Path)) throw new AdvisorOptionsException("options_unreadable");
+        var data = Backup();
+        return data == null ? new AdvisorOptions() : AdvisorOptions.Parse(Encoding.UTF8.GetString(data));
+    }
+    internal byte[]? Backup()
+    {
+        try { return AdvisorConfigFile.Backup(Path); }
+        catch (InvalidDataException) { throw new AdvisorOptionsException("options_invalid"); }
+        catch (IOException) { throw new AdvisorOptionsException("options_unreadable"); }
+        catch (UnauthorizedAccessException) { throw new AdvisorOptionsException("options_unreadable"); }
+    }
+    internal void Write(AdvisorOptions value)
+    {
+        try { AdvisorConfigFile.Write(Path, value.Data()); }
+        catch (IOException) { throw new AdvisorOptionsException("options_write_failed"); }
+        catch (UnauthorizedAccessException) { throw new AdvisorOptionsException("options_write_failed"); }
+    }
+    internal void Restore(byte[]? before)
+    {
+        try { AdvisorConfigFile.Restore(Path, before); }
+        catch (IOException) { throw new AdvisorOptionsException("options_write_failed"); }
+        catch (UnauthorizedAccessException) { throw new AdvisorOptionsException("options_write_failed"); }
+    }
+    internal void Apply(AdvisorOptions value) { Current = value; }
+}
+
+internal sealed class AdvisorOptionsException : Exception
+{
+    internal string Code { get; }
+    internal AdvisorOptionsException(string code) : base(code) { Code = code; }
+}

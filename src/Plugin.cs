@@ -17,6 +17,9 @@ public sealed class Plugin : IAnchorChainMod
     private static Harmony? harmony;
     private static CampaignIntegration? campaign;
     private static BattleIntegration? battle;
+    private static AdvisorOptionsStore? options;
+    private static Type? campaignFiles;
+    private static bool campaignInstallAttempted;
     private static bool installed, campaignFailed, battleFailed;
 
     public void TriggerEntryPoint()
@@ -31,14 +34,16 @@ public sealed class Plugin : IAnchorChainMod
                 Log.LogInfo("Disabled in the mod manager; advisor was not installed.");
                 return;
             }
+            options = new AdvisorOptionsStore(AdvisorOptionsStore.PathIn(UnityEngine.Application.persistentDataPath));
+            campaignFiles = files;
             AdvisorDependencies.LoadMarkdown(typeof(Plugin).Assembly);
             harmony = new Harmony(ModId);
-            battle = new BattleIntegration(GuardBattle, message => Log.LogWarning(message));
+            battle = new BattleIntegration(GuardBattle, message => Log.LogWarning(message), options);
             harmony.Patch(Required(typeof(MainGameViewModel), "OnLateUpdate"), postfix: new HarmonyMethod(typeof(Plugin), nameof(BattleFrame)));
             harmony.Patch(Required(typeof(MainGameViewModel), "OnDestroy"), prefix: new HarmonyMethod(typeof(Plugin), nameof(BattleDestroyed)));
             installed = true;
             Log.LogInfo("Advisor 0.10.4 ready for tactical battles. DCM is optional. Open AI in the bottom-right battle toolbar.");
-            GuardCampaign(() => InstallCampaign(files));
+            TryInstallCampaign();
         }
         catch (Exception error)
         {
@@ -46,6 +51,13 @@ public sealed class Plugin : IAnchorChainMod
             battleFailed = true;
             try { battle?.Reset(); } catch (Exception cleanup) { Log.LogError(cleanup); }
         }
+    }
+
+    private static void TryInstallCampaign()
+    {
+        if (options == null || !options.Current.CampaignEnabled || campaignInstallAttempted) return;
+        campaignInstallAttempted = true;
+        GuardCampaign(() => InstallCampaign(campaignFiles ?? throw new InvalidOperationException("The mod activation context is missing.")));
     }
 
     private static void InstallCampaign(Type files)
@@ -61,7 +73,7 @@ public sealed class Plugin : IAnchorChainMod
             Log.LogInfo("DCM is disabled; tactical advisor is available independently.");
             return;
         }
-        campaign = new CampaignIntegration(assembly, GuardCampaign, message => Log.LogWarning(message));
+        campaign = new CampaignIntegration(assembly, GuardCampaign, message => Log.LogWarning(message), options!);
         var ui = assembly.GetType("DynamicCampaignMod.UI.CampaignUI", true)!;
         harmony!.Patch(Required(ui, "Frame"), postfix: new HarmonyMethod(typeof(Plugin), nameof(CampaignFrame)));
         harmony.Patch(Required(ui, "Detach"), prefix: new HarmonyMethod(typeof(Plugin), nameof(CampaignDetach)));
@@ -70,7 +82,11 @@ public sealed class Plugin : IAnchorChainMod
         Log.LogInfo("Optional DCM campaign advisor installed.");
     }
 
-    private static void BattleFrame(MainGameViewModel __instance) => GuardBattle(() => battle!.Tick(__instance));
+    private static void BattleFrame(MainGameViewModel __instance)
+    {
+        GuardBattle(() => battle!.Tick(__instance));
+        TryInstallCampaign();
+    }
     private static void BattleDestroyed(MainGameViewModel __instance) => GuardBattle(() => battle?.Destroy(__instance));
     private static void CampaignFrame(object __instance) => GuardCampaign(() => campaign!.Tick(__instance));
     private static void CampaignDetach() => GuardCampaign(() => campaign?.Reset());

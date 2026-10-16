@@ -10,6 +10,7 @@ internal sealed class BattleIntegration
 {
     private readonly Action<Action> guard;
     private readonly Action<string> warn;
+    private readonly AdvisorOptionsStore options;
     private readonly BattleSituationReader reader = new();
     private MainGameViewModel? model;
     private MainGameView? view;
@@ -19,7 +20,7 @@ internal sealed class BattleIntegration
     private BattleHudButton? launcher;
     private AdvisorWindow? advisor;
 
-    internal BattleIntegration(Action<Action> guard, Action<string> warn) { this.guard = guard; this.warn = warn; }
+    internal BattleIntegration(Action<Action> guard, Action<string> warn, AdvisorOptionsStore options) { this.guard = guard; this.warn = warn; this.options = options; }
 
     internal void Tick(MainGameViewModel current)
     {
@@ -40,7 +41,7 @@ internal sealed class BattleIntegration
             button.Control.Click += (_, _) => guard(() =>
             {
                 var host = FindHost(current.RootControl) ?? throw new InvalidOperationException("The battle window host is unavailable.");
-                advisor ??= new AdvisorWindow(root, host, guard, new BattleAdvisorSource(Capture), GameLanguage.Read, warn);
+                advisor ??= new AdvisorWindow(root, host, guard, new BattleAdvisorSource(Capture), GameLanguage.Read, warn, options);
                 advisor.Toggle();
                 button.Control.IsChecked = advisor.IsOpen;
             });

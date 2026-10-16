@@ -1,20 +1,32 @@
 namespace SeaPowerAIAdvisor;
 
-// Commit both tabs together. A profile write failure must not leave new connection settings active.
+// Publish runtime options only after all saved settings succeed; undo earlier writes on failure.
 internal static class AdvisorPreferences
 {
     internal static AdvisorProfile Save(AdvisorProfileDraft profile, AdvisorSettingsDraft connection,
-        string profileDirectory, string connectionPath)
+        AdvisorOptionsStore options, AdvisorOptions nextOptions, string profileDirectory, string connectionPath)
     {
         var data = connection.Data();
         _ = profile.Build();
-        var before = AdvisorSettings.Backup(connectionPath);
-        AdvisorSettings.WriteBytes(connectionPath, data);
-        try { return profile.Save(profileDirectory); }
+        var beforeConnection = AdvisorSettings.Backup(connectionPath);
+        var beforeOptions = options.Backup();
+        var connectionWritten = false; var optionsWritten = false;
+        try
+        {
+            AdvisorSettings.WriteBytes(connectionPath, data); connectionWritten = true;
+            options.Write(nextOptions); optionsWritten = true;
+            var saved = profile.Save(profileDirectory);
+            options.Apply(nextOptions);
+            return saved;
+        }
         catch
         {
-            try { AdvisorSettings.Restore(connectionPath, before); }
-            catch { throw new AdvisorConnectionException("settings_rollback_failed"); }
+            var rollbackFailed = false;
+            if (optionsWritten)
+                try { options.Restore(beforeOptions); } catch { rollbackFailed = true; }
+            if (connectionWritten)
+                try { AdvisorSettings.Restore(connectionPath, beforeConnection); } catch { rollbackFailed = true; }
+            if (rollbackFailed) throw new AdvisorConnectionException("settings_rollback_failed");
             throw;
         }
     }

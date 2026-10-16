@@ -21,7 +21,6 @@ internal sealed class AdviceResult
 
 internal sealed class GeminiAdvisor
 {
-    internal const int MaxApiRequests = AdvisorQueryLimits.MaxRounds + 1;
     internal const int MaxTotalRequestBytes = 1_000_000;
     internal const int ContextExchanges = 3;
     private readonly IGeminiTransport transport;
@@ -40,6 +39,7 @@ internal sealed class GeminiAdvisor
     private async Task<AdviceResult> RunAsync(IAdvisorQuerySession session, AdvisorSettings settings,
         IReadOnlyList<ChatExchange> history, CancellationToken cancellation, AdvisorProfile? profile)
     {
+        var maxApiRequests = session.MaxRounds + 1;
         var initial = session.InitialInput();
         profile?.AddAnswerPreferences(initial);
         var tool = (JObject)initial["query_tool"]!;
@@ -61,10 +61,10 @@ internal sealed class GeminiAdvisor
         var usageKnown = true;
         var toolsAllowed = true;
         var queriesUsed = new List<string>();
-        for (var api = 1; api <= MaxApiRequests; api++)
+        for (var api = 1; api <= maxApiRequests; api++)
         {
             cancellation.ThrowIfCancellationRequested();
-            var allow = toolsAllowed && session.RoundsUsed < AdvisorQueryLimits.MaxRounds && api < MaxApiRequests;
+            var allow = toolsAllowed && session.RoundsUsed < session.MaxRounds && api < maxApiRequests;
             var body = new JObject
             {
                 ["systemInstruction"] = new JObject { ["parts"] = new JArray(new JObject { ["text"] = system }) },

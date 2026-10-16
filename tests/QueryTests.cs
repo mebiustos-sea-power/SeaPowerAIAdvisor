@@ -149,10 +149,10 @@ internal static class QueryTests
         check("Every attempted request consumes a round and the query limit stops further results", () =>
         {
             var session = Session(new Fixture(assembly));
-            for (var i = 0; i < AdvisorQueryLimits.MaxRounds; i++)
+            for (var i = 0; i < AdvisorQueryLimits.DefaultMaxRounds; i++)
                 Require((string?)session.Execute(Request(session, Q("unknown")))["error"]!["code"] == "unknown_query", "Expected rejection changed");
             Require((string?)session.Execute(Request(session, Q("list_forces")))["error"]!["code"] == "round_limit" &&
-                session.RoundsUsed == AdvisorQueryLimits.MaxRounds, "Repeated errors bypassed the round limit");
+                session.RoundsUsed == AdvisorQueryLimits.DefaultMaxRounds, "Repeated errors bypassed the round limit");
         });
         check("Request and response size limits count UTF-8 bytes without truncating a selected report", () =>
         {
@@ -172,7 +172,7 @@ internal static class QueryTests
             var session = new AdvisorQuerySession(Replace(Capture(f), reports: new[] {
                 new PublishedReport(f.Now, "Other", new string('報', 12_000)) }), "ja", "");
             var sawLimit = false;
-            for (var i = 0; i < AdvisorQueryLimits.MaxRounds; i++)
+            for (var i = 0; i < AdvisorQueryLimits.DefaultMaxRounds; i++)
             {
                 var response = session.Execute(Request(session, Q("get_reports", "ids", new JArray("report_1"))));
                 if ((string?)response["status"] == "error")

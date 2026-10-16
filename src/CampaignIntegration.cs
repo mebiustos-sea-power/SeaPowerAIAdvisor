@@ -15,6 +15,7 @@ internal sealed class CampaignIntegration
     private readonly int campaignScene;
     private readonly Action<Action> guard;
     private readonly Action<string> warn;
+    private readonly AdvisorOptionsStore options;
     private readonly CampaignSituationReader reader = new();
     private object? session;
     private object? campaignUi;
@@ -22,10 +23,11 @@ internal sealed class CampaignIntegration
     private ToggleButton? launcher;
     private AdvisorWindow? advisor;
 
-    internal CampaignIntegration(Assembly campaign, Action<Action> guard, Action<string> warn)
+    internal CampaignIntegration(Assembly campaign, Action<Action> guard, Action<string> warn, AdvisorOptionsStore options)
     {
         this.guard = guard;
         this.warn = warn;
+        this.options = options;
         var type = campaign.GetType("DynamicCampaignMod.Game.Session.CampaignSession", true)!;
         const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
         active = type.GetProperty("Active", flags)?.GetGetMethod(true) ?? throw new MissingMemberException(type.FullName, "Active");
@@ -39,7 +41,7 @@ internal sealed class CampaignIntegration
 
     internal void Tick(object campaignUi)
     {
-        if (!InCampaign())
+        if (!options.Current.CampaignEnabled || !InCampaign())
         {
             Reset();
             return;
@@ -72,9 +74,10 @@ internal sealed class CampaignIntegration
             };
             launcher.Click += (_, _) => guard(() =>
             {
+                if (!options.Current.CampaignEnabled) return;
                 var host = view.FindName("WindowHost") as WindowHost
                     ?? throw new InvalidOperationException("The campaign's own WindowHost is unavailable.");
-                advisor ??= new AdvisorWindow(view, host, guard, new CampaignAdvisorSource(Capture), GameLanguage.Read, warn);
+                advisor ??= new AdvisorWindow(view, host, guard, new CampaignAdvisorSource(Capture), GameLanguage.Read, warn, options);
                 advisor.Toggle();
                 launcher.IsChecked = advisor.IsOpen;
             });
@@ -89,7 +92,7 @@ internal sealed class CampaignIntegration
 
     private SituationSnapshot Capture()
     {
-        if (!InCampaign() || session == null || !ReferenceEquals(session, simulation.Invoke(null, null)))
+        if (!options.Current.CampaignEnabled || !InCampaign() || session == null || !ReferenceEquals(session, simulation.Invoke(null, null)))
             throw new SituationUnavailableException("campaign_unavailable");
         var names = new CampaignDisplayNames(campaignUi
             ?? throw new InvalidOperationException("The campaign display context is missing."), session);

@@ -34,7 +34,7 @@ internal static class PreferencesTests
             draft.ApiKey = "  changed_mock_key  "; draft.Model = " gemini-2.5-pro "; draft.LogAiJson = true;
             var profile = new AdvisorProfileDraft(new AdvisorProfile("Before", "portrait.png", false, "Default style", "Before style"))
                 { CustomName = "After", Personality = "After style" };
-            AdvisorPreferences.Save(profile, draft, directory, path);
+            Save(profile, draft, directory, path);
             var saved = AdvisorSettings.Load(path); var advisor = AdvisorProfile.Load(directory);
             Require(saved.ApiKey == "changed_mock_key" && saved.Model == "gemini-2.5-pro" && saved.LogAiJson &&
                 saved.RequestTimeoutSeconds == 45 && saved.ConsultationTimeoutSeconds == 90 && saved.MaxOutputTokens == 2048,
@@ -47,7 +47,7 @@ internal static class PreferencesTests
             var path = Path.Combine(directory, "gemini.json");
             var draft = AdvisorSettings.Edit(path);
             Require(draft.ApiKey == "" && draft.Model == AdvisorSettings.DefaultModel && !draft.LogAiJson, "Missing settings did not start unconfigured");
-            AdvisorPreferences.Save(new AdvisorProfileDraft(new AdvisorProfile("First advisor", "portrait.png")), draft, directory, path);
+            Save(new AdvisorProfileDraft(new AdvisorProfile("First advisor", "portrait.png")), draft, directory, path);
             Require(AdvisorProfile.Load(directory).DisplayName == "First advisor" && AdvisorSettings.Edit(path).ApiKey == "", "First profile setup required credentials");
             Throws("api_key_missing", () => AdvisorSettings.Load(path));
         }));
@@ -65,7 +65,7 @@ internal static class PreferencesTests
             foreach (var id in new[] { "other-provider", "https://example.invalid/gemini-pro", "gemini-pro/../other", "gemini-pro?key=value", "" })
             {
                 var draft = AdvisorSettings.Edit(path); draft.Model = id;
-                Throws("model_invalid", () => AdvisorPreferences.Save(new AdvisorProfileDraft(profile) { CustomName = "Unsaved" }, draft, directory, path));
+                Throws("model_invalid", () => Save(new AdvisorProfileDraft(profile) { CustomName = "Unsaved" }, draft, directory, path));
                 Require(File.ReadAllBytes(path).SequenceEqual(before) && File.ReadAllBytes(AdvisorProfile.SettingsPath(directory)).SequenceEqual(profileBefore),
                     "A rejected model saved part of the settings");
             }
@@ -80,7 +80,7 @@ internal static class PreferencesTests
                 var before = File.Exists(path) ? File.ReadAllBytes(path) : null;
                 Directory.CreateDirectory(AdvisorProfile.SettingsPath(folder));
                 var draft = AdvisorSettings.Edit(path); draft.ApiKey = "changed_mock_key"; draft.LogAiJson = true;
-                try { AdvisorPreferences.Save(new AdvisorProfileDraft(new AdvisorProfile("New", "portrait.png")), draft, folder, path); }
+                try { Save(new AdvisorProfileDraft(new AdvisorProfile("New", "portrait.png")), draft, folder, path); }
                 catch (AdvisorProfileException error) when (error.Code == "profile_write_failed")
                 {
                     Require(before == null ? !File.Exists(path) : File.ReadAllBytes(path).SequenceEqual(before), "Failed save left new credentials or logging active");
@@ -91,11 +91,15 @@ internal static class PreferencesTests
             var blockedPath = Path.Combine(directory, "blocked.json"); Directory.CreateDirectory(blockedPath);
             var profile = new AdvisorProfile("Original", "portrait.png"); profile.Save(directory);
             var original = File.ReadAllBytes(AdvisorProfile.SettingsPath(directory));
-            Throws("settings_write_failed", () => AdvisorPreferences.Save(new AdvisorProfileDraft(profile) { CustomName = "Unsaved" },
+            Throws("settings_write_failed", () => Save(new AdvisorProfileDraft(profile) { CustomName = "Unsaved" },
                 AdvisorSettings.Edit(blockedPath), directory, blockedPath));
             Require(File.ReadAllBytes(AdvisorProfile.SettingsPath(directory)).SequenceEqual(original), "An AI write failure still saved the profile");
         }));
     }
+
+    private static AdvisorProfile Save(AdvisorProfileDraft profile, AdvisorSettingsDraft connection, string directory, string path) =>
+        AdvisorPreferences.Save(profile, connection, new AdvisorOptionsStore(Path.Combine(directory, "options.json")),
+            new AdvisorOptions(), directory, path);
 
     private static JObject Original() => new() { ["api_key"] = Key, ["model"] = "gemini-original-model",
         ["log_ai_json"] = false, ["request_timeout_seconds"] = 45, ["consultation_timeout_seconds"] = 90, ["max_output_tokens"] = 2048 };

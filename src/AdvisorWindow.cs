@@ -15,6 +15,10 @@ internal sealed class AdvisorWindow
     private readonly WindowHost host;
     private readonly Action<Action> guard;
     private readonly IAdvisorSource source;
+    private readonly AdvisorOptionsStore options;
+    private AdvisorOptions? optionsDraft;
+    private readonly TextBox maxQueryRounds;
+    private readonly CheckBox enableCampaign;
     private readonly Func<string> replyLanguage;
     private readonly Action<string> warn;
     private readonly AdvisorConversation conversation = new();
@@ -59,12 +63,13 @@ internal sealed class AdvisorWindow
     private bool scrollPending;
     private bool diagnosticScrollPending;
 
-    internal AdvisorWindow(FrameworkElement view, WindowHost host, Action<Action> guard, IAdvisorSource source, Func<string> replyLanguage, Action<string> warn)
+    internal AdvisorWindow(FrameworkElement view, WindowHost host, Action<Action> guard, IAdvisorSource source, Func<string> replyLanguage, Action<string> warn, AdvisorOptionsStore options)
     {
         this.view = view;
         this.host = host;
         this.guard = guard;
         this.source = source;
+        this.options = options;
         this.replyLanguage = replyLanguage;
         this.warn = warn;
         uiLanguage = replyLanguage();
@@ -106,6 +111,8 @@ internal sealed class AdvisorWindow
         settingsStatus = Named<TextBlock>(content, "SettingsStatus");
         apiKey = Named<PasswordBox>(content, "ApiKey");
         modelName = Named<TextBox>(content, "ModelName");
+        maxQueryRounds = Named<TextBox>(content, "MaxQueryRounds");
+        enableCampaign = Named<CheckBox>(content, "EnableCampaignAdvisor");
         testConnection = Named<Button>(content, "TestConnection");
         connectionTestStatus = Named<TextBlock>(content, "ConnectionTestStatus");
         connectionTestError = Named<TextBlock>(content, "ConnectionTestError");
@@ -136,7 +143,7 @@ internal sealed class AdvisorWindow
         questionInput = new QuestionInputController(question, () => active != null, StartConsultation, guard);
         question.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(question));
         question.LostKeyboardFocus += (_, _) => guard(() => typing.Release(question));
-        foreach (var input in new[] { profileName, profilePersonality, modelName, diagnosticOutput, Named<TextBox>(content, "ProfilePath") })
+        foreach (var input in new[] { profileName, profilePersonality, modelName, maxQueryRounds, diagnosticOutput, Named<TextBox>(content, "ProfilePath") })
         {
             input.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(input));
             input.LostKeyboardFocus += (_, _) => guard(() => typing.Release(input));
@@ -274,7 +281,7 @@ internal sealed class AdvisorWindow
         try
         {
             var settings = AdvisorSettings.Load(settingsPath);
-            var session = source.CreateSession(replyLanguage(), request.Text);
+            var session = source.CreateSession(replyLanguage(), request.Text, options.Current.MaxQueryRounds);
             var history = conversation.Exchanges.ToArray();
             pendingTurn = turn;
             pendingModel = settings.Model;
@@ -400,7 +407,7 @@ internal sealed class AdvisorWindow
             if (structured)
             {
                 var language = replyLanguage();
-                var input = source.CreateSession(language, question.Text).InitialInput();
+                var input = source.CreateSession(language, question.Text, options.Current.MaxQueryRounds).InitialInput();
                 appliedProfile?.AddAnswerPreferences(input);
                 diagnosticOutput.Text = input.ToString(Newtonsoft.Json.Formatting.Indented);
                 diagnosticStatus.Text = text.Format("diagnostics.input_generated", language);
@@ -483,22 +490,28 @@ internal sealed class AdvisorWindow
             apiKey.Password = connectionDraft.ApiKey;
             modelName.Text = connectionDraft.Model;
             logAiJson.IsChecked = connectionDraft.LogAiJson;
-            logAiJson.IsEnabled = saveSettings.IsEnabled = true;
-            UpdateConnectionTestControls();
         }
-        catch (AdvisorConnectionException failure)
+        catch (AdvisorConnectionException failure) { connectionDraft = null; SettingsError(failure); }
+        try
         {
-            connectionDraft = null;
-            logAiJson.IsEnabled = saveSettings.IsEnabled = false;
-            UpdateConnectionTestControls();
-            SettingsError(failure);
+            optionsDraft = options.Read();
+            maxQueryRounds.Text = optionsDraft.MaxQueryRounds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            enableCampaign.IsChecked = optionsDraft.CampaignEnabled;
         }
+        catch (AdvisorOptionsException failure) { optionsDraft = null; OptionsError(failure); }
+        maxQueryRounds.IsEnabled = enableCampaign.IsEnabled = optionsDraft != null;
+        logAiJson.IsEnabled = connectionDraft != null;
+        saveSettings.IsEnabled = connectionDraft != null && optionsDraft != null;
+        UpdateConnectionTestControls();
     }
 
     private void DiscardConnectionChanges()
     {
         CancelConnectionTest();
         connectionDraft = null;
+        optionsDraft = null;
+        maxQueryRounds.Text = string.Empty;
+        enableCampaign.IsChecked = false;
         apiKey.Password = string.Empty;
         modelName.Text = string.Empty;
         logAiJson.IsChecked = false;
@@ -587,6 +600,19 @@ internal sealed class AdvisorWindow
         connectionDraft.ApiKey = apiKey.Password;
         connectionDraft.Model = modelName.Text ?? string.Empty;
         connectionDraft.LogAiJson = logAiJson.IsChecked == true;
+    }
+
+    private AdvisorOptions ReadOptionsDraft()
+    {
+        if (!int.TryParse(maxQueryRounds.Text, System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var rounds)) throw new AdvisorOptionsException("query_rounds_invalid");
+        return new AdvisorOptions(rounds, enableCampaign.IsChecked == true);
+    }
+
+    private void OptionsError(AdvisorOptionsException failure)
+    {
+        SetSettingsStatus(text["settings.error." + failure.Code] + text.Format("settings.error_suffix", failure.Code));
+        warn("Advisor options failed: " + failure.Code);
     }
 
     private void SettingsError(AdvisorConnectionException failure)
@@ -723,7 +749,7 @@ internal sealed class AdvisorWindow
             SetSettingsStatus(text["profile.ime"]);
             return;
         }
-        if (portraitSelection != null || connectionDraft == null) return;
+        if (portraitSelection != null || connectionDraft == null || optionsDraft == null) return;
         CancelConnectionTest();
         SetSettingsStatus(string.Empty);
         if (!profileName.IsReadOnly) profileDraft.CustomName = profileName.Text ?? "";
@@ -732,9 +758,10 @@ internal sealed class AdvisorWindow
         try
         {
             _ = connectionDraft.Data();
+            var nextOptions = ReadOptionsDraft();
             var next = new AdvisorPortrait(profileDraft.ReadActivePortrait(profileDirectory, DefaultPortrait));
             AdvisorProfile profile;
-            try { profile = AdvisorPreferences.Save(profileDraft, connectionDraft, profileDirectory, settingsPath); }
+            try { profile = AdvisorPreferences.Save(profileDraft, connectionDraft, options, nextOptions, profileDirectory, settingsPath); }
             catch { next.Dispose(); throw; }
             var previous = appliedProfile;
             ApplyProfile(profile, next);
@@ -751,6 +778,11 @@ internal sealed class AdvisorWindow
         {
             settingsTabs.SelectedIndex = 1;
             SettingsError(failure);
+        }
+        catch (AdvisorOptionsException failure)
+        {
+            settingsTabs.SelectedIndex = failure.Code == "query_rounds_invalid" ? 1 : 0;
+            OptionsError(failure);
         }
     }
 

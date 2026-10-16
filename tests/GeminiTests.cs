@@ -212,16 +212,16 @@ internal static class GeminiTests
             var session = Session(assembly);
             var transport = new Fake((n, body, cancellation) =>
             {
-                if (n <= AdvisorQueryLimits.MaxRounds) return Reply(new JObject { ["functionCall"] = Call(session, "catalog", "round-" + n) });
+                if (n <= AdvisorQueryLimits.DefaultMaxRounds) return Reply(new JObject { ["functionCall"] = Call(session, "catalog", "round-" + n) });
                 Require((string?)body["toolConfig"]!["functionCallingConfig"]!["mode"] == "NONE", "Tools still enabled after query limit");
                 var response = Reply(new JObject { ["text"] = "取得上限の範囲で回答します。" }); response.Remove("usageMetadata"); return response;
             });
             var result = await new GeminiAdvisor(transport).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None);
-            Require(result.ApiRequests == GeminiAdvisor.MaxApiRequests && result.QueryRounds == 5 && result.TotalTokens == null, "Wrong API cap or fabricated usage");
+            Require(result.ApiRequests == (AdvisorQueryLimits.DefaultMaxRounds + 1) && result.QueryRounds == 5 && result.TotalTokens == null, "Wrong API cap or fabricated usage");
             var bad = Session(assembly);
             var repeated = new Fake((n, b, c) => Reply(new JObject { ["functionCall"] = Call(bad, "catalog", "again-" + n) }));
             await ThrowsCodeAsync("unexpected_function_call", () => new GeminiAdvisor(repeated).ConsultAsync(bad, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None));
-            Require(repeated.Calls == GeminiAdvisor.MaxApiRequests, "Extra billable retry after disabled tools");
+            Require(repeated.Calls == (AdvisorQueryLimits.DefaultMaxRounds + 1), "Extra billable retry after disabled tools");
         }));
         check("Only recent real dialogue is supplied and historical context is separate from the new snapshot", () => Async(async () =>
         {
