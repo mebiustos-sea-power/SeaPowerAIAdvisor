@@ -11,6 +11,7 @@ internal interface IAdvisorQuerySession
     string Id { get; }
     int RoundsUsed { get; }
     int MaxRounds { get; }
+    AdvisorPrompts Prompts { get; }
     JObject InitialInput();
     JObject Execute(JObject request);
 }

@@ -35,4 +35,7 @@
     <Error Condition="!Exists('$(SeaPowerDir)\Sea Power_Data\Managed\Seapower-Scripts.dll')" Text="Set SeaPowerDir in Directory.Build.local.props." />
     <Error Condition="!Exists('$(AnchorChainDir)\AnchorChain.dll')" Text="Set AnchorChainDir in Directory.Build.local.props." />
   </Target>
+  <ItemGroup>
+    <Content Include="..\package\Prompts\*.json" Link="Prompts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

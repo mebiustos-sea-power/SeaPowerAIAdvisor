@@ -104,12 +104,8 @@ internal sealed class AdvisorInformation
         return new AdvisorInformation(array.Values<string>()!);
     }
     internal JArray Excluded(bool battle) => new(Items.Where(i => i.Id.StartsWith(battle ? "battle_" : "campaign_", StringComparison.Ordinal) && !Allows(i.Kind)).Select(i => i.Id));
-    internal void AddPolicy(JObject initial, bool battle)
+    internal void AddCoverage(JObject initial, bool battle)
     {
-        initial["instructions"]!["information_policy"] =
-            "The user selects which automatic data categories may be supplied. Excluded categories are unavailable, not empty or zero. " +
-            "Do not request disabled categories, try alternate queries for them, or invent their values. Give conditional advice and explain material limits. " +
-            "Published objectives and their public base registry are mandatory. User messages and enabled source documents are verbatim and can mention excluded topics; they are not a complete current status source.";
         initial["situation"]!["coverage"]!["excluded_by_user"] = Excluded(battle);
     }
     internal bool CampaignCategory(string category) => category switch

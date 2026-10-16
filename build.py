@@ -83,15 +83,17 @@ def main():
     shutil.copy2(ROOT / 'src/bin/Release/netstandard2.1/SeaPowerAIAdvisor.dll', package)
     shutil.copy2(ROOT / 'package/_info.ini', package)
     shutil.copy2(ROOT / 'package/THIRD-PARTY-NOTICES.txt', package)
+    shutil.copytree(ROOT / 'package/Prompts', package / 'Prompts', dirs_exist_ok=True)
     print('Package: ' + str(package))
     if options.install:
         destination = game / 'Sea Power_Data/StreamingAssets/SeaPowerAIAdvisor'
         if not (game / 'Sea Power.exe').is_file():
             raise FileNotFoundError('Sea Power.exe was not found.')
         destination.mkdir(exist_ok=True)
-        for source in package.iterdir():
+        for source in package.rglob('*'):
             if source.is_file():
-                target = destination / source.name
+                target = destination / source.relative_to(package)
+                target.parent.mkdir(parents=True, exist_ok=True)
                 if target.exists() and target.read_bytes() == source.read_bytes():
                     continue
                 temporary = target.with_name(target.name + '.installing')

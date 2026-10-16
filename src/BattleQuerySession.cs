@@ -16,22 +16,22 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
     public string Id { get; } = Guid.NewGuid().ToString("N");
     public int RoundsUsed { get; private set; }
     public int MaxRounds { get; }
+    public AdvisorPrompts Prompts { get; }
     private int returnedBytes;
 
-    internal BattleQuerySession(BattleSnapshot situation, string language, string? question, int maxRounds = DefaultMaxRounds, AdvisorInformation? information = null)
+    internal BattleQuerySession(BattleSnapshot situation, string language, string? question, int maxRounds = DefaultMaxRounds, AdvisorInformation? information = null, AdvisorPrompts? prompts = null)
     {
         if (maxRounds < 1 || maxRounds > MaximumRounds) throw new ArgumentOutOfRangeException(nameof(maxRounds));
         MaxRounds = maxRounds;
+        Prompts = prompts ?? AdvisorPrompts.Current;
         this.information = information ?? AdvisorInformation.All;
         information = this.information;
         snapshot = situation.Copy();
-        initial = AdvisorInputBuilder.Header(language, question);
+        initial = AdvisorInputBuilder.Header(language, question, Prompts, true);
         initial["schema_version"] = 3;
         initial["mode"] = "tactical_battle";
         initial["interaction_mode"] = "on_demand";
         initial["consultation_id"] = Id;
-        initial["instructions"]!["evidence_policy"] = AdvisorAnswerPolicy.BattleEvidence;
-        initial["instructions"]!["retrieval"] = "Use query_situation for relevant evidence. Known IDs can be queried directly; batch independent requests. Answer using gathered facts when the retrieval budget ends.";
         initial["situation"] = new JObject
         {
             ["captured_at_utc"] = snapshot["captured_at_utc"]!.DeepClone(),
@@ -71,7 +71,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
         if (!information.Allows(InformationKind.BattleContacts)) overview.Remove("observed_contact_count");
         if (!information.Allows(InformationKind.BattleReports)) overview.Remove("retained_report_count");
         initial["situation"]!["coverage"]!["available_on_request"] = new JArray(Catalogue().Properties().Select(p => p.Name));
-        information.AddPolicy(initial, true);
+        information.AddCoverage(initial, true);
         returnedBytes = Bytes(initial);
         if (returnedBytes > MaxTotalBytes) throw new InvalidOperationException("Mandatory battle input exceeds the consultation payload limit.");
     }

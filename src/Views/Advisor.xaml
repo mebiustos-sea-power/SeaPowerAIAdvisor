@@ -78,14 +78,24 @@
     <TabControl x:Name="SettingsTabs" Grid.Row="1" SelectedIndex="0" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
       <TabItem x:Name="GeneralTab" Header="{DynamicResource Advisor.general.tab}"
                HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
-        <Grid x:Name="GeneralSettings" Margin="0,12,0,0">
+        <ScrollViewer x:Name="GeneralSettings" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,12,0,0">
+          <StackPanel Margin="0,0,8,0">
+            <TextBlock Text="{DynamicResource Advisor.general.experimental}" FontSize="14" FontWeight="Bold" Margin="0,0,0,10" />
+            <CheckBox x:Name="EnableCampaignAdvisor" IsChecked="False" HorizontalContentAlignment="Stretch">
+              <TextBlock Text="{DynamicResource Advisor.general.campaign_alpha}" TextWrapping="Wrap" />
+            </CheckBox>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+      <TabItem x:Name="AdvisorTab" Header="{DynamicResource Advisor.profile.tab}"
+               HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+        <Grid x:Name="AdvisorSettings" Margin="0,12,0,0">
           <Grid.RowDefinitions>
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
           </Grid.RowDefinitions>
           <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="0,0,8,0">
-              <TextBlock Text="{DynamicResource Advisor.profile.tab}" FontSize="14" FontWeight="Bold" Margin="0,0,0,12" />
               <Grid>
                 <Grid.ColumnDefinitions>
                   <ColumnDefinition Width="120" /><ColumnDefinition Width="16" /><ColumnDefinition Width="*" />
@@ -118,10 +128,6 @@
               <TextBox x:Name="ProfilePersonality" Height="120" AcceptsReturn="True" AcceptsTab="False"
                        TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                        FontSize="14" Padding="7" ToolTip="{DynamicResource Advisor.profile.personality_tip}" />
-              <TextBlock Text="{DynamicResource Advisor.general.experimental}" FontSize="14" FontWeight="Bold" Margin="0,20,0,10" />
-              <CheckBox x:Name="EnableCampaignAdvisor" IsChecked="False" HorizontalContentAlignment="Stretch">
-                <TextBlock Text="{DynamicResource Advisor.general.campaign_alpha}" TextWrapping="Wrap" />
-              </CheckBox>
             </StackPanel>
           </ScrollViewer>
           <TextBlock x:Name="ProfileStatus" Grid.Row="1" TextWrapping="Wrap" FontSize="12"
@@ -147,6 +153,10 @@
             <TextBlock Text="{DynamicResource Advisor.ai.max_query_rounds}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,4" />
             <TextBox x:Name="MaxQueryRounds" FontSize="14" Padding="7" Width="80" HorizontalAlignment="Left" MaxLength="2"
                      ToolTip="{DynamicResource Advisor.ai.max_query_rounds_tip}" />
+            <TextBlock Text="{DynamicResource Advisor.ai.common_prompt}" FontSize="12" Margin="0,18,0,4" />
+            <TextBox x:Name="CommonPrompt" Height="120" AcceptsReturn="True" AcceptsTab="False"
+                     TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                     FontSize="14" Padding="7" />
           </StackPanel>
         </ScrollViewer>
       </TabItem>

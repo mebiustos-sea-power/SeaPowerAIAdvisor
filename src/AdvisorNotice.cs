@@ -34,6 +34,7 @@ internal sealed class AdvisorNotice
     }
 
     internal static AdvisorNotice Situation(string code) => new("situation.error." + code, code);
+    internal static AdvisorNotice Prompts(AdvisorPromptException error) => new("prompts.error." + error.Code, error.Code);
     internal static AdvisorNotice Unexpected() => new("connection.unknown", "unexpected_error");
     internal string Message(AdvisorText text) => text[TextKey] + " [" + Code +
         (HttpStatus.HasValue ? " / HTTP " + HttpStatus : "") + "]";

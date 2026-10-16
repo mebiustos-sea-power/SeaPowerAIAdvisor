@@ -231,5 +231,11 @@
   "information.aviation": "航空部隊・飛行中の航空機",
   "information.base_observations": "基地の観測記録",
   "information.orders": "公開済みの命令",
-  "settings.error.information_invalid": "提供情報の設定形式を確認してください。"
+  "settings.error.information_invalid": "提供情報の設定形式を確認してください。",
+  "ai.common_prompt": "共通プロンプト（すべてのアドバイザー）",
+  "settings.error.common_prompt_invalid": "共通プロンプトは2,000文字以内で入力してください。",
+  "prompts.error.prompts_missing": "システム指示ファイルがありません。MODのPromptsフォルダーを確認し、ゲームを再起動してください。",
+  "prompts.error.prompts_unreadable": "システム指示ファイルを読み取れません。MODのPromptsフォルダーを確認し、ゲームを再起動してください。",
+  "prompts.error.prompts_invalid": "システム指示ファイルの形式を確認し、ゲームを再起動してください。",
+  "diagnostics.prompt_failed": "システム指示を読み込めません。"
 }

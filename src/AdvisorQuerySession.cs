@@ -20,12 +20,14 @@ internal sealed class AdvisorQuerySession : IAdvisorQuerySession
     public string Id { get; } = Guid.NewGuid().ToString("N");
     public int RoundsUsed { get; private set; }
     public int MaxRounds { get; }
+    public AdvisorPrompts Prompts { get; }
     internal int ReturnedBytes { get; private set; }
 
-    internal AdvisorQuerySession(SituationSnapshot snapshot, string language, string? question, int maxRounds = DefaultMaxRounds, AdvisorInformation? information = null)
+    internal AdvisorQuerySession(SituationSnapshot snapshot, string language, string? question, int maxRounds = DefaultMaxRounds, AdvisorInformation? information = null, AdvisorPrompts? prompts = null)
     {
         if (maxRounds < 1 || maxRounds > MaximumRounds) throw new ArgumentOutOfRangeException(nameof(maxRounds));
         MaxRounds = maxRounds;
+        Prompts = prompts ?? AdvisorPrompts.Current;
         this.information = information ?? AdvisorInformation.All;
         information = this.information;
         this.snapshot = snapshot ?? throw new ArgumentNullException(nameof(snapshot));
@@ -52,11 +54,10 @@ internal sealed class AdvisorQuerySession : IAdvisorQuerySession
         if (snapshot.Aviation.Flights.Any(f => f.SourceUnitIndex.HasValue &&
             (f.SourceUnitIndex.Value < 0 || f.SourceUnitIndex.Value >= snapshot.Aviation.Units.Count)))
             throw new InvalidOperationException("An own flight has no matching air unit.");
-        initial = AdvisorInputBuilder.Header(language, question);
+        initial = AdvisorInputBuilder.Header(language, question, Prompts, false);
         initial["schema_version"] = 2;
         initial["interaction_mode"] = "on_demand";
         initial["consultation_id"] = Id;
-        initial["instructions"]!["retrieval"] = "Use query_situation to obtain relevant evidence before advising. Lists give entry points, not mandatory menu steps. Known IDs can be queried directly and independent requests can be batched. Report the limits of any advice if evidence or retrieval budget is insufficient.";
         initial["situation"] = new JObject
         {
             ["captured_at_utc"] = AdvisorInputBuilder.Time(snapshot.At),
@@ -82,7 +83,7 @@ internal sealed class AdvisorQuerySession : IAdvisorQuerySession
                 ["retained_report_count"] = snapshot.Reports.Count
             }
         };
-        initial["aviation_semantics"] = "Land total includes airborne aircraft; ready_unarmed needs preparation. Carrier nominal_complement is a reference complement; aboard excludes allocated arming/airborne aircraft. Available_for_preparation excludes cooling but does not establish an armed, launchable sortie. Unsupported carrier types have null operational counts. Flight entries overlap unit counts. Selected/selectable loadout names do not prove current weapon stocks, range or mission feasibility.";
+        initial["aviation_semantics"] = Prompts.AviationSemantics;
         initial["knowledge_catalog"] = AdvisorQueryCatalog.Describe(snapshot, information);
         initial["query_tool"] = AdvisorQueryCatalog.Tool(information);
         initial["query_limits"] = new JObject
@@ -105,7 +106,7 @@ internal sealed class AdvisorQuerySession : IAdvisorQuerySession
         if (!information.Allows(InformationKind.CampaignReports)) overview.Remove("retained_report_count");
         initial["situation"]!["coverage"]!["available_on_request"] = new JArray(
             ((JArray)initial["knowledge_catalog"]!).OfType<JObject>().Select(r => (string)r["category"]!));
-        information.AddPolicy(initial, false);
+        information.AddCoverage(initial, false);
         ReturnedBytes = Bytes(initial);
         if (ReturnedBytes > MaxTotalBytes)
             throw new InvalidOperationException("Mandatory initial input exceeds the consultation payload limit.");
