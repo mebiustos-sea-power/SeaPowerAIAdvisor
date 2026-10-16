@@ -32,6 +32,8 @@ internal sealed class AdvisorWindow
     private readonly Image portraitImage, profilePreview;
     private readonly FrameworkElement conversationPane, settingsPane;
     private readonly TabControl settingsTabs;
+    private readonly CheckBox logAiJson;
+    private readonly string settingsPath;
     private readonly Button settingsAction;
     private readonly string profileDirectory;
     private AdvisorPortrait? portrait, previewPortrait;
@@ -96,6 +98,9 @@ internal sealed class AdvisorWindow
         Named<Button>(content, "SaveProfile").Click += (_, _) => guard(SaveProfile);
         Named<Button>(content, "ReloadProfile").Click += (_, _) => guard(() => ReloadProfile(true));
         profileDirectory = AdvisorProfile.DirectoryIn(UnityEngine.Application.persistentDataPath);
+        settingsPath = AdvisorSettings.PathIn(UnityEngine.Application.persistentDataPath);
+        logAiJson = Named<CheckBox>(content, "LogAiJson");
+        logAiJson.Click += (_, _) => guard(SaveLogging);
         Named<TextBox>(content, "ProfilePath").Text = AdvisorProfile.SettingsPath(profileDirectory);
         send = Named<Button>(content, "Send");
         send.Click += (_, _) => guard(Send);
@@ -160,6 +165,7 @@ internal sealed class AdvisorWindow
         if (IsOpen) { Close(); return; }
         RefreshLanguage();
         ReloadProfile(false);
+        ReloadLogging();
         WindowHostCommands.OpenWindowCommand.Execute(window, view);
         if (!IsOpen) throw new InvalidOperationException("The game window host did not open the advisor.");
         // Keep the draft and history while reopening this screen; integrations reset them on a mission change.
@@ -236,7 +242,7 @@ internal sealed class AdvisorWindow
         }
         try
         {
-            var settings = AdvisorSettings.Load(AdvisorSettings.PathIn(UnityEngine.Application.persistentDataPath));
+            var settings = AdvisorSettings.Load(settingsPath);
             var session = source.CreateSession(replyLanguage(), request.Text);
             var history = conversation.Exchanges.ToArray();
             pendingQuestion = request;
@@ -396,8 +402,43 @@ internal sealed class AdvisorWindow
         settingsPane.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         paneTitle.Text = text[show ? "pane.settings" : "pane.conversation"];
         settingsAction.Content = text[show ? "action.back" : "action.settings"];
-        if (show) FocusSettings();
+        if (show) { ReloadLogging(); FocusSettings(); }
         else { scrollPending = true; question.Focus(); }
+    }
+
+    private void ReloadLogging()
+    {
+        try
+        {
+            logAiJson.IsChecked = AdvisorSettings.LoadLogging(settingsPath);
+            logAiJson.IsEnabled = true;
+        }
+        catch (AdvisorConnectionException failure)
+        {
+            logAiJson.IsEnabled = false;
+            LoggingSettingsError(failure);
+        }
+    }
+
+    private void SaveLogging()
+    {
+        var enabled = logAiJson.IsChecked == true;
+        try
+        {
+            AdvisorSettings.SaveLogging(settingsPath, enabled);
+            diagnosticStatus.Text = string.Empty;
+        }
+        catch (AdvisorConnectionException failure)
+        {
+            logAiJson.IsChecked = !enabled;
+            LoggingSettingsError(failure);
+        }
+    }
+
+    private void LoggingSettingsError(AdvisorConnectionException failure)
+    {
+        diagnosticStatus.Text = text.Format("developer.settings_error", failure.Code);
+        warn("AI logging settings failed: " + failure.Code);
     }
 
     private void FocusSettings()

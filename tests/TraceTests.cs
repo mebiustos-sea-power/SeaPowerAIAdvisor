@@ -166,9 +166,11 @@ internal static class TraceTests
                 (long)response["received_bytes"]! <= GeminiTransport.MaxResponseBytes + 8192 &&
                 ((string)response["body_json"]!).Length == (long)response["received_bytes"]!, "Oversized reception was silently complete or unbounded");
         }));
-        check("Logging can be disabled explicitly and a write failure stops before any HTTP call", () => InTemp(async directory =>
+        check("Logging defaults to off, explicit settings control it, and a write failure stops before HTTP", () => InTemp(async directory =>
         {
-            Require(Settings().LogAiJson && !Settings(false).LogAiJson, "Logging default or opt-out is wrong");
+            var defaults = AdvisorSettings.Parse(new JObject { ["api_key"] = Key }.ToString());
+            Require(!defaults.LogAiJson && Settings().LogAiJson && !Settings(false).LogAiJson,
+                "Logging default or explicit override is wrong");
             foreach (var invalid in new[] { "null", "\"false\"", "0" })
             {
                 try { AdvisorSettings.Parse("{\"api_key\":\"" + Key + "\",\"log_ai_json\":" + invalid + "}"); }
@@ -178,18 +180,19 @@ internal static class TraceTests
             var disabledPath = Path.Combine(directory, "disabled");
             var question = new AdvisorQuestion("Question");
             var calls = 0;
-            await AdvisorConsultation.RunAsync(disabledPath, Session(question), Settings(false), question, Array.Empty<ChatExchange>(),
-                CancellationToken.None, trace =>
-                {
-                    Require(trace == null, "Disabled logging created a writer");
-                    return new GeminiTransport(new Handler((r, c) => { calls++; return Task.FromResult(Response(200, Reply(new JObject { ["text"] = "Answer" }))); }), trace);
-                });
-            Require(calls == 1 && !Directory.Exists(disabledPath), "Disabling logs affected the consultation or wrote files");
+            foreach (var settings in new[] { defaults, Settings(false) })
+                await AdvisorConsultation.RunAsync(disabledPath, Session(question), settings, question, Array.Empty<ChatExchange>(),
+                    CancellationToken.None, trace =>
+                    {
+                        Require(trace == null, "Disabled logging created a writer");
+                        return new GeminiTransport(new Handler((r, c) => { calls++; return Task.FromResult(Response(200, Reply(new JObject { ["text"] = "Answer" }))); }), trace);
+                    });
+            Require(calls == 2 && !Directory.Exists(disabledPath), "Disabling logs affected the consultation or wrote files");
             var blocked = Path.Combine(directory, "blocked");
             File.WriteAllText(blocked, "file, not directory");
             await Throws("diagnostic_log_error", () => AdvisorConsultation.RunAsync(blocked, Session(question), Settings(), question,
                 Array.Empty<ChatExchange>(), CancellationToken.None, trace => { calls++; throw new InvalidOperationException("HTTP should not start"); }));
-            Require(calls == 1, "An unlogged consultation was sent despite a failed log");
+            Require(calls == 2, "An unlogged consultation was sent despite a failed log");
         }));
         check("Simultaneous consultations keep independent files, identities and sequences", () => InTemp(async directory =>
         {
