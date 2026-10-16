@@ -10,6 +10,13 @@ internal static class Program
 
     private static void Main(string[] args)
     {
+        if (args.Length == 1 && args[0] == "--battle-only")
+        {
+            BattleTests.Run(Check);
+            Require(!AppDomain.CurrentDomain.GetAssemblies().Any(a => a.GetName().Name == "DynamicCampaignMod"), "Battle-only verification loaded DCM");
+            Console.WriteLine("PASS " + count + " battle checks (no DCM loaded)");
+            return;
+        }
         if (args.Length == 5 && args[0] == "--query-demo") { QueryDemo.Run(args[1], args[2], args[3], args[4]); return; }
         if (args.Length == 4 && args[0] == "--gemini-air-smoke")
         {
@@ -101,6 +108,7 @@ internal static class Program
                     .Any(m => (m.DeclaringType?.Namespace ?? (m as TypeReference)?.Namespace ?? "").StartsWith("System.Net", StringComparison.Ordinal)),
                     "Network access crossed the player-knowledge boundary");
         });
+        BattleTests.Run(Check);
         SituationTests.Run(args[0], Check, args.Skip(3).ToArray());
         InputTests.Run(args[0], args[2], Check);
         QueryTests.Run(args[0], Check);

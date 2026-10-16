@@ -114,7 +114,8 @@ internal static class CampaignAirReader
     private static object? Static(object state, string type, string method, params object[] args) =>
         StaticCall(state.GetType().Assembly.GetType("DynamicCampaignMod.Core.Sim." + type, true)!, method, args);
     private static object? StaticCall(Type type, string method, params object[] args) =>
-        (type.GetMethod(method, BindingFlags.Public | BindingFlags.Static)
+        (type.GetMethods(BindingFlags.Public | BindingFlags.Static).SingleOrDefault(m => m.Name == method &&
+            m.GetParameters().Length == args.Length && m.GetParameters().Select((p, i) => p.ParameterType.IsInstanceOfType(args[i])).All(matches => matches))
             ?? throw new MissingMethodException(type.FullName, method)).Invoke(null, args);
     private static object? Call(object source, string name, params object[] args) =>
         (source.GetType().GetMethod(name, BindingFlags.Public | BindingFlags.Instance)

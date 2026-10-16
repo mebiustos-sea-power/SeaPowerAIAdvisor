@@ -9,12 +9,12 @@ internal sealed class AdvisorPortrait : IDisposable
 {
     private readonly Texture2D texture;
     internal TextureSource Source { get; }
-    internal AdvisorPortrait(byte[] png)
+    internal AdvisorPortrait(byte[] image)
     {
         texture = new Texture2D(2, 2, UnityEngine.TextureFormat.RGBA32, false);
         try
         {
-            if (!ImageConversion.LoadImage(texture, png, true)) throw new AdvisorProfileException("portrait_invalid");
+            if (!ImageConversion.LoadImage(texture, image, true)) throw new AdvisorProfileException("portrait_invalid");
             texture.name = "SeaPowerAIAdvisor portrait";
             texture.filterMode = FilterMode.Bilinear;
             texture.wrapMode = TextureWrapMode.Clamp;

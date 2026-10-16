@@ -37,7 +37,7 @@ internal static class QueryDemo
         var initial = session.InitialInput();
         using var fullText = new StringReader(AdvisorInputBuilder.Build(snapshot, "ja", "勝利のために優先すべき行動は？"));
         using var fullReader = new JsonTextReader(fullText) { DateParseHandling = DateParseHandling.None };
-        var fullBytes = AdvisorQuerySession.Bytes(JObject.Load(fullReader));
+        var fullBytes = AdvisorQueryLimits.Bytes(JObject.Load(fullReader));
         var trace = new JObject
         {
             ["demo_mode"] = "offline_scripted_queries",
@@ -46,7 +46,7 @@ internal static class QueryDemo
             ["summary"] = new JObject
             {
                 ["rounds_used"] = session.RoundsUsed,
-                ["initial_compact_utf8_bytes"] = AdvisorQuerySession.Bytes(initial),
+                ["initial_compact_utf8_bytes"] = AdvisorQueryLimits.Bytes(initial),
                 ["successful_payload_compact_utf8_bytes"] = session.ReturnedBytes,
                 ["full_diagnostic_compact_utf8_bytes"] = fullBytes
             }

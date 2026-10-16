@@ -5,77 +5,100 @@ using System.Reflection;
 using AnchorChain;
 using BepInEx.Logging;
 using HarmonyLib;
+using SeapowerUI.ViewModels;
 
 namespace SeaPowerAIAdvisor;
 
-[ACPlugin(ModId, "Sea Power AI Advisor Prototype", "0.9.1", new[] { "dynamiccampaignmod" }, new string[0])]
-[ACDependency("dynamiccampaignmod", null, null)]
+[ACPlugin(ModId, "Sea Power AI Advisor Prototype", "0.10.4", new string[0], new string[0])]
 public sealed class Plugin : IAnchorChainMod
 {
     public const string ModId = "mebiustos.seapower.aiadvisor";
     private static readonly ManualLogSource Log = Logger.CreateLogSource("Sea Power AI Advisor");
     private static Harmony? harmony;
-    private static Assembly? campaign;
-    private static CampaignIntegration? integration;
-    private static bool scheduled;
-    private static bool installed;
-    private static bool failed;
+    private static CampaignIntegration? campaign;
+    private static BattleIntegration? battle;
+    private static bool installed, campaignFailed, battleFailed;
 
     public void TriggerEntryPoint()
     {
-        if (scheduled || installed || failed) return;
-        Guard(() =>
+        if (installed) return;
+        try
         {
             var game = AppDomain.CurrentDomain.GetAssemblies().Single(a => a.GetName().Name == "Seapower-Scripts");
             var files = game.GetType("SeaPower.FileManager", true)!;
-            var package = Path.GetDirectoryName(typeof(Plugin).Assembly.Location)!;
-            if (!ModActivation.IsEnabled(files, package))
+            if (!ModActivation.IsEnabled(files, Path.GetDirectoryName(typeof(Plugin).Assembly.Location)!))
             {
-                Log.LogInfo("Disabled in the mod manager; UI prototype was not installed.");
+                Log.LogInfo("Disabled in the mod manager; advisor was not installed.");
                 return;
             }
-            campaign = AppDomain.CurrentDomain.GetAssemblies().SingleOrDefault(a => a.GetName().Name == "DynamicCampaignMod")
-                ?? throw new InvalidOperationException("DynamicCampaignMod.dll is not loaded.");
-            if (!ModActivation.IsEnabled(files, Path.GetDirectoryName(campaign.Location)!))
-                throw new InvalidOperationException("Dynamic Campaign Mod is disabled.");
-            var deferred = campaign.GetType("DynamicCampaignMod.DeferredPatcher", true)!;
             harmony = new Harmony(ModId);
-            harmony.Patch(Required(deferred, "Patch"), postfix: new HarmonyMethod(typeof(Plugin), nameof(Install)));
-            scheduled = true;
-            Log.LogInfo("Advisor scheduled after campaign initialization.");
-        });
+            battle = new BattleIntegration(GuardBattle, message => Log.LogWarning(message));
+            harmony.Patch(Required(typeof(MainGameViewModel), "OnLateUpdate"), postfix: new HarmonyMethod(typeof(Plugin), nameof(BattleFrame)));
+            harmony.Patch(Required(typeof(MainGameViewModel), "OnDestroy"), prefix: new HarmonyMethod(typeof(Plugin), nameof(BattleDestroyed)));
+            installed = true;
+            Log.LogInfo("Advisor 0.10.4 ready for tactical battles. DCM is optional. Open AI at the upper right of the battle screen.");
+            GuardCampaign(() => InstallCampaign(files));
+        }
+        catch (Exception error)
+        {
+            Log.LogError("Advisor initialization failed: " + error);
+            battleFailed = true;
+            try { battle?.Reset(); } catch (Exception cleanup) { Log.LogError(cleanup); }
+        }
     }
 
-    private static void Install() => Guard(() =>
+    private static void InstallCampaign(Type files)
     {
-        if (installed) return;
-        integration = new CampaignIntegration(campaign!, Guard, message => Log.LogWarning(message));
-        var ui = campaign!.GetType("DynamicCampaignMod.UI.CampaignUI", true)!;
-        harmony!.Patch(Required(ui, "Frame"), postfix: new HarmonyMethod(typeof(Plugin), nameof(Frame)));
-        harmony.Patch(Required(ui, "Detach"), prefix: new HarmonyMethod(typeof(Plugin), nameof(Detach)));
-        var session = campaign.GetType("DynamicCampaignMod.Game.Session.CampaignSession", true)!;
-        harmony.Patch(Required(session, "OnSceneUnloaded"), prefix: new HarmonyMethod(typeof(Plugin), nameof(SceneUnloaded)));
-        installed = true;
-        Log.LogInfo("Gemini advisor 0.9.1 ready. Use AI in the strategy toolbar. Player-known on-demand knowledge queries with victory objectives; reply language follows the game; sends only on explicit consultation.");
-    });
+        var assembly = AppDomain.CurrentDomain.GetAssemblies().SingleOrDefault(a => a.GetName().Name == "DynamicCampaignMod");
+        if (assembly == null)
+        {
+            Log.LogInfo("DCM is not installed; tactical advisor is available independently.");
+            return;
+        }
+        if (!ModActivation.IsEnabled(files, Path.GetDirectoryName(assembly.Location)!))
+        {
+            Log.LogInfo("DCM is disabled; tactical advisor is available independently.");
+            return;
+        }
+        campaign = new CampaignIntegration(assembly, GuardCampaign, message => Log.LogWarning(message));
+        var ui = assembly.GetType("DynamicCampaignMod.UI.CampaignUI", true)!;
+        harmony!.Patch(Required(ui, "Frame"), postfix: new HarmonyMethod(typeof(Plugin), nameof(CampaignFrame)));
+        harmony.Patch(Required(ui, "Detach"), prefix: new HarmonyMethod(typeof(Plugin), nameof(CampaignDetach)));
+        var session = assembly.GetType("DynamicCampaignMod.Game.Session.CampaignSession", true)!;
+        harmony.Patch(Required(session, "OnSceneUnloaded"), prefix: new HarmonyMethod(typeof(Plugin), nameof(CampaignSceneUnloaded)));
+        Log.LogInfo("Optional DCM campaign advisor installed.");
+    }
 
-    private static void Frame(object __instance) => Guard(() => integration!.Tick(__instance));
-    private static void Detach() => Guard(() => integration?.Reset());
-    private static void SceneUnloaded(UnityEngine.SceneManagement.Scene scene) => Guard(() => integration?.SceneUnloaded(scene));
+    private static void BattleFrame(MainGameViewModel __instance) => GuardBattle(() => battle!.Tick(__instance));
+    private static void BattleDestroyed(MainGameViewModel __instance) => GuardBattle(() => battle?.Destroy(__instance));
+    private static void CampaignFrame(object __instance) => GuardCampaign(() => campaign!.Tick(__instance));
+    private static void CampaignDetach() => GuardCampaign(() => campaign?.Reset());
+    private static void CampaignSceneUnloaded(UnityEngine.SceneManagement.Scene scene) => GuardCampaign(() => campaign?.SceneUnloaded(scene));
 
     private static MethodInfo Required(Type type, string name) =>
         AccessTools.Method(type, name) ?? throw new MissingMethodException(type.FullName, name);
 
-    private static void Guard(Action action)
+    private static void GuardBattle(Action action)
     {
-        if (failed) return;
+        if (battleFailed) return;
         try { action(); }
         catch (Exception error)
         {
-            failed = true;
-            Log.LogError("Advisor prototype stopped until restart: " + error);
-            try { integration?.Reset(); }
-            catch (Exception cleanupError) { Log.LogError("Advisor UI cleanup failed: " + cleanupError); }
+            battleFailed = true;
+            Log.LogError("Battle advisor stopped until restart: " + error);
+            try { battle?.Reset(); } catch (Exception cleanup) { Log.LogError(cleanup); }
+        }
+    }
+
+    private static void GuardCampaign(Action action)
+    {
+        if (campaignFailed) return;
+        try { action(); }
+        catch (Exception error)
+        {
+            campaignFailed = true;
+            Log.LogError("DCM advisor stopped until restart: " + error);
+            try { campaign?.Reset(); } catch (Exception cleanup) { Log.LogError(cleanup); }
         }
     }
 }

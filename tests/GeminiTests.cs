@@ -44,6 +44,39 @@ internal static class GeminiTests
             }
             finally { if (File.Exists(path)) File.Delete(path); }
         });
+        check("Advisor preferences reach Gemini in both modes without replacing core rules, language or image privacy", () => Async(async () =>
+        {
+            foreach (var useDefault in new[] { false, true })
+            foreach (var personality in new[] { "", "親しみのある率直な口調。\n必要なら詳しく説明する。" })
+            {
+                const string inactivePersonality = "INACTIVE_STYLE_MUST_REMAIN_LOCAL";
+                var profile = new AdvisorProfile("カスタム士官", @"C:\Private\local-portrait.png", useDefault,
+                    useDefault ? personality : inactivePersonality, useDefault ? inactivePersonality : personality);
+                var snapshot = QueryTests.Capture(new SituationTests.Fixture(assembly));
+                var session = new AdvisorQuerySession(snapshot, "fr", "What should I do next?");
+                var expectedRules = session.InitialInput()["instructions"]!.ToString(Formatting.None);
+                var fake = new Fake((n, body, token) =>
+                {
+                    var initial = JObject.Parse((string)body["contents"]![0]!["parts"]![0]!["text"]!);
+                    var preferences = (JObject)initial["advisor_preferences"]!;
+                    Require((string?)preferences["name"] == profile.DisplayName &&
+                        (string?)preferences["personality_and_tone"] == personality &&
+                        preferences.Properties().Count() == 2 &&
+                        !body.ToString().Contains(inactivePersonality, StringComparison.Ordinal),
+                        "Wrong active personality or inactive/private profile settings were sent");
+                    Require((string?)initial["reply_language"] == "fr", "Style changed the game reply language");
+                    var system = (string)body["systemInstruction"]!["parts"]![0]!["text"]!;
+                    Require(system.Contains(expectedRules, StringComparison.Ordinal) &&
+                        system.Contains(AdvisorAnswerPolicy.Personality, StringComparison.Ordinal) &&
+                        (personality.Length == 0 || !system.Contains(personality, StringComparison.Ordinal)),
+                        "User style replaced core rules or was elevated into the system instruction");
+                    return Reply(new JObject { ["text"] = "Réponse." });
+                });
+                var result = await new GeminiAdvisor(fake).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None, profile);
+                Require(result.Text == "Réponse." && fake.Calls == 1 &&
+                    session.InitialInput()["advisor_preferences"] == null, "Preferences changed the knowledge session or caused extra API calls");
+            }
+        }));
         check("HTTP requests use only the official HTTPS endpoint and keep the key out of URLs and JSON", () => Async(async () =>
         {
             var handler = new Handler(async (request, cancellation) =>
@@ -155,7 +188,7 @@ internal static class GeminiTests
             var session = Session(assembly);
             var transport = new Fake((n, body, cancellation) =>
             {
-                if (n <= AdvisorQuerySession.MaxRounds) return Reply(new JObject { ["functionCall"] = Call(session, "catalog", "round-" + n) });
+                if (n <= AdvisorQueryLimits.MaxRounds) return Reply(new JObject { ["functionCall"] = Call(session, "catalog", "round-" + n) });
                 Require((string?)body["toolConfig"]!["functionCallingConfig"]!["mode"] == "NONE", "Tools still enabled after query limit");
                 var response = Reply(new JObject { ["text"] = "取得上限の範囲で回答します。" }); response.Remove("usageMetadata"); return response;
             });

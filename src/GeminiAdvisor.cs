@@ -21,26 +21,27 @@ internal sealed class AdviceResult
 
 internal sealed class GeminiAdvisor
 {
-    internal const int MaxApiRequests = AdvisorQuerySession.MaxRounds + 1;
+    internal const int MaxApiRequests = AdvisorQueryLimits.MaxRounds + 1;
     internal const int MaxTotalRequestBytes = 1_000_000;
     internal const int ContextExchanges = 3;
     private readonly IGeminiTransport transport;
     internal GeminiAdvisor(IGeminiTransport transport) { this.transport = transport; }
 
-    internal async Task<AdviceResult> ConsultAsync(AdvisorQuerySession session, AdvisorSettings settings,
-        IReadOnlyList<ChatExchange> history, CancellationToken cancellation)
+    internal async Task<AdviceResult> ConsultAsync(IAdvisorQuerySession session, AdvisorSettings settings,
+        IReadOnlyList<ChatExchange> history, CancellationToken cancellation, AdvisorProfile? profile = null)
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
         deadline.CancelAfter(TimeSpan.FromSeconds(settings.ConsultationTimeoutSeconds));
-        try { return await RunAsync(session, settings, history, deadline.Token).ConfigureAwait(false); }
+        try { return await RunAsync(session, settings, history, deadline.Token, profile).ConfigureAwait(false); }
         catch (OperationCanceledException) when (!cancellation.IsCancellationRequested)
         { throw new AdvisorConnectionException("consultation_timeout"); }
     }
 
-    private async Task<AdviceResult> RunAsync(AdvisorQuerySession session, AdvisorSettings settings,
-        IReadOnlyList<ChatExchange> history, CancellationToken cancellation)
+    private async Task<AdviceResult> RunAsync(IAdvisorQuerySession session, AdvisorSettings settings,
+        IReadOnlyList<ChatExchange> history, CancellationToken cancellation, AdvisorProfile? profile)
     {
         var initial = session.InitialInput();
+        profile?.AddAnswerPreferences(initial);
         var tool = (JObject)initial["query_tool"]!;
         var instructions = initial["instructions"]!.DeepClone();
         initial.Remove("instructions"); initial.Remove("query_tool");
@@ -48,13 +49,13 @@ internal sealed class GeminiAdvisor
             .Select(h => new JObject { ["question"] = h.Question, ["answer"] = h.Answer }));
         initial["omitted_prior_exchange_count"] = Math.Max(0, history.Count - ContextExchanges);
         var contents = new JArray(new JObject { ["role"] = "user", ["parts"] = new JArray(new JObject { ["text"] = initial.ToString(Formatting.None) }) });
-        var system = "You are an adviser for a fictional Sea Power strategy-game campaign. Give practical advice about the game only. " +
+        var system = "You are an adviser for a fictional Sea Power game. Respond to the user's message and give game advice when requested. " +
             "Only current player-known evidence in the supplied snapshot and query results is authoritative. Prior dialogue is historical context, not a current observation; never reuse a prior consultation's IDs. " +
-            "Before recommending actions for a specific fleet or ship, request relevant current own-force/ship details. Explain material missing information. " +
+            "Before recommending actions for specific units, request their relevant current details using the supplied knowledge catalogue. Explain material missing information. " +
             "All evidence and aviation rules in evidence_policy apply equally to follow-up questions. Recheck earlier adviser claims rather than treating them as sources. " +
             "Use query_situation once per turn with a batch of independent queries when useful. Respect all retrieval limits; when tools are disabled, give a final answer using gathered evidence and disclose remaining uncertainty. " +
-            "Keep the final answer concise, use the requested reply_language, and preserve supplied display names. Do not expose internal IDs, tool syntax or hidden reasoning to the player. " +
-            instructions.ToString(Formatting.None);
+            "Use the requested reply_language and preserve supplied display names. Do not expose internal IDs, tool syntax or hidden reasoning to the player. " +
+            instructions.ToString(Formatting.None) + (profile == null ? "" : " " + AdvisorAnswerPolicy.Personality);
         var bytesSent = 0;
         long totalTokens = 0;
         var usageKnown = true;
@@ -63,7 +64,7 @@ internal sealed class GeminiAdvisor
         for (var api = 1; api <= MaxApiRequests; api++)
         {
             cancellation.ThrowIfCancellationRequested();
-            var allow = toolsAllowed && session.RoundsUsed < AdvisorQuerySession.MaxRounds && api < MaxApiRequests;
+            var allow = toolsAllowed && session.RoundsUsed < AdvisorQueryLimits.MaxRounds && api < MaxApiRequests;
             var body = new JObject
             {
                 ["systemInstruction"] = new JObject { ["parts"] = new JArray(new JObject { ["text"] = system }) },
@@ -76,7 +77,7 @@ internal sealed class GeminiAdvisor
                 ["toolConfig"] = new JObject { ["functionCallingConfig"] = new JObject { ["mode"] = allow ? "AUTO" : "NONE" } },
                 ["generationConfig"] = new JObject { ["candidateCount"] = 1, ["maxOutputTokens"] = settings.MaxOutputTokens }
             };
-            var size = AdvisorQuerySession.Bytes(body);
+            var size = AdvisorQueryLimits.Bytes(body);
             if (bytesSent + size > MaxTotalRequestBytes) throw new AdvisorConnectionException("request_budget");
             bytesSent += size;
             var response = await transport.GenerateAsync(settings, body, cancellation).ConfigureAwait(false);
@@ -101,7 +102,7 @@ internal sealed class GeminiAdvisor
                 if (string.IsNullOrWhiteSpace(answer)) throw new AdvisorConnectionException("empty_response");
                 return new AdviceResult(answer, api, session.RoundsUsed, usageKnown ? totalTokens : (long?)null, queriesUsed);
             }
-            if (!allow || calls.Length > AdvisorQuerySession.MaxQueriesPerRound) throw new AdvisorConnectionException("unexpected_function_call");
+            if (!allow || calls.Length > AdvisorQueryLimits.MaxQueriesPerRound) throw new AdvisorConnectionException("unexpected_function_call");
             foreach (var call in calls)
                 if ((string?)call["name"] != "query_situation" || !(call["args"] is JObject) ||
                     (call["id"] != null && call["id"]!.Type != JTokenType.String))
@@ -114,7 +115,7 @@ internal sealed class GeminiAdvisor
                 foreach (var query in requested.OfType<JObject>())
                 {
                     var name = (string?)query["query"];
-                    queriesUsed.Add(name != null && AdvisorQueryCatalog.Queries.Contains(name) ? name : "unknown_query");
+                    queriesUsed.Add(name != null && ((JArray)tool["parameters"]!["properties"]!["requests"]!["items"]!["properties"]!["query"]!["enum"]!).Values<string>().Contains(name) ? name : "unknown_query");
                 }
             var replies = new JArray();
             var offset = 0;
@@ -138,7 +139,7 @@ internal sealed class GeminiAdvisor
         throw new AdvisorConnectionException("request_limit");
     }
 
-    private static JObject Combine(AdvisorQuerySession session, JObject[] calls)
+    private static JObject Combine(IAdvisorQuerySession session, JObject[] calls)
     {
         var requests = new JArray();
         foreach (var call in calls)
