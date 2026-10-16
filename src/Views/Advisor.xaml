@@ -31,7 +31,8 @@
           </Border>
           <TextBlock x:Name="AdvisorName" Text="Michael Reed" TextWrapping="Wrap" TextAlignment="Center"
                      FontSize="17" Margin="0,10,0,0" />
-          <TextBlock Text="{DynamicResource Advisor.advisor.role}" TextAlignment="Center" FontSize="12" Margin="0,5,0,0" Opacity="0.7" />
+          <TextBlock x:Name="AdvisorRole" Text="{DynamicResource Advisor.advisor.role}" TextWrapping="Wrap" TextAlignment="Center"
+                     FontSize="12" Margin="0,5,0,0" Opacity="0.7" />
           <TextBlock x:Name="Activity" Text="{DynamicResource Advisor.activity.idle}" TextWrapping="Wrap" TextAlignment="Center"
                      FontSize="12" Margin="0,12,0,0" Opacity="0.8" />
           <StackPanel Margin="0,18,0,0">
@@ -107,6 +108,8 @@
                   </StackPanel>
                   <TextBlock Text="{DynamicResource Advisor.profile.name}" FontSize="12" Margin="0,0,0,4" />
                   <TextBox x:Name="ProfileName" FontSize="14" Padding="7" IsReadOnly="True" />
+                  <TextBlock Text="{DynamicResource Advisor.profile.role}" FontSize="12" Margin="0,8,0,4" />
+                  <TextBox x:Name="ProfileRole" FontSize="14" Padding="7" IsReadOnly="True" />
                   <Button x:Name="ChoosePortrait" Content="{DynamicResource Advisor.action.choose_portrait}"
                           Height="30" Padding="10,0" HorizontalAlignment="Left" Margin="0,8,0,0" Visibility="Collapsed" />
                 </StackPanel>

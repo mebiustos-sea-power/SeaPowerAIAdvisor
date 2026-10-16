@@ -22,6 +22,57 @@ internal static class ProfileTests
             Require(profile.UseDefault && profile.DisplayName == "Michael Reed" && profile.PortraitFile == "portrait.png", "Initial user profile is incorrect");
             Require(profile.ReadPortrait(directory).SequenceEqual(png), "Bundled image was modified or not installed");
         }));
+        check("Custom role initializes once from the game language for new and older profiles", () =>
+        {
+            foreach (var language in new[] { "ja", "en", "fr" }) InTemp(directory =>
+            {
+                var role = AdvisorText.Load(language)["advisor.role"];
+                AdvisorProfile.EnsureCreated(directory, () => png, role);
+                Require(AdvisorProfile.Load(directory).CustomRole == role, "The initial role was not saved in the selected language");
+                var before = File.ReadAllBytes(AdvisorProfile.SettingsPath(directory));
+                var other = AdvisorText.Load(language == "ja" ? "en" : "ja")["advisor.role"];
+                AdvisorProfile.EnsureCreated(directory, () => throw new InvalidOperationException("Existing portrait replaced"), other);
+                Require(File.ReadAllBytes(AdvisorProfile.SettingsPath(directory)).SequenceEqual(before),
+                    "Changing the game language replaced the saved role");
+                var legacy = new JObject { ["display_name"] = "Existing advisor", ["portrait_file"] = "portrait.png", ["personality"] = "Existing style" };
+                File.WriteAllText(AdvisorProfile.SettingsPath(directory), legacy.ToString());
+                AdvisorProfile.EnsureCreated(directory, () => png, role);
+                var upgraded = AdvisorProfile.Load(directory);
+                Require(upgraded.CustomRole == role && upgraded.DisplayName == "Existing advisor" && !upgraded.UseDefault &&
+                    upgraded.DefaultPersonality == "Existing style" && upgraded.CustomPersonality == "Existing style",
+                    "Initializing an older profile changed its identity or style");
+                before = File.ReadAllBytes(AdvisorProfile.SettingsPath(directory));
+                AdvisorProfile.EnsureCreated(directory, () => png, other);
+                Require(File.ReadAllBytes(AdvisorProfile.SettingsPath(directory)).SequenceEqual(before), "The old profile was initialized again");
+            });
+        });
+        check("Custom role edits survive mode changes and portrait imports while an empty saved role stays empty", () => InTemp(directory =>
+        {
+            AdvisorProfile.EnsureCreated(directory, () => png, AdvisorText.Load("ja")["advisor.role"]);
+            var applied = AdvisorProfile.Load(directory);
+            var before = File.ReadAllBytes(AdvisorProfile.SettingsPath(directory));
+            var draft = new AdvisorProfileDraft(applied) { UseDefault = false, CustomRole = "情報将校" };
+            draft.UseDefault = true;
+            Require(draft.CustomRole == "情報将校" && applied.CustomRole != draft.CustomRole &&
+                File.ReadAllBytes(AdvisorProfile.SettingsPath(directory)).SequenceEqual(before), "Unsaved role edits changed the active profile");
+            Require(new AdvisorProfileDraft(applied).CustomRole == applied.CustomRole, "Discarding edits retained an unsaved role");
+            draft.SelectPortrait(png);
+            draft.Save(directory);
+            var loaded = AdvisorProfile.Load(directory);
+            Require(loaded.UseDefault && loaded.CustomRole == "情報将校" && loaded.ReadPortrait(directory).SequenceEqual(png),
+                "Saving the default identity or importing a portrait lost the custom role");
+            draft = new AdvisorProfileDraft(loaded) { UseDefault = false, CustomRole = "" };
+            draft.Save(directory);
+            AdvisorProfile.EnsureCreated(directory, () => png, AdvisorText.Load("en")["advisor.role"]);
+            Require(AdvisorProfile.Load(directory).CustomRole == "", "An explicitly empty role was filled in again");
+            before = File.ReadAllBytes(AdvisorProfile.SettingsPath(directory));
+            foreach (var invalid in new[] { new string('x', AdvisorProfile.MaxRoleLength + 1), "invalid\nrole" })
+            {
+                draft.CustomRole = invalid;
+                Throws("role_invalid", () => draft.Save(directory));
+            }
+            Require(File.ReadAllBytes(AdvisorProfile.SettingsPath(directory)).SequenceEqual(before), "An invalid role changed saved settings");
+        }));
         check("Default and custom identities retain independent personality edits across switches and saves", () => InTemp(directory =>
         {
             AdvisorProfile.EnsureCreated(directory, () => png);
@@ -251,6 +302,8 @@ internal static class ProfileTests
                 "{\"display_name\":\"a\",\"portrait_file\":\"portrait.png\",\"personality\":17}",
                 "{\"display_name\":\"a\",\"portrait_file\":\"portrait.png\",\"default_personality\":17}",
                 "{\"display_name\":\"a\",\"portrait_file\":\"portrait.png\",\"custom_personality\":17}",
+                "{\"display_name\":\"a\",\"portrait_file\":\"portrait.png\",\"custom_role\":17}",
+                "{\"display_name\":\"a\",\"portrait_file\":\"portrait.png\",\"custom_role\":null}",
                 "{\"display_name\":\"a\",\"portrait_file\":\"portrait.gif\"}"
             }) Throws("profile_invalid", () => AdvisorProfile.Parse(json));
         });
