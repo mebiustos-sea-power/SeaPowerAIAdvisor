@@ -12,6 +12,8 @@
   "action.cancel_settings": "キャンセル",
   "action.send": "相談する",
   "action.cancel": "中止",
+  "action.copy": "コピー",
+  "transcript.copy_tip": "回答のMarkdown原文をコピーします。",
   "action.clear": "会話を消去",
   "action.save_profile": "保存して会話に戻る",
   "action.capture": "状況確認",
