@@ -18,10 +18,13 @@ internal sealed class AdvisorQuerySession : IAdvisorQuerySession
     private readonly Dictionary<int, ObservedBase> observations;
     public string Id { get; } = Guid.NewGuid().ToString("N");
     public int RoundsUsed { get; private set; }
+    public int MaxRounds { get; }
     internal int ReturnedBytes { get; private set; }
 
-    internal AdvisorQuerySession(SituationSnapshot snapshot, string language, string? question)
+    internal AdvisorQuerySession(SituationSnapshot snapshot, string language, string? question, int maxRounds = DefaultMaxRounds)
     {
+        if (maxRounds < 1 || maxRounds > MaximumRounds) throw new ArgumentOutOfRangeException(nameof(maxRounds));
+        MaxRounds = maxRounds;
         this.snapshot = snapshot ?? throw new ArgumentNullException(nameof(snapshot));
         for (var f = 0; f < snapshot.Forces.Count; f++)
         {

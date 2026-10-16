@@ -295,12 +295,12 @@ internal static class ProfileTests
             XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
             XElement Named(string name) => root.Descendants().Single(e => (string?)e.Attribute(x + "Name") == name);
             var settings = Named("SettingsPane"); var tabs = Named("SettingsTabs");
-            var profile = Named("ProfileTab"); var diagnostics = Named("DiagnosticsTab");
+            var profile = Named("GeneralTab"); var diagnostics = Named("DiagnosticsTab");
             var connection = Named("ConnectionTab");
             Require((string?)settings.Attribute("Visibility") == "Collapsed" &&
                 tabs.Parent == settings && tabs.Name.LocalName == "TabControl" &&
                 (string?)tabs.Attribute("SelectedIndex") == "0" &&
-                tabs.Elements().Select(e => (string?)e.Attribute(x + "Name")).SequenceEqual(new[] { "ProfileTab", "ConnectionTab", "DiagnosticsTab" }),
+                tabs.Elements().Select(e => (string?)e.Attribute(x + "Name")).SequenceEqual(new[] { "GeneralTab", "ConnectionTab", "DiagnosticsTab" }),
                 "Settings and diagnostics are not separate tabs with settings selected initially");
             Require(Named("Capture").Ancestors().Contains(diagnostics) &&
                 Named("Input").Ancestors().Contains(diagnostics) &&
@@ -321,7 +321,8 @@ internal static class ProfileTests
                 "Follow-up detail is not after the two independent quick consultations");
             Require(Named("ApiKey").Ancestors().Contains(connection) && Named("ApiKey").Name.LocalName == "PasswordBox" &&
                 (string?)Named("ApiKey").Attribute("ShowLastCharacterDuration") == "0" &&
-                Named("ModelName").Ancestors().Contains(connection), "Connection credentials are not in a masked input on their own tab");
+                Named("ModelName").Ancestors().Contains(connection) && Named("MaxQueryRounds").Ancestors().Contains(connection) &&
+                Named("EnableCampaignAdvisor").Ancestors().Contains(profile), "AI settings or campaign opt-in are in the wrong tab");
             var conversation = Named("ConversationPane");
             Require(conversation.Parent == root && settings.Parent == root &&
                 (string?)conversation.Attribute("Grid.Row") == (string?)settings.Attribute("Grid.Row"),

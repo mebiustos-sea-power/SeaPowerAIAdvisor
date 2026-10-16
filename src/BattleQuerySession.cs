@@ -14,10 +14,13 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
     private readonly JObject initial;
     public string Id { get; } = Guid.NewGuid().ToString("N");
     public int RoundsUsed { get; private set; }
+    public int MaxRounds { get; }
     private int returnedBytes;
 
-    internal BattleQuerySession(BattleSnapshot situation, string language, string? question)
+    internal BattleQuerySession(BattleSnapshot situation, string language, string? question, int maxRounds = DefaultMaxRounds)
     {
+        if (maxRounds < 1 || maxRounds > MaximumRounds) throw new ArgumentOutOfRangeException(nameof(maxRounds));
+        MaxRounds = maxRounds;
         snapshot = situation.Copy();
         initial = AdvisorInputBuilder.Header(language, question);
         initial["schema_version"] = 3;

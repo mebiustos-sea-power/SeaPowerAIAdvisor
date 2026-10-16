@@ -10,13 +10,15 @@ internal interface IAdvisorQuerySession
 {
     string Id { get; }
     int RoundsUsed { get; }
+    int MaxRounds { get; }
     JObject InitialInput();
     JObject Execute(JObject request);
 }
 
 internal static class AdvisorQueryLimits
 {
-    internal const int MaxRounds = 5;
+    internal const int DefaultMaxRounds = 5;
+    internal const int MaximumRounds = 20;
     internal const int MaxQueriesPerRound = 8;
     internal const int MaxIdsPerQuery = 10;
     internal const int DefaultPageSize = 10;

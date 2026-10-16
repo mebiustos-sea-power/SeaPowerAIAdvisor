@@ -36,43 +36,22 @@ internal sealed class AdvisorSettings
 
     internal static byte[]? Backup(string path)
     {
-        try
-        {
-            if (!File.Exists(path)) return null;
-            if (new FileInfo(path).Length > 16_384) throw new AdvisorConnectionException("settings_invalid");
-            return File.ReadAllBytes(path);
-        }
+        try { return AdvisorConfigFile.Backup(path); }
+        catch (InvalidDataException) { throw new AdvisorConnectionException("settings_invalid"); }
         catch (IOException) { throw new AdvisorConnectionException("settings_unreadable"); }
         catch (UnauthorizedAccessException) { throw new AdvisorConnectionException("settings_unreadable"); }
     }
-
     internal static void Restore(string path, byte[]? before)
     {
-        if (before != null) { WriteBytes(path, before); return; }
-        try { File.Delete(path); }
+        try { AdvisorConfigFile.Restore(path, before); }
         catch (IOException) { throw new AdvisorConnectionException("settings_write_failed"); }
         catch (UnauthorizedAccessException) { throw new AdvisorConnectionException("settings_write_failed"); }
     }
-
     internal static void WriteBytes(string path, byte[] bytes)
     {
-        var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
-            using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-                stream.Write(bytes, 0, bytes.Length);
-            if (File.Exists(path)) File.Replace(temporary, path, null);
-            else File.Move(temporary, path);
-        }
+        try { AdvisorConfigFile.Write(path, bytes); }
         catch (IOException) { throw new AdvisorConnectionException("settings_write_failed"); }
         catch (UnauthorizedAccessException) { throw new AdvisorConnectionException("settings_write_failed"); }
-        finally
-        {
-            try { if (File.Exists(temporary)) File.Delete(temporary); }
-            catch (IOException) { throw new AdvisorConnectionException("settings_write_failed"); }
-            catch (UnauthorizedAccessException) { throw new AdvisorConnectionException("settings_write_failed"); }
-        }
     }
 
     internal static void ValidateDraft(JObject value) => Parse(value, false);
