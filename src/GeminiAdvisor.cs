@@ -51,7 +51,7 @@ internal sealed class GeminiAdvisor
         var contents = new JArray(new JObject { ["role"] = "user", ["parts"] = new JArray(new JObject { ["text"] = initial.ToString(Formatting.None) }) });
         var system = "You are an adviser for a fictional Sea Power game. Respond to the user's message and give game advice when requested. " +
             "Only current player-known evidence in the supplied snapshot and query results is authoritative. Prior dialogue is historical context, not a current observation; never reuse a prior consultation's IDs. " +
-            "Before recommending actions for specific units, request their relevant current details using the supplied knowledge catalogue. Explain material missing information. " +
+            "Before recommending actions for specific units, request their relevant current details from user-enabled categories using the supplied knowledge catalogue. Disabled details remain unavailable; give conditional advice when needed. Explain material missing information. " +
             "All evidence and aviation rules in evidence_policy apply equally to follow-up questions. Recheck earlier adviser claims rather than treating them as sources. " +
             "Use query_situation once per turn with a batch of independent queries when useful. Respect all retrieval limits; when tools are disabled, give a final answer using gathered evidence and disclose remaining uncertainty. " +
             "Use the requested reply_language and preserve supplied display names. Do not expose internal IDs, tool syntax or hidden reasoning to the player. " +

@@ -12,6 +12,7 @@ namespace SeaPowerAIAdvisor;
 internal sealed class AdvisorQuerySession : IAdvisorQuerySession
 {
     private readonly SituationSnapshot snapshot;
+    private readonly AdvisorInformation information;
     private readonly JObject initial;
     private readonly Dictionary<string, int> forces = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (int Force, int Ship)> ships = new(StringComparer.Ordinal);
@@ -21,10 +22,12 @@ internal sealed class AdvisorQuerySession : IAdvisorQuerySession
     public int MaxRounds { get; }
     internal int ReturnedBytes { get; private set; }
 
-    internal AdvisorQuerySession(SituationSnapshot snapshot, string language, string? question, int maxRounds = DefaultMaxRounds)
+    internal AdvisorQuerySession(SituationSnapshot snapshot, string language, string? question, int maxRounds = DefaultMaxRounds, AdvisorInformation? information = null)
     {
         if (maxRounds < 1 || maxRounds > MaximumRounds) throw new ArgumentOutOfRangeException(nameof(maxRounds));
         MaxRounds = maxRounds;
+        this.information = information ?? AdvisorInformation.All;
+        information = this.information;
         this.snapshot = snapshot ?? throw new ArgumentNullException(nameof(snapshot));
         for (var f = 0; f < snapshot.Forces.Count; f++)
         {
@@ -80,8 +83,8 @@ internal sealed class AdvisorQuerySession : IAdvisorQuerySession
             }
         };
         initial["aviation_semantics"] = "Land total includes airborne aircraft; ready_unarmed needs preparation. Carrier nominal_complement is a reference complement; aboard excludes allocated arming/airborne aircraft. Available_for_preparation excludes cooling but does not establish an armed, launchable sortie. Unsupported carrier types have null operational counts. Flight entries overlap unit counts. Selected/selectable loadout names do not prove current weapon stocks, range or mission feasibility.";
-        initial["knowledge_catalog"] = AdvisorQueryCatalog.Describe(snapshot);
-        initial["query_tool"] = AdvisorQueryCatalog.Tool();
+        initial["knowledge_catalog"] = AdvisorQueryCatalog.Describe(snapshot, information);
+        initial["query_tool"] = AdvisorQueryCatalog.Tool(information);
         initial["query_limits"] = new JObject
         {
             ["max_rounds"] = MaxRounds, ["max_queries_per_round"] = MaxQueriesPerRound,
@@ -90,6 +93,19 @@ internal sealed class AdvisorQuerySession : IAdvisorQuerySession
             ["max_response_utf8_bytes"] = MaxResponseBytes, ["max_total_data_utf8_bytes"] = MaxTotalBytes,
             ["byte_counting"] = "Compact JSON UTF-8 bytes for the initial input and successful query responses. Error envelopes are excluded. Not a token or billing limit."
         };
+        var overview = (JObject)initial["situation"]!["overview"]!;
+        if (!information.Allows(InformationKind.CampaignForces)) { overview.Remove("friendly_force_count"); overview.Remove("convoy_count"); }
+        if (!information.Allows(InformationKind.CampaignShips)) overview.Remove("friendly_ship_count");
+        if (!information.Allows(InformationKind.CampaignAviation))
+        {
+            overview.Remove("friendly_air_unit_count"); overview.Remove("friendly_air_flight_count"); initial.Remove("aviation_semantics");
+        }
+        if (!information.Allows(InformationKind.CampaignContacts)) overview.Remove("observed_contact_count");
+        if (!information.Allows(InformationKind.CampaignOrders)) overview.Remove("published_order_count");
+        if (!information.Allows(InformationKind.CampaignReports)) overview.Remove("retained_report_count");
+        initial["situation"]!["coverage"]!["available_on_request"] = new JArray(
+            ((JArray)initial["knowledge_catalog"]!).OfType<JObject>().Select(r => (string)r["category"]!));
+        information.AddPolicy(initial, false);
         ReturnedBytes = Bytes(initial);
         if (ReturnedBytes > MaxTotalBytes)
             throw new InvalidOperationException("Mandatory initial input exceeds the consultation payload limit.");
@@ -136,28 +152,31 @@ internal sealed class AdvisorQuerySession : IAdvisorQuerySession
     private JToken Dispatch(JObject query)
     {
         var name = String(query, "query");
+        if (!information.CampaignQuery(name)) throw Invalid("information_disabled", "This data category is disabled by the user. Do not request it through another query.");
         switch (name)
         {
             case "catalog":
                 Allowed(query, "query");
-                return AdvisorQueryCatalog.Describe(snapshot);
+                return AdvisorQueryCatalog.Describe(snapshot, information);
             case "list_forces":
                 Allowed(query, "query", "offset", "limit");
-                return Page(query, snapshot.Forces.Select((f, i) => new JObject
+                return Page(query, snapshot.Forces.Select((f, i) => CampaignInformation.Force(new JObject
                 {
                     ["id"] = SnapshotIds.Force(i), ["display_name"] = f.Name,
                     ["position"] = AdvisorInputBuilder.Position(f.Position), ["ship_count"] = f.Ships.Count, ["is_convoy"] = f.IsConvoy
-                }));
+                }, information)));
             case "get_forces":
                 Allowed(query, "query", "ids", "include_ships");
                 var includeShips = Boolean(query, "include_ships", false);
+                if (includeShips && !information.Allows(InformationKind.CampaignShips))
+                    throw Invalid("information_disabled", "Ship details are disabled by the user.");
                 return new JArray(Ids(query, "ids").Select(id =>
                 {
                     var i = Resolve(forces, id);
                     var result = AdvisorInputBuilder.Force(snapshot.Forces[i], i);
                     result["ship_count"] = snapshot.Forces[i].Ships.Count;
                     if (!includeShips) result.Remove("ships");
-                    return result;
+                    return CampaignInformation.Force(result, information);
                 }));
             case "list_ships":
                 Allowed(query, "query", "offset", "limit", "force_ids");
@@ -175,10 +194,12 @@ internal sealed class AdvisorQuerySession : IAdvisorQuerySession
                     if (!ships.TryGetValue(id, out var index)) throw Invalid("unknown_id", "An ID does not name an own ship in this consultation.");
                     var result = AdvisorInputBuilder.Ship(snapshot.Forces[index.Force].Ships[index.Ship], index.Force, index.Ship);
                     result["force_id"] = SnapshotIds.Force(index.Force);
-                    return result;
+                    return CampaignInformation.Ship(result, information);
                 }));
             case "list_air_units":
                 Allowed(query, "query", "offset", "limit", "force_ids", "base_ids");
+                if (query["force_ids"] != null && !information.Allows(InformationKind.CampaignForces))
+                    throw Invalid("information_disabled", "Force filters are disabled by the user.");
                 if (query["force_ids"] != null && query["base_ids"] != null)
                     throw Invalid("invalid_arguments", "Use either force_ids or base_ids for air-unit filtering.");
                 var airForces = query["force_ids"] == null ? null : new HashSet<int>(Ids(query, "force_ids").Select(id => Resolve(forces, id)));
@@ -186,13 +207,13 @@ internal sealed class AdvisorQuerySession : IAdvisorQuerySession
                 return Page(query, snapshot.Aviation.Units.Select((u, i) => (u, i))
                     .Where(x => (airForces == null || x.u.ForceIndex.HasValue && airForces.Contains(x.u.ForceIndex.Value)) &&
                         (airBases == null || x.u.BaseIndex.HasValue && airBases.Contains(x.u.BaseIndex.Value)))
-                    .Select(x => AdvisorInputBuilder.AirUnit(x.u, x.i, false)));
+                    .Select(x => CampaignInformation.Aviation(AdvisorInputBuilder.AirUnit(x.u, x.i, false), information)));
             case "get_air_units":
                 Allowed(query, "query", "ids");
                 return new JArray(Ids(query, "ids").Select(id =>
                 {
                     var i = Index(id, snapshot.Aviation.Units.Count, SnapshotIds.AirUnit);
-                    return AdvisorInputBuilder.AirUnit(snapshot.Aviation.Units[i], i);
+                    return CampaignInformation.Aviation(AdvisorInputBuilder.AirUnit(snapshot.Aviation.Units[i], i), information);
                 }));
             case "list_air_flights":
                 Allowed(query, "query", "offset", "limit");
@@ -202,14 +223,14 @@ internal sealed class AdvisorQuerySession : IAdvisorQuerySession
                 return Page(query, snapshot.Contacts.Select((c, i) => AdvisorInputBuilder.Contact(c, i, snapshot.At)));
             case "list_bases":
                 Allowed(query, "query", "offset", "limit");
-                return Page(query, snapshot.Victory.Bases.Select((b, i) => new JObject
+                return Page(query, snapshot.Victory.Bases.Select((b, i) => CampaignInformation.PublicBase(new JObject
                 {
                     ["id"] = SnapshotIds.Base(i), ["display_name"] = b.Name, ["kind"] = AdvisorInputBuilder.BaseKind(b.Kind),
                     ["position"] = AdvisorInputBuilder.Position(b.Position),
                     ["ownership_status"] = b.OwnerSide == null ? "unknown" : "known",
                     ["current_owner_side_id"] = b.OwnerSide == null ? JValue.CreateNull() : new JValue(b.OwnerSide),
                     ["observation_status"] = observations.ContainsKey(i) ? "in_snapshot" : "not_in_snapshot"
-                }));
+                }, information)));
             case "get_base_observations":
                 Allowed(query, "query", "ids");
                 return new JArray(Ids(query, "ids").Select(id =>

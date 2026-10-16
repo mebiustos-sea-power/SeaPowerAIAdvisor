@@ -12,15 +12,17 @@ internal sealed class AdvisorOptions
 {
     internal int MaxQueryRounds { get; }
     internal bool CampaignEnabled { get; }
-    internal AdvisorOptions(int maxQueryRounds = AdvisorQueryLimits.DefaultMaxRounds, bool campaignEnabled = false)
+    internal AdvisorInformation Information { get; }
+    internal AdvisorOptions(int maxQueryRounds = AdvisorQueryLimits.DefaultMaxRounds, bool campaignEnabled = false, AdvisorInformation? information = null)
     {
         if (maxQueryRounds < 1 || maxQueryRounds > AdvisorQueryLimits.MaximumRounds)
             throw new AdvisorOptionsException("query_rounds_invalid");
-        MaxQueryRounds = maxQueryRounds; CampaignEnabled = campaignEnabled;
+        MaxQueryRounds = maxQueryRounds; CampaignEnabled = campaignEnabled; Information = information ?? AdvisorInformation.All;
     }
     internal byte[] Data() => Encoding.UTF8.GetBytes(new JObject
     {
-        ["max_query_rounds"] = MaxQueryRounds, ["campaign_advisor_enabled"] = CampaignEnabled
+        ["max_query_rounds"] = MaxQueryRounds, ["campaign_advisor_enabled"] = CampaignEnabled,
+        ["disabled_information"] = Information.Data()
     }.ToString(Formatting.Indented) + Environment.NewLine);
 
     internal static AdvisorOptions Parse(string json)
@@ -28,9 +30,9 @@ internal sealed class AdvisorOptions
         try
         {
             using var source = new StringReader(json);
-            using var reader = new JsonTextReader(source) { DateParseHandling = DateParseHandling.None, MaxDepth = 4 };
+            using var reader = new JsonTextReader(source) { DateParseHandling = DateParseHandling.None, MaxDepth = 5 };
             var value = JObject.Load(reader, new JsonLoadSettings { DuplicatePropertyNameHandling = DuplicatePropertyNameHandling.Error });
-            if (reader.Read() || value.Properties().Any(p => p.Name != "max_query_rounds" && p.Name != "campaign_advisor_enabled"))
+            if (reader.Read() || value.Properties().Any(p => p.Name != "max_query_rounds" && p.Name != "campaign_advisor_enabled" && p.Name != "disabled_information"))
                 throw new AdvisorOptionsException("options_invalid");
             var rounds = AdvisorQueryLimits.DefaultMaxRounds;
             if (value["max_query_rounds"] != null && (value["max_query_rounds"]!.Type != JTokenType.Integer ||
@@ -38,7 +40,7 @@ internal sealed class AdvisorOptions
                 throw new AdvisorOptionsException("query_rounds_invalid");
             if (value["campaign_advisor_enabled"] != null && value["campaign_advisor_enabled"]!.Type != JTokenType.Boolean)
                 throw new AdvisorOptionsException("options_invalid");
-            return new AdvisorOptions(rounds, (bool?)value["campaign_advisor_enabled"] ?? false);
+            return new AdvisorOptions(rounds, (bool?)value["campaign_advisor_enabled"] ?? false, AdvisorInformation.Parse(value["disabled_information"]));
         }
         catch (JsonException) { throw new AdvisorOptionsException("options_invalid"); }
     }

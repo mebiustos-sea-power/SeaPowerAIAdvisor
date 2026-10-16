@@ -40,17 +40,19 @@ internal static class OptionsTests
         check("Shared save publishes campaign and retrieval settings together while discarded edits leave saved state intact", () => InTemp(directory =>
         {
             var store = new AdvisorOptionsStore(Path.Combine(directory, "options.json"));
-            var pending = new AdvisorOptions(7, true);
+            var pending = new AdvisorOptions(7, true, AdvisorInformation.All.With(InformationKind.BattleWeapons, false));
             Require(!store.Current.CampaignEnabled && store.Read().MaxQueryRounds == 5, "Pending edits took effect before save");
             var connection = new AdvisorSettingsDraft(new JObject { ["api_key"] = "" });
             AdvisorPreferences.Save(new AdvisorProfileDraft(new AdvisorProfile("Saved advisor", "portrait.png")), connection, store, pending,
                 directory, Path.Combine(directory, "gemini.json"));
             Require(store.Current.CampaignEnabled && store.Current.MaxQueryRounds == 7 &&
-                new AdvisorOptionsStore(store.Path).Current.MaxQueryRounds == 7 && AdvisorProfile.Load(directory).DisplayName == "Saved advisor",
+                new AdvisorOptionsStore(store.Path).Current.MaxQueryRounds == 7 && !store.Read().Information.Allows(InformationKind.BattleWeapons) &&
+                !store.Current.Information.Allows(InformationKind.BattleWeapons) && AdvisorProfile.Load(directory).DisplayName == "Saved advisor",
                 "The common save did not publish and persist all settings");
             var discarded = new AdvisorOptions(1, false);
             _ = discarded.Data();
-            Require(store.Current.CampaignEnabled && store.Read().CampaignEnabled && store.Read().MaxQueryRounds == 7,
+            Require(store.Current.CampaignEnabled && store.Read().CampaignEnabled && store.Read().MaxQueryRounds == 7 &&
+                !store.Read().Information.Allows(InformationKind.BattleWeapons),
                 "Discarding an edited candidate changed runtime or saved options");
         }));
         check("A failed save restores options and credentials without publishing partial runtime changes", () => InTemp(directory =>
@@ -68,13 +70,13 @@ internal static class OptionsTests
                 try
                 {
                     AdvisorPreferences.Save(new AdvisorProfileDraft(new AdvisorProfile("Unsaved", "portrait.png")),
-                        new AdvisorSettingsDraft(new JObject { ["api_key"] = "mock_changed" }), store, new AdvisorOptions(9, true), folder, connectionPath);
+                        new AdvisorSettingsDraft(new JObject { ["api_key"] = "mock_changed" }), store, new AdvisorOptions(9, true, AdvisorInformation.All.With(InformationKind.BattleWeapons, false)), folder, connectionPath);
                 }
                 catch (AdvisorProfileException error) when (error.Code == "profile_write_failed")
                 {
                     Require(File.ReadAllBytes(connectionPath).SequenceEqual(connectionBytes) &&
                         (optionBytes == null ? !File.Exists(store.Path) : File.ReadAllBytes(store.Path).SequenceEqual(optionBytes)) &&
-                        !store.Current.CampaignEnabled && store.Current.MaxQueryRounds == 5, "A profile failure left a partial save active");
+                        !store.Current.CampaignEnabled && store.Current.MaxQueryRounds == 5 && store.Current.Information.Allows(InformationKind.BattleWeapons), "A profile failure left a partial save active");
                     continue;
                 }
                 throw new InvalidOperationException("Expected a failed profile save");

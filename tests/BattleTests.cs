@@ -143,6 +143,51 @@ internal static class BattleTests
             Require(result.ApiRequests == 3 && result.QueryRounds == 2 && result.Queries.Contains("get_unit_capabilities") &&
                 result.Queries.Contains("get_contact_threats"), "The new evidence queries did not share one retrieval round");
         });
+        check("Battle exclusions gate metadata and every detail route without removing public objectives", () =>
+        {
+            var policy = AdvisorInformation.All;
+            foreach (var item in AdvisorInformation.Items) policy = policy.With(item.Kind, false);
+            var source = new BattleAdvisorSource(() => new Fixture().Capture());
+            var session = source.CreateSession("ja", "What now?", 20, policy);
+            var initial = session.InitialInput();
+            Require(!initial["situation"]!["overview"]!.HasValues && !initial["knowledge_catalog"]!.HasValues &&
+                initial["situation"]!["victory_conditions"]!["objectives"]!.HasValues, "Excluded metadata leaked or objectives were removed");
+            var names = initial["query_tool"]!["parameters"]!["properties"]!["requests"]!["items"]!["properties"]!["query"]!["enum"]!.Values<string>();
+            Require(names.SequenceEqual(new[] { "catalog" }), "The provider advertises disabled battle tools");
+            foreach (var query in new[] { "list_units", "get_units", "get_unit_capabilities", "list_contacts", "get_contact_threats", "get_briefing", "list_reports", "get_reports" })
+                Require((string?)session.Execute(Request(session, new JObject { ["query"] = query, ["ids"] = new JArray("own_unit_1") }))["error"]?["code"] == "information_disabled",
+                    "Direct query bypassed disabled category: " + query);
+            Require(!session.Execute(Request(session, new JObject { ["query"] = "catalog" }))["results"]![0]!["data"]!.HasValues,
+                "The runtime catalogue disclosed excluded categories");
+        });
+        check("Battle sections and shared references respect independent own and contact permissions", () =>
+        {
+            var policy = AdvisorInformation.All.With(InformationKind.BattleWeapons, false).With(InformationKind.BattleDamage, false);
+            var session = new BattleQuerySession(new Fixture().Capture(), "ja", "Fuel and threats", information: policy);
+            var initial = session.InitialInput();
+            var sections = initial["query_tool"]!["parameters"]!["properties"]!["requests"]!["items"]!["properties"]!["sections"]!["items"]!["enum"]!.Values<string>();
+            Require(sections.SequenceEqual(new[] { "fuel" }), "The tool still offers disabled capability sections");
+            var fuel = session.Execute(Request(session, new JObject { ["query"] = "get_unit_capabilities", ["ids"] = new JArray("own_unit_1") }))["results"]![0]!["data"]!;
+            Require(fuel["units"]![0]!["fuel"] != null && fuel["units"]![0]!["damage"] == null && fuel["units"]![0]!["weapons"] == null &&
+                !fuel["weapon_references"]!.HasValues, "An omitted sections argument leaked disabled data or weapon references");
+            var rejected = session.Execute(Request(session, new JObject { ["query"] = "get_unit_capabilities", ["ids"] = new JArray("own_unit_1"), ["sections"] = new JArray("fuel", "weapons") }));
+            Require((string?)rejected["error"]?["code"] == "information_disabled" && rejected["results"] == null, "Explicit disabled sections returned partial evidence");
+            var threat = session.Execute(Request(session, new JObject { ["query"] = "get_contact_threats", ["ids"] = new JArray("observed_contact_1") }));
+            Require(threat["results"]![0]!["data"]!["weapon_references"]!.HasValues, "Disabling own weapons incorrectly disabled public enemy references");
+            var noThreats = new BattleQuerySession(new Fixture().Capture(), "ja", "Contacts only", information: AdvisorInformation.All.With(InformationKind.BattleThreats, false));
+            var contact = noThreats.Execute(Request(noThreats, new JObject { ["query"] = "list_contacts" }))["results"]![0]!["data"]!["items"]![0]!;
+            Require(contact["class_display_name"] != null && contact["public_class_reference_available"] == null,
+                "Disabling public references removed observed identification or leaked reference availability");
+        });
+        check("Gemini receives the restricted tool schema and a disabled request returns no data", () =>
+        {
+            var policy = AdvisorInformation.All.With(InformationKind.BattleWeapons, false);
+            var session = new BattleQuerySession(new Fixture().Capture(), "ja", "Own fuel", information: policy);
+            var transport = new RestrictedTransport();
+            var result = new GeminiAdvisor(transport).ConsultAsync(session, AdvisorSettings.Parse("{\"api_key\":\"mock-information-key\"}"),
+                Array.Empty<ChatExchange>(), CancellationToken.None).GetAwaiter().GetResult();
+            Require(result.ApiRequests == 2 && result.QueryRounds == 1 && transport.Calls == 2, "Restricted consultation did not complete");
+        });
         check("Gemini uses battle-specific tools through the common provider", () =>
         {
             var session = new BattleQuerySession(new Fixture().Capture(), "ja", "まず何をすべき？");
@@ -156,6 +201,32 @@ internal static class BattleTests
 
     private static JObject Request(IAdvisorQuerySession session, params JObject[] queries) =>
         new() { ["consultation_id"] = session.Id, ["requests"] = new JArray(queries) };
+
+    private sealed class RestrictedTransport : IGeminiTransport
+    {
+        internal int Calls;
+        public Task<JObject> GenerateAsync(AdvisorSettings settings, JObject body, CancellationToken cancellation)
+        {
+            Calls++;
+            JObject part;
+            if (Calls == 1)
+            {
+                var sections = body["tools"]![0]!["functionDeclarations"]![0]!["parametersJsonSchema"]!["properties"]!["requests"]!["items"]!["properties"]!["sections"]!["items"]!["enum"]!.Values<string>();
+                Require(!sections.Contains("weapons") && sections.Contains("fuel"), "The actual wire request advertised a disabled section");
+                part = new JObject { ["functionCall"] = new JObject { ["name"] = "query_situation", ["args"] = new JObject {
+                    ["requests"] = new JArray(new JObject { ["query"] = "get_unit_capabilities", ["ids"] = new JArray("own_unit_1"), ["sections"] = new JArray("fuel", "weapons") }) } } };
+            }
+            else
+            {
+                var result = body["contents"]![2]!["parts"]![0]!["functionResponse"]!["response"]!;
+                Require((string?)result["error"]?["code"] == "information_disabled" && result["results"] == null,
+                    "The actual function response exposed disabled data");
+                part = new JObject { ["text"] = "兵装情報が無効なため、その制約を考慮します。" };
+            }
+            return Task.FromResult(new JObject { ["candidates"] = new JArray(new JObject { ["finishReason"] = "STOP",
+                ["content"] = new JObject { ["role"] = "model", ["parts"] = new JArray(part) } }) });
+        }
+    }
 
     private sealed class MockBattleTransport : IGeminiTransport
     {

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Newtonsoft.Json.Linq;
 
 namespace SeaPowerAIAdvisor;
@@ -12,9 +13,12 @@ internal static class AdvisorQueryCatalog
         "list_air_units", "get_air_units", "list_air_flights"
     };
 
-    internal static JArray Describe(SituationSnapshot snapshot) => new(
+    internal static JArray Describe(SituationSnapshot snapshot, AdvisorInformation? selection = null)
+    {
+        var information = selection ?? AdvisorInformation.All;
+        var rows = new JArray(
         Category("friendly_task_forces", snapshot.Forces.Count, "Own force names, positions and ship counts; selected force details.", "list_forces", "get_forces"),
-        Category("friendly_ships", CountShips(snapshot), "Own ship names and types, then fuel, ammunition and damage.", "list_ships", "get_ships"),
+        Category("friendly_ships", CountShips(snapshot), "Own ship names and types, and user-enabled fuel, ammunition and damage details.", "list_ships", "get_ships"),
         Category("friendly_air_units", snapshot.Aviation.Units.Count, "Own land squadrons and carrier air wings: host, aircraft types, counts, preparation states, campaign launch support and displayed constraints. Read details before recommending aircraft. No sortie feasibility or weapon/range guarantee.", "list_air_units", "get_air_units"),
         Category("friendly_air_flights", snapshot.Aviation.Flights.Count, "Own airborne flights: name, aircraft, position, count, selected loadout and return state. These aircraft overlap squadron/wing counts; do not add them again.", "list_air_flights", null),
         Category("observed_contacts", snapshot.Contacts.Count, "Observed enemy contacts with observation time and uncertainty; no live enemy state.", "list_contacts", null),
@@ -22,9 +26,22 @@ internal static class AdvisorQueryCatalog
         Category("base_observations", snapshot.Bases.Count, "Recorded non-player base sightings only. Friendly-base stocks and defenses are not in this snapshot.", null, "get_base_observations"),
         Category("published_orders", snapshot.Orders.Count, "Published own orders and their briefing text.", "list_orders", "get_orders"),
         Category("recent_player_reports", snapshot.Reports.Count, "Metadata for the retained recent player reports; text is fetched by ID. At most 30 records are retained locally.", "list_reports", "get_reports")
-    );
+        );
+        return new JArray(rows.OfType<JObject>().Where(r => information.CampaignCategory((string)r["category"]!)));
+    }
 
-    internal static JObject Tool() => new()
+    internal static JObject Tool(AdvisorInformation? selection = null)
+    {
+        var information = selection ?? AdvisorInformation.All;
+        var tool = RawTool();
+        var properties = (JObject)tool["parameters"]!["properties"]!["requests"]!["items"]!["properties"]!;
+        properties["query"]!["enum"] = new JArray(Queries.Where(information.CampaignQuery));
+        if (!information.Allows(InformationKind.CampaignShips)) properties.Remove("include_ships");
+        if (!information.Allows(InformationKind.CampaignForces)) properties.Remove("force_ids");
+        return tool;
+    }
+
+    private static JObject RawTool() => new()
     {
         ["name"] = "query_situation",
         ["description"] = "Read only this consultation's player-known snapshot. The host binds the active consultation; supply requests only. Lists are paginated. Use get_* directly for known IDs; group independent requests in one batch. Request missing evidence before advising, and state what remains unknown. Never infer enemy live state from a sighting.",
