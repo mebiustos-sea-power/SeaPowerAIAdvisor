@@ -2,30 +2,22 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Text;
+using static SeaPowerAIAdvisor.AdvisorQueryLimits;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace SeaPowerAIAdvisor;
 
 // Queries operate only on detached player knowledge. This type has no game or provider access.
-internal sealed class AdvisorQuerySession
+internal sealed class AdvisorQuerySession : IAdvisorQuerySession
 {
-    internal const int MaxRounds = 5;
-    internal const int MaxQueriesPerRound = 8;
-    internal const int MaxIdsPerQuery = 10;
-    internal const int DefaultPageSize = 10;
-    internal const int MaxPageSize = 20;
-    internal const int MaxRequestBytes = 16_000;
-    internal const int MaxResponseBytes = 48_000;
-    internal const int MaxTotalBytes = 160_000;
     private readonly SituationSnapshot snapshot;
     private readonly JObject initial;
     private readonly Dictionary<string, int> forces = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (int Force, int Ship)> ships = new(StringComparer.Ordinal);
     private readonly Dictionary<int, ObservedBase> observations;
-    internal string Id { get; } = Guid.NewGuid().ToString("N");
-    internal int RoundsUsed { get; private set; }
+    public string Id { get; } = Guid.NewGuid().ToString("N");
+    public int RoundsUsed { get; private set; }
     internal int ReturnedBytes { get; private set; }
 
     internal AdvisorQuerySession(SituationSnapshot snapshot, string language, string? question)
@@ -100,9 +92,9 @@ internal sealed class AdvisorQuerySession
             throw new InvalidOperationException("Mandatory initial input exceeds the consultation payload limit.");
     }
 
-    internal JObject InitialInput() => (JObject)initial.DeepClone();
+    public JObject InitialInput() => (JObject)initial.DeepClone();
 
-    internal JObject Execute(JObject request)
+    public JObject Execute(JObject request)
     {
         if (request == null) throw new ArgumentNullException(nameof(request));
         try
@@ -314,12 +306,5 @@ internal sealed class AdvisorQuerySession
     {
         if (query.Properties().Any(p => !names.Contains(p.Name))) throw Invalid("invalid_arguments", "The query contains an unsupported argument.");
     }
-    internal static int Bytes(JToken value) => Encoding.UTF8.GetByteCount(value.ToString(Formatting.None));
     private static AdvisorQueryException Invalid(string code, string message) => new(code, message);
-}
-
-internal sealed class AdvisorQueryException : Exception
-{
-    internal string Code { get; }
-    internal AdvisorQueryException(string code, string message) : base(message) { Code = code; }
 }

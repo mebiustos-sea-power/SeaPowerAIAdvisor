@@ -25,7 +25,7 @@ def local_path(value):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Build and test the campaign advisor. Tests use mock HTTP; live Gemini calls require a separate explicit smoke command.')
+    parser = argparse.ArgumentParser(description='Build and test the campaign and tactical battle advisor. Tests use mock HTTP; live Gemini calls require a separate explicit smoke command.')
     parser.add_argument('--install', action='store_true', help='Copy the package into its own StreamingAssets folder; does not enable it.')
     parser.add_argument('--sample-save', type=Path, help='Optional local campaign save for a read-only smoke test.')
     parser.add_argument('--campaign-definition', type=Path, help='Campaign definition for --sample-save.')

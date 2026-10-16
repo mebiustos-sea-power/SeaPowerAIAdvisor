@@ -36,7 +36,7 @@ internal static class AdvisorQueryCatalog
             {
                 ["requests"] = new JObject
                 {
-                    ["type"] = "array", ["minItems"] = 1, ["maxItems"] = AdvisorQuerySession.MaxQueriesPerRound,
+                    ["type"] = "array", ["minItems"] = 1, ["maxItems"] = AdvisorQueryLimits.MaxQueriesPerRound,
                     ["items"] = new JObject
                     {
                         ["type"] = "object", ["additionalProperties"] = false, ["required"] = new JArray("query"),
@@ -47,7 +47,7 @@ internal static class AdvisorQueryCatalog
                             ["force_ids"] = Ids("Optional for list_ships and list_air_units; omit for all. For list_air_units, selects carrier wings hosted by these forces."),
                             ["base_ids"] = Ids("list_air_units only: select land squadrons hosted at these public base IDs. Do not combine with force_ids."),
                             ["offset"] = Integer("Zero-based list offset. List queries only.", 0, int.MaxValue),
-                            ["limit"] = Integer("List page size. Omit for the default page size.", 1, AdvisorQuerySession.MaxPageSize),
+                            ["limit"] = Integer("List page size. Omit for the default page size.", 1, AdvisorQueryLimits.MaxPageSize),
                             ["include_ships"] = new JObject { ["type"] = "boolean", ["description"] = "get_forces only. Omit or false for force details without individual ships; true includes all ships in each selected force." },
                             ["kind"] = new JObject { ["type"] = "string", ["description"] = "list_reports only: a report kind code.",
                                 ["enum"] = new JArray("contact", "battle", "landing", "fleet", "air", "supply", "production", "admiralty", "economy", "other") }
@@ -66,7 +66,7 @@ internal static class AdvisorQueryCatalog
     };
     private static JObject Ids(string description) => new()
     {
-        ["type"] = "array", ["minItems"] = 1, ["maxItems"] = AdvisorQuerySession.MaxIdsPerQuery,
+        ["type"] = "array", ["minItems"] = 1, ["maxItems"] = AdvisorQueryLimits.MaxIdsPerQuery,
         ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string" }, ["description"] = description
     };
     private static JObject Integer(string description, int min, int max) => new()

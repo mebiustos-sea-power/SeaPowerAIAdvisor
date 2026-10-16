@@ -74,7 +74,7 @@ internal sealed class CampaignIntegration
             {
                 var host = view.FindName("WindowHost") as WindowHost
                     ?? throw new InvalidOperationException("The campaign's own WindowHost is unavailable.");
-                advisor ??= new AdvisorWindow(view, host, guard, Capture, GameLanguage.Read, warn);
+                advisor ??= new AdvisorWindow(view, host, guard, new CampaignAdvisorSource(Capture), GameLanguage.Read, warn);
                 advisor.Toggle();
                 launcher.IsChecked = advisor.IsOpen;
             });

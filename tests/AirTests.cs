@@ -61,9 +61,14 @@ internal static class AirTests
             Require(aew.CampaignLaunchSupported && aew.Counts["aboard"] == 3 && aew.Counts["available_for_preparation"] == 2 &&
                 aew.Counts["cooling"] == 1 && aew.Counts["arming"] == 1 && aew.Counts["airborne"] == 2 && aew.Counts["lost"] == 2,
                 "Carrier readiness differs from actual campaign calculations");
-            Require(!strike.CampaignLaunchSupported && strike.Counts["aboard"] == 8 && strike.Counts["airborne"] == null &&
-                strike.Counts["available_for_preparation"] == null && strike.LoadoutNames.Count == 0,
-                "Aboard-only aircraft were presented as usable campaign sorties");
+            if (assembly.GetName().Version! >= new Version(0, 25, 0))
+                Require(strike.CampaignLaunchSupported && strike.Counts["aboard"] == 8 && strike.Counts["airborne"] == 0 &&
+                    strike.Counts["available_for_preparation"] == 8 && strike.LoadoutNames.Count == 1,
+                    "DCM 0.25 fixed-wing strike aircraft lost their supported readiness or loadouts");
+            else
+                Require(!strike.CampaignLaunchSupported && strike.Counts["aboard"] == 8 && strike.Counts["airborne"] == null &&
+                    strike.Counts["available_for_preparation"] == null && strike.LoadoutNames.Count == 0,
+                    "Aboard-only aircraft were presented as usable campaign sorties");
             Require(wing.LaunchBlocked == true && wing.LaunchReason != null && wing.DeckCycleRemaining >= 0, "In-port deck constraint was lost");
             Require(before == JsonConvert.SerializeObject(c.F.State), "Reading carrier data mutated the campaign");
             Set(c.Hull, "Wing", null); c.Capture();

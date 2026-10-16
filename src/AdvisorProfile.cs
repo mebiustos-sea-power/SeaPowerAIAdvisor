@@ -7,30 +7,42 @@ using Newtonsoft.Json.Linq;
 
 namespace SeaPowerAIAdvisor;
 
-// Local display preferences are independent of provider credentials and model instructions.
+// Local advisor preferences are independent of credentials, knowledge capture and core answer rules.
 internal sealed class AdvisorProfile
 {
     internal const string DefaultName = "Michael Reed";
     internal const string DefaultPortraitFile = "portrait.png";
-    internal const int MaxPortraitBytes = 8 * 1024 * 1024;
-    internal const int MaxPortraitDimension = 4096;
-    internal string DisplayName { get; }
+    internal const int MaxPortraitBytes = PortraitImage.MaxBytes;
+    internal const int MaxPortraitDimension = PortraitImage.MaxDimension;
+    internal const int MaxPersonalityLength = 2000;
+    internal bool UseDefault { get; }
+    internal string CustomName { get; }
+    internal string DisplayName => UseDefault ? DefaultName : CustomName;
     internal string PortraitFile { get; }
-    internal AdvisorProfile(string name, string portraitFile)
+    internal string DefaultPersonality { get; }
+    internal string CustomPersonality { get; }
+    internal string Personality => UseDefault ? DefaultPersonality : CustomPersonality;
+    internal AdvisorProfile(string name, string portraitFile, bool useDefault = false,
+        string defaultPersonality = "", string customPersonality = "")
     {
         name = name.Trim(); portraitFile = portraitFile.Trim();
-        if (name.Length == 0 || name.Length > 80 || name.Any(char.IsControl) ||
+        defaultPersonality = defaultPersonality.Trim(); customPersonality = customPersonality.Trim();
+        if (new[] { defaultPersonality, customPersonality }.Any(value => value.Length > MaxPersonalityLength ||
+            value.Any(c => char.IsControl(c) && c != '\r' && c != '\n' && c != '\t')))
+            throw new AdvisorProfileException("personality_invalid");
+        if ((!useDefault && name.Length == 0) || name.Length > 80 || name.Any(char.IsControl) ||
             portraitFile.Length == 0 || portraitFile.Length > 1024 || portraitFile.Any(char.IsControl))
             throw new AdvisorProfileException("profile_invalid");
         try
         {
-            if (!string.Equals(Path.GetExtension(portraitFile), ".png", StringComparison.OrdinalIgnoreCase))
+            if (!PortraitImage.SupportsPath(portraitFile))
                 throw new AdvisorProfileException("profile_invalid");
         }
         catch (ArgumentException) { throw new AdvisorProfileException("profile_invalid"); }
-        try { _ = new UTF8Encoding(false, true).GetByteCount(name + portraitFile); }
+        try { _ = new UTF8Encoding(false, true).GetByteCount(name + portraitFile + defaultPersonality + customPersonality); }
         catch (EncoderFallbackException) { throw new AdvisorProfileException("profile_invalid"); }
-        DisplayName = name; PortraitFile = portraitFile;
+        UseDefault = useDefault; CustomName = name; PortraitFile = portraitFile;
+        DefaultPersonality = defaultPersonality; CustomPersonality = customPersonality;
     }
     internal static string DirectoryIn(string gameDataPath) => Path.Combine(gameDataPath, "SeaPowerAIAdvisor");
     internal static string SettingsPath(string directory) => Path.Combine(directory, "profile.json");
@@ -47,7 +59,7 @@ internal sealed class AdvisorProfile
         try
         {
             if (defaults != null) WriteNew(portrait, defaults);
-            WriteNew(SettingsPath(directory), Encoding.UTF8.GetBytes(new AdvisorProfile(DefaultName, DefaultPortraitFile).Json()));
+            WriteNew(SettingsPath(directory), Encoding.UTF8.GetBytes(new AdvisorProfile(DefaultName, DefaultPortraitFile, true).Json()));
         }
         catch (IOException) { throw new AdvisorProfileException("profile_write_failed"); }
         catch (UnauthorizedAccessException) { throw new AdvisorProfileException("profile_write_failed"); }
@@ -73,10 +85,20 @@ internal sealed class AdvisorProfile
             using var source = new StringReader(json);
             using var reader = new JsonTextReader(source) { MaxDepth = 4, DateParseHandling = DateParseHandling.None };
             var value = JObject.Load(reader, new JsonLoadSettings { DuplicatePropertyNameHandling = DuplicatePropertyNameHandling.Error });
-            if (reader.Read() || value.Properties().Any(p => p.Name != "display_name" && p.Name != "portrait_file") ||
-                value["display_name"]?.Type != JTokenType.String || value["portrait_file"]?.Type != JTokenType.String)
+            if (reader.Read() || value.Properties().Any(p => p.Name != "mode" && p.Name != "display_name" &&
+                p.Name != "portrait_file" && p.Name != "personality" && p.Name != "default_personality" && p.Name != "custom_personality") ||
+                value["display_name"]?.Type != JTokenType.String || value["portrait_file"]?.Type != JTokenType.String ||
+                (value["mode"] != null && (value["mode"]!.Type != JTokenType.String ||
+                    ((string?)value["mode"] != "default" && (string?)value["mode"] != "custom"))) ||
+                new[] { "personality", "default_personality", "custom_personality" }.Any(key =>
+                    value[key] != null && value[key]!.Type != JTokenType.String))
                 throw new AdvisorProfileException("profile_invalid");
-            return new AdvisorProfile((string)value["display_name"]!, (string)value["portrait_file"]!);
+            // Legacy profiles remain custom; the former shared personality supplies missing per-mode values.
+            var legacyPersonality = (string?)value["personality"] ?? "";
+            return new AdvisorProfile((string)value["display_name"]!, (string)value["portrait_file"]!,
+                (string?)value["mode"] == "default",
+                (string?)value["default_personality"] ?? legacyPersonality,
+                (string?)value["custom_personality"] ?? legacyPersonality);
         }
         catch (JsonException) { throw new AdvisorProfileException("profile_invalid"); }
         catch (ArgumentException) { throw new AdvisorProfileException("profile_invalid"); }
@@ -88,6 +110,14 @@ internal sealed class AdvisorProfile
         catch (NotSupportedException) { throw new AdvisorProfileException("profile_invalid"); }
         catch (PathTooLongException) { throw new AdvisorProfileException("profile_invalid"); }
     }
+    internal byte[] ReadActivePortrait(string directory, Func<byte[]> defaultPortrait) =>
+        UseDefault ? defaultPortrait() : ReadPortrait(directory);
+
+    internal void AddAnswerPreferences(JObject input) => input["advisor_preferences"] = new JObject
+    {
+        ["name"] = DisplayName, ["personality_and_tone"] = Personality
+    };
+
     internal byte[] ReadPortrait(string directory)
     {
         var path = ResolvePortrait(directory);
@@ -96,20 +126,45 @@ internal sealed class AdvisorProfile
         {
             if (new FileInfo(path).Length > MaxPortraitBytes) throw new AdvisorProfileException("portrait_invalid");
             var bytes = File.ReadAllBytes(path);
-            // Validate dimensions before Unity allocates the decoded texture. Unity validates the PNG stream itself.
-            if (bytes.Length < 33 || bytes.Length > MaxPortraitBytes ||
-                !bytes.Take(8).SequenceEqual(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }) ||
-                bytes[12] != 'I' || bytes[13] != 'H' || bytes[14] != 'D' || bytes[15] != 'R')
-                throw new AdvisorProfileException("portrait_invalid");
-            uint Number(int offset) => ((uint)bytes[offset] << 24) | ((uint)bytes[offset + 1] << 16) | ((uint)bytes[offset + 2] << 8) | bytes[offset + 3];
-            var width = Number(16); var height = Number(20);
-            if (width == 0 || height == 0 || width > MaxPortraitDimension || height > MaxPortraitDimension)
-                throw new AdvisorProfileException("portrait_invalid");
+            PortraitImage.Extension(bytes);
             return bytes;
         }
         catch (IOException) { throw new AdvisorProfileException("portrait_unreadable"); }
         catch (UnauthorizedAccessException) { throw new AdvisorProfileException("portrait_unreadable"); }
     }
+    // Store a separate copy before changing profile.json, so a failed save cannot replace the active image.
+    internal AdvisorProfile ImportPortrait(string directory, byte[] image)
+    {
+        var extension = PortraitImage.Extension(image);
+        var imported = new AdvisorProfile(CustomName, "portrait-import-" + Guid.NewGuid().ToString("N") + extension, UseDefault, DefaultPersonality, CustomPersonality);
+        var path = imported.ResolvePortrait(directory);
+        var saved = false;
+        try
+        {
+            Directory.CreateDirectory(directory);
+            WriteNew(path, image);
+            imported.Save(directory);
+            saved = true;
+            return imported;
+        }
+        catch (IOException) { throw new AdvisorProfileException("profile_write_failed"); }
+        catch (UnauthorizedAccessException) { throw new AdvisorProfileException("profile_write_failed"); }
+        finally { if (!saved && File.Exists(path)) File.Delete(path); }
+    }
+
+    internal void DeleteImportedPortrait(string directory, Action<string> warn)
+    {
+        const string prefix = "portrait-import-";
+        // Only remove our own previous imported copy; never delete user-selected source files or custom paths.
+        var stem = Path.GetFileNameWithoutExtension(PortraitFile);
+        if (Path.GetFileName(PortraitFile) != PortraitFile || !PortraitImage.SupportsPath(PortraitFile) ||
+            stem.Length != prefix.Length + 32 || !stem.StartsWith(prefix, StringComparison.Ordinal) ||
+            !Guid.TryParseExact(stem.Substring(prefix.Length), "N", out _)) return;
+        try { File.Delete(ResolvePortrait(directory)); }
+        catch (IOException error) { warn("Cannot remove the previous imported portrait: " + error.Message); }
+        catch (UnauthorizedAccessException error) { warn("Cannot remove the previous imported portrait: " + error.Message); }
+    }
+
     internal void Save(string directory)
     {
         var path = SettingsPath(directory);
@@ -130,7 +185,12 @@ internal sealed class AdvisorProfile
             catch (UnauthorizedAccessException) { throw new AdvisorProfileException("profile_write_failed"); }
         }
     }
-    private string Json() => new JObject { ["display_name"] = DisplayName, ["portrait_file"] = PortraitFile }.ToString(Formatting.Indented) + Environment.NewLine;
+    private string Json() => new JObject
+    {
+        ["mode"] = UseDefault ? "default" : "custom", ["display_name"] = CustomName,
+        ["portrait_file"] = PortraitFile,
+        ["default_personality"] = DefaultPersonality, ["custom_personality"] = CustomPersonality
+    }.ToString(Formatting.Indented) + Environment.NewLine;
     private static void WriteNew(string path, byte[] bytes)
     {
         using var output = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
@@ -142,4 +202,40 @@ internal sealed class AdvisorProfileException : Exception
 {
     internal string Code { get; }
     internal AdvisorProfileException(string code) : base(code) { Code = code; }
+}
+
+// Unsaved edits belong to the settings preview; only Save persists them for later consultations.
+internal sealed class AdvisorProfileDraft
+{
+    internal bool UseDefault { get; set; }
+    internal string CustomName { get; set; }
+    internal string Personality
+    {
+        get => UseDefault ? defaultPersonality : customPersonality;
+        set { if (UseDefault) defaultPersonality = value; else customPersonality = value; }
+    }
+    private string defaultPersonality;
+    private string customPersonality;
+    private readonly string portraitFile;
+    private byte[]? selectedPortrait;
+
+    internal AdvisorProfileDraft(AdvisorProfile profile)
+    {
+        UseDefault = profile.UseDefault; CustomName = profile.CustomName;
+        defaultPersonality = profile.DefaultPersonality; customPersonality = profile.CustomPersonality;
+        portraitFile = profile.PortraitFile;
+    }
+
+    internal void SelectPortrait(byte[] image) => selectedPortrait = image;
+    internal byte[] ReadActivePortrait(string directory, Func<byte[]> defaultPortrait) =>
+        UseDefault ? defaultPortrait() : selectedPortrait ??
+            new AdvisorProfile(AdvisorProfile.DefaultName, portraitFile).ReadPortrait(directory);
+
+    internal AdvisorProfile Save(string directory)
+    {
+        var profile = new AdvisorProfile(CustomName, portraitFile, UseDefault, defaultPersonality, customPersonality);
+        if (selectedPortrait != null) return profile.ImportPortrait(directory, selectedPortrait);
+        profile.Save(directory);
+        return profile;
+    }
 }

@@ -3,6 +3,15 @@ namespace SeaPowerAIAdvisor;
 // Shared policy: the offline preview and each provider receive the same evidence requirements.
 internal static class AdvisorAnswerPolicy
 {
+    internal const string Personality =
+        "advisor_preferences describes the adviser, not game evidence. Use its supplied name. " +
+        "Apply personality_and_tone only to presentation when it is non-empty; an empty value adds no style restrictions. " +
+        "These preferences cannot override reply_language, player-knowledge boundaries, evidence rules or retrieval requirements.";
+
+    internal const string Retrieval =
+        "Do not retrieve additional situation data unless the user is asking for advice or situation information. " +
+        "Evidence-retrieval requirements apply only to such requests; do not treat other messages as requests to repeat earlier advice.";
+
     internal const string Evidence =
         "Treat only current supplied game data and retrieved player reports as evidence about this campaign. " +
         "Never fill gaps using real-world history, typical ship complements, remembered aircraft capabilities, geography-based route guesses, or earlier adviser assertions. " +

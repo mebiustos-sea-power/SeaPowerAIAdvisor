@@ -1,6 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><TargetFramework>net10.0</TargetFramework><OutputType>Exe</OutputType><AssemblyName>SeaPowerAIAdvisor.Tests</AssemblyName></PropertyGroup>
   <ItemGroup>
+    <Compile Include="..\src\IAdvisorQuerySession.cs" Link="IAdvisorQuerySession.cs" />
+    <Compile Include="..\src\AdvisorSource.cs" Link="AdvisorSource.cs" />
+    <Compile Include="..\src\BattleSnapshot.cs" Link="BattleSnapshot.cs" />
+    <Compile Include="..\src\BattleQuerySession.cs" Link="BattleQuerySession.cs" />
+    <Compile Include="..\src\BattleSituationReader.cs" Link="BattleSituationReader.cs" />
     <Compile Include="..\src\AdvisorConversation.cs" Link="AdvisorConversation.cs" />
     <Compile Include="..\src\QuestionInput.cs" Link="QuestionInput.cs" />
     <Compile Include="..\src\AdvisorText.cs" Link="AdvisorText.cs" />
@@ -9,6 +14,7 @@
     <EmbeddedResource Include="..\src\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Localization.%(Filename).json" />
     <Compile Include="..\src\AdvisorSettings.cs" Link="AdvisorSettings.cs" />
     <Compile Include="..\src\AdvisorProfile.cs" Link="AdvisorProfile.cs" />
+    <Compile Include="..\src\PortraitImage.cs" Link="PortraitImage.cs" />
     <Compile Include="..\src\GeminiTransport.cs" Link="GeminiTransport.cs" />
     <Compile Include="..\src\AdvisorTrace.cs" Link="AdvisorTrace.cs" />
     <Compile Include="..\src\AdvisorConsultation.cs" Link="AdvisorConsultation.cs" />

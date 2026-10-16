@@ -2,93 +2,145 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Margin="14"
       TextElement.Foreground="{DynamicResource Brush.Foreground.Highlight}">
   <Grid.RowDefinitions>
+    <RowDefinition Height="Auto" />
     <RowDefinition Height="*" />
-    <RowDefinition Height="Auto" />
-    <RowDefinition Height="100" />
-    <RowDefinition Height="Auto" />
-    <RowDefinition Height="Auto" />
   </Grid.RowDefinitions>
-  <Grid>
-    <Grid.ColumnDefinitions>
-      <ColumnDefinition Width="150" />
-      <ColumnDefinition Width="16" />
-      <ColumnDefinition Width="*" />
-    </Grid.ColumnDefinitions>
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-    <StackPanel VerticalAlignment="Top">
-      <Border Background="#202B38" BorderBrush="#607080" BorderThickness="1" Padding="4">
-        <Grid Height="140">
-          <Image x:Name="Portrait" Stretch="Uniform" />
-          <TextBlock x:Name="PortraitError" Text="{DynamicResource Advisor.portrait.error}" TextWrapping="Wrap"
-                     TextAlignment="Center" VerticalAlignment="Center" FontSize="12" />
-        </Grid>
-      </Border>
-      <TextBlock x:Name="AdvisorName" Text="Michael Reed" TextWrapping="Wrap" TextAlignment="Center"
-                 FontSize="17" Margin="0,10,0,0" />
-      <TextBlock Text="{DynamicResource Advisor.advisor.role}" TextAlignment="Center" FontSize="12" Margin="0,5,0,0" Opacity="0.7" />
-      <TextBlock x:Name="Activity" Text="{DynamicResource Advisor.activity.idle}" TextWrapping="Wrap" TextAlignment="Center"
-                 FontSize="12" Margin="0,12,0,0" Opacity="0.8" />
-      <StackPanel Margin="0,18,0,0">
-        <Button x:Name="NextSteps" Content="{DynamicResource Advisor.preset.next_steps}"
-                ToolTip="{DynamicResource Advisor.preset.next_steps_tip}" Height="34" Margin="0,0,0,8" />
-        <Button x:Name="MoreDetail" Content="{DynamicResource Advisor.preset.more_detail}"
-                ToolTip="{DynamicResource Advisor.preset.more_detail_tip}" Height="34" Margin="0,0,0,8" IsEnabled="False" />
-        <Button x:Name="KeyRisks" Content="{DynamicResource Advisor.preset.key_risks}"
-                ToolTip="{DynamicResource Advisor.preset.key_risks_tip}" Height="34" />
-      </StackPanel>
-    </StackPanel>
-    </ScrollViewer>
-    <Grid Grid.Column="2">
-      <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-      <Grid Margin="0,0,0,8">
-        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-        <TextBlock x:Name="PaneTitle" Text="{DynamicResource Advisor.pane.conversation}" FontSize="16" VerticalAlignment="Center" />
-        <Button x:Name="Settings" Grid.Column="1" Content="{DynamicResource Advisor.action.settings}" Height="28" Padding="12,0" />
-      </Grid>
-      <TextBox x:Name="Transcript" Grid.Row="1" IsReadOnly="True" AcceptsReturn="True"
-               TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
-               FontSize="14" Padding="10" MinHeight="120" />
-      <ScrollViewer x:Name="SettingsPane" Grid.Row="1" Visibility="Collapsed"
-                    VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-        <StackPanel Margin="0,0,8,0">
-          <TextBlock Text="{DynamicResource Advisor.profile.heading}" FontSize="15" Margin="0,0,0,8" />
-          <TextBlock Text="{DynamicResource Advisor.profile.name}" FontSize="12" Margin="0,0,0,4" />
-          <TextBox x:Name="ProfileName" FontSize="14" Padding="7" />
-          <TextBlock Text="{DynamicResource Advisor.profile.portrait}" FontSize="12" Margin="0,8,0,4" />
-          <TextBox x:Name="ProfilePortrait" FontSize="13" Padding="7" />
-          <WrapPanel Margin="0,8,0,0">
-            <Button x:Name="SaveProfile" Content="{DynamicResource Advisor.action.save_profile}" Height="30" Padding="10,0" Margin="0,0,8,6" />
-            <Button x:Name="ReloadProfile" Content="{DynamicResource Advisor.action.reload_profile}" Height="30" Padding="10,0" Margin="0,0,0,6" />
-          </WrapPanel>
-          <TextBlock x:Name="ProfileStatus" TextWrapping="Wrap" FontSize="12" Margin="0,2,0,8" />
-          <TextBlock Text="{DynamicResource Advisor.profile.path}" FontSize="12" Margin="0,0,0,4" />
-          <TextBox x:Name="ProfilePath" IsReadOnly="True" TextWrapping="Wrap" FontSize="12" Padding="6" />
-          <TextBlock Text="{DynamicResource Advisor.profile.help}"
-                     TextWrapping="Wrap" FontSize="12" Margin="0,6,0,16" />
-          <TextBlock Text="{DynamicResource Advisor.diagnostics.heading}" FontSize="15" Margin="0,0,0,8" />
-          <TextBlock Text="{DynamicResource Advisor.diagnostics.info}"
-                     TextWrapping="Wrap" FontSize="12" Margin="0,0,0,8" />
-          <WrapPanel>
-            <Button x:Name="Capture" Content="{DynamicResource Advisor.action.capture}" Height="30" Padding="10,0" Margin="0,0,8,6" />
-            <Button x:Name="Input" Content="{DynamicResource Advisor.action.input}" Height="30" Padding="10,0" Margin="0,0,0,6" />
-          </WrapPanel>
-          <TextBox x:Name="DiagnosticOutput" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"
-                   Height="230" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
-                   FontSize="12" Padding="8" />
+  <Grid Margin="0,0,0,8">
+    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+    <TextBlock x:Name="PaneTitle" Text="{DynamicResource Advisor.pane.conversation}" FontSize="16" VerticalAlignment="Center" />
+    <Button x:Name="Settings" Grid.Column="1" Content="{DynamicResource Advisor.action.settings}" Height="28" Padding="12,0" />
+  </Grid>
+  <Grid x:Name="ConversationPane" Grid.Row="1">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="100" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+    <Grid>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="150" />
+        <ColumnDefinition Width="16" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel VerticalAlignment="Top">
+          <Border Background="#202B38" BorderBrush="#607080" BorderThickness="1" Padding="4">
+            <Grid Height="140">
+              <Image x:Name="Portrait" Stretch="Uniform" />
+              <TextBlock x:Name="PortraitError" Text="{DynamicResource Advisor.portrait.error}" TextWrapping="Wrap"
+                         TextAlignment="Center" VerticalAlignment="Center" FontSize="12" />
+            </Grid>
+          </Border>
+          <TextBlock x:Name="AdvisorName" Text="Michael Reed" TextWrapping="Wrap" TextAlignment="Center"
+                     FontSize="17" Margin="0,10,0,0" />
+          <TextBlock Text="{DynamicResource Advisor.advisor.role}" TextAlignment="Center" FontSize="12" Margin="0,5,0,0" Opacity="0.7" />
+          <TextBlock x:Name="Activity" Text="{DynamicResource Advisor.activity.idle}" TextWrapping="Wrap" TextAlignment="Center"
+                     FontSize="12" Margin="0,12,0,0" Opacity="0.8" />
+          <StackPanel Margin="0,18,0,0">
+            <Button x:Name="NextSteps" Content="{DynamicResource Advisor.preset.next_steps}"
+                    ToolTip="{DynamicResource Advisor.preset.next_steps_tip}" Height="34" Margin="0,0,0,8" />
+            <Button x:Name="MoreDetail" Content="{DynamicResource Advisor.preset.more_detail}"
+                    ToolTip="{DynamicResource Advisor.preset.more_detail_tip}" Height="34" Margin="0,0,0,8" IsEnabled="False" />
+            <Button x:Name="KeyRisks" Content="{DynamicResource Advisor.preset.key_risks}"
+                    ToolTip="{DynamicResource Advisor.preset.key_risks_tip}" Height="34" />
+          </StackPanel>
         </StackPanel>
       </ScrollViewer>
+      <TextBox x:Name="Transcript" Grid.Column="2" IsReadOnly="True" AcceptsReturn="True"
+               TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+               FontSize="14" Padding="10" MinHeight="120" />
     </Grid>
+    <TextBlock Grid.Row="1" Text="{DynamicResource Advisor.question.label}" FontSize="13" Margin="0,10,0,5" />
+    <TextBox x:Name="Question" Grid.Row="2" AcceptsReturn="True" AcceptsTab="False"
+             TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+             FontSize="15" Padding="8" ToolTip="{DynamicResource Advisor.question.tooltip}" />
+    <Grid Grid.Row="3" Margin="0,10,0,0">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+      <TextBlock Text="{DynamicResource Advisor.question.shortcut}" FontSize="12" VerticalAlignment="Center" />
+      <Button x:Name="Clear" Grid.Column="1" Content="{DynamicResource Advisor.action.clear}" Height="30" Padding="10,0" Margin="8,0,0,0" />
+      <Button x:Name="Send" Grid.Column="2" Content="{DynamicResource Advisor.action.send}" MinWidth="70" Height="30" Margin="8,0,0,0" />
+    </Grid>
+    <TextBlock x:Name="Status" Grid.Row="4" Text="{DynamicResource Advisor.status.ready}"
+               FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0" />
   </Grid>
-  <TextBlock Grid.Row="1" Text="{DynamicResource Advisor.question.label}" FontSize="13" Margin="0,10,0,5" />
-  <TextBox x:Name="Question" Grid.Row="2" AcceptsReturn="True" AcceptsTab="False"
-           TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
-           FontSize="15" Padding="8" ToolTip="{DynamicResource Advisor.question.tooltip}" />
-  <Grid Grid.Row="3" Margin="0,10,0,0">
-    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-    <TextBlock Text="{DynamicResource Advisor.question.shortcut}" FontSize="12" VerticalAlignment="Center" />
-    <Button x:Name="Clear" Grid.Column="1" Content="{DynamicResource Advisor.action.clear}" Height="30" Padding="10,0" Margin="8,0,0,0" />
-    <Button x:Name="Send" Grid.Column="2" Content="{DynamicResource Advisor.action.send}" MinWidth="70" Height="30" Margin="8,0,0,0" />
+  <Grid x:Name="SettingsPane" Grid.Row="1" Visibility="Collapsed">
+    <TabControl x:Name="SettingsTabs" SelectedIndex="0" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+      <TabItem x:Name="ProfileTab" Header="{DynamicResource Advisor.pane.settings}"
+               HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+        <Grid x:Name="ProfileSettings" Margin="0,12,0,0">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="0,0,8,0">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="120" /><ColumnDefinition Width="16" /><ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border Background="#202B38" BorderBrush="#607080" BorderThickness="1" Padding="4"
+                        Width="120" Height="136" VerticalAlignment="Top">
+                  <Grid>
+                    <Image x:Name="ProfilePreview" Stretch="Uniform" />
+                    <TextBlock x:Name="ProfilePreviewError" Text="{DynamicResource Advisor.portrait.error}" TextWrapping="Wrap"
+                               TextAlignment="Center" VerticalAlignment="Center" FontSize="12" />
+                  </Grid>
+                </Border>
+                <StackPanel Grid.Column="2">
+                  <TextBlock Text="{DynamicResource Advisor.profile.advisor}" FontSize="12" Margin="0,0,0,6" />
+                  <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                    <RadioButton x:Name="DefaultAdvisor" GroupName="AdvisorMode" IsChecked="True"
+                                 Content="{DynamicResource Advisor.profile.default}" Margin="0,0,18,0" />
+                    <RadioButton x:Name="CustomAdvisor" GroupName="AdvisorMode"
+                                 Content="{DynamicResource Advisor.profile.custom}" />
+                  </StackPanel>
+                  <TextBlock Text="{DynamicResource Advisor.profile.name}" FontSize="12" Margin="0,0,0,4" />
+                  <TextBox x:Name="ProfileName" FontSize="14" Padding="7" IsReadOnly="True" />
+                  <Button x:Name="ChoosePortrait" Content="{DynamicResource Advisor.action.choose_portrait}"
+                          Height="30" Padding="10,0" HorizontalAlignment="Left" Margin="0,8,0,0" Visibility="Collapsed" />
+                </StackPanel>
+              </Grid>
+              <TextBlock Text="{DynamicResource Advisor.profile.personality}" FontSize="12" Margin="0,18,0,4" />
+              <TextBox x:Name="ProfilePersonality" Height="120" AcceptsReturn="True" AcceptsTab="False"
+                       TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                       FontSize="14" Padding="7" ToolTip="{DynamicResource Advisor.profile.personality_tip}" />
+            </StackPanel>
+          </ScrollViewer>
+          <TextBlock x:Name="ProfileStatus" Grid.Row="1" TextWrapping="Wrap" FontSize="12"
+                     Margin="0,8,0,0" Visibility="Collapsed" />
+          <WrapPanel x:Name="ProfileActions" Grid.Row="2" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button x:Name="ReloadProfile" Content="{DynamicResource Advisor.action.reload_profile}" Height="30" Padding="12,0" />
+            <Button x:Name="SaveProfile" Content="{DynamicResource Advisor.action.save_profile}" Height="30" Padding="12,0" Margin="8,0,0,0" />
+          </WrapPanel>
+        </Grid>
+      </TabItem>
+      <TabItem x:Name="DiagnosticsTab" Header="{DynamicResource Advisor.diagnostics.heading}"
+               HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+        <Grid x:Name="DiagnosticsPane" Margin="0,12,0,0">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+          <StackPanel>
+            <TextBlock Text="{DynamicResource Advisor.profile.path}" FontSize="12" Margin="0,0,0,4" />
+            <TextBox x:Name="ProfilePath" IsReadOnly="True" TextWrapping="Wrap" FontSize="12" Padding="6" />
+            <WrapPanel Margin="0,12,0,6">
+              <Button x:Name="Capture" Content="{DynamicResource Advisor.action.capture}" Height="30" Padding="10,0"
+                      ToolTip="{DynamicResource Advisor.diagnostics.info}" Margin="0,0,8,0" />
+              <Button x:Name="Input" Content="{DynamicResource Advisor.action.input}" Height="30" Padding="10,0"
+                      ToolTip="{DynamicResource Advisor.diagnostics.info}" />
+            </WrapPanel>
+          </StackPanel>
+          <TextBox x:Name="DiagnosticOutput" Grid.Row="1" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"
+                   VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                   FontSize="12" Padding="8" />
+          <TextBlock x:Name="DiagnosticStatus" Grid.Row="2" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0" />
+        </Grid>
+      </TabItem>
+    </TabControl>
   </Grid>
-  <TextBlock x:Name="Status" Grid.Row="4" Text="{DynamicResource Advisor.status.ready}"
-             FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0" />
 </Grid>
