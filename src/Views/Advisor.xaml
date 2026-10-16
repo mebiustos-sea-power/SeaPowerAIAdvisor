@@ -91,7 +91,7 @@
                   <ColumnDefinition Width="120" /><ColumnDefinition Width="16" /><ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <Border Background="#202B38" BorderBrush="#607080" BorderThickness="1" Padding="4"
-                        Width="120" Height="136" VerticalAlignment="Top">
+                        Width="120" Height="120" VerticalAlignment="Top">
                   <Grid>
                     <Image x:Name="ProfilePreview" Stretch="Uniform" />
                     <TextBlock x:Name="ProfilePreviewError" Text="{DynamicResource Advisor.portrait.error}" TextWrapping="Wrap"

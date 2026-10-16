@@ -168,7 +168,7 @@ internal sealed class AdvisorWindow
         window.DataContext = window;
         window.Template = view.TryFindResource("WindowLayoutNoScroll") as ControlTemplate
             ?? throw new InvalidOperationException("The game's WindowLayoutNoScroll template is unavailable.");
-        window.OnClosed += (_, _) => guard(() => { CancelActive(); ReleaseInput(); ReleasePortrait(); portraitSelection = null; DiscardConnectionChanges(); });
+        window.OnClosed += (_, _) => guard(OnWindowClosed);
         settingsTabs.SelectionChanged += (_, _) => guard(() =>
         {
             if (!IsOpen || settingsPane.Visibility != Visibility.Visible) return;
@@ -191,13 +191,11 @@ internal sealed class AdvisorWindow
         LoadProfile();
         RefreshConfigurationNotice();
         ShowConversation(false);
-        if (settingsPane.Visibility == Visibility.Visible) BeginConnectionEdit();
         WindowHostCommands.OpenWindowCommand.Execute(window, view);
         if (!IsOpen) throw new InvalidOperationException("The game window host did not open the advisor.");
-        // Keep conversation and message text; reopened settings reload their saved values.
+        // Reopen the conversation with its history and message text intact.
         choosePortrait.IsEnabled = portraitSelection == null;
-        if (settingsPane.Visibility == Visibility.Visible) FocusSettings();
-        else question.Focus();
+        question.Focus();
     }
 
     internal void Tick()
@@ -221,11 +219,18 @@ internal sealed class AdvisorWindow
 
     internal void Close()
     {
+        if (IsOpen) window.CloseWindowNow();
+        else OnWindowClosed();
+    }
+
+    private void OnWindowClosed()
+    {
         CancelActive();
         ReleaseInput();
-        portraitSelection = null;
+        DiscardProfileChanges();
         DiscardConnectionChanges();
-        if (IsOpen) window.CloseWindowNow();
+        settingsPane.Visibility = Visibility.Collapsed;
+        conversationPane.Visibility = Visibility.Visible;
         ReleasePortrait();
     }
 
