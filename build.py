@@ -25,11 +25,14 @@ def local_path(value):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Build the offline campaign advisor prototype.')
+    parser = argparse.ArgumentParser(description='Build and test the campaign advisor. Tests use mock HTTP; live Gemini calls require a separate explicit smoke command.')
     parser.add_argument('--install', action='store_true', help='Copy the package into its own StreamingAssets folder; does not enable it.')
     parser.add_argument('--sample-save', type=Path, help='Optional local campaign save for a read-only smoke test.')
     parser.add_argument('--campaign-definition', type=Path, help='Campaign definition for --sample-save.')
+    parser.add_argument('--query-demo', action='store_true', help='Write a scripted, offline knowledge-query trace using --sample-save.')
     options = parser.parse_args()
+    if options.query_demo and not options.sample_save:
+        parser.error('--query-demo requires --sample-save and --campaign-definition')
     if bool(options.sample_save) != bool(options.campaign_definition):
         parser.error('--sample-save and --campaign-definition must be supplied together')
     samples = [options.sample_save, options.campaign_definition] if options.sample_save else []
@@ -70,7 +73,11 @@ def main():
     campaign = local_path(properties['AnchorChainDir']).parent / '3813157776' / 'DynamicCampaignMod.dll'
     run([host_path(ROOT / 'tests/bin/Release/net10.0/SeaPowerAIAdvisor.Tests.dll'),
          host_path(campaign), host_path(ROOT / 'src/bin/Release/netstandard2.1/SeaPowerAIAdvisor.dll'),
+         host_path(game / 'Sea Power_Data/Managed/Seapower-Scripts.dll'),
          *[host_path(p.resolve()) for p in samples]], 'tests.log')
+    if options.query_demo:
+        run([host_path(ROOT / 'tests/bin/Release/net10.0/SeaPowerAIAdvisor.Tests.dll'), '--query-demo',
+             host_path(campaign), *[host_path(p.resolve()) for p in samples], host_path(artifact / 'query-demo.json')], 'query-demo.log')
     package = ROOT / 'dist/SeaPowerAIAdvisor'
     package.mkdir(parents=True, exist_ok=True)
     shutil.copy2(ROOT / 'src/bin/Release/netstandard2.1/SeaPowerAIAdvisor.dll', package)

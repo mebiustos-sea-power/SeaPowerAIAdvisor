@@ -1,10 +1,33 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><TargetFramework>net10.0</TargetFramework><OutputType>Exe</OutputType><AssemblyName>SeaPowerAIAdvisor.Tests</AssemblyName></PropertyGroup>
   <ItemGroup>
-    <Compile Include="..\src\PrototypeConversation.cs" Link="PrototypeConversation.cs" />
+    <Compile Include="..\src\AdvisorConversation.cs" Link="AdvisorConversation.cs" />
+    <Compile Include="..\src\QuestionInput.cs" Link="QuestionInput.cs" />
+    <Compile Include="..\src\AdvisorText.cs" Link="AdvisorText.cs" />
+    <Compile Include="..\src\AdvisorQuestion.cs" Link="AdvisorQuestion.cs" />
+    <Compile Include="..\src\AdvisorTranscript.cs" Link="AdvisorTranscript.cs" />
+    <EmbeddedResource Include="..\src\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Localization.%(Filename).json" />
+    <Compile Include="..\src\AdvisorSettings.cs" Link="AdvisorSettings.cs" />
+    <Compile Include="..\src\AdvisorProfile.cs" Link="AdvisorProfile.cs" />
+    <Compile Include="..\src\GeminiTransport.cs" Link="GeminiTransport.cs" />
+    <Compile Include="..\src\AdvisorTrace.cs" Link="AdvisorTrace.cs" />
+    <Compile Include="..\src\AdvisorConsultation.cs" Link="AdvisorConsultation.cs" />
+    <Compile Include="..\src\GeminiAdvisor.cs" Link="GeminiAdvisor.cs" />
+    <Compile Include="..\src\AdvisorJob.cs" Link="AdvisorJob.cs" />
     <Compile Include="..\src\SituationSnapshot.cs" Link="SituationSnapshot.cs" />
+    <Compile Include="..\src\FriendlyAviationSnapshot.cs" Link="FriendlyAviationSnapshot.cs" />
+    <Compile Include="..\src\CampaignAirReader.cs" Link="CampaignAirReader.cs" />
+    <Compile Include="..\src\AdvisorAnswerPolicy.cs" Link="AdvisorAnswerPolicy.cs" />
+    <Compile Include="..\src\VictorySnapshot.cs" Link="VictorySnapshot.cs" />
+    <Compile Include="..\src\CampaignVictoryReader.cs" Link="CampaignVictoryReader.cs" />
     <Compile Include="..\src\CampaignSituationReader.cs" Link="CampaignSituationReader.cs" />
     <Compile Include="..\src\SituationFormatter.cs" Link="SituationFormatter.cs" />
+    <Compile Include="..\src\AdvisorInputBuilder.cs" Link="AdvisorInputBuilder.cs" />
+    <Compile Include="..\src\SnapshotIds.cs" Link="SnapshotIds.cs" />
+    <Compile Include="..\src\AdvisorQueryCatalog.cs" Link="AdvisorQueryCatalog.cs" />
+    <Compile Include="..\src\AdvisorQuerySession.cs" Link="AdvisorQuerySession.cs" />
+    <Compile Include="..\src\LanguageCode.cs" Link="LanguageCode.cs" />
+    <Compile Include="..\src\CampaignDisplayNames.cs" Link="CampaignDisplayNames.cs" />
     <Reference Include="Newtonsoft.Json" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\Newtonsoft.Json.dll" Private="true" />
     <Reference Include="Mono.Cecil" HintPath="$(SeaPowerDir)\BepInEx\core\Mono.Cecil.dll" Private="true" />
   </ItemGroup>

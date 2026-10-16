@@ -17,6 +17,7 @@ internal sealed class CampaignIntegration
     private readonly Action<string> warn;
     private readonly CampaignSituationReader reader = new();
     private object? session;
+    private object? campaignUi;
     private StackPanel? toolbar;
     private ToggleButton? launcher;
     private AdvisorWindow? advisor;
@@ -51,6 +52,7 @@ internal sealed class CampaignIntegration
             Reset();
             session = current;
         }
+        this.campaignUi = campaignUi;
         if (launcher == null)
         {
             // The original toolbar can still be awaiting attachment during initialization.
@@ -63,7 +65,7 @@ internal sealed class CampaignIntegration
             launcher = new ToggleButton
             {
                 Content = "AI",
-                ToolTip = "AI相談（試作）",
+                ToolTip = AdvisorText.Load(GameLanguage.Read())["launcher.tooltip"],
                 FontSize = 15,
                 Style = root.TryFindResource("StrategyButton") as Style
                     ?? throw new InvalidOperationException("The campaign's StrategyButton style is unavailable.")
@@ -72,7 +74,7 @@ internal sealed class CampaignIntegration
             {
                 var host = view.FindName("WindowHost") as WindowHost
                     ?? throw new InvalidOperationException("The campaign's own WindowHost is unavailable.");
-                advisor ??= new AdvisorWindow(view, host, guard, Capture, warn);
+                advisor ??= new AdvisorWindow(view, host, guard, Capture, GameLanguage.Read, warn);
                 advisor.Toggle();
                 launcher.IsChecked = advisor.IsOpen;
             });
@@ -88,8 +90,10 @@ internal sealed class CampaignIntegration
     private SituationSnapshot Capture()
     {
         if (!InCampaign() || session == null || !ReferenceEquals(session, simulation.Invoke(null, null)))
-            throw new SituationUnavailableException("キャンペーン画面の状況を取得できません。画面を開き直してください。");
-        return reader.Capture(session);
+            throw new SituationUnavailableException("campaign_unavailable");
+        var names = new CampaignDisplayNames(campaignUi
+            ?? throw new InvalidOperationException("The campaign display context is missing."), session);
+        return reader.Capture(session, names.ShipName);
     }
 
     internal void SceneUnloaded(Scene scene)
@@ -112,6 +116,7 @@ internal sealed class CampaignIntegration
                 launcher = null;
                 toolbar = null;
                 session = null;
+                campaignUi = null;
             }
         }
     }

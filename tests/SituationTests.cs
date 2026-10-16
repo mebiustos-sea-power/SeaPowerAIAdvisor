@@ -18,36 +18,60 @@ internal static class SituationTests
         {
             var f = new Fixture(assembly);
             var reader = new CampaignSituationReader();
-            var snapshot = reader.Capture(f.Sim);
+            var snapshot = reader.Capture(f.Sim, f.DisplayShipName);
             var before = SituationFormatter.Format(snapshot);
+            var input = AdvisorInputBuilder.Build(snapshot, "ja", "護衛隊をどこへ？");
             f.HideEverythingDifferently();
-            Require(SituationFormatter.Format(reader.Capture(f.Sim)) == before, "Hidden data changed the preview");
+            Require(SituationFormatter.Format(reader.Capture(f.Sim, f.DisplayShipName)) == before, "Hidden data changed the preview");
             Require(SituationFormatter.Format(snapshot) == before, "A captured snapshot retained mutable source objects");
+            Require(AdvisorInputBuilder.Build(reader.Capture(f.Sim, f.DisplayShipName), "ja", "護衛隊をどこへ？") == input,
+                "Hidden data changed structured AI input");
         });
         check("Only player forces reach ship catalog and ammunition services", () =>
         {
             var f = new Fixture(assembly);
-            var s = new CampaignSituationReader().Capture(f.Sim);
+            var s = new CampaignSituationReader().Capture(f.Sim, f.DisplayShipName);
             Require(s.Forces.Count == 1 && s.Forces[0].Name == "護衛隊", "Enemy forces were included");
             var ships = s.Forces[0].Ships;
             Require(ships.Count == 3 && ships[0].FuelShare == .6 && ships[0].DamageShare == .2 && ships[0].AmmoShare == .4 && ships[0].Type == "DD", "Own readiness was lost");
             Require(ships[1].Nuclear && ships[2].Unarmed && ships[2].AmmoShare == null, "Nuclear/unarmed treatment is incorrect");
             Require(s.Forces[0].Port == "味方港" && s.Forces[0].Mission == "Follow", "Own location/mission was lost");
-            Require(f.Sim.Catalog.Calls == 3 && f.Sim.Logistics.Calls == 2, "Unexpected ship service access");
+            Require(f.Sim.Logistics.Calls == 2, "Unarmed ships reached the ammunition service");
+        });
+        check("Display projection is applied to own ships before they reach AI input", () =>
+        {
+            var f = new Fixture(assembly);
+            var snapshot = new CampaignSituationReader().Capture(f.Sim, hull => "画面の名前：" + f.DisplayShipName(hull));
+            Require(snapshot.Forces.Single().Ships[0].Name == "画面の名前：自軍艦0", "Reader bypassed display projection");
+            var input = JObject.Parse(AdvisorInputBuilder.Build(snapshot, "ja", ""));
+            Require((string?)input["situation"]!["friendly_task_forces"]![0]!["ships"]![0]!["display_name"] == "画面の名前：自軍艦0",
+                "Structured input replaced a projected display name");
+        });
+        check("AI references do not disclose internal identifiers of own or enemy movers", () =>
+        {
+            var f = new Fixture(assembly);
+            var reader = new CampaignSituationReader();
+            var before = AdvisorInputBuilder.Build(reader.Capture(f.Sim, f.DisplayShipName), "ja", "");
+            foreach (var force in Sequence(f.State, "TaskForces").Cast<object>())
+            {
+                Set(force, "Id", 123456789);
+                foreach (var hull in Sequence(force, "Ships").Cast<object>()) Set(hull, "Id", 987654321);
+            }
+            Require(AdvisorInputBuilder.Build(reader.Capture(f.Sim, f.DisplayShipName), "ja", "") == before, "An internal game ID reached input");
         });
         check("Enemy contacts use sightings even when identified or actual enemy is absent", () =>
         {
             var f = new Fixture(assembly);
             Set(f.Contact, "Identified", true);
             Sequence(f.State, "TaskForces").Remove(f.Enemy);
-            var s = new CampaignSituationReader().Capture(f.Sim);
+            var s = new CampaignSituationReader().Capture(f.Sim, f.DisplayShipName);
             var c = s.Contacts.Single();
             Require(c.Identified && c.Position.Latitude == 31 && c.Position.Longitude == 132 && c.Count == 2, "Contact resolved into live state");
             Require(c.SeenAt == f.Now.AddHours(-1) && c.UncertaintyNm == 25, "Observation time/uncertainty changed");
             var before = SituationFormatter.Format(s);
             Set(f.Contact, "Count", 3);
             Set(f.Contact, "Position", f.Point(32, 133));
-            var changed = new CampaignSituationReader().Capture(f.Sim);
+            var changed = new CampaignSituationReader().Capture(f.Sim, f.DisplayShipName);
             Require(changed.Contacts.Single().Count == 3 && SituationFormatter.Format(changed) != before, "New observations did not update the preview");
             Require(s.Contacts.Single().Count == 2, "Snapshot contact changed after capture");
         });
@@ -61,34 +85,36 @@ internal static class SituationTests
             Set(other, "LastSeen", f.Now.AddHours(-1)); Set(other, "Position", f.Point(33, 134));
             contacts.Add(10, other);
             var reader = new CampaignSituationReader();
-            var before = SituationFormatter.Format(reader.Capture(f.Sim));
+            var before = SituationFormatter.Format(reader.Capture(f.Sim, f.DisplayShipName));
+            var input = AdvisorInputBuilder.Build(reader.Capture(f.Sim, f.DisplayShipName), "en", "");
             contacts.Clear();
             Set(f.Contact, "MoverId", 1); Set(other, "MoverId", 999);
             contacts.Add(1, f.Contact); contacts.Add(999, other);
-            Require(SituationFormatter.Format(reader.Capture(f.Sim)) == before, "Internal identifiers influenced the disclosed preview");
+            Require(SituationFormatter.Format(reader.Capture(f.Sim, f.DisplayShipName)) == before, "Internal identifiers influenced the disclosed preview");
+            Require(AdvisorInputBuilder.Build(reader.Capture(f.Sim, f.DisplayShipName), "en", "") == input, "Internal contact IDs influenced AI input");
         });
         check("Contact aging grows uncertainty and expires only after twelve game hours", () =>
         {
             var f = new Fixture(assembly);
             Set(f.Contact, "LastSeen", f.Now.AddHours(-12));
             var reader = new CampaignSituationReader();
-            Require(reader.Capture(f.Sim).Contacts.Single().UncertaintyNm == 300, "Twelve-hour boundary is wrong");
+            Require(reader.Capture(f.Sim, f.DisplayShipName).Contacts.Single().UncertaintyNm == 300, "Twelve-hour boundary is wrong");
             Set(f.Contact, "LastSeen", f.Now.AddHours(-12).AddSeconds(-1));
-            Require(reader.Capture(f.Sim).Contacts.Count == 0, "Forgotten contact was disclosed");
+            Require(reader.Capture(f.Sim, f.DisplayShipName).Contacts.Count == 0, "Forgotten contact was disclosed");
         });
         check("Unknown enemy base forces stay unknown while observed zero remains zero", () =>
         {
             var f = new Fixture(assembly);
             var reader = new CampaignSituationReader();
-            var b = reader.Capture(f.Sim).Bases.Single();
+            var b = reader.Capture(f.Sim, f.DisplayShipName).Bases.Single();
             Require(b.LandSeenAt == f.Now.AddHours(-2) && b.Batteries == 2, "Observed defenses were lost");
             Require(b.ForcesSeenAt == null && b.Ships == null && b.Aircraft == null, "Unobserved base counts leaked");
             Set(f.Sighting, "ForcesAt", f.Now.AddMinutes(-15));
             Set(f.Sighting, "ShipsInPort", 0); Set(f.Sighting, "Aircraft", 0);
-            b = reader.Capture(f.Sim).Bases.Single();
+            b = reader.Capture(f.Sim, f.DisplayShipName).Bases.Single();
             Require(b.Ships == 0 && b.Aircraft == 0 && b.ForcesSeenAt.HasValue, "Observed zero became unknown");
             Set(f.Sighting, "Holder", "FORMER_OWNER");
-            b = reader.Capture(f.Sim).Bases.Single();
+            b = reader.Capture(f.Sim, f.DisplayShipName).Bases.Single();
             Require(b.LandSeenAt == null && b.ForcesSeenAt == null && b.Batteries == null, "A former owner's defense records were reused");
         });
         check("Colocated air base reuses only the matching port sighting", () =>
@@ -99,13 +125,13 @@ internal static class SituationTests
             Set(air, "lat", 35d); Set(air, "lon", 140d); Set(air, "port", "enemy-port"); Set(air, "colocated", true);
             Sequence(f.Definition, "bases").Add(air);
             Dictionary(f.State, "BaseOwner").Add("enemy-air", "RED");
-            var b = new CampaignSituationReader().Capture(f.Sim).Bases.Single(x => x.Name == "敵飛行場");
+            var b = new CampaignSituationReader().Capture(f.Sim, f.DisplayShipName).Bases.Single(x => x.Name == "敵飛行場");
             Require(b.Batteries == 2 && b.ForcesSeenAt == null && b.Kind == "AirBase", "Shared base sighting was incorrectly resolved");
         });
         check("Orders exclude enemy orders and undisclosed future phases", () =>
         {
             var f = new Fixture(assembly);
-            var orders = new CampaignSituationReader().Capture(f.Sim).Orders;
+            var orders = new CampaignSituationReader().Capture(f.Sim, f.DisplayShipName).Orders;
             Require(orders.Count == 2 && orders.Any(x => x.Title == "開示作戦") && orders.Any(x => x.Title == "護衛命令"), "Published orders were not preserved");
             Require(orders.Single(x => x.Title == "護衛命令").Deadline == f.Now.AddHours(12), "Public deadline was lost");
         });
@@ -118,7 +144,7 @@ internal static class SituationTests
             feed.Add(f.Message("RED", f.Now.AddMinutes(-1), "秘密報告"));
             feed.Add(f.Message("BLUE", f.Now.AddDays(1), "未来報告"));
             Set(f.State, "Messages", null);
-            var reports = new CampaignSituationReader().Capture(f.Sim).Reports;
+            var reports = new CampaignSituationReader().Capture(f.Sim, f.DisplayShipName).Reports;
             Require(reports.Count == 30 && reports[0].Text == "報告5" && reports[29].Text == "報告34", "Feed filtering or retention is wrong");
         });
         check("Fog disabled refuses capture and missing player intel fails without creating it", () =>
@@ -126,28 +152,29 @@ internal static class SituationTests
             var f = new Fixture(assembly);
             var reader = new CampaignSituationReader();
             Set(f.Definition, "fogOfWar", false);
-            Throws<SituationUnavailableException>(() => reader.Capture(f.Sim));
+            Throws<SituationUnavailableException>(() => reader.Capture(f.Sim, f.DisplayShipName));
             Set(f.Definition, "fogOfWar", true);
             Dictionary(f.State, "Intel").Remove("BLUE");
             var count = Dictionary(f.State, "Intel").Count;
-            Throws<InvalidOperationException>(() => reader.Capture(f.Sim));
+            Throws<InvalidOperationException>(() => reader.Capture(f.Sim, f.DisplayShipName));
             Require(Dictionary(f.State, "Intel").Count == count, "Capture created an intelligence record");
         });
         check("Impossible observation dates and unknown order statuses surface as errors", () =>
         {
             var f = new Fixture(assembly);
             Set(f.Contact, "LastSeen", f.Now.AddSeconds(1));
-            Throws<InvalidOperationException>(() => new CampaignSituationReader().Capture(f.Sim));
+            Throws<InvalidOperationException>(() => new CampaignSituationReader().Capture(f.Sim, f.DisplayShipName));
             Set(f.Contact, "LastSeen", f.Now);
             var field = f.Order.GetType().GetField("Status")!;
             field.SetValue(f.Order, Enum.ToObject(field.FieldType, 99));
-            Throws<InvalidOperationException>(() => new CampaignSituationReader().Capture(f.Sim));
+            Throws<InvalidOperationException>(() => new CampaignSituationReader().Capture(f.Sim, f.DisplayShipName));
         });
+        VictoryTests.Run(assembly, check);
         if (samplePaths.Length == 2)
             check("Real saved campaign captures without changing source state", () => CheckSave(assembly, samplePaths[0], samplePaths[1]));
     }
 
-    internal static void CheckSave(Assembly assembly, string savePath, string definitionPath)
+    internal static SituationSnapshot CheckSave(Assembly assembly, string savePath, string definitionPath)
     {
         // A real save checks field/null/date compatibility; catalog readiness is covered separately.
         var saved = JObject.Parse(File.ReadAllText(savePath));
@@ -165,21 +192,39 @@ internal static class SituationTests
             sim.Catalog.Specs[(string)Get(hull, "UnitIni")] = new OwnSpec(false, false);
             sim.Logistics.Own.Add(hull);
         }
+        foreach (var squadron in Sequence(state, "Squadrons").Cast<object>().Where(x => (string)Get(x, "SideId") == side))
+            foreach (var frame in Sequence(squadron, "Airframes").Cast<object>())
+            {
+                var key = (string)Get(frame, "UnitIni");
+                sim.Catalog.AircraftSpecs[key] = new OwnAircraftSpec(key);
+            }
+        foreach (var flight in Sequence(state, "Flights").Cast<object>().Where(x => (string)Get(x, "SideId") == side))
+        {
+            var key = (string)Get(flight, "UnitIni");
+            sim.Catalog.AircraftSpecs[key] = new OwnAircraftSpec(key);
+        }
         var before = JToken.FromObject(state, Serializer()).ToString(Formatting.None);
-        var snapshot = new CampaignSituationReader().Capture(sim);
+        var snapshot = new CampaignSituationReader().Capture(sim, hull => (string)Get(hull, "Name"));
         Require(snapshot.Forces.Count == own.Length && snapshot.Side == side, "Saved player force filter changed");
         Require(SituationFormatter.Format(snapshot).Length > 0, "Saved situation is empty");
+        var json = AdvisorInputBuilder.Build(snapshot, "ja", "現在の状況は？");
+        var input = JObject.Parse(json);
+        Require(input["situation"]!["friendly_task_forces"]!.Count() == own.Length &&
+            input["situation"]!["observed_contacts"]!.Count() == snapshot.Contacts.Count, "Saved situation changed during JSON projection");
         var after = JToken.FromObject(state, Serializer()).ToString(Formatting.None);
         Require(before == after, "Capture modified the loaded state");
+        Console.WriteLine("Structured sample length: " + json.Length + " characters");
         Console.WriteLine("Sample counts: own fleets=" + snapshot.Forces.Count + ", contacts=" + snapshot.Contacts.Count +
-            ", opposing bases=" + snapshot.Bases.Count + ", reports=" + snapshot.Reports.Count);
+            ", opposing bases=" + snapshot.Bases.Count + ", reports=" + snapshot.Reports.Count +
+            ", own air units=" + snapshot.Aviation.Units.Count + ", own air flights=" + snapshot.Aviation.Flights.Count);
+        return snapshot;
     }
 
-    private static object Get(object target, string field) => target.GetType().GetField(field)!.GetValue(target)!;
-    private static void Set(object target, string field, object? value) => target.GetType().GetField(field)!.SetValue(target, value);
-    private static void SetEnum(object target, string field, string value) => Set(target, field, Enum.Parse(target.GetType().GetField(field)!.FieldType, value));
-    private static IList Sequence(object target, string field) => (IList)Get(target, field);
-    private static IDictionary Dictionary(object target, string field) => (IDictionary)Get(target, field);
+    internal static object Get(object target, string field) => target.GetType().GetField(field)!.GetValue(target)!;
+    internal static void Set(object target, string field, object? value) => target.GetType().GetField(field)!.SetValue(target, value);
+    internal static void SetEnum(object target, string field, string value) => Set(target, field, Enum.Parse(target.GetType().GetField(field)!.FieldType, value));
+    internal static IList Sequence(object target, string field) => (IList)Get(target, field);
+    internal static IDictionary Dictionary(object target, string field) => (IDictionary)Get(target, field);
     private static void Require(bool value, string error) { if (!value) throw new InvalidOperationException(error); }
     private static void Throws<T>(Action action) where T : Exception
     {
@@ -187,7 +232,7 @@ internal static class SituationTests
         throw new InvalidOperationException("Expected " + typeof(T).Name);
     }
 
-    private sealed class Fixture
+    internal sealed class Fixture
     {
         private readonly Assembly assembly;
         internal readonly DateTime Now = new(1985, 6, 1, 12, 0, 0, DateTimeKind.Utc);
@@ -198,6 +243,11 @@ internal static class SituationTests
             this.assembly = assembly;
             State = New("Core.State.CampaignState"); Definition = New("Core.Data.CampaignDefinition");
             Set(State, "Definition", Definition); Set(State, "Now", Now); Set(State, "PlayerSideId", "BLUE"); Set(Definition, "fogOfWar", true);
+            foreach (var id in new[] { "BLUE", "RED" })
+            {
+                var side = New("Core.Data.SideDefinition"); Set(side, "id", id); Set(side, "name", id == "BLUE" ? "味方陣営" : "相手陣営");
+                Sequence(Definition, "sides").Add(side);
+            }
             var intel = New("Core.State.SideIntel"); Set(intel, "SideId", "BLUE");
             Dictionary(State, "Intel").Add("BLUE", intel);
             EnemyIntel = New("Core.State.SideIntel"); Set(EnemyIntel, "SideId", "RED");
@@ -217,7 +267,7 @@ internal static class SituationTests
             for (var i = 0; i < 3; i++)
             {
                 var hull = New("Core.State.Hull");
-                Set(hull, "Name", "自軍艦" + i); Set(hull, "UnitIni", "own" + i);
+                Set(hull, "Id", 1000 + i); Set(hull, "Name", "自軍艦" + i); Set(hull, "UnitIni", "own" + i);
                 Set(hull, "Fuel", .6); Set(hull, "Damage", .2);
                 Sequence(own, "Ships").Add(hull);
                 Sim.Catalog.Specs.Add("own" + i, new OwnSpec(i == 1, i == 2)); Sim.Logistics.Own.Add(hull);
@@ -225,6 +275,7 @@ internal static class SituationTests
             foreach (var id in new[] { "own-port", "enemy-port" })
             {
                 var b = New("Core.Data.BaseDefinition"); Set(b, "id", id); Set(b, "name", id == "own-port" ? "味方港" : "敵港");
+                Set(b, "side", id == "own-port" ? "BLUE" : "RED");
                 Set(b, "lat", 35d); Set(b, "lon", 140d); SetEnum(b, "kind", "NavalBase");
                 Sequence(Definition, "bases").Add(b); Dictionary(State, "BaseOwner").Add(id, id == "own-port" ? "BLUE" : "RED");
             }
@@ -242,6 +293,11 @@ internal static class SituationTests
             var orphan = MakeOrder("BLUE", "Active", "SECRET UNDISCLOSED OPERATION", Now.AddHours(-3)); Set(orphan, "OperationId", 999);
             Sequence(State, "Feed").Add(Message("BLUE", Now.AddMinutes(-1), "公開された報告"));
             Sequence(State, "Messages").Add(Message("RED", Now, "SECRET GLOBAL MESSAGE"));
+        }
+        internal string DisplayShipName(object hull)
+        {
+            Require(Sim.Logistics.Own.Contains(hull), "Enemy hull reached the display-name resolver");
+            return (string)Get(hull, "Name");
         }
         internal object New(string name) => Activator.CreateInstance(assembly.GetType("DynamicCampaignMod." + name, true)!)!;
         internal object Point(double lat, double lon) => Activator.CreateInstance(assembly.GetType("DynamicCampaignMod.Core.Geo.GeoPoint", true)!, lat, lon)!;
@@ -287,14 +343,27 @@ internal static class SituationTests
         public string TypeAbbr = "DD";
         public bool Nuclear { get; }
         public bool Unarmed { get; }
+        public bool Merchant => Unarmed;
+        public readonly HashSet<string> Roles = new(StringComparer.Ordinal);
+        public bool HasRole(string role) => Roles.Contains(role);
         internal OwnSpec(bool nuclear, bool unarmed) { Nuclear = nuclear; Unarmed = unarmed; }
     }
     internal sealed class OwnCatalog
     {
         internal readonly Dictionary<string, OwnSpec> Specs = new();
         internal int Calls;
+        internal readonly Dictionary<string, OwnAircraftSpec> AircraftSpecs = new(StringComparer.Ordinal);
         public OwnSpec Ship(string ini) { Calls++; return Specs[ini]; }
+        public OwnAircraftSpec Aircraft(string ini) => AircraftSpecs[ini];
+        public string DisplayName(string ini) => AircraftSpecs[ini].DisplayName;
     }
+    internal sealed class OwnAircraftSpec
+    {
+        public string DisplayName;
+        public List<OwnLoadout> Loadouts = new();
+        internal OwnAircraftSpec(string name) { DisplayName = name; }
+    }
+    internal sealed class OwnLoadout { public string Name = "Default"; }
     internal sealed class OwnLogistics
     {
         internal readonly HashSet<object> Own = new();

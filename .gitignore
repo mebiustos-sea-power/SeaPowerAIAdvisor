@@ -4,3 +4,7 @@ artifacts/
 dist/
 Directory.Build.local.props
 docs/agent-memory.md
+**/gemini.json
+**/profile.json
+**/portrait.png
+**/logs/

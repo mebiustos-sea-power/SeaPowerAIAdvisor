@@ -12,12 +12,13 @@ internal sealed class CampaignSituationReader
     internal const int ReportLimit = 30;
     private readonly Dictionary<(Type, string), FieldInfo> fields = new();
 
-    internal SituationSnapshot Capture(object sim)
+    internal SituationSnapshot Capture(object sim, Func<object, string> ownShipDisplayName)
     {
+        if (ownShipDisplayName == null) throw new ArgumentNullException(nameof(ownShipDisplayName));
         var state = Object(sim, "State");
         var definition = Object(state, "Definition");
         if (!Read<bool>(definition, "fogOfWar"))
-            throw new SituationUnavailableException("戦場の霧が無効のため、状況の取得を停止しました。");
+            throw new SituationUnavailableException("fog_disabled");
         var now = Read<DateTime>(state, "Now");
         var side = Read<string>(state, "PlayerSideId");
         if (string.IsNullOrEmpty(side)) throw new InvalidOperationException("The active campaign has no player side.");
@@ -29,12 +30,14 @@ internal sealed class CampaignSituationReader
         var byId = bases.ToDictionary(b => Read<string>(b, "id"), StringComparer.Ordinal);
         var owners = Dictionary(state, "BaseOwner");
         var forces = new List<FriendlyForce>();
+        var ownForces = new List<object>();
         foreach (var force in List(state, "TaskForces"))
         {
             // Affiliation is checked before reading any force detail, including Name.
             if (Read<string>(force, "SideId") != side) continue;
+            ownForces.Add(force);
             var ships = new List<FriendlyShip>();
-            foreach (var hull in List(force, "Ships")) ships.Add(Ship(sim, hull));
+            foreach (var hull in List(force, "Ships")) ships.Add(Ship(sim, hull, ownShipDisplayName));
             var portId = Optional<string>(force, "PortId");
             string? port = null;
             if (portId != null)
@@ -42,7 +45,7 @@ internal sealed class CampaignSituationReader
             var mission = Optional<object>(force, "Mission");
             // Mission kind is our own order. TargetId/Point/AimedAt can reference hidden enemy state and are excluded.
             forces.Add(new FriendlyForce(Read<string>(force, "Name"), Position(Object(force, "Position")),
-                Finite(Read<double>(force, "SpeedKnots")), port, mission == null ? "None" : EnumValue(mission, "Kind"), ships));
+                Finite(Read<double>(force, "SpeedKnots")), port, mission == null ? "None" : EnumValue(mission, "Kind"), Optional<object>(force, "Convoy") != null, ships));
         }
         var contacts = new List<ObservedContact>();
         foreach (DictionaryEntry entry in Dictionary(intel, "Contacts"))
@@ -85,7 +88,7 @@ internal sealed class CampaignSituationReader
                 landAt.HasValue ? Nonnegative(Read<int>(sighting!, "SamSites")) : null,
                 landAt.HasValue ? Nonnegative(Read<int>(sighting!, "GroundUnits")) : null, forcesAt,
                 forcesAt.HasValue ? Nonnegative(Read<int>(sighting!, "ShipsInPort")) : null,
-                forcesAt.HasValue ? Nonnegative(Read<int>(sighting!, "Aircraft")) : null));
+                forcesAt.HasValue ? Nonnegative(Read<int>(sighting!, "Aircraft")) : null, Array.IndexOf(bases, b)));
         }
         var orders = new List<PublishedOrder>();
         var publicOperations = new HashSet<int>();
@@ -117,7 +120,8 @@ internal sealed class CampaignSituationReader
         var orderedContacts = contacts.OrderByDescending(x => x.SeenAt).ThenBy(x => x.Kind, StringComparer.Ordinal)
             .ThenBy(x => x.Position.Latitude).ThenBy(x => x.Position.Longitude).ThenBy(x => x.Count).ThenBy(x => x.Identified);
         return new SituationSnapshot(now, side, forces, orderedContacts, observedBases, orders.OrderBy(x => x.OfferedAt),
-            reports.OrderBy(x => x.At).Skip(Math.Max(0, reports.Count - ReportLimit)));
+            reports.OrderBy(x => x.At).Skip(Math.Max(0, reports.Count - ReportLimit)), CampaignVictoryReader.Capture(state),
+            CampaignAirReader.Capture(sim, ownForces, forces));
     }
 
     private bool PublicOrder(object order, DateTime now)
@@ -131,7 +135,7 @@ internal sealed class CampaignSituationReader
         return offered != DateTime.MinValue && offered <= now;
     }
 
-    private FriendlyShip Ship(object sim, object hull)
+    private FriendlyShip Ship(object sim, object hull, Func<object, string> ownShipDisplayName)
     {
         var catalog = Object(sim, "Catalog");
         var spec = Call(catalog, "Ship", Read<string>(hull, "UnitIni"))
@@ -140,8 +144,8 @@ internal sealed class CampaignSituationReader
         var unarmed = Property<bool>(spec, "Unarmed");
         var ammo = unarmed ? (double?)null : (double)(Call(Object(sim, "Logistics"), "AmmoLevel", hull)
             ?? throw new InvalidOperationException("The own ship ammunition level is unavailable."));
-        return new FriendlyShip(Read<string>(hull, "Name"), Read<string>(spec, "TypeAbbr"), Finite(Read<double>(hull, "Fuel")),
-            Finite(Read<double>(hull, "Damage")), nuclear, unarmed, ammo.HasValue ? Finite(ammo.Value) : null);
+        return new FriendlyShip(ownShipDisplayName(hull), Read<string>(spec, "TypeAbbr"), Finite(Read<double>(hull, "Fuel")),
+            Finite(Read<double>(hull, "Damage")), nuclear, unarmed, Property<bool>(spec, "Merchant"), ammo.HasValue ? Finite(ammo.Value) : null);
     }
 
     private MapPosition Position(object point) => new(Finite(Read<double>(point, "Lat")), Finite(Read<double>(point, "Lon")));

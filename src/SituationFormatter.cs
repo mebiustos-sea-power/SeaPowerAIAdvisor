@@ -6,66 +6,93 @@ namespace SeaPowerAIAdvisor;
 
 internal static class SituationFormatter
 {
-    internal static string Format(SituationSnapshot snapshot)
+    internal static string Format(SituationSnapshot snapshot, AdvisorText? language = null)
     {
-        var text = new StringBuilder();
-        text.AppendLine("アドバイザーが参照する状況（外部送信なし）");
-        text.AppendLine("取得時刻：" + Time(snapshot.At));
-        text.AppendLine("敵の位置・数量は観測時点の情報です。未観測は不明として扱います。");
-        text.AppendLine("【自軍艦隊】");
-        if (snapshot.Forces.Count == 0) text.AppendLine("艦隊なし");
+        var text = language ?? AdvisorText.Load("en");
+        var output = new StringBuilder();
+        string T(string key) => text["diagnostic." + key];
+        string F(string key, params object[] args) => text.Format("diagnostic." + key, args);
+        output.AppendLine(T("header"));
+        output.AppendLine(F("captured", Time(snapshot.At)));
+        output.AppendLine(T("knowledge"));
+        output.AppendLine(T("own_fleets"));
+        if (snapshot.Forces.Count == 0) output.AppendLine(T("no_fleets"));
         foreach (var force in snapshot.Forces)
         {
-            text.AppendLine(force.Name + "：" + Position(force.Position) + "／" + (force.Port == null ? "洋上" : "入港中 " + force.Port));
-            text.AppendLine("  速力 " + Number(force.SpeedKnots) + " kt／任務 " + Mission(force.Mission));
+            output.AppendLine(F("force", force.Name, Position(force.Position), force.Port == null ? T("at_sea") : F("in_port", force.Port)));
+            output.AppendLine(F("speed_mission", Number(force.SpeedKnots), Label(text, "mission", force.Mission)));
             foreach (var ship in force.Ships)
-                text.AppendLine("  " + ship.Name + "（" + ship.Type + "）：燃料 " + (ship.Nuclear ? "原子力" : Percent(ship.FuelShare)) +
-                    "／弾薬 " + (ship.Unarmed ? "非武装" : Percent(ship.AmmoShare!.Value)) + "／損傷 " + Percent(ship.DamageShare));
+                output.AppendLine(F("ship", ship.Name, ship.Type, ship.Nuclear ? T("nuclear") : Percent(ship.FuelShare),
+                    ship.Unarmed ? T("unarmed") : Percent(ship.AmmoShare!.Value), Percent(ship.DamageShare)));
         }
-        text.AppendLine("\n【既知の敵接触】");
-        if (snapshot.Contacts.Count == 0) text.AppendLine("現在の観測記録なし（敵が存在しないという意味ではありません）");
+        output.AppendLine("\n" + T("own_aviation"));
+        if (snapshot.Aviation.Units.Count == 0) output.AppendLine(T("no_records"));
+        foreach (var unit in snapshot.Aviation.Units)
+        {
+            var host = unit.BaseIndex.HasValue ? snapshot.Victory.Bases[unit.BaseIndex.Value].Name
+                : unit.ForceIndex.HasValue ? snapshot.Forces[unit.ForceIndex.Value].Name : T("unknown");
+            output.AppendLine(F("air_unit", unit.Name, host));
+            output.AppendLine(F("launch_restriction", unit.LaunchBlocked.HasValue
+                    ? unit.LaunchBlocked.Value ? T("yes") : T("no_displayed_block") : T("unknown")) +
+                (unit.RunwayOutUntil.HasValue ? F("runway", Time(unit.RunwayOutUntil.Value)) : "") +
+                (unit.DeckCycleRemaining.HasValue ? F("deck_cycle", unit.DeckCycleRemaining.Value) : "") +
+                (unit.LaunchReason == null ? "" : " / " + unit.LaunchReason));
+            foreach (var aircraft in unit.Aircraft)
+            {
+                output.AppendLine(F("aircraft", aircraft.Name, aircraft.CampaignLaunchSupported ? T("supported") : T("unsupported")));
+                output.Append("    ");
+                foreach (var count in aircraft.Counts)
+                    output.Append(Label(text, "readiness", count.Key)).Append('=')
+                        .Append(count.Value.HasValue ? count.Value.Value.ToString(CultureInfo.InvariantCulture) : T("unknown")).Append(" / ");
+                output.AppendLine();
+            }
+        }
+        output.AppendLine(T("aviation_caveat"));
+        foreach (var flight in snapshot.Aviation.Flights)
+            output.AppendLine(F("flight", flight.Name, flight.AircraftName, flight.Count, Position(flight.Position),
+                flight.LoadoutName, flight.Returning ? T("returning") : ""));
+        output.AppendLine("\n" + T("contacts"));
+        if (snapshot.Contacts.Count == 0) output.AppendLine(T("no_contacts"));
         var index = 0;
         foreach (var contact in snapshot.Contacts)
         {
-            var label = contact.Kind == "Air" ? "航空接触" : contact.Kind == "Submarine" ? "潜水艦接触" : "水上接触";
-            text.AppendLine("接触" + ++index + " " + label + "：" + contact.Count + "／" + (contact.Identified ? "識別済み" : "未識別"));
-            text.AppendLine("  最終観測 " + Time(contact.SeenAt) + "／" + Position(contact.Position));
-            text.AppendLine("  経過 " + Number((snapshot.At - contact.SeenAt).TotalHours) + "時間／位置の不確かさ 半径 " + Number(contact.UncertaintyNm) + " nm");
+            output.AppendLine(F("contact", ++index, T("contact_kind." + contact.Kind), contact.Count,
+                contact.Identified ? T("identified") : T("unidentified")));
+            output.AppendLine(F("last_seen", Time(contact.SeenAt), Position(contact.Position)));
+            output.AppendLine(F("age", Number((snapshot.At - contact.SeenAt).TotalHours), Number(contact.UncertaintyNm)));
         }
-        text.AppendLine("\n【敵基地の偵察情報】");
-        if (snapshot.Bases.Count == 0) text.AppendLine("なし");
+        output.AppendLine("\n" + T("bases"));
+        if (snapshot.Bases.Count == 0) output.AppendLine(T("none"));
         foreach (var b in snapshot.Bases)
         {
-            text.AppendLine(b.Name + "（" + BaseKind(b.Kind) + "）" + Position(b.Position));
-            text.AppendLine(b.LandSeenAt.HasValue
-                ? "  地上防備 最終観測 " + Time(b.LandSeenAt.Value) + "：砲台 " + b.Batteries + "／SAM " + b.SamSites + "／地上部隊 " + b.GroundUnits
-                : "  地上防備：不明（未観測）");
-            text.AppendLine(b.ForcesSeenAt.HasValue
-                ? "  艦船・航空機 最終観測 " + Time(b.ForcesSeenAt.Value) + "：在港艦船 " + b.Ships + "／航空機 " + b.Aircraft
-                : "  在港艦船・航空機：不明（未観測）");
+            if (b.Kind != "AirBase" && b.Kind != "NavalBase" && b.Kind != "Port")
+                throw new InvalidOperationException("Unknown base classification: " + b.Kind);
+            output.AppendLine(F("base", b.Name, text["base_kind." + b.Kind], Position(b.Position)));
+            output.AppendLine(b.LandSeenAt.HasValue
+                ? F("ground_seen", Time(b.LandSeenAt.Value), b.Batteries!, b.SamSites!, b.GroundUnits!)
+                : T("ground_unknown"));
+            output.AppendLine(b.ForcesSeenAt.HasValue
+                ? F("forces_seen", Time(b.ForcesSeenAt.Value), b.Ships!, b.Aircraft!)
+                : T("forces_unknown"));
         }
-        text.AppendLine("\n【開示済みの命令と作戦】");
-        if (snapshot.Orders.Count == 0) text.AppendLine("なし");
+        output.AppendLine("\n" + T("orders"));
+        if (snapshot.Orders.Count == 0) output.AppendLine(T("none"));
         foreach (var order in snapshot.Orders)
         {
-            text.AppendLine(order.Title + "（" + OrderStatus(order.Status) + "）");
-            text.AppendLine("  提示 " + Time(order.OfferedAt) + (order.Deadline.HasValue ? "／期限 " + Time(order.Deadline.Value) : ""));
-            text.AppendLine(order.Briefing);
+            output.AppendLine(F("order", order.Title, Label(text, "order_status", order.Status)));
+            output.AppendLine(F("offered", Time(order.OfferedAt), order.Deadline.HasValue ? F("deadline", Time(order.Deadline.Value)) : ""));
+            output.AppendLine(order.Briefing);
         }
-        text.AppendLine("\n【プレイヤー向け報告 直近" + CampaignSituationReader.ReportLimit + "件まで】");
-        if (snapshot.Reports.Count == 0) text.AppendLine("なし");
-        foreach (var report in snapshot.Reports) text.AppendLine(Time(report.At) + " " + report.Text);
-        return text.ToString();
+        output.AppendLine("\n" + F("reports", CampaignSituationReader.ReportLimit));
+        if (snapshot.Reports.Count == 0) output.AppendLine(T("none"));
+        foreach (var report in snapshot.Reports) output.AppendLine(Time(report.At) + " " + report.Text);
+        return output.ToString();
     }
 
+    private static string Label(AdvisorText text, string group, string code) =>
+        text.Contains(group + "." + code) ? text[group + "." + code] : code;
     private static string Position(MapPosition point) => Number(point.Latitude) + "°, " + Number(point.Longitude) + "°";
     private static string Number(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
     private static string Percent(double value) => (value * 100).ToString("0", CultureInfo.InvariantCulture) + "%";
     private static string Time(DateTime at) => at.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) + "Z";
-    private static string BaseKind(string kind) => kind switch
-    { "AirBase" => "飛行場", "NavalBase" => "海軍基地", "Port" => "港", _ => throw new InvalidOperationException("Unknown base classification: " + kind) };
-    private static string OrderStatus(string value) => value switch
-    { "Offered" => "受諾待ち", "Active" => "遂行中", "Completed" => "完了", "Failed" => "失敗", "Declined" => "辞退", "Lapsed" => "期限切れ", "Cancelled" => "取消", _ => value };
-    private static string Mission(string value) => value switch
-    { "None" => "なし", "Patrol" => "哨戒", "Hunt" => "捜索・撃破", "Escort" => "護衛", "Cap" => "戦闘空中哨戒", "Cover" => "掩護", "Search" => "捜索", "Follow" => "追従", "Rendezvous" => "会合", "Join" => "合流", "Invade" => "上陸", "StrikeBase" => "基地攻撃", "Replenish" => "補給", "Refuel" => "給油", "TankerStation" => "給油待機", _ => value };
 }
