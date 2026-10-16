@@ -60,9 +60,28 @@ internal sealed class BattleIntegration
             !SeaPower.Environment.InstanceExists(false))
             throw new SituationUnavailableException("battle_unavailable");
         var map = model.Map ?? throw new InvalidOperationException("The player's battle map is unavailable.");
+        var now = SeaPower.Environment.Instance.DateTime;
+        var references = ReadReferenceCatalog(now.Year);
         return reader.Capture(map.MapKnownUnits.AllUnits, player!, MissionManager.Instance.Objectives, EventLog.Instance,
-            SeaPower.Environment.Instance.DateTime, SceneCreator.Instance.CurrentMissionName,
-            (bool)BattleSituationReader.Member(typeof(Globals).GetProperty("AllowControlOfEnemyUnits")!.GetValue(null)!, "Value")!);
+            now, SceneCreator.Instance.CurrentMissionName,
+            (bool)BattleValue.Member(typeof(Globals).GetProperty("AllowControlOfEnemyUnits")!.GetValue(null)!, "Value")!,
+            new BattleCapabilityReader(references));
+    }
+
+    private static BattleReferenceCatalog ReadReferenceCatalog(int year)
+    {
+        var type = typeof(Globals).Assembly.GetType("SeaPower.EncyclopedicDataManager", true)!;
+        const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic |
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.FlattenHierarchy;
+        var exists = type.GetMethod("InstanceExists", flags) ?? throw new MissingMethodException(type.FullName, "InstanceExists");
+        if (!(bool)exists.Invoke(null, new object[] { false })!)
+            return new BattleReferenceCatalog(Array.Empty<object>(), Array.Empty<object>(), year, false);
+        var manager = type.GetProperty("Instance", flags)?.GetValue(null)
+            ?? throw new InvalidOperationException("The encyclopedia instance is unavailable.");
+        if (!(bool)BattleValue.Required(manager, "UnitsLoaded"))
+            return new BattleReferenceCatalog(Array.Empty<object>(), Array.Empty<object>(), year, false);
+        return new BattleReferenceCatalog(BattleValue.Rows(BattleValue.Required(manager, "MuseumObjectEntries")),
+            BattleValue.Rows(BattleValue.Required(manager, "WeaponMuseumEntries")), year, true);
     }
 
     private static MainGameView? FindView(DependencyObject node)

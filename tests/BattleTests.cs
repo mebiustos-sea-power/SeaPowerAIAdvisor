@@ -56,6 +56,93 @@ internal static class BattleTests
             session.Execute(new JObject { ["consultation_id"] = "previous-consultation", ["requests"] = new JArray(new JObject { ["query"] = "catalog" }) });
             Require((string?)session.Execute(Request(session, new JObject { ["query"] = "catalog" }))["error"]!["code"] == "round_limit", "Invalid calls bypassed the round budget");
         });
+        check("Own capabilities are batched, frozen, selectively returned and share weapon references", () =>
+        {
+            var f = new Fixture();
+            f.Own._type = "Aircraft";
+            f.Own.Compartments = null;
+            var ship = new OwnUnit(); ship.Name.Value = "護衛艦"; f.OwnUnits.Add(ship);
+            var session = new BattleQuerySession(f.Capture(), "ja", "燃料と兵装を比較して");
+            f.Own._obp._currentFuelMass = 1;
+            f.Own.AmmunitionAmountDictionary["test_missile"] = 0;
+            f.PublicWeapons[0].MaxLaunchRange = new Distance(999);
+            var initial = session.InitialInput();
+            Require(initial["situation"]!["unit_capabilities"] == null && initial["situation"]!["weapon_references"] == null,
+                "Large capability details were sent before the model requested them");
+            var data = session.Execute(Request(session, new JObject { ["query"] = "get_unit_capabilities", ["ids"] = new JArray("own_unit_1", "own_unit_2") }))["results"]![0]!["data"]!;
+            var units = (JArray)data["units"]!;
+            Require(units.Count == 2 && (double?)units[0]!["fuel"]!["remaining_mass_kg"] == 600 &&
+                (double?)units[0]!["fuel"]!["percent_of_internal_capacity"] == 60 &&
+                (string?)units[1]!["fuel"]!["status"] == "not_displayed_for_unit_type" &&
+                units[1]!["fuel"]!["remaining_mass_kg"]!.Type == JTokenType.Null, "Fuel types or frozen values were lost");
+            Require((int?)units[0]!["weapons"]!["ammunition"]![0]!["remaining_count"] == 8 &&
+                (double?)units[1]!["damage"]!["hull_integrity_percent"] == 75 &&
+                (string?)units[1]!["damage"]!["damaged_systems"]![0]!["damage_state"] == "severe" &&
+                ((JArray)data["weapon_references"]!).Count == 1 &&
+                (double?)data["weapon_references"]![0]!["maximum_launch_range_nm"] == 70,
+                "Capabilities mixed current sources, lost damage or repeated a shared weapon definition");
+            var fuel = session.Execute(Request(session, new JObject { ["query"] = "get_unit_capabilities", ["ids"] = new JArray("own_unit_1"), ["sections"] = new JArray("fuel") }))["results"]![0]!["data"]!;
+            Require(fuel["units"]![0]!["weapons"] == null && fuel["units"]![0]!["damage"] == null &&
+                ((JArray)fuel["weapon_references"]!).Count == 0, "A fuel-only request returned unrelated details");
+            var bad = session.Execute(Request(session, new JObject { ["query"] = "get_unit_capabilities", ["ids"] = new JArray("own_unit_1"), ["sections"] = new JArray("enemy_loadout") }));
+            Require((string?)bad["error"]!["code"] == "invalid_arguments", "An unsupported section was accepted");
+        });
+        check("Enemy threat references use observed classes and public variants without reading actual enemy state", () =>
+        {
+            var f = new Fixture();
+            f.PublicWeapons.Add(new PublicWeapon { IniRef = "future_missile", IocDate = 2030, MaxLaunchRange = new Distance(9999) });
+            f.PublicWeapons.Add(new PublicWeapon { IniRef = "hidden_missile", HiddenInEncyclopedia = true, MaxLaunchRange = new Distance(9998) });
+            f.PublicClasses[0].WeaponEntries.AddRange(f.PublicWeapons.Skip(1));
+            f.PublicWeapons.Add(new PublicWeapon { IniRef = "alternate_missile", MaxLaunchRange = new Distance(55) });
+            f.PublicClasses[0].DateBasedAlternatives["test_missile"] = new[] { (1980, "alternate_missile"), (2030, "future_missile") };
+            var captured = f.Capture();
+            f.Secret.Value = "Changed actual ammunition, damage, fuel and position";
+            Require(f.Capture().Copy().ToString() == captured.Copy().ToString(), "Actual enemy state affected public threat references");
+            var session = new BattleQuerySession(captured, "ja", "敵の脅威となる距離は？");
+            var data = session.Execute(Request(session, new JObject { ["query"] = "get_contact_threats", ["ids"] = new JArray("observed_contact_1") }))["results"]![0]!["data"]!;
+            var contact = data["contacts"]![0]!;
+            Require((string?)contact["class_display_name"] == "公開された艦級" &&
+                (bool?)contact["actual_enemy_state_included"] == false &&
+                ((JArray)contact["unknowns"]!).Values<string>().Contains("remaining_ammunition") &&
+                (string?)contact["observed_posture"] == "unknown" &&
+                ((JArray)contact["possible_weapon_reference_ids"]!).Count == 2 &&
+                ((JArray)data["weapon_references"]!).Count == 2 &&
+                ((JArray)data["weapon_references"]!).OfType<JObject>().Any(w => (double?)w["maximum_launch_range_nm"] == 70) &&
+                ((JArray)data["weapon_references"]!).OfType<JObject>().Any(w => (double?)w["maximum_launch_range_nm"] == 55),
+                "Reference candidates lost their evidence boundary or included hidden/future weapons");
+            f.Track.Class = null;
+            var unknown = new BattleQuerySession(f.Capture(), "en", "Threats?");
+            var reply = unknown.Execute(Request(unknown, new JObject { ["query"] = "get_contact_threats", ["ids"] = new JArray("observed_contact_1") }));
+            Require((string?)reply["results"]![0]!["data"]!["contacts"]![0]!["status"] == "unidentified_class" &&
+                ((JArray)reply["results"]![0]!["data"]!["weapon_references"]!).Count == 0, "An unknown class was guessed from the enemy object");
+            var rejected = unknown.Execute(Request(unknown, new JObject { ["query"] = "get_contact_threats", ["ids"] = new JArray("own_unit_1") }));
+            Require((string?)rejected["error"]!["code"] == "unknown_id", "Threat queries accepted IDs from the wrong scope");
+        });
+        check("Missing public ranges stay unknown and malformed current values surface instead of becoming zero", () =>
+        {
+            var f = new Fixture();
+            f.PublicWeapons[0].MaxLaunchRange = new Distance(double.NaN);
+            var snapshot = f.Capture().Copy();
+            Require(snapshot["weapon_references"]![0]!["maximum_launch_range_nm"]!.Type == JTokenType.Null,
+                "An unspecified encyclopedia range became a zero or an invented value");
+            f.Ready = false;
+            snapshot = f.Capture().Copy();
+            Require((string?)snapshot["contact_threat_references"]![0]!["status"] == "encyclopedia_not_ready" &&
+                (int?)snapshot["unit_capabilities"]![0]!["weapons"]!["ammunition"]![0]!["remaining_count"] == 8,
+                "An unavailable reference library hid current own inventory");
+            f.Own.AmmunitionAmountDictionary["test_missile"] = -1;
+            try { _ = f.Capture(); throw new Exception("Negative inventory was accepted"); }
+            catch (InvalidOperationException) { }
+        });
+        check("A Gemini battle consultation batches own capabilities with public enemy threat evidence", () =>
+        {
+            var session = new BattleQuerySession(new Fixture().Capture(), "ja", "自軍と敵の射程を比べて");
+            var result = new GeminiAdvisor(new CapabilityTransport()).ConsultAsync(session,
+                AdvisorSettings.Parse("{\"api_key\":\"mock-key\",\"model\":\"gemini-test\",\"log_ai_json\":false}"),
+                Array.Empty<ChatExchange>(), CancellationToken.None).GetAwaiter().GetResult();
+            Require(result.ApiRequests == 3 && result.QueryRounds == 2 && result.Queries.Contains("get_unit_capabilities") &&
+                result.Queries.Contains("get_contact_threats"), "The new evidence queries did not share one retrieval round");
+        });
         check("Gemini uses battle-specific tools through the common provider", () =>
         {
             var session = new BattleQuerySession(new Fixture().Capture(), "ja", "まず何をすべき？");
@@ -100,6 +187,36 @@ internal static class BattleTests
         };
     }
 
+    private sealed class CapabilityTransport : IGeminiTransport
+    {
+        private int calls;
+        public Task<JObject> GenerateAsync(AdvisorSettings settings, JObject body, CancellationToken cancellation)
+        {
+            calls++;
+            JObject part;
+            if (calls == 1) part = Tool(new JObject { ["query"] = "list_units" }, new JObject { ["query"] = "list_contacts" });
+            else if (calls == 2)
+            {
+                var data = body["contents"]![2]!["parts"]![0]!["functionResponse"]!["response"]!["results"]!;
+                part = Tool(new JObject { ["query"] = "get_unit_capabilities", ["ids"] = new JArray(data[0]!["data"]!["items"]![0]!["id"]!.DeepClone()) },
+                    new JObject { ["query"] = "get_contact_threats", ["ids"] = new JArray(data[1]!["data"]!["items"]![0]!["id"]!.DeepClone()) });
+            }
+            else
+            {
+                var data = body["contents"]![4]!["parts"]![0]!["functionResponse"]!["response"]!["results"]!;
+                Require((int?)data[0]!["data"]!["units"]![0]!["weapons"]!["ammunition"]![0]!["remaining_count"] == 8 &&
+                    (string?)data[1]!["data"]!["contacts"]![0]!["evidence_kind"] == "public_class_reference" &&
+                    (double?)data[1]!["data"]!["weapon_references"]![0]!["maximum_launch_range_nm"] == 70,
+                    "The provider did not receive inventory and sourced conditional threat evidence");
+                part = new JObject { ["text"] = "公開性能に基づく推定です。敵の実際の搭載と残弾は不明です。" };
+            }
+            return Task.FromResult(new JObject { ["candidates"] = new JArray(new JObject {
+                ["finishReason"] = "STOP", ["content"] = new JObject { ["role"] = "model", ["parts"] = new JArray(part) } }) });
+        }
+        private static JObject Tool(params JObject[] requests) => new() { ["functionCall"] = new JObject {
+            ["name"] = "query_situation", ["args"] = new JObject { ["requests"] = new JArray(requests) } } };
+    }
+
     private sealed class Fixture
     {
         internal readonly OwnUnit Own = new();
@@ -108,20 +225,28 @@ internal static class BattleTests
         internal readonly HiddenObjective Hidden = new();
         internal readonly FutureReport Future = new();
         private readonly DateTime now = new(1985, 6, 1, 12, 0, 0);
-        internal Fixture() { Track = new Track { Object = Secret }; }
+        internal readonly List<OwnUnit> OwnUnits = new();
+        internal readonly List<PublicWeapon> PublicWeapons = new() { new PublicWeapon() };
+        internal readonly List<PublicClass> PublicClasses = new();
+        internal bool Ready = true;
+        internal Fixture()
+        {
+            Track = new Track { Object = Secret };
+            OwnUnits.Add(Own);
+            PublicClasses.Add(new PublicClass { WeaponEntries = new List<PublicWeapon>(PublicWeapons) });
+        }
         internal BattleSnapshot Capture(bool disclosure = false) => new BattleSituationReader().Capture(
-            new object[]
-            {
-                new { Unit = new { Object = Own } },
+            OwnUnits.Select(u => (object)new { Unit = new { Object = u } }).Concat(new object[] {
                 new { Unit = Track, ObjectViewModel = new { ObjectName = new Reactive<string>("画面で識別した艦") }, VisualType = "Surface", VisualPosture = "Unknown" }
-            }, new { TaskforceObjects = new[] { Own } },
+            }).ToArray(), new { TaskforceObjects = OwnUnits.ToArray() },
             new object[] { new { IsHidden = false, Text = "輸送船を保護する", Status = 0 }, Hidden },
             new
             {
                 MissionBriefing = new Reactive<string>("公開済みの任務説明"),
                 Intelligence = new object[] { new { Time = now.AddMinutes(-1), IntelligenceText = "接触の報告" }, Future },
                 AllIntelligence = new Forbidden()
-            }, now, "Test scenario", disclosure);
+            }, now, "Test scenario", disclosure, new BattleCapabilityReader(
+                new BattleReferenceCatalog(PublicClasses, PublicWeapons, now.Year, Ready)));
     }
     private sealed class Reactive<T>
     {
@@ -131,10 +256,66 @@ internal static class BattleTests
     private sealed class OwnUnit
     {
         public Reactive<string> Name { get; } = new("ミッドウェイ");
-        public string _type { get; } = "Vessel";
+        public string _type { get; set; } = "Vessel";
+        public Parameters _obp { get; } = new();
+        public bool _unlimitedFuel => false;
+        public object? Compartments { get; set; } = new { IntegrityPercentage = 75.0, FloodingPercentage = 10.0 };
+        public bool IsDestroyed => false;
+        public bool Disabled => false;
+        public Reactive<double> FlightTimeLeftInSec { get; } = new(1200);
+        public Reactive<string> WeaponState { get; } = new("tight");
+        public Dictionary<string, int> AmmunitionAmountDictionary { get; } = new() { ["test_missile"] = 8 };
+        public Dictionary<string, object> AmmunitionNameToAmmunitionDictionary { get; } = new() {
+            ["test_missile"] = new { _ap = new { _displayedName = "公開ミサイル" } }
+        };
         public Reactive<Geo> Position { get; } = new(new Geo(31, 131));
         public Reactive<double> Heading { get; } = new(270);
         public double _velocityInKnots { get; } = 18;
+    }
+    private sealed class Parameters
+    {
+        public double _currentFuelMass = 600;
+        public double _maxFuel = 1200;
+        public double _defaultMaxFuel = 1000;
+        public object[] _systems = { new { CurrentDamageType = "no" }, new {
+            CurrentDamageType = "Severe", DisplayName = new Reactive<string>("捜索レーダー"), Repairable = false } };
+    }
+    private sealed class Distance
+    {
+        public double InNauticalMiles { get; }
+        internal Distance(double value) { InNauticalMiles = value; }
+    }
+    private sealed class PublicWeapon
+    {
+        public bool HiddenInEncyclopedia { get; set; }
+        public string IniRef { get; set; } = "test_missile";
+        public int VariantIndex => 0;
+        public string DisplayName => "公開ミサイル";
+        public string? ModSource => null;
+        public string Type => "Missile";
+        public string TargetType => "ASuW";
+        public bool HasSecondaryTargetType => false;
+        public string SecondaryTargetType => "UNKNOWN";
+        public bool CanAttackSurface => true;
+        public bool CanAttackAir => false;
+        public string GuidanceType => "ActiveRadar";
+        public object? Ap => new { IsFcrHorizonLimited = false, RequiresDirectLineOfSight = false };
+        public int IocDate { get; set; } = 1970;
+        public Distance MinLaunchRange => new(2);
+        public Distance MaxLaunchRange { get; set; } = new(70);
+        public Distance GunAaRange => new(double.NaN);
+    }
+    private sealed class PublicClass
+    {
+        public bool HiddenInEncyclopedia => false;
+        public string IniRef => "test_class";
+        public int ServiceEntryDate => 1960;
+        public string DisplayClassName => "公開された艦級";
+        public string DisplayName => "公開された艦級";
+        public List<PublicWeapon> WeaponEntries { get; set; } = new();
+        public Dictionary<string, (int, string)[]> DateBasedAlternatives { get; } = new();
+        public object[] WeaponSystemEntries => Array.Empty<object>();
+        public Dictionary<string, object[]> LoadoutWeaponSystemEntries => new();
     }
     private sealed class Geo
     {
@@ -146,7 +327,7 @@ internal static class BattleTests
     {
         public object Object { get; set; } = null!;
         public object? PositionEstimate { get; set; } = new { Item1 = new Geo(32, 130) };
-        public object? Class { get; set; } = new object();
+        public object? Class { get; set; } = new { Value = "test_class" };
         public object Position => throw new InvalidOperationException("Read a contact position outside its estimate");
         public bool HasLiveTrack => false;
         public Reactive<bool> Identified { get; } = new(true);
@@ -158,6 +339,9 @@ internal static class BattleTests
         internal string Value = "Actual enemy secrets";
         public object Position => throw new InvalidOperationException("Read actual enemy position");
         public string Name => throw new InvalidOperationException("Read actual enemy name");
+        public object _obp => throw new InvalidOperationException("Read actual enemy capabilities");
+        public object AmmunitionAmountDictionary => throw new InvalidOperationException("Read actual enemy ammunition");
+        public object Compartments => throw new InvalidOperationException("Read actual enemy damage");
     }
     private sealed class HiddenObjective
     {
