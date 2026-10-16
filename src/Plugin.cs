@@ -36,7 +36,7 @@ public sealed class Plugin : IAnchorChainMod
             harmony.Patch(Required(typeof(MainGameViewModel), "OnLateUpdate"), postfix: new HarmonyMethod(typeof(Plugin), nameof(BattleFrame)));
             harmony.Patch(Required(typeof(MainGameViewModel), "OnDestroy"), prefix: new HarmonyMethod(typeof(Plugin), nameof(BattleDestroyed)));
             installed = true;
-            Log.LogInfo("Advisor 0.10.4 ready for tactical battles. DCM is optional. Open AI at the upper right of the battle screen.");
+            Log.LogInfo("Advisor 0.10.4 ready for tactical battles. DCM is optional. Open AI in the bottom-right battle toolbar.");
             GuardCampaign(() => InstallCampaign(files));
         }
         catch (Exception error)
