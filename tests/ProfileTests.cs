@@ -375,7 +375,9 @@ internal static class ProfileTests
                 "Follow-up detail is not after the two independent quick consultations");
             Require(Named("ApiKey").Ancestors().Contains(connection) && Named("ApiKey").Name.LocalName == "PasswordBox" &&
                 (string?)Named("ApiKey").Attribute("ShowLastCharacterDuration") == "0" &&
-                Named("ModelName").Ancestors().Contains(connection) && Named("MaxQueryRounds").Ancestors().Contains(connection) &&
+                Named("FallbackApiKey").Ancestors().Contains(connection) && Named("FallbackApiKey").Name.LocalName == "PasswordBox" &&
+                (string?)Named("FallbackApiKey").Attribute("ShowLastCharacterDuration") == "0" &&
+                Named("ModelName").Ancestors().Contains(connection) && Named("FallbackModelName").Ancestors().Contains(connection) && Named("MaxQueryRounds").Ancestors().Contains(connection) &&
                 Named("CommonPrompt").Ancestors().Contains(connection) &&
                 Named("EnableCampaignAdvisor").Ancestors().Contains(general), "AI settings or campaign opt-in are in the wrong tab");
             var conversation = Named("ConversationPane");

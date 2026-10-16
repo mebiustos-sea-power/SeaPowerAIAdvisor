@@ -174,7 +174,7 @@
   "profile.image_selected": "画像を選択しました。保存すると反映されます。",
   "profile.error.personality_invalid": "性格・口調などは2,000文字以内で入力してください。",
   "profile.image_filter": "画像（PNG、JPG、JPEG）",
-  "action.save_settings": "保存して会話に戻る",
+  "action.save_settings": "保存",
   "profile.tab": "アドバイザー",
   "connection.tab": "AI設定",
   "connection.api_key": "APIキー",
@@ -260,5 +260,18 @@
   "progress.topic.bases": "公開基地",
   "progress.topic.observations": "基地の観測",
   "progress.topic.orders": "命令",
-  "progress.topic.other": "取得要求"
+  "progress.topic.other": "取得要求",
+  "connection.fallback_hint": "メインAPIで利用制限や一時的な通信エラーが発生した場合、サブAPIへ自動で切り替えます。",
+  "connection.primary_key_name": "メインAPIキー",
+  "connection.fallback_key_name": "サブAPIキー",
+  "connection.test_result": "{0}：{1}",
+  "connection.fallback_key_missing": "AI設定でサブAPIキーを入力してください。",
+  "connection.fallback_failed": "サブAPIキーでの送信に失敗しました。",
+  "progress.switching_key": "メインAPIキーでの送信に失敗したため、サブAPIキーへ切り替えています…",
+  "progress.fallback_active": "サブAPIキーで続行しています。",
+  "connection.fallback_model_invalid": "AI設定でサブのGeminiモデルIDを確認してください。",
+  "settings.error.fallback_model_invalid": "サブに使用する有効なGeminiのモデルIDを入力してください。",
+  "progress.model": "モデル：{0}",
+  "connection.main_heading": "メインAPI設定（必須）",
+  "connection.sub_heading": "サブAPI設定（任意）"
 }
