@@ -25,7 +25,8 @@ internal sealed class AdvisorWindow
     private AdvisorText text;
     private string uiLanguage;
     private readonly TextBox question;
-    private readonly TextBox transcript;
+    private readonly ScrollViewer transcriptScroll;
+    private readonly AdvisorTranscriptView transcript;
     private readonly TextBox diagnosticOutput, profileName, profilePersonality;
     private readonly RadioButton defaultAdvisor, customAdvisor;
     private readonly TextBlock advisorName, activity, portraitError, profilePreviewError, profileStatus, paneTitle;
@@ -71,7 +72,8 @@ internal sealed class AdvisorWindow
             ?? throw new InvalidOperationException("The advisor view is not a FrameworkElement.");
         ApplyTextResources();
         question = Named<TextBox>(content, "Question");
-        transcript = Named<TextBox>(content, "Transcript");
+        transcriptScroll = Named<ScrollViewer>(content, "Transcript");
+        transcript = new AdvisorTranscriptView(Named<StackPanel>(content, "TranscriptMessages"), guard);
         status = Named<TextBlock>(content, "Status");
         diagnosticStatus = Named<TextBlock>(content, "DiagnosticStatus");
         diagnosticOutput = Named<TextBox>(content, "DiagnosticOutput");
@@ -121,8 +123,6 @@ internal sealed class AdvisorWindow
         questionInput = new QuestionInputController(question, () => active != null, StartConsultation, guard);
         question.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(question));
         question.LostKeyboardFocus += (_, _) => guard(() => typing.Release(question));
-        transcript.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(transcript));
-        transcript.LostKeyboardFocus += (_, _) => guard(() => typing.Release(transcript));
         foreach (var input in new[] { profileName, profilePersonality, diagnosticOutput, Named<TextBox>(content, "ProfilePath") })
         {
             input.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(input));
@@ -186,7 +186,7 @@ internal sealed class AdvisorWindow
         }
         if (scrollPending)
         {
-            transcript.ScrollToEnd();
+            transcriptScroll.ScrollToEnd();
             scrollPending = false;
         }
     }
@@ -371,7 +371,7 @@ internal sealed class AdvisorWindow
     {
         scrollPending = false;
         diagnosticScrollPending = false;
-        transcript.Text = AdvisorTranscript.Format(conversation.Exchanges, text["speaker.you"], speakerName, text["transcript.empty"]);
+        transcript.Show(conversation.Exchanges, text, speakerName, text["transcript.empty"]);
         UpdateShortcuts();
         if (updateStatus) status.Text = text["status.ready"];
     }
@@ -383,7 +383,7 @@ internal sealed class AdvisorWindow
         conversation.Clear();
         scrollPending = false;
         diagnosticScrollPending = false;
-        transcript.Text = text["transcript.cleared"];
+        transcript.Empty(text["transcript.cleared"]);
         UpdateShortcuts();
         status.Text = text["status.new_question"];
         question.Focus();

@@ -96,8 +96,10 @@ internal static class PresentationTests
                     Require(request.Text.All(c => c < 128) && request.Text != request.DisplayText, "Shortcut question is not separate English text");
                     Require(conversation.TryAdd(request, "Answer / 回答", out _), "Shortcut was rejected");
                     var exchange = conversation.Exchanges.Single();
-                    var visible = AdvisorTranscript.Format(conversation.Exchanges, text["speaker.you"], "Michael Reed", "Empty");
-                    Require(exchange.Question == request.Text && visible.Contains(text["speaker.you"] + "\n" + request.DisplayText, StringComparison.Ordinal) &&
+                    var visible = AdvisorTranscript.Render(conversation.Exchanges, text["speaker.you"], "Michael Reed", "Copy", "Copy answer", "Empty");
+                    var captions = XDocument.Parse(visible).Descendants().Where(e => e.Name.LocalName == "TextBlock")
+                        .Select(e => (string?)e.Attribute("Text")).ToArray();
+                    Require(exchange.Question == request.Text && captions.Contains(text["speaker.you"]) && captions.Contains(request.DisplayText) &&
                         !visible.Contains(request.Text, StringComparison.Ordinal), "The internal prompt leaked into visible chat or the caption replaced AI history");
                     foreach (var draft in new[] { "", "日本語の下書き\n追加の条件", request.Text })
                         Require(request.DraftAfterSuccess(draft) == draft, "A shortcut cleared or overwrote the typed draft");

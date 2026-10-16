@@ -12,6 +12,8 @@
   "action.cancel_settings": "Cancel",
   "action.send": "Send",
   "action.cancel": "Cancel",
+  "action.copy": "Copy",
+  "transcript.copy_tip": "Copy the original Markdown answer.",
   "action.clear": "Clear chat",
   "action.save_profile": "Save & return to chat",
   "action.capture": "Situation",

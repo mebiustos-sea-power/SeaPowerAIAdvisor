@@ -31,6 +31,7 @@ public sealed class Plugin : IAnchorChainMod
                 Log.LogInfo("Disabled in the mod manager; advisor was not installed.");
                 return;
             }
+            AdvisorDependencies.LoadMarkdown(typeof(Plugin).Assembly);
             harmony = new Harmony(ModId);
             battle = new BattleIntegration(GuardBattle, message => Log.LogWarning(message));
             harmony.Patch(Required(typeof(MainGameViewModel), "OnLateUpdate"), postfix: new HarmonyMethod(typeof(Plugin), nameof(BattleFrame)));

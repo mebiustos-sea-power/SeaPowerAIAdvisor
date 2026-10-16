@@ -82,6 +82,7 @@ def main():
     package.mkdir(parents=True, exist_ok=True)
     shutil.copy2(ROOT / 'src/bin/Release/netstandard2.1/SeaPowerAIAdvisor.dll', package)
     shutil.copy2(ROOT / 'package/_info.ini', package)
+    shutil.copy2(ROOT / 'package/THIRD-PARTY-NOTICES.txt', package)
     print('Package: ' + str(package))
     if options.install:
         destination = game / 'Sea Power_Data/StreamingAssets/SeaPowerAIAdvisor'

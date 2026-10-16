@@ -48,9 +48,12 @@
           </StackPanel>
         </StackPanel>
       </ScrollViewer>
-      <TextBox x:Name="Transcript" Grid.Column="2" IsReadOnly="True" AcceptsReturn="True"
-               TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
-               FontSize="14" Padding="10" MinHeight="120" />
+      <Border Grid.Column="2" BorderBrush="#607080" BorderThickness="1" Background="#202B38" MinHeight="120">
+        <ScrollViewer x:Name="Transcript" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                      Padding="10" HorizontalContentAlignment="Stretch">
+          <StackPanel x:Name="TranscriptMessages" />
+        </ScrollViewer>
+      </Border>
     </Grid>
     <TextBlock Grid.Row="1" Text="{DynamicResource Advisor.question.label}" FontSize="13" Margin="0,10,0,5" />
     <TextBox x:Name="Question" Grid.Row="2" AcceptsReturn="True" AcceptsTab="False"

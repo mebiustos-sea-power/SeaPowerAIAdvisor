@@ -37,7 +37,7 @@ internal sealed class AdvisorConversation
         if (!Validate(question.Text, out error)) return false;
         if (string.IsNullOrWhiteSpace(answer)) { error = "validation.answer_empty"; return false; }
         if (string.IsNullOrWhiteSpace(question.DisplayText)) throw new ArgumentException("The question caption is missing.");
-        // Store plain text; neither user nor model output is interpolated into XAML.
+        // Preserve the original question and Markdown answer for history, copy and AI context.
         exchanges.Add(new ChatExchange(question.Text, answer, question.DisplayText));
         if (exchanges.Count > MaxExchanges) exchanges.RemoveAt(0);
         return true;
