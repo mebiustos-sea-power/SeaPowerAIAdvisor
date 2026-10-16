@@ -288,7 +288,7 @@ internal static class ProfileTests
             catch (FileNotFoundException) { return; }
             throw new InvalidOperationException("A missing packaged dependency was hidden");
         }));
-        check("Settings and diagnostics use separate tabs with profile actions at the bottom right", () =>
+        check("Settings and diagnostics use separate tabs with a single save-and-return action at the bottom right", () =>
         {
             var view = assembly.MainModule.Resources.OfType<EmbeddedResource>().Single(r => r.Name == "SeaPowerAIAdvisor.Advisor.xaml");
             using var stream = view.GetResourceStream(); var root = XDocument.Load(stream).Root!;
@@ -338,8 +338,9 @@ internal static class ProfileTests
                 int.Parse((string)actions.Attribute("Grid.Row")!) == profileRows.Length - 1 &&
                 (string?)actions.Attribute("HorizontalAlignment") == "Right" &&
                 (string?)profileRows[0].Attribute("Height") == "*" &&
-                Named("SaveProfile").Parent == actions && Named("ReloadProfile").Parent == actions,
-                "Save and reload are not anchored to the bottom right of settings");
+                Named("SaveProfile").Parent == actions && actions.Elements().Count() == 1 &&
+                !root.Descendants().Any(e => (string?)e.Attribute(x + "Name") == "ReloadProfile"),
+                "Settings do not have a single save-and-return action at the bottom right");
             var output = Named("DiagnosticOutput"); var diagnosticPane = Named("DiagnosticsPane");
             var rows = diagnosticPane.Element(diagnosticPane.Name.Namespace + "Grid.RowDefinitions")!.Elements().ToArray();
             Require(output.Parent == diagnosticPane && output.Attribute("Height") == null &&
