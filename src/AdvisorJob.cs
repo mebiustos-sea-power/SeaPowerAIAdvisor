@@ -9,18 +9,24 @@ internal sealed class AdvisorJob : IDisposable
 {
     private readonly CancellationTokenSource cancellation = new();
     private readonly Action<string> warn;
-    private bool retired;
+    private volatile bool retired;
+    private AdvisorProgress? pendingProgress;
+    internal AdvisorProgress? TakeProgress() => Interlocked.Exchange(ref pendingProgress, null);
+    private void Report(AdvisorProgress value) { if (!retired) Interlocked.Exchange(ref pendingProgress, value); }
     private bool observed;
     internal Task<AdviceCompletion> Completion { get; }
 
     internal AdvisorJob(Func<CancellationToken, Task<AdviceResult>> work, Action<string> warn)
+        : this((cancellation, _) => work(cancellation), warn) { }
+
+    internal AdvisorJob(Func<CancellationToken, Action<AdvisorProgress>, Task<AdviceResult>> work, Action<string> warn)
     {
         this.warn = warn;
         Completion = Task.Run(async () =>
         {
             try
             {
-                var result = await work(cancellation.Token).ConfigureAwait(false);
+                var result = await work(cancellation.Token, Report).ConfigureAwait(false);
                 cancellation.Token.ThrowIfCancellationRequested();
                 return AdviceCompletion.Success(result);
             }
@@ -45,6 +51,7 @@ internal sealed class AdvisorJob : IDisposable
     {
         if (retired) return;
         retired = true; cancellation.Cancel();
+        Interlocked.Exchange(ref pendingProgress, null);
         _ = Completion.ContinueWith(t =>
         {
             if (!observed && t.Result.UnexpectedError != null)

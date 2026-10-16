@@ -16,37 +16,34 @@ internal sealed class AdvisorProfile
     internal const int MaxPortraitDimension = PortraitImage.MaxDimension;
     internal const int MaxPersonalityLength = 2000;
     internal const int MaxRoleLength = 80;
+    internal const string DefaultId = "default";
+    internal const int MaxProfileBytes = 1_048_576;
     internal bool UseDefault { get; }
-    internal string CustomName { get; }
-    internal string CustomRole { get; }
+    internal System.Collections.Generic.IReadOnlyList<AdvisorPersona> Advisers { get; }
+    internal string? SelectedCustomId { get; }
+    internal string ActiveId => UseDefault ? DefaultId : SelectedCustomId!;
+    private AdvisorPersona? Custom => Advisers.SingleOrDefault(a => a.Id == SelectedCustomId);
+    internal string CustomName => Custom?.Name ?? "";
+    internal string CustomRole => Custom?.Role ?? "";
     internal string DisplayName => UseDefault ? DefaultName : CustomName;
-    internal string PortraitFile { get; }
+    internal string PortraitFile => Custom?.PortraitFile ?? DefaultPortraitFile;
     internal string DefaultPersonality { get; }
-    internal string CustomPersonality { get; }
+    internal string CustomPersonality => Custom?.Personality ?? "";
     internal string Personality => UseDefault ? DefaultPersonality : CustomPersonality;
+    // Retains the former single-custom constructor for value snapshots and legacy imports.
     internal AdvisorProfile(string name, string portraitFile, bool useDefault = false,
         string defaultPersonality = "", string customPersonality = "", string customRole = "")
+        : this(new[] { new AdvisorPersona("custom", name, customRole, portraitFile, customPersonality) }, "custom", useDefault, defaultPersonality) { }
+    internal AdvisorProfile(System.Collections.Generic.IEnumerable<AdvisorPersona> advisers, string? selectedCustomId,
+        bool useDefault, string defaultPersonality)
     {
-        name = name.Trim(); portraitFile = portraitFile.Trim(); customRole = customRole.Trim();
-        if (customRole.Length > MaxRoleLength || customRole.Any(char.IsControl))
-            throw new AdvisorProfileException("role_invalid");
-        defaultPersonality = defaultPersonality.Trim(); customPersonality = customPersonality.Trim();
-        if (new[] { defaultPersonality, customPersonality }.Any(value => value.Length > MaxPersonalityLength ||
-            value.Any(c => char.IsControl(c) && c != '\r' && c != '\n' && c != '\t')))
-            throw new AdvisorProfileException("personality_invalid");
-        if ((!useDefault && name.Length == 0) || name.Length > 80 || name.Any(char.IsControl) ||
-            portraitFile.Length == 0 || portraitFile.Length > 1024 || portraitFile.Any(char.IsControl))
+        var entries = advisers.ToArray();
+        if (entries.Select(a => a.Id).Distinct(StringComparer.Ordinal).Count() != entries.Length ||
+            (selectedCustomId != null && !entries.Any(a => a.Id == selectedCustomId)) ||
+            (!useDefault && (selectedCustomId == null || entries.Single(a => a.Id == selectedCustomId).Name.Length == 0)))
             throw new AdvisorProfileException("profile_invalid");
-        try
-        {
-            if (!PortraitImage.SupportsPath(portraitFile))
-                throw new AdvisorProfileException("profile_invalid");
-        }
-        catch (ArgumentException) { throw new AdvisorProfileException("profile_invalid"); }
-        try { _ = new UTF8Encoding(false, true).GetByteCount(name + portraitFile + defaultPersonality + customPersonality + customRole); }
-        catch (EncoderFallbackException) { throw new AdvisorProfileException("profile_invalid"); }
-        UseDefault = useDefault; CustomName = name; CustomRole = customRole; PortraitFile = portraitFile;
-        DefaultPersonality = defaultPersonality; CustomPersonality = customPersonality;
+        Advisers = Array.AsReadOnly(entries); SelectedCustomId = selectedCustomId ?? entries.FirstOrDefault()?.Id;
+        UseDefault = useDefault; DefaultPersonality = AdvisorPersona.Style(defaultPersonality);
     }
     internal static string DirectoryIn(string gameDataPath) => Path.Combine(gameDataPath, "SeaPowerAIAdvisor");
     internal static string SettingsPath(string directory) => Path.Combine(directory, "profile.json");
@@ -86,7 +83,7 @@ internal sealed class AdvisorProfile
         if (!File.Exists(path)) throw new AdvisorProfileException("profile_missing");
         try
         {
-            if (new FileInfo(path).Length > 16_384) throw new AdvisorProfileException("profile_invalid");
+            if (new FileInfo(path).Length > MaxProfileBytes) throw new AdvisorProfileException("profile_invalid");
             return Parse(File.ReadAllText(path, new UTF8Encoding(false, true)), initialCustomRole, out roleMissing);
         }
         catch (DecoderFallbackException) { throw new AdvisorProfileException("profile_invalid"); }
@@ -100,9 +97,24 @@ internal sealed class AdvisorProfile
         try
         {
             using var source = new StringReader(json);
-            using var reader = new JsonTextReader(source) { MaxDepth = 4, DateParseHandling = DateParseHandling.None };
+            using var reader = new JsonTextReader(source) { MaxDepth = 8, DateParseHandling = DateParseHandling.None };
             var value = JObject.Load(reader, new JsonLoadSettings { DuplicatePropertyNameHandling = DuplicatePropertyNameHandling.Error });
-            if (reader.Read() || value.Properties().Any(p => p.Name != "mode" && p.Name != "display_name" &&
+            if (reader.Read()) throw new AdvisorProfileException("profile_invalid");
+            if (value["schema_version"] != null)
+            {
+                roleMissing = false;
+                var fields = new[] { "schema_version", "mode", "selected_custom_id", "default_personality", "custom_advisors" };
+                if (value["schema_version"]!.Type != JTokenType.Integer || value["schema_version"]!.ToString(Formatting.None) != "2" ||
+                    value.Properties().Any(p => !fields.Contains(p.Name)) || value["mode"]?.Type != JTokenType.String ||
+                    ((string?)value["mode"] != "default" && (string?)value["mode"] != "custom") ||
+                    value["default_personality"]?.Type != JTokenType.String ||
+                    (value["selected_custom_id"]?.Type != JTokenType.String && value["selected_custom_id"]?.Type != JTokenType.Null) ||
+                    !(value["custom_advisors"] is JArray advisers) || advisers.Any(a => !(a is JObject)))
+                    throw new AdvisorProfileException("profile_invalid");
+                return new AdvisorProfile(advisers.Cast<JObject>().Select(AdvisorPersona.Parse), (string?)value["selected_custom_id"],
+                    (string?)value["mode"] == "default", (string)value["default_personality"]!);
+            }
+            if (value.Properties().Any(p => p.Name != "mode" && p.Name != "display_name" &&
                 p.Name != "portrait_file" && p.Name != "personality" && p.Name != "default_personality" && p.Name != "custom_personality" && p.Name != "custom_role") ||
                 value["display_name"]?.Type != JTokenType.String || value["portrait_file"]?.Type != JTokenType.String ||
                 (value["mode"] != null && (value["mode"]!.Type != JTokenType.String ||
@@ -155,7 +167,8 @@ internal sealed class AdvisorProfile
     internal AdvisorProfile ImportPortrait(string directory, byte[] image)
     {
         var extension = PortraitImage.Extension(image);
-        var imported = new AdvisorProfile(CustomName, "portrait-import-" + Guid.NewGuid().ToString("N") + extension, UseDefault, DefaultPersonality, CustomPersonality, CustomRole);
+        var imported = WithPortrait(SelectedCustomId ?? throw new AdvisorProfileException("profile_invalid"),
+            "portrait-import-" + Guid.NewGuid().ToString("N") + extension);
         var path = imported.ResolvePortrait(directory);
         var saved = false;
         try
@@ -171,27 +184,42 @@ internal sealed class AdvisorProfile
         finally { if (!saved && File.Exists(path)) File.Delete(path); }
     }
 
-    internal void DeleteImportedPortrait(string directory, Action<string> warn)
+    internal AdvisorProfile WithPortrait(string id, string file)
+    {
+        if (!Advisers.Any(a => a.Id == id)) throw new AdvisorProfileException("profile_invalid");
+        return new AdvisorProfile(Advisers.Select(a => a.Id == id ? new AdvisorPersona(a.Id, a.Name, a.Role, file, a.Personality) : a),
+            SelectedCustomId, UseDefault, DefaultPersonality);
+    }
+    internal void DeleteUnusedPortraits(string directory, AdvisorProfile next, Action<string> warn)
+    {
+        var retained = next.Advisers.Select(a => a.PortraitFile).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in Advisers.Select(a => a.PortraitFile).Distinct(StringComparer.OrdinalIgnoreCase).Where(f => !retained.Contains(f)))
+            DeletePortraitFile(directory, file, warn);
+    }
+    internal void DeleteImportedPortrait(string directory, Action<string> warn) => DeletePortraitFile(directory, PortraitFile, warn);
+    private static void DeletePortraitFile(string directory, string portraitFile, Action<string> warn)
     {
         const string prefix = "portrait-import-";
         // Only remove our own previous imported copy; never delete user-selected source files or custom paths.
-        var stem = Path.GetFileNameWithoutExtension(PortraitFile);
-        if (Path.GetFileName(PortraitFile) != PortraitFile || !PortraitImage.SupportsPath(PortraitFile) ||
+        var stem = Path.GetFileNameWithoutExtension(portraitFile);
+        if (Path.GetFileName(portraitFile) != portraitFile || !PortraitImage.SupportsPath(portraitFile) ||
             stem.Length != prefix.Length + 32 || !stem.StartsWith(prefix, StringComparison.Ordinal) ||
             !Guid.TryParseExact(stem.Substring(prefix.Length), "N", out _)) return;
-        try { File.Delete(ResolvePortrait(directory)); }
+        try { File.Delete(Path.Combine(directory, portraitFile)); }
         catch (IOException error) { warn("Cannot remove the previous imported portrait: " + error.Message); }
         catch (UnauthorizedAccessException error) { warn("Cannot remove the previous imported portrait: " + error.Message); }
     }
 
     internal void Save(string directory)
     {
+        var data = Encoding.UTF8.GetBytes(Json());
+        if (data.Length > MaxProfileBytes) throw new AdvisorProfileException("profile_invalid");
         var path = SettingsPath(directory);
         var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
             Directory.CreateDirectory(directory);
-            WriteNew(temporary, Encoding.UTF8.GetBytes(Json()));
+            WriteNew(temporary, data);
             if (File.Exists(path)) File.Replace(temporary, path, null);
             else File.Move(temporary, path);
         }
@@ -206,11 +234,11 @@ internal sealed class AdvisorProfile
     }
     private string Json() => new JObject
     {
-        ["mode"] = UseDefault ? "default" : "custom", ["display_name"] = CustomName,
-        ["portrait_file"] = PortraitFile, ["custom_role"] = CustomRole,
-        ["default_personality"] = DefaultPersonality, ["custom_personality"] = CustomPersonality
+        ["schema_version"] = 2, ["mode"] = UseDefault ? "default" : "custom",
+        ["selected_custom_id"] = SelectedCustomId, ["default_personality"] = DefaultPersonality,
+        ["custom_advisors"] = new JArray(Advisers.Select(a => a.Json()))
     }.ToString(Formatting.Indented) + Environment.NewLine;
-    private static void WriteNew(string path, byte[] bytes)
+    internal static void WriteNew(string path, byte[] bytes)
     {
         using var output = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
         output.Write(bytes, 0, bytes.Length);
@@ -221,43 +249,4 @@ internal sealed class AdvisorProfileException : Exception
 {
     internal string Code { get; }
     internal AdvisorProfileException(string code) : base(code) { Code = code; }
-}
-
-// Unsaved edits belong to the settings preview; only Save persists them for later consultations.
-internal sealed class AdvisorProfileDraft
-{
-    internal bool UseDefault { get; set; }
-    internal string CustomName { get; set; }
-    internal string CustomRole { get; set; }
-    internal string Personality
-    {
-        get => UseDefault ? defaultPersonality : customPersonality;
-        set { if (UseDefault) defaultPersonality = value; else customPersonality = value; }
-    }
-    private string defaultPersonality;
-    private string customPersonality;
-    private readonly string portraitFile;
-    private byte[]? selectedPortrait;
-
-    internal AdvisorProfileDraft(AdvisorProfile profile)
-    {
-        UseDefault = profile.UseDefault; CustomName = profile.CustomName; CustomRole = profile.CustomRole;
-        defaultPersonality = profile.DefaultPersonality; customPersonality = profile.CustomPersonality;
-        portraitFile = profile.PortraitFile;
-    }
-
-    internal void SelectPortrait(byte[] image) => selectedPortrait = image;
-    internal byte[] ReadActivePortrait(string directory, Func<byte[]> defaultPortrait) =>
-        UseDefault ? defaultPortrait() : selectedPortrait ??
-            new AdvisorProfile(AdvisorProfile.DefaultName, portraitFile).ReadPortrait(directory);
-
-    internal AdvisorProfile Build() => new(CustomName, portraitFile, UseDefault, defaultPersonality, customPersonality, CustomRole);
-
-    internal AdvisorProfile Save(string directory)
-    {
-        var profile = Build();
-        if (selectedPortrait != null) return profile.ImportPortrait(directory, selectedPortrait);
-        profile.Save(directory);
-        return profile;
-    }
 }

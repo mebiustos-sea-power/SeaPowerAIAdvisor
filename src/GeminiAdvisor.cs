@@ -27,17 +27,17 @@ internal sealed class GeminiAdvisor
     internal GeminiAdvisor(IGeminiTransport transport) { this.transport = transport; }
 
     internal async Task<AdviceResult> ConsultAsync(IAdvisorQuerySession session, AdvisorSettings settings,
-        IReadOnlyList<ChatExchange> history, CancellationToken cancellation, AdvisorProfile? profile = null, string commonPrompt = "")
+        IReadOnlyList<ChatExchange> history, CancellationToken cancellation, AdvisorProfile? profile = null, string commonPrompt = "", Action<AdvisorProgress>? progress = null)
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
         deadline.CancelAfter(TimeSpan.FromSeconds(settings.ConsultationTimeoutSeconds));
-        try { return await RunAsync(session, settings, history, deadline.Token, profile, commonPrompt).ConfigureAwait(false); }
+        try { return await RunAsync(session, settings, history, deadline.Token, profile, commonPrompt, progress).ConfigureAwait(false); }
         catch (OperationCanceledException) when (!cancellation.IsCancellationRequested)
         { throw new AdvisorConnectionException("consultation_timeout"); }
     }
 
     private async Task<AdviceResult> RunAsync(IAdvisorQuerySession session, AdvisorSettings settings,
-        IReadOnlyList<ChatExchange> history, CancellationToken cancellation, AdvisorProfile? profile, string commonPrompt)
+        IReadOnlyList<ChatExchange> history, CancellationToken cancellation, AdvisorProfile? profile, string commonPrompt, Action<AdvisorProgress>? progress)
     {
         var maxApiRequests = session.MaxRounds + 1;
         var initial = session.InitialInput();
@@ -47,7 +47,7 @@ internal sealed class GeminiAdvisor
         var instructions = initial["instructions"]!.DeepClone();
         initial.Remove("instructions"); initial.Remove("query_tool");
         initial["prior_dialogue"] = new JArray(history.Skip(Math.Max(0, history.Count - ContextExchanges))
-            .Select(h => new JObject { ["question"] = h.Question, ["answer"] = h.Answer }));
+            .Select(h => new JObject { ["question"] = h.Question, ["answer"] = h.Answer, ["advisor_name"] = h.AdvisorName }));
         initial["omitted_prior_exchange_count"] = Math.Max(0, history.Count - ContextExchanges);
         var contents = new JArray(new JObject { ["role"] = "user", ["parts"] = new JArray(new JObject { ["text"] = initial.ToString(Formatting.None) }) });
         var system = session.Prompts.SystemInstruction(instructions);
@@ -56,6 +56,7 @@ internal sealed class GeminiAdvisor
         var usageKnown = true;
         var toolsAllowed = true;
         var queriesUsed = new List<string>();
+        var lastQueries = Array.Empty<string>();
         for (var api = 1; api <= maxApiRequests; api++)
         {
             cancellation.ThrowIfCancellationRequested();
@@ -75,6 +76,7 @@ internal sealed class GeminiAdvisor
             var size = AdvisorQueryLimits.Bytes(body);
             if (bytesSent + size > MaxTotalRequestBytes) throw new AdvisorConnectionException("request_budget");
             bytesSent += size;
+            progress?.Invoke(new AdvisorProgress(allow ? AdvisorStage.Waiting : AdvisorStage.FinalAnswer, api, session.RoundsUsed, session.MaxRounds, lastQueries));
             var response = await transport.GenerateAsync(settings, body, cancellation).ConfigureAwait(false);
             cancellation.ThrowIfCancellationRequested();
             var count = response["usageMetadata"]?["totalTokenCount"];
@@ -105,7 +107,12 @@ internal sealed class GeminiAdvisor
             // Preserve every model part, in its original order, including opaque thought signatures.
             contents.Add(content.DeepClone());
             var combined = Combine(session, calls);
+            var knownQueries = ((JArray)tool["parameters"]!["properties"]!["requests"]!["items"]!["properties"]!["query"]!["enum"]!).Values<string>().ToHashSet(StringComparer.Ordinal);
+            var pendingQueries = (combined["requests"] as JArray ?? new JArray()).OfType<JObject>().Select(q =>
+                q["query"]?.Type == JTokenType.String && knownQueries.Contains((string?)q["query"]) ? (string)q["query"]! : "unknown_query").ToArray();
+            progress?.Invoke(new AdvisorProgress(AdvisorStage.Retrieving, api, session.RoundsUsed + 1, session.MaxRounds, pendingQueries));
             var result = session.Execute(combined);
+            lastQueries = (string?)result["status"] == "ok" ? pendingQueries : Array.Empty<string>();
             if (combined["requests"] is JArray requested)
                 foreach (var query in requested.OfType<JObject>())
                 {

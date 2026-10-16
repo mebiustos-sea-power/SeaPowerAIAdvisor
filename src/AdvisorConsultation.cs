@@ -10,13 +10,13 @@ internal static class AdvisorConsultation
 {
     internal static async Task<AdviceResult> RunAsync(string logDirectory, IAdvisorQuerySession session, AdvisorSettings settings,
         AdvisorQuestion question, IReadOnlyList<ChatExchange> history, CancellationToken cancellation,
-        Func<AdvisorTrace?, GeminiTransport>? transportFactory = null, AdvisorProfile? profile = null, string commonPrompt = "")
+        Func<AdvisorTrace?, GeminiTransport>? transportFactory = null, AdvisorProfile? profile = null, string commonPrompt = "", Action<AdvisorProgress>? progress = null)
     {
         using var trace = AdvisorTrace.Start(logDirectory, session.Id, settings, question);
         try
         {
             using var transport = transportFactory == null ? new GeminiTransport(trace) : transportFactory(trace);
-            var result = await new GeminiAdvisor(transport).ConsultAsync(session, settings, history, cancellation, profile, commonPrompt).ConfigureAwait(false);
+            var result = await new GeminiAdvisor(transport).ConsultAsync(session, settings, history, cancellation, profile, commonPrompt, progress).ConfigureAwait(false);
             cancellation.ThrowIfCancellationRequested();
             trace?.Finish("completed", result);
             return result;

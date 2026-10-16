@@ -23,13 +23,19 @@ internal static class AdvisorTranscript
                 row.Add(Element("Grid", new XAttribute("Margin", "0,6,0,6"),
                     Element("Grid.ColumnDefinitions", Element("ColumnDefinition", new XAttribute("Width", "*")),
                         Element("ColumnDefinition", new XAttribute("Width", "Auto"))),
-                    Label(advisor, "AdvisorNameBrush"),
+                    Label(turn.AdvisorName.Length == 0 ? advisor : turn.AdvisorName, "AdvisorNameBrush"),
                     Action("CopyAnswer" + i, text["action.copy"], text["transcript.copy_tip"], 1)),
                     AdvisorMarkdown.Render(exchange.Answer));
             }
             else if (turn.State == AdvisorTurnState.Failed)
                 row.Add(Error((turn.Error ?? throw new InvalidOperationException("The failed turn has no error.")).Message(text)));
-            else row.Add(Plain(text[turn.State == AdvisorTurnState.Waiting ? "transcript.waiting" : "status.cancelled"]));
+            else if (turn.State == AdvisorTurnState.Waiting)
+            {
+                var waiting = Plain(AdvisorProgress.Format(turn.Progress, text));
+                waiting.Add(new XAttribute(XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml") + "Name", "ProgressTurn" + i));
+                row.Add(waiting);
+            }
+            else row.Add(Plain(text["status.cancelled"]));
             if (conversation.CanRetry(turn)) row.Add(Action("RetryTurn" + i, text["action.retry"], text["transcript.retry_tip"]));
             root.Add(row);
         }

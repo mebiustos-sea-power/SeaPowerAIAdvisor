@@ -9,8 +9,9 @@ internal sealed class ChatExchange
     internal string Question { get; }
     internal string Answer { get; }
     internal string DisplayQuestion { get; }
-    internal ChatExchange(string question, string answer, string? displayQuestion = null)
-    { Question = question; Answer = answer; DisplayQuestion = displayQuestion ?? question; }
+    internal string AdvisorName { get; }
+    internal ChatExchange(string question, string answer, string? displayQuestion = null, string advisorName = "")
+    { Question = question; Answer = answer; DisplayQuestion = displayQuestion ?? question; AdvisorName = advisorName; }
 }
 
 internal enum AdvisorTurnState { Waiting, Answered, Failed, Cancelled }
@@ -19,28 +20,34 @@ internal sealed class AdvisorTurn
 {
     internal AdvisorQuestion Request { get; }
     internal int ContextGeneration { get; private set; }
+    internal string AdvisorName { get; private set; }
+    internal string AdvisorId { get; private set; }
+    internal AdvisorProgress? Progress { get; private set; }
+    internal void UpdateProgress(AdvisorProgress value) { RequireWaiting(); Progress = value; }
     internal AdvisorTurnState State { get; private set; } = AdvisorTurnState.Waiting;
     internal ChatExchange? Exchange { get; private set; }
     internal AdvisorNotice? Error { get; private set; }
-    internal AdvisorTurn(AdvisorQuestion request, int contextGeneration) { Request = request; ContextGeneration = contextGeneration; }
+    internal AdvisorTurn(AdvisorQuestion request, int contextGeneration, string advisorName, string advisorId)
+    { Request = request; ContextGeneration = contextGeneration; AdvisorName = advisorName; AdvisorId = advisorId; }
 
     internal void Complete(string answer)
     {
         RequireWaiting();
         if (string.IsNullOrWhiteSpace(answer)) throw new ArgumentException("The answer is empty.");
-        Exchange = new ChatExchange(Request.Text, answer, Request.DisplayText);
+        Exchange = new ChatExchange(Request.Text, answer, Request.DisplayText, AdvisorName);
         State = AdvisorTurnState.Answered;
     }
 
     internal void Fail(AdvisorNotice error)
     { RequireWaiting(); Error = error; State = AdvisorTurnState.Failed; }
     internal void Cancel() { RequireWaiting(); State = AdvisorTurnState.Cancelled; }
-    internal void Retry(int contextGeneration)
+    internal void Retry(int contextGeneration, string? advisorName, string? advisorId)
     {
         if (State != AdvisorTurnState.Failed && State != AdvisorTurnState.Cancelled)
             throw new InvalidOperationException("Only an unsuccessful turn can be retried.");
         Error = null;
         ContextGeneration = contextGeneration;
+        AdvisorName = advisorName ?? AdvisorName; AdvisorId = advisorId ?? AdvisorId; Progress = null;
         State = AdvisorTurnState.Waiting;
     }
     private void RequireWaiting()
@@ -73,13 +80,13 @@ internal sealed class AdvisorConversation
         return error.Length == 0;
     }
 
-    internal AdvisorTurn Begin(AdvisorQuestion request)
+    internal AdvisorTurn Begin(AdvisorQuestion request, string advisorName = "", string advisorId = "")
     {
         if (!Validate(request.Text, out _) || string.IsNullOrWhiteSpace(request.DisplayText))
             throw new ArgumentException("The question is invalid.");
         if (turns.Any(t => t.State == AdvisorTurnState.Waiting))
             throw new InvalidOperationException("A consultation is already pending.");
-        var turn = new AdvisorTurn(request, contextGeneration);
+        var turn = new AdvisorTurn(request, contextGeneration, advisorName, advisorId);
         turns.Add(turn);
         if (turns.Count > MaxExchanges) turns.RemoveAt(0);
         return turn;
@@ -88,10 +95,10 @@ internal sealed class AdvisorConversation
     internal bool CanRetry(AdvisorTurn turn) => turns.Count > 0 && ReferenceEquals(turns[turns.Count - 1], turn) &&
         (turn.State == AdvisorTurnState.Failed || turn.State == AdvisorTurnState.Cancelled);
 
-    internal void Retry(AdvisorTurn turn)
+    internal void Retry(AdvisorTurn turn, string? advisorName = null, string? advisorId = null)
     {
         if (!CanRetry(turn)) throw new InvalidOperationException("Only the latest unsuccessful turn can be retried.");
-        turn.Retry(contextGeneration);
+        turn.Retry(contextGeneration, advisorName, advisorId);
     }
 
     internal bool TryAdd(string? question, string answer, out string error)

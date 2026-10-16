@@ -14,6 +14,7 @@ internal static class ProfileTests
         using var assembly = AssemblyDefinition.ReadAssembly(advisorPath);
         var resource = assembly.MainModule.Resources.OfType<EmbeddedResource>().Single(r => r.Name == "SeaPowerAIAdvisor.DefaultPortrait.png");
         var png = resource.GetResourceData();
+        ProfileLibraryTests.Run(png, check);
         var jpeg = Convert.FromBase64String("/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAACAAMDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDxSAC4hWWYeZI3V35J/E0UUV9fgv8Adqf+FfkjGp8b9T//2Q==");
         check("First profile setup selects the packaged default identity and preserves a custom portrait slot", () => InTemp(directory =>
         {
@@ -392,7 +393,7 @@ internal static class ProfileTests
             Require(Named("ProfilePreview").Ancestors().Contains(profile) &&
                 Named("ProfileName").Ancestors().Contains(profile) &&
                 Named("ChoosePortrait").Ancestors().Contains(profile) &&
-                Named("DefaultAdvisor").Ancestors().Contains(profile) && Named("CustomAdvisor").Ancestors().Contains(profile) &&
+                Named("AdvisorSelector").Ancestors().Contains(profile) && Named("AddAdvisor").Ancestors().Contains(profile) && Named("RemoveAdvisor").Ancestors().Contains(profile) &&
                 Named("ProfilePersonality").Ancestors().Contains(profile) &&
                 (string?)Named("ProfilePersonality").Attribute("IsReadOnly") != "True" &&
                 (string?)Named("ProfilePersonality").Attribute("IsEnabled") != "False" &&
