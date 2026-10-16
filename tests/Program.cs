@@ -13,6 +13,7 @@ internal static class Program
         if (args.Length == 1 && args[0] == "--battle-only")
         {
             BattleTests.Run(Check);
+            InformationTests.Run(Check);
             Require(!AppDomain.CurrentDomain.GetAssemblies().Any(a => a.GetName().Name == "DynamicCampaignMod"), "Battle-only verification loaded DCM");
             Console.WriteLine("PASS " + count + " battle checks (no DCM loaded)");
             return;
@@ -117,6 +118,8 @@ internal static class Program
         ProfileTests.Run(args[1], Check);
         PreferencesTests.Run(Check);
         OptionsTests.Run(args[0], Check);
+        InformationTests.Run(Check);
+        InformationTests.RunCampaign(args[0], Check);
         ConversationTests.Run(Check);
         ConnectionTests.Run(Check);
         QuestionInputTests.Run(args[2], Check);

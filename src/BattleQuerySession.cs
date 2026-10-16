@@ -11,16 +11,19 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
 {
     private static readonly string[] names = { "catalog", "list_units", "get_units", "list_contacts", "get_briefing", "list_reports", "get_reports", "get_unit_capabilities", "get_contact_threats" };
     private readonly JObject snapshot;
+    private readonly AdvisorInformation information;
     private readonly JObject initial;
     public string Id { get; } = Guid.NewGuid().ToString("N");
     public int RoundsUsed { get; private set; }
     public int MaxRounds { get; }
     private int returnedBytes;
 
-    internal BattleQuerySession(BattleSnapshot situation, string language, string? question, int maxRounds = DefaultMaxRounds)
+    internal BattleQuerySession(BattleSnapshot situation, string language, string? question, int maxRounds = DefaultMaxRounds, AdvisorInformation? information = null)
     {
         if (maxRounds < 1 || maxRounds > MaximumRounds) throw new ArgumentOutOfRangeException(nameof(maxRounds));
         MaxRounds = maxRounds;
+        this.information = information ?? AdvisorInformation.All;
+        information = this.information;
         snapshot = situation.Copy();
         initial = AdvisorInputBuilder.Header(language, question);
         initial["schema_version"] = 3;
@@ -63,6 +66,12 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
             ["default_page_size"] = DefaultPageSize, ["max_page_size"] = MaxPageSize,
             ["max_request_utf8_bytes"] = MaxRequestBytes, ["max_response_utf8_bytes"] = MaxResponseBytes, ["max_total_data_utf8_bytes"] = MaxTotalBytes
         };
+        var overview = (JObject)initial["situation"]!["overview"]!;
+        if (!information.Allows(InformationKind.BattleUnits)) overview.Remove("friendly_unit_count");
+        if (!information.Allows(InformationKind.BattleContacts)) overview.Remove("observed_contact_count");
+        if (!information.Allows(InformationKind.BattleReports)) overview.Remove("retained_report_count");
+        initial["situation"]!["coverage"]!["available_on_request"] = new JArray(Catalogue().Properties().Select(p => p.Name));
+        information.AddPolicy(initial, true);
         returnedBytes = Bytes(initial);
         if (returnedBytes > MaxTotalBytes) throw new InvalidOperationException("Mandatory battle input exceeds the consultation payload limit.");
     }
@@ -106,6 +115,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
     private JToken Dispatch(JObject query)
     {
         var name = (string)query["query"]!;
+        if (!information.BattleQuery(name)) throw Error("information_disabled", "This data category is disabled by the user. Do not request it through another query.");
         switch (name)
         {
             case "catalog":
@@ -117,7 +127,11 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
                 return Page(query, new JArray(Rows("friendly_units").OfType<JObject>()
                     .Select(r => new JObject { ["id"] = r["id"]!.DeepClone(), ["display_name"] = r["display_name"]!.DeepClone(), ["kind"] = r["kind"]!.DeepClone() })));
             case "list_contacts":
-                Allowed(query, "query", "offset", "limit"); return Page(query, Rows("observed_contacts"));
+                Allowed(query, "query", "offset", "limit");
+                var contacts = (JArray)Rows("observed_contacts").DeepClone();
+                if (!information.Allows(InformationKind.BattleThreats))
+                    foreach (var contact in contacts.OfType<JObject>()) contact.Remove("public_class_reference_available");
+                return Page(query, contacts);
             case "list_reports":
                 Allowed(query, "query", "offset", "limit");
                 return Page(query, new JArray(Rows("published_reports").OfType<JObject>()
@@ -159,13 +173,16 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
 
     private JObject Capabilities(JObject query)
     {
-        var sections = new[] { "fuel", "damage", "weapons" };
+        var supported = new[] { "fuel", "damage", "weapons" };
+        var sections = information.BattleSections;
         if (query["sections"] != null)
         {
             if (!(query["sections"] is JArray selected) || selected.Count < 1 || selected.Count > 3 ||
-                selected.Any(s => s.Type != JTokenType.String || !sections.Contains((string)s!)) ||
+                selected.Any(s => s.Type != JTokenType.String || !supported.Contains((string)s!)) ||
                 selected.Values<string>().Distinct(StringComparer.Ordinal).Count() != selected.Count)
                 throw Error("invalid_arguments", "Sections must be unique fuel, damage or weapons values.");
+            if (selected.Values<string>().Any(s => !sections.Contains(s)))
+                throw Error("information_disabled", "One or more capability sections are disabled by the user.");
             sections = selected.Values<string>().ToArray()!;
         }
         var rows = new JArray();
@@ -193,10 +210,17 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
     }
 
     private JArray Rows(string name) => (JArray)snapshot[name]!;
-    private JObject Catalogue() => new()
+    private JObject Catalogue()
+    {
+        var result = RawCatalogue();
+        foreach (var property in result.Properties().Where(p => !information.BattleCategory(p.Name)).ToArray()) property.Remove();
+        if (result["unit_capabilities"] is JObject capabilities) capabilities["available_sections"] = new JArray(information.BattleSections);
+        return result;
+    }
+    private JObject RawCatalogue() => new()
     {
         ["friendly_units"] = new JObject { ["item_count"] = Rows("friendly_units").Count, ["list_query"] = "list_units", ["detail_query"] = "get_units", ["description"] = "Own on-map units: displayed names, kind, position, heading and speed only." },
-        ["unit_capabilities"] = new JObject { ["item_count"] = Rows("unit_capabilities").Count, ["query"] = "get_unit_capabilities", ["description"] = "Batch current own-unit fuel, damage and ammunition plus referenced weapon ranges. Supply current own-unit IDs; optional sections: fuel, damage, weapons. References are deduplicated within the result. Counts do not prove weapons are ready to fire." },
+        ["unit_capabilities"] = new JObject { ["item_count"] = Rows("unit_capabilities").Count, ["query"] = "get_unit_capabilities", ["description"] = "Batch current own-unit status and referenced weapon ranges. Supply current own-unit IDs and only available_sections; omit sections for all enabled sections. References are deduplicated within the result. Counts do not prove weapons are ready to fire." },
         ["public_class_threat_references"] = new JObject { ["query"] = "get_contact_threats", ["description"] = "Batch current contact IDs to obtain public encyclopedia armament candidates and ranges for identified classes. No actual enemy equipment, ammunition, readiness or damage. Use reference evidence for conditional threat estimates, cite names and retain uncertainty." },
         ["observed_contacts"] = new JObject { ["item_count"] = Rows("observed_contacts").Count, ["list_query"] = "list_contacts", ["description"] = "Player-map contacts, including unknown or neutral posture. Sensor estimates may be stale; no actual enemy state." },
         ["mission_briefing"] = new JObject { ["query"] = "get_briefing", ["description"] = "The player's currently displayed mission briefing." },
@@ -228,7 +252,20 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
         if (query.Properties().Any(p => !keys.Contains(p.Name))) throw Error("invalid_arguments", "Unsupported argument.");
     }
     private static AdvisorQueryException Error(string code, string message) => new(code, message);
-    private static JObject Tool() => new()
+    private JObject Tool()
+    {
+        var tool = RawTool();
+        var properties = (JObject)tool["parameters"]!["properties"]!["requests"]!["items"]!["properties"]!;
+        properties["query"]!["enum"] = new JArray(names.Where(information.BattleQuery));
+        if (information.BattleSections.Length == 0) properties.Remove("sections");
+        else
+        {
+            properties["sections"]!["items"]!["enum"] = new JArray(information.BattleSections);
+            properties["sections"]!["description"] = "get_unit_capabilities only. Omit for all user-enabled sections; disabled sections cannot be requested.";
+        }
+        return tool;
+    }
+    private static JObject RawTool() => new()
     {
         ["name"] = "query_situation",
         ["description"] = "Read only this consultation's player-known battle snapshot. The host selects the consultation; supply requests only. Batch independent queries, use get_* for known IDs, and respect pagination.",

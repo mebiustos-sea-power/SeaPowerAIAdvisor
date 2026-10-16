@@ -19,6 +19,7 @@ internal sealed class AdvisorWindow
     private AdvisorOptions? optionsDraft;
     private readonly TextBox maxQueryRounds;
     private readonly CheckBox enableCampaign;
+    private readonly AdvisorInformationView informationChoices;
     private readonly Func<string> replyLanguage;
     private readonly Action<string> warn;
     private readonly AdvisorConversation conversation = new();
@@ -116,6 +117,7 @@ internal sealed class AdvisorWindow
         modelName = Named<TextBox>(content, "ModelName");
         maxQueryRounds = Named<TextBox>(content, "MaxQueryRounds");
         enableCampaign = Named<CheckBox>(content, "EnableCampaignAdvisor");
+        informationChoices = new AdvisorInformationView(Named<StackPanel>(content, "InformationChoices"), guard);
         testConnection = Named<Button>(content, "TestConnection");
         connectionTestStatus = Named<TextBlock>(content, "ConnectionTestStatus");
         connectionTestError = Named<TextBlock>(content, "ConnectionTestError");
@@ -280,6 +282,7 @@ internal sealed class AdvisorWindow
             question.Focus();
             return;
         }
+        conversation.UseInformationPolicy(options.Current.Information.Key);
         var turn = retry ?? conversation.Begin(request);
         if (retry != null) conversation.Retry(turn);
         else question.Text = request.DraftAfterSend(question.Text ?? string.Empty);
@@ -289,7 +292,7 @@ internal sealed class AdvisorWindow
         try
         {
             var settings = AdvisorSettings.Load(settingsPath);
-            var session = source.CreateSession(replyLanguage(), request.Text, options.Current.MaxQueryRounds);
+            var session = source.CreateSession(replyLanguage(), request.Text, options.Current.MaxQueryRounds, options.Current.Information);
             var history = conversation.Exchanges.ToArray();
             pendingTurn = turn;
             pendingModel = settings.Model;
@@ -415,7 +418,7 @@ internal sealed class AdvisorWindow
             if (structured)
             {
                 var language = replyLanguage();
-                var input = source.CreateSession(language, question.Text, options.Current.MaxQueryRounds).InitialInput();
+                var input = source.CreateSession(language, question.Text, options.Current.MaxQueryRounds, options.Current.Information).InitialInput();
                 appliedProfile?.AddAnswerPreferences(input);
                 diagnosticOutput.Text = input.ToString(Newtonsoft.Json.Formatting.Indented);
                 diagnosticStatus.Text = text.Format("diagnostics.input_generated", language);
@@ -505,6 +508,7 @@ internal sealed class AdvisorWindow
             optionsDraft = options.Read();
             maxQueryRounds.Text = optionsDraft.MaxQueryRounds.ToString(System.Globalization.CultureInfo.InvariantCulture);
             enableCampaign.IsChecked = optionsDraft.CampaignEnabled;
+            informationChoices.Reset(optionsDraft.Information);
         }
         catch (AdvisorOptionsException failure) { optionsDraft = null; OptionsError(failure); }
         maxQueryRounds.IsEnabled = enableCampaign.IsEnabled = optionsDraft != null;
@@ -518,6 +522,7 @@ internal sealed class AdvisorWindow
         CancelConnectionTest();
         connectionDraft = null;
         optionsDraft = null;
+        informationChoices.Reset(null);
         maxQueryRounds.Text = string.Empty;
         enableCampaign.IsChecked = false;
         apiKey.Password = string.Empty;
@@ -614,7 +619,7 @@ internal sealed class AdvisorWindow
     {
         if (!int.TryParse(maxQueryRounds.Text, System.Globalization.NumberStyles.Integer,
             System.Globalization.CultureInfo.InvariantCulture, out var rounds)) throw new AdvisorOptionsException("query_rounds_invalid");
-        return new AdvisorOptions(rounds, enableCampaign.IsChecked == true);
+        return new AdvisorOptions(rounds, enableCampaign.IsChecked == true, informationChoices.Value);
     }
 
     private void OptionsError(AdvisorOptionsException failure)
@@ -645,7 +650,8 @@ internal sealed class AdvisorWindow
             if (apiKey.IsEnabled) apiKey.Focus();
             else Named<Button>(content, "CancelSettings").Focus();
         }
-        else if (settingsTabs.SelectedIndex == 2) captureAction.Focus();
+        else if (settingsTabs.SelectedIndex == 2) informationChoices.Focus();
+        else if (settingsTabs.SelectedIndex == 3) captureAction.Focus();
         else if (profileDraft.UseDefault) profilePersonality.Focus();
         else profileName.Focus();
     }
@@ -781,6 +787,7 @@ internal sealed class AdvisorWindow
             AdvisorProfile profile;
             try { profile = AdvisorPreferences.Save(profileDraft, connectionDraft, options, nextOptions, profileDirectory, settingsPath); }
             catch { next.Dispose(); throw; }
+            conversation.UseInformationPolicy(nextOptions.Information.Key);
             var previous = appliedProfile;
             ApplyProfile(profile, next);
             if (previous != null && previous.PortraitFile != profile.PortraitFile)
@@ -799,7 +806,7 @@ internal sealed class AdvisorWindow
         }
         catch (AdvisorOptionsException failure)
         {
-            settingsTabs.SelectedIndex = failure.Code == "query_rounds_invalid" ? 1 : 0;
+            settingsTabs.SelectedIndex = failure.Code == "query_rounds_invalid" ? 1 : failure.Code == "information_invalid" ? 2 : 0;
             OptionsError(failure);
         }
     }

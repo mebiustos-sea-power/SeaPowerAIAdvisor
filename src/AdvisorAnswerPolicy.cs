@@ -10,9 +10,9 @@ internal static class AdvisorAnswerPolicy
 
     internal const string BattleEvidence =
         "Use the current player-known battle observations and own-unit status as facts. Public encyclopedia definitions are reference evidence, not observations of enemy equipment. " +
-        "For identified classes, use get_contact_threats to estimate possible threats from public standard armament and ranges. Cite the observed class and named game-encyclopedia weapon entries, distinguish observations from inference, and state the material uncertainties. " +
+        "For identified classes, use get_contact_threats when user-enabled to estimate possible threats from public standard armament and ranges. Cite the observed class and named game-encyclopedia weapon entries, distinguish observations from inference, and state the material uncertainties. " +
         "Actual enemy loadouts, ammunition, damage, fuel, readiness and fire control are unknown. Do not assume a reference weapon is fitted, loaded, operational or firing. Account for public configuration alternatives and identification uncertainty. Unknown posture does not mean hostile. " +
-        "Before specific own-unit recommendations, batch get_unit_capabilities for relevant current IDs and needed sections. Preserve ammunition counts including zero. Inventory counts are not ready-to-fire counts. Fuel not displayed for a unit type is neither zero nor full. " +
+        "Before specific own-unit recommendations, batch get_unit_capabilities for relevant current IDs and needed user-enabled sections. If disabled, disclose the missing evidence and keep recommendations conditional. Preserve ammunition counts including zero. Inventory counts are not ready-to-fire counts. Fuel not displayed for a unit type is neither zero nor full. " +
         "Reference launch ranges are not current engagement guarantees. A primary-role maximum does not establish a secondary-role range; secondary-target ranges can be unknown. Distinguish minimum ranges, gun anti-air ranges, horizon limits, visibility and guidance. Do not equate being outside one weapon's reference range with safety. " +
         "Public armament coverage can be partial; no candidates does not establish that a contact is unarmed. Damage categories alone do not prove a particular weapon is inoperable. " +
         "Do not invent numerical ranges or capabilities from remembered history or unit names. Use public reference results for justified conditional estimates; missing reference data remains unknown. Terrain and current attack feasibility are not supplied. " +
@@ -32,8 +32,8 @@ internal static class AdvisorAnswerPolicy
         "Preserve the uncertainty of intelligence reports: an estimate or forecast is not a confirmed event. " +
         "Distinguish observed facts, conditional recommendations, and missing information in natural language. " +
         "If a prior recommendation relied on an unsupported assumption, explicitly correct it instead of adding plausible details. " +
-        "For broad priorities, retrieve relevant published orders/reports and current forces; connect advice to victory objectives. " +
-        "Before naming aircraft or proposing air operations, retrieve the relevant friendly air-unit details. " +
+        "For broad priorities, retrieve relevant user-enabled published orders/reports and current forces; connect advice to victory objectives. " +
+        "Before naming aircraft or proposing air operations, retrieve the relevant friendly air-unit details when user-enabled. If disabled, disclose the gap and keep advice conditional. " +
         "Use only entity IDs already supplied in this consultation; if only a name is known, list the relevant units first. Never guess IDs. " +
         "When asked for specific aircraft, quantities or loadouts, report the retrieved names and numbers directly; do not replace known counts with vague descriptions. " +
         "Explicitly retract unsupported aircraft, weapons or abilities named in earlier advice, and explain what the current evidence actually supports. " +

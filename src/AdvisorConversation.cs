@@ -18,10 +18,11 @@ internal enum AdvisorTurnState { Waiting, Answered, Failed, Cancelled }
 internal sealed class AdvisorTurn
 {
     internal AdvisorQuestion Request { get; }
+    internal int ContextGeneration { get; private set; }
     internal AdvisorTurnState State { get; private set; } = AdvisorTurnState.Waiting;
     internal ChatExchange? Exchange { get; private set; }
     internal AdvisorNotice? Error { get; private set; }
-    internal AdvisorTurn(AdvisorQuestion request) { Request = request; }
+    internal AdvisorTurn(AdvisorQuestion request, int contextGeneration) { Request = request; ContextGeneration = contextGeneration; }
 
     internal void Complete(string answer)
     {
@@ -34,11 +35,12 @@ internal sealed class AdvisorTurn
     internal void Fail(AdvisorNotice error)
     { RequireWaiting(); Error = error; State = AdvisorTurnState.Failed; }
     internal void Cancel() { RequireWaiting(); State = AdvisorTurnState.Cancelled; }
-    internal void Retry()
+    internal void Retry(int contextGeneration)
     {
         if (State != AdvisorTurnState.Failed && State != AdvisorTurnState.Cancelled)
             throw new InvalidOperationException("Only an unsuccessful turn can be retried.");
         Error = null;
+        ContextGeneration = contextGeneration;
         State = AdvisorTurnState.Waiting;
     }
     private void RequireWaiting()
@@ -52,9 +54,17 @@ internal sealed class AdvisorConversation
     internal const int MaxQuestionLength = 2000;
     internal const int MaxExchanges = 20;
     private readonly List<AdvisorTurn> turns = new();
+    private string? informationKey;
+    private int contextGeneration;
+    // Keep visible history, but never resend dialogue created under a different information selection.
+    internal void UseInformationPolicy(string key)
+    {
+        if (informationKey != null && informationKey != key) contextGeneration++;
+        informationKey = key;
+    }
     internal IReadOnlyList<AdvisorTurn> Turns => turns;
-    // Only completed dialogue is evidence for later requests. UI notices never enter this projection.
-    internal IReadOnlyList<ChatExchange> Exchanges => turns.Where(t => t.Exchange != null).Select(t => t.Exchange!).ToArray();
+    // Only completed dialogue from the current context is sent later. Notices and older settings stay in the UI.
+    internal IReadOnlyList<ChatExchange> Exchanges => turns.Where(t => t.Exchange != null && t.ContextGeneration == contextGeneration).Select(t => t.Exchange!).ToArray();
 
     internal static bool Validate(string? question, out string error)
     {
@@ -69,7 +79,7 @@ internal sealed class AdvisorConversation
             throw new ArgumentException("The question is invalid.");
         if (turns.Any(t => t.State == AdvisorTurnState.Waiting))
             throw new InvalidOperationException("A consultation is already pending.");
-        var turn = new AdvisorTurn(request);
+        var turn = new AdvisorTurn(request, contextGeneration);
         turns.Add(turn);
         if (turns.Count > MaxExchanges) turns.RemoveAt(0);
         return turn;
@@ -81,7 +91,7 @@ internal sealed class AdvisorConversation
     internal void Retry(AdvisorTurn turn)
     {
         if (!CanRetry(turn)) throw new InvalidOperationException("Only the latest unsuccessful turn can be retried.");
-        turn.Retry();
+        turn.Retry(contextGeneration);
     }
 
     internal bool TryAdd(string? question, string answer, out string error)

@@ -353,7 +353,7 @@ internal static class ProfileTests
             Require((string?)settings.Attribute("Visibility") == "Collapsed" &&
                 tabs.Parent == settings && tabs.Name.LocalName == "TabControl" &&
                 (string?)tabs.Attribute("SelectedIndex") == "0" &&
-                tabs.Elements().Select(e => (string?)e.Attribute(x + "Name")).SequenceEqual(new[] { "GeneralTab", "ConnectionTab", "DiagnosticsTab" }),
+                tabs.Elements().Select(e => (string?)e.Attribute(x + "Name")).SequenceEqual(new[] { "GeneralTab", "ConnectionTab", "InformationTab", "DiagnosticsTab" }),
                 "Settings and diagnostics are not separate tabs with settings selected initially");
             Require(Named("Capture").Ancestors().Contains(diagnostics) &&
                 Named("Input").Ancestors().Contains(diagnostics) &&
