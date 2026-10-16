@@ -13,7 +13,7 @@ namespace SeaPowerAIAdvisor;
 internal sealed class AdvisorTrace : IDisposable
 {
     private readonly StreamWriter writer;
-    private readonly string apiKey;
+    private readonly string[] secrets;
     private readonly string id;
     private readonly Stopwatch clock = Stopwatch.StartNew();
     private int sequence;
@@ -23,7 +23,8 @@ internal sealed class AdvisorTrace : IDisposable
     private AdvisorTrace(string directory, string id, AdvisorSettings settings, AdvisorQuestion question)
     {
         this.id = id;
-        apiKey = settings.ApiKey;
+        secrets = new[] { settings.ApiKey, settings.FallbackApiKey }.Where(k => k.Length > 0)
+            .SelectMany(KeyVariants).Distinct().OrderByDescending(k => k.Length).ToArray();
         Directory.CreateDirectory(directory);
         FilePath = Path.Combine(directory, "consultation-" + DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss.fff'Z'", CultureInfo.InvariantCulture) +
             "-" + Guid.NewGuid().ToString("N") + ".jsonl");
@@ -33,7 +34,7 @@ internal sealed class AdvisorTrace : IDisposable
             Write("consultation_started", new JObject
             {
                 ["mod_version"] = typeof(AdvisorTrace).Assembly.GetName().Version!.ToString(),
-                ["model"] = settings.Model, ["display_question"] = question.DisplayText,
+                ["model"] = settings.RequestModel, ["fallback_model"] = settings.FallbackModel, ["display_question"] = question.DisplayText,
                 ["question_source"] = question.IsShortcut ? "shortcut" : "typed"
             });
         }
@@ -48,9 +49,14 @@ internal sealed class AdvisorTrace : IDisposable
         catch (UnauthorizedAccessException) { throw new AdvisorConnectionException("diagnostic_log_error"); }
     }
 
-    internal void Request(int request, string json) => Write("request", new JObject
+    internal void Request(int request, string json, bool fallback = false, string? model = null) => Write("request", new JObject
     {
-        ["api_request"] = request, ["direction"] = "mod_to_ai", ["body_json"] = RedactBody(json)
+        ["api_request"] = request, ["direction"] = "mod_to_ai", ["key_slot"] = fallback ? "fallback" : "primary", ["model"] = model, ["body_json"] = RedactBody(json)
+    });
+
+    internal void Fallback(AdvisorConnectionException error) => Write("key_changed", new JObject
+    {
+        ["from_key"] = "primary", ["to_key"] = "fallback", ["error_code"] = error.Code, ["http_status"] = error.HttpStatus
     });
 
     internal void Response(int request, int status, string body, bool complete, long receivedBytes) => Write("response", new JObject
@@ -66,7 +72,7 @@ internal sealed class AdvisorTrace : IDisposable
         Write("consultation_finished", new JObject
         {
             ["outcome"] = outcome, ["error_code"] = errorCode, ["http_status"] = status, ["error_type"] = errorType,
-            ["api_requests"] = result?.ApiRequests, ["query_rounds"] = result?.QueryRounds, ["total_tokens"] = result?.TotalTokens
+            ["model"] = result?.Model, ["api_requests"] = result?.ApiRequests, ["query_rounds"] = result?.QueryRounds, ["total_tokens"] = result?.TotalTokens
         });
 
     private void Write(string kind, JObject record)
@@ -128,17 +134,22 @@ internal sealed class AdvisorTrace : IDisposable
         return changed;
     }
 
-    private string Scrub(string value)
+    private static string[] KeyVariants(string key)
     {
         var variants = new string[5];
-        variants[0] = apiKey;
+        variants[0] = key;
         for (var i = 1; i < 4; i++)
         {
             var quoted = JsonConvert.ToString(variants[i - 1]);
             variants[i] = quoted.Substring(1, quoted.Length - 2);
         }
-        variants[4] = Uri.EscapeDataString(apiKey);
-        foreach (var secret in variants.Distinct().OrderByDescending(s => s.Length))
+        variants[4] = Uri.EscapeDataString(key);
+        return variants;
+    }
+
+    private string Scrub(string value)
+    {
+        foreach (var secret in secrets)
             value = value.Replace(secret, "<api-key-removed>");
         return value;
     }

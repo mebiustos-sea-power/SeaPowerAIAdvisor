@@ -35,6 +35,7 @@
     <Compile Include="..\src\AdvisorTrace.cs" Link="AdvisorTrace.cs" />
     <Compile Include="..\src\AdvisorConsultation.cs" Link="AdvisorConsultation.cs" />
     <Compile Include="..\src\GeminiAdvisor.cs" Link="GeminiAdvisor.cs" />
+    <Compile Include="..\src\GeminiFallback.cs" Link="GeminiFallback.cs" />
     <Compile Include="..\src\AdvisorJob.cs" Link="AdvisorJob.cs" />
     <Compile Include="..\src\AdvisorProgress.cs" Link="AdvisorProgress.cs" />
     <Compile Include="..\src\SituationSnapshot.cs" Link="SituationSnapshot.cs" />

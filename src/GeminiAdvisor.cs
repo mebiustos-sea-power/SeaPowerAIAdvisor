@@ -14,9 +14,10 @@ internal sealed class AdviceResult
     internal int ApiRequests { get; }
     internal int QueryRounds { get; }
     internal long? TotalTokens { get; }
+    internal string Model { get; }
     internal IReadOnlyList<string> Queries { get; }
-    internal AdviceResult(string text, int apiRequests, int queryRounds, long? totalTokens, IEnumerable<string>? queries = null)
-    { Text = text; ApiRequests = apiRequests; QueryRounds = queryRounds; TotalTokens = totalTokens; Queries = Array.AsReadOnly((queries ?? Array.Empty<string>()).ToArray()); }
+    internal AdviceResult(string text, int apiRequests, int queryRounds, long? totalTokens, IEnumerable<string>? queries = null, string model = "")
+    { Text = text; ApiRequests = apiRequests; QueryRounds = queryRounds; TotalTokens = totalTokens; Model = model; Queries = Array.AsReadOnly((queries ?? Array.Empty<string>()).ToArray()); }
 }
 
 internal sealed class GeminiAdvisor
@@ -24,7 +25,9 @@ internal sealed class GeminiAdvisor
     internal const int MaxTotalRequestBytes = 1_000_000;
     internal const int ContextExchanges = 3;
     private readonly IGeminiTransport transport;
-    internal GeminiAdvisor(IGeminiTransport transport) { this.transport = transport; }
+    private readonly Action<AdvisorConnectionException>? switched;
+    internal GeminiAdvisor(IGeminiTransport transport, Action<AdvisorConnectionException>? switched = null)
+    { this.transport = transport; this.switched = switched; }
 
     internal async Task<AdviceResult> ConsultAsync(IAdvisorQuerySession session, AdvisorSettings settings,
         IReadOnlyList<ChatExchange> history, CancellationToken cancellation, AdvisorProfile? profile = null, string commonPrompt = "", Action<AdvisorProgress>? progress = null)
@@ -57,6 +60,15 @@ internal sealed class GeminiAdvisor
         var toolsAllowed = true;
         var queriesUsed = new List<string>();
         var lastQueries = Array.Empty<string>();
+        var lastApiRequest = 0;
+        var retrievals = new JArray();
+        var modelContextChanged = false;
+        var connection = new GeminiFallback(transport, settings, error =>
+        {
+            usageKnown = false; // A lost response may have consumed tokens that we cannot measure.
+            switched?.Invoke(error);
+            progress?.Invoke(new AdvisorProgress(AdvisorStage.SwitchingKey, lastApiRequest, session.RoundsUsed, session.MaxRounds, lastQueries, true, settings.FallbackModel));
+        });
         for (var api = 1; api <= maxApiRequests; api++)
         {
             cancellation.ThrowIfCancellationRequested();
@@ -73,11 +85,24 @@ internal sealed class GeminiAdvisor
                 ["toolConfig"] = new JObject { ["functionCallingConfig"] = new JObject { ["mode"] = allow ? "AUTO" : "NONE" } },
                 ["generationConfig"] = new JObject { ["candidateCount"] = 1, ["maxOutputTokens"] = settings.MaxOutputTokens }
             };
-            var size = AdvisorQueryLimits.Bytes(body);
-            if (bytesSent + size > MaxTotalRequestBytes) throw new AdvisorConnectionException("request_budget");
-            bytesSent += size;
-            progress?.Invoke(new AdvisorProgress(allow ? AdvisorStage.Waiting : AdvisorStage.FinalAnswer, api, session.RoundsUsed, session.MaxRounds, lastQueries));
-            var response = await transport.GenerateAsync(settings, body, cancellation).ConfigureAwait(false);
+            var response = await connection.GenerateAsync(fallback =>
+            {
+                if (fallback && !modelContextChanged && settings.FallbackModel != settings.Model)
+                {
+                    contents = ModelContext(initial, retrievals, session.RoundsUsed, session.MaxRounds);
+                    modelContextChanged = true;
+                }
+                body["contents"] = contents.DeepClone();
+                return body;
+            }, cancellation, (requestNumber, fallback, request) =>
+            {
+                var size = AdvisorQueryLimits.Bytes(request);
+                if (bytesSent + size > MaxTotalRequestBytes) throw new AdvisorConnectionException("request_budget");
+                bytesSent += size;
+                lastApiRequest = requestNumber;
+                progress?.Invoke(new AdvisorProgress(allow ? AdvisorStage.Waiting : AdvisorStage.FinalAnswer,
+                    requestNumber, session.RoundsUsed, session.MaxRounds, lastQueries, fallback, fallback ? settings.FallbackModel : settings.Model));
+            }).ConfigureAwait(false);
             cancellation.ThrowIfCancellationRequested();
             var count = response["usageMetadata"]?["totalTokenCount"];
             if (count?.Type == JTokenType.Integer && long.TryParse(count.ToString(), out var measured) && measured >= 0)
@@ -97,7 +122,7 @@ internal sealed class GeminiAdvisor
                 var answer = string.Concat(parts.OfType<JObject>().Where(p => (bool?)p["thought"] != true)
                     .Select(p => p["text"]?.Type == JTokenType.String ? (string)p["text"]! : ""));
                 if (string.IsNullOrWhiteSpace(answer)) throw new AdvisorConnectionException("empty_response");
-                return new AdviceResult(answer, api, session.RoundsUsed, usageKnown ? totalTokens : (long?)null, queriesUsed);
+                return new AdviceResult(answer, connection.ApiRequests, session.RoundsUsed, usageKnown ? totalTokens : (long?)null, queriesUsed, connection.UsingFallback ? settings.FallbackModel : settings.Model);
             }
             if (!allow || calls.Length > AdvisorQueryLimits.MaxQueriesPerRound) throw new AdvisorConnectionException("unexpected_function_call");
             foreach (var call in calls)
@@ -110,8 +135,9 @@ internal sealed class GeminiAdvisor
             var knownQueries = ((JArray)tool["parameters"]!["properties"]!["requests"]!["items"]!["properties"]!["query"]!["enum"]!).Values<string>().ToHashSet(StringComparer.Ordinal);
             var pendingQueries = (combined["requests"] as JArray ?? new JArray()).OfType<JObject>().Select(q =>
                 q["query"]?.Type == JTokenType.String && knownQueries.Contains((string?)q["query"]) ? (string)q["query"]! : "unknown_query").ToArray();
-            progress?.Invoke(new AdvisorProgress(AdvisorStage.Retrieving, api, session.RoundsUsed + 1, session.MaxRounds, pendingQueries));
+            progress?.Invoke(new AdvisorProgress(AdvisorStage.Retrieving, connection.ApiRequests, session.RoundsUsed + 1, session.MaxRounds, pendingQueries, connection.UsingFallback, connection.UsingFallback ? settings.FallbackModel : settings.Model));
             var result = session.Execute(combined);
+            retrievals.Add(new JObject { ["request"] = combined.DeepClone(), ["response"] = result.DeepClone() });
             lastQueries = (string?)result["status"] == "ok" ? pendingQueries : Array.Empty<string>();
             if (combined["requests"] is JArray requested)
                 foreach (var query in requested.OfType<JObject>())
@@ -139,6 +165,20 @@ internal sealed class GeminiAdvisor
             if (errorCode == "payload_limit" || errorCode == "round_limit") toolsAllowed = false;
         }
         throw new AdvisorConnectionException("request_limit");
+    }
+
+    // A different model receives actual retrieved evidence as user data, without inheriting another model's signed reasoning.
+    private static JArray ModelContext(JObject initial, JArray retrievals, int roundsUsed, int maxRounds)
+    {
+        var input = (JObject)initial.DeepClone();
+        input["continuation"] = new JObject
+        {
+            ["reason"] = "fallback_model_changed",
+            ["query_rounds_used"] = roundsUsed,
+            ["remaining_query_rounds"] = Math.Max(0, maxRounds - roundsUsed),
+            ["completed_retrievals"] = retrievals.DeepClone()
+        };
+        return new JArray(new JObject { ["role"] = "user", ["parts"] = new JArray(new JObject { ["text"] = input.ToString(Formatting.None) }) });
     }
 
     private static JObject Combine(IAdvisorQuerySession session, JObject[] calls)

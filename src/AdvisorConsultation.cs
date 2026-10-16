@@ -16,7 +16,7 @@ internal static class AdvisorConsultation
         try
         {
             using var transport = transportFactory == null ? new GeminiTransport(trace) : transportFactory(trace);
-            var result = await new GeminiAdvisor(transport).ConsultAsync(session, settings, history, cancellation, profile, commonPrompt, progress).ConfigureAwait(false);
+            var result = await new GeminiAdvisor(transport, error => trace?.Fallback(error)).ConsultAsync(session, settings, history, cancellation, profile, commonPrompt, progress).ConfigureAwait(false);
             cancellation.ThrowIfCancellationRequested();
             trace?.Finish("completed", result);
             return result;

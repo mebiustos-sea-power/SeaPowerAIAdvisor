@@ -37,7 +37,7 @@ internal static class GeminiConnectionTest
             if (string.IsNullOrWhiteSpace(answer)) throw new AdvisorConnectionException("empty_response");
             long? tokens = response["usageMetadata"]?["totalTokenCount"]?.Type == JTokenType.Integer &&
                 long.TryParse(response["usageMetadata"]!["totalTokenCount"]!.ToString(), out var count) && count >= 0 ? count : (long?)null;
-            var result = new AdviceResult(answer, 1, 0, tokens);
+            var result = new AdviceResult(answer, 1, 0, tokens, model: settings.RequestModel);
             trace?.Finish("completed", result);
             return result;
         }
