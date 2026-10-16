@@ -10,42 +10,55 @@ internal static class Program
 
     private static void Main(string[] args)
     {
+        if (args.Length == 5 && args[0] == "--query-demo") { QueryDemo.Run(args[1], args[2], args[3], args[4]); return; }
+        if (args.Length == 4 && args[0] == "--gemini-air-smoke")
+        {
+            try { GeminiAirSmoke.Run(args[1], args[2], args[3]); }
+            catch (AdvisorConnectionException e) { Console.Error.WriteLine("Aviation evaluation failed: " + e.Message); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 6 && args[0] == "--gemini-smoke")
+        {
+            try { GeminiSmoke.Run(args[1], args[2], args[3], args[4], args[5]); }
+            catch (AdvisorConnectionException e) { Console.Error.WriteLine("Gemini smoke failed: " + e.Message); Environment.ExitCode = 1; }
+            return;
+        }
         Check("Japanese multiline questions and XML punctuation survive unchanged", () =>
         {
-            var chat = new PrototypeConversation();
+            var chat = new AdvisorConversation();
             var question = "佐世保へ向かうべきですか？\n燃料・護衛の優先順位も知りたい。\n<>&\" 日本語𠮷";
-            Require(chat.TrySend(question, out _), "Valid question rejected");
+            Require(chat.TryAdd(question, "回答：" + question, out _), "Valid question rejected");
             Require(chat.Exchanges.Single().Question == question, "User text was modified");
-            Require(chat.Exchanges.Single().Answer.Contains(question, StringComparison.Ordinal), "The displayed echo lost characters");
+            Require(chat.Exchanges.Single().Answer.Contains(question, StringComparison.Ordinal), "The stored answer lost characters");
         });
         Check("Blank questions do not create a response or destroy previous conversation", () =>
         {
-            var chat = new PrototypeConversation(); chat.TrySend("偵察を優先すべき？", out _);
+            var chat = new AdvisorConversation(); chat.TryAdd("偵察を優先すべき？", "回答", out _);
             foreach (var empty in new string?[] { null, "", " \t\n", "　" })
-                Require(!chat.TrySend(empty, out var error) && error.Length > 0 && chat.Exchanges.Count == 1, "Blank input changed the conversation");
+                Require(!chat.TryAdd(empty, "回答", out var error) && error.Length > 0 && chat.Exchanges.Count == 1, "Blank input changed the conversation");
         });
         Check("Question size limit rejects oversized input without changing history", () =>
         {
-            var chat = new PrototypeConversation();
-            Require(chat.TrySend(new string('あ', PrototypeConversation.MaxQuestionLength), out _), "Boundary question rejected");
-            Require(!chat.TrySend(new string('あ', PrototypeConversation.MaxQuestionLength + 1), out _), "Oversized question accepted");
+            var chat = new AdvisorConversation();
+            Require(chat.TryAdd(new string('あ', AdvisorConversation.MaxQuestionLength), "回答", out _), "Boundary question rejected");
+            Require(!chat.TryAdd(new string('あ', AdvisorConversation.MaxQuestionLength + 1), "回答", out _), "Oversized question accepted");
             Require(chat.Exchanges.Count == 1, "Rejected question was recorded");
         });
         Check("Follow-up questions preserve ordered exchanges", () =>
         {
-            var chat = new PrototypeConversation();
-            chat.TrySend("補給について", out _); chat.TrySend("その場合、護衛は？", out _);
+            var chat = new AdvisorConversation();
+            chat.TryAdd("補給について", "回答", out _); chat.TryAdd("その場合、護衛は？", "回答", out _);
             Require(chat.Exchanges.Count == 2 && chat.Exchanges[0].Question == "補給について" && chat.Exchanges[1].Question == "その場合、護衛は？", "Follow-up history was corrupted");
         });
         Check("Long conversations retain the latest exchanges", () =>
         {
-            var chat = new PrototypeConversation();
-            for (var i = 0; i <= PrototypeConversation.MaxExchanges; i++) chat.TrySend("質問" + i, out _);
-            Require(chat.Exchanges.Count == PrototypeConversation.MaxExchanges && chat.Exchanges[0].Question == "質問1", "History retention is incorrect");
+            var chat = new AdvisorConversation();
+            for (var i = 0; i <= AdvisorConversation.MaxExchanges; i++) chat.TryAdd("質問" + i, "回答", out _);
+            Require(chat.Exchanges.Count == AdvisorConversation.MaxExchanges && chat.Exchanges[0].Question == "質問1", "History retention is incorrect");
         });
         Check("Clearing conversation permits a fresh first question", () =>
         {
-            var chat = new PrototypeConversation(); chat.TrySend("以前の会話", out _); chat.Clear(); chat.TrySend("新しい会話", out _);
+            var chat = new AdvisorConversation(); chat.TryAdd("以前の会話", "回答", out _); chat.Clear(); chat.TryAdd("新しい会話", "回答", out _);
             Require(chat.Exchanges.Count == 1 && chat.Exchanges[0].Question == "新しい会話", "Previous conversation survived clearing");
         });
         Check("Installed campaign has the lifecycle hooks and mode contract used by the adapter", () =>
@@ -78,13 +91,25 @@ internal static class Program
                 (string?)e.Attribute(x + "Key") == "StrategyButton" && ((string?)e.Attribute("TargetType"))!.Contains("ToggleButton")),
                 "Toolbar button styling contract changed");
         });
-        Check("Built prototype carries its embedded view and has no AI networking dependency", () =>
+        Check("Built advisor embeds its view and keeps networking out of the knowledge boundary", () =>
         {
             using var built = AssemblyDefinition.ReadAssembly(args[1]);
             Require(built.MainModule.Resources.Any(r => r.Name == "SeaPowerAIAdvisor.Advisor.xaml"), "Embedded window is missing");
-            Require(!built.MainModule.GetTypeReferences().Any(t => t.Namespace.StartsWith("System.Net", StringComparison.Ordinal)), "Unexpected networking code in the offline prototype");
+            foreach (var type in new[] { "CampaignSituationReader", "CampaignAirReader", "CampaignVictoryReader", "AdvisorQuerySession", "AdvisorInputBuilder" })
+                Require(!built.MainModule.GetType("SeaPowerAIAdvisor." + type).Methods.Where(m => m.HasBody)
+                    .SelectMany(m => m.Body.Instructions).Select(i => i.Operand).OfType<MemberReference>()
+                    .Any(m => (m.DeclaringType?.Namespace ?? (m as TypeReference)?.Namespace ?? "").StartsWith("System.Net", StringComparison.Ordinal)),
+                    "Network access crossed the player-knowledge boundary");
         });
-        SituationTests.Run(args[0], Check, args.Skip(2).ToArray());
+        SituationTests.Run(args[0], Check, args.Skip(3).ToArray());
+        InputTests.Run(args[0], args[2], Check);
+        QueryTests.Run(args[0], Check);
+        AirTests.Run(args[0], Check);
+        GeminiTests.Run(args[0], Check);
+        ProfileTests.Run(args[1], Check);
+        QuestionInputTests.Run(args[2], Check);
+        PresentationTests.Run(args[1], args[0], Check);
+        TraceTests.Run(args[0], Check);
         Console.WriteLine("PASS " + count + " checks");
     }
 

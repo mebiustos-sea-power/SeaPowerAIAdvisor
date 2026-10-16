@@ -1,0 +1,8 @@
+{
+  "api_key": "",
+  "model": "gemini-3.5-flash-lite",
+  "request_timeout_seconds": 60,
+  "consultation_timeout_seconds": 180,
+  "max_output_tokens": 4096,
+  "log_ai_json": true
+}

@@ -8,7 +8,7 @@ using HarmonyLib;
 
 namespace SeaPowerAIAdvisor;
 
-[ACPlugin(ModId, "Sea Power AI Advisor Prototype", "0.2.0", new[] { "dynamiccampaignmod" }, new string[0])]
+[ACPlugin(ModId, "Sea Power AI Advisor Prototype", "0.9.1", new[] { "dynamiccampaignmod" }, new string[0])]
 [ACDependency("dynamiccampaignmod", null, null)]
 public sealed class Plugin : IAnchorChainMod
 {
@@ -42,7 +42,7 @@ public sealed class Plugin : IAnchorChainMod
             harmony = new Harmony(ModId);
             harmony.Patch(Required(deferred, "Patch"), postfix: new HarmonyMethod(typeof(Plugin), nameof(Install)));
             scheduled = true;
-            Log.LogInfo("Offline UI prototype scheduled after campaign initialization.");
+            Log.LogInfo("Advisor scheduled after campaign initialization.");
         });
     }
 
@@ -56,7 +56,7 @@ public sealed class Plugin : IAnchorChainMod
         var session = campaign.GetType("DynamicCampaignMod.Game.Session.CampaignSession", true)!;
         harmony.Patch(Required(session, "OnSceneUnloaded"), prefix: new HarmonyMethod(typeof(Plugin), nameof(SceneUnloaded)));
         installed = true;
-        Log.LogInfo("Offline advisor 0.2.0 ready. Use AI in the strategy toolbar. Player-knowledge preview only; no network.");
+        Log.LogInfo("Gemini advisor 0.9.1 ready. Use AI in the strategy toolbar. Player-known on-demand knowledge queries with victory objectives; reply language follows the game; sends only on explicit consultation.");
     });
 
     private static void Frame(object __instance) => Guard(() => integration!.Tick(__instance));
