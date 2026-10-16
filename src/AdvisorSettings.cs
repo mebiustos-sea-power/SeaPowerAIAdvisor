@@ -21,7 +21,34 @@ internal sealed class AdvisorSettings
     private AdvisorSettings(string key, string model, int requestTimeout, int totalTimeout, int outputTokens, bool logAiJson)
     { ApiKey = key; Model = model; RequestTimeoutSeconds = requestTimeout; ConsultationTimeoutSeconds = totalTimeout; MaxOutputTokens = outputTokens; LogAiJson = logAiJson; }
 
-    internal static AdvisorSettings Load(string path)
+    internal static AdvisorSettings Load(string path) => Parse(ReadDocument(path));
+    internal static bool LoadLogging(string path) => File.Exists(path) && Logging(ReadDocument(path));
+
+    internal static void SaveLogging(string path, bool enabled)
+    {
+        var value = File.Exists(path) ? ReadDocument(path) : new JObject { ["api_key"] = "" };
+        value["log_ai_json"] = enabled;
+        var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+            using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            using (var writer = new StreamWriter(stream))
+                writer.Write(value.ToString(Formatting.Indented) + Environment.NewLine);
+            if (File.Exists(path)) File.Replace(temporary, path, null);
+            else File.Move(temporary, path);
+        }
+        catch (IOException) { throw new AdvisorConnectionException("settings_write_failed"); }
+        catch (UnauthorizedAccessException) { throw new AdvisorConnectionException("settings_write_failed"); }
+        finally
+        {
+            try { if (File.Exists(temporary)) File.Delete(temporary); }
+            catch (IOException) { throw new AdvisorConnectionException("settings_write_failed"); }
+            catch (UnauthorizedAccessException) { throw new AdvisorConnectionException("settings_write_failed"); }
+        }
+    }
+
+    private static JObject ReadDocument(string path)
     {
         if (!File.Exists(path)) throw new AdvisorConnectionException("settings_missing");
         string text;
@@ -32,10 +59,12 @@ internal sealed class AdvisorSettings
         }
         catch (IOException) { throw new AdvisorConnectionException("settings_unreadable"); }
         catch (UnauthorizedAccessException) { throw new AdvisorConnectionException("settings_unreadable"); }
-        return Parse(text);
+        return ParseDocument(text);
     }
 
-    internal static AdvisorSettings Parse(string json)
+    internal static AdvisorSettings Parse(string json) => Parse(ParseDocument(json));
+
+    private static JObject ParseDocument(string json)
     {
         JObject value;
         try
@@ -48,6 +77,19 @@ internal sealed class AdvisorSettings
         catch (JsonException) { throw new AdvisorConnectionException("settings_invalid"); }
         if (value.Properties().Any(p => !new[] { "api_key", "model", "request_timeout_seconds", "consultation_timeout_seconds", "max_output_tokens", "log_ai_json" }.Contains(p.Name)))
             throw new AdvisorConnectionException("settings_invalid");
+        _ = Logging(value);
+        return value;
+    }
+
+    private static bool Logging(JObject value)
+    {
+        if (value["log_ai_json"] != null && value["log_ai_json"]!.Type != JTokenType.Boolean)
+            throw new AdvisorConnectionException("settings_invalid");
+        return (bool?)value["log_ai_json"] ?? false;
+    }
+
+    private static AdvisorSettings Parse(JObject value)
+    {
         if (value["api_key"]?.Type != JTokenType.String) throw new AdvisorConnectionException("api_key_missing");
         var key = ((string)value["api_key"]!).Trim();
         if (key.Length == 0) throw new AdvisorConnectionException("api_key_missing");
@@ -58,10 +100,7 @@ internal sealed class AdvisorSettings
         var request = Number(value, "request_timeout_seconds", 60, 5, 120);
         var total = Number(value, "consultation_timeout_seconds", 180, 10, 600);
         if (total < request) throw new AdvisorConnectionException("settings_invalid");
-        if (value["log_ai_json"] != null && value["log_ai_json"]!.Type != JTokenType.Boolean)
-            throw new AdvisorConnectionException("settings_invalid");
-        return new AdvisorSettings(key, model, request, total, Number(value, "max_output_tokens", 4096, 256, 8192),
-            (bool?)value["log_ai_json"] ?? true);
+        return new AdvisorSettings(key, model, request, total, Number(value, "max_output_tokens", 4096, 256, 8192), Logging(value));
     }
 
     private static int Number(JObject value, string name, int fallback, int min, int max)

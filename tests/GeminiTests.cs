@@ -37,8 +37,32 @@ internal static class GeminiTests
             var path = Path.Combine(Path.GetTempPath(), "SeaPowerAIAdvisor-settings-" + Guid.NewGuid().ToString("N") + ".json");
             try
             {
-                File.WriteAllText(path, "{\"api_key\":\"" + MockKey + "\"}");
-                Require(AdvisorSettings.Load(path).Model == AdvisorSettings.DefaultModel, "Local config did not load");
+                Require(!AdvisorSettings.LoadLogging(path), "Missing settings enabled logs");
+                AdvisorSettings.SaveLogging(path, true);
+                Require(AdvisorSettings.LoadLogging(path), "Logging cannot be configured before an API key");
+                ThrowsCode("api_key_missing", () => AdvisorSettings.Load(path));
+                var original = new JObject
+                {
+                    ["api_key"] = MockKey, ["model"] = AdvisorSettings.DefaultModel,
+                    ["request_timeout_seconds"] = 45, ["consultation_timeout_seconds"] = 90,
+                    ["max_output_tokens"] = 2048
+                };
+                File.WriteAllText(path, original.ToString());
+                Require(AdvisorSettings.Load(path).Model == AdvisorSettings.DefaultModel &&
+                    !AdvisorSettings.LoadLogging(path), "Local config did not load with logging off by default");
+                foreach (var enabled in new[] { true, false })
+                {
+                    AdvisorSettings.SaveLogging(path, enabled);
+                    var expected = (JObject)original.DeepClone();
+                    expected["log_ai_json"] = enabled;
+                    Require(JToken.DeepEquals(expected, JObject.Parse(File.ReadAllText(path))) &&
+                        AdvisorSettings.LoadLogging(path) == enabled && AdvisorSettings.Load(path).LogAiJson == enabled,
+                        "Saving the log option changed credentials/provider settings or was not reloaded");
+                }
+                File.WriteAllText(path, "{broken");
+                var invalid = File.ReadAllBytes(path);
+                ThrowsCode("settings_invalid", () => AdvisorSettings.SaveLogging(path, true));
+                Require(File.ReadAllBytes(path).SequenceEqual(invalid), "A malformed configuration was overwritten");
                 File.WriteAllText(path, "{\"api_key\":\"" + MockKey + "\",\"model\":\"gemini-3.1-flash-lite\"}");
                 Require(AdvisorSettings.Load(path).Model == "gemini-3.1-flash-lite", "Settings were cached across requests");
             }
