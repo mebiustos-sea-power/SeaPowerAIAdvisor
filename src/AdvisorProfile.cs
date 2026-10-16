@@ -231,9 +231,11 @@ internal sealed class AdvisorProfileDraft
         UseDefault ? defaultPortrait() : selectedPortrait ??
             new AdvisorProfile(AdvisorProfile.DefaultName, portraitFile).ReadPortrait(directory);
 
+    internal AdvisorProfile Build() => new(CustomName, portraitFile, UseDefault, defaultPersonality, customPersonality);
+
     internal AdvisorProfile Save(string directory)
     {
-        var profile = new AdvisorProfile(CustomName, portraitFile, UseDefault, defaultPersonality, customPersonality);
+        var profile = Build();
         if (selectedPortrait != null) return profile.ImportPortrait(directory, selectedPortrait);
         profile.Save(directory);
         return profile;

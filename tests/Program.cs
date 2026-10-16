@@ -115,6 +115,7 @@ internal static class Program
         AirTests.Run(args[0], Check);
         GeminiTests.Run(args[0], Check);
         ProfileTests.Run(args[1], Check);
+        PreferencesTests.Run(Check);
         QuestionInputTests.Run(args[2], Check);
         PresentationTests.Run(args[1], args[0], Check);
         MarkdownTests.Run(args[1], Check);

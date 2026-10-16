@@ -23,7 +23,7 @@ internal static class GeminiTests
             foreach (var json in new[] {
                 "{\"api_key\":\"" + MockKey + "\",\"api_key\":\"duplicate\"}", "{\"api_key\":\"" + MockKey + "\",",
                 "{\"api_key\":\"" + MockKey + "\",\"model\":\"https://other-host\"}",
-                "{\"api_key\":\"" + MockKey + "\",\"model\":\"gemini-pro\"}",
+                "{\"api_key\":\"" + MockKey + "\",\"model\":\"other-provider-model\"}",
                 "{\"api_key\":\"" + MockKey + "\",\"unexpected\":true}",
                 "{\"api_key\":\"" + MockKey + "\",\"request_timeout_seconds\":0}",
                 "{\"api_key\":\"" + MockKey + "\",\"max_output_tokens\":999999999999999999999999999}"

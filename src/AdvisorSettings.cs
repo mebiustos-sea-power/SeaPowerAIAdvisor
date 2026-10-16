@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -24,17 +25,43 @@ internal sealed class AdvisorSettings
     internal static AdvisorSettings Load(string path) => Parse(ReadDocument(path));
     internal static bool LoadLogging(string path) => File.Exists(path) && Logging(ReadDocument(path));
 
+    internal static AdvisorSettingsDraft Edit(string path) => new(File.Exists(path) ? ReadDocument(path) : new JObject());
+
     internal static void SaveLogging(string path, bool enabled)
     {
         var value = File.Exists(path) ? ReadDocument(path) : new JObject { ["api_key"] = "" };
         value["log_ai_json"] = enabled;
+        WriteBytes(path, Encoding.UTF8.GetBytes(value.ToString(Formatting.Indented) + Environment.NewLine));
+    }
+
+    internal static byte[]? Backup(string path)
+    {
+        try
+        {
+            if (!File.Exists(path)) return null;
+            if (new FileInfo(path).Length > 16_384) throw new AdvisorConnectionException("settings_invalid");
+            return File.ReadAllBytes(path);
+        }
+        catch (IOException) { throw new AdvisorConnectionException("settings_unreadable"); }
+        catch (UnauthorizedAccessException) { throw new AdvisorConnectionException("settings_unreadable"); }
+    }
+
+    internal static void Restore(string path, byte[]? before)
+    {
+        if (before != null) { WriteBytes(path, before); return; }
+        try { File.Delete(path); }
+        catch (IOException) { throw new AdvisorConnectionException("settings_write_failed"); }
+        catch (UnauthorizedAccessException) { throw new AdvisorConnectionException("settings_write_failed"); }
+    }
+
+    internal static void WriteBytes(string path, byte[] bytes)
+    {
         var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
             using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-            using (var writer = new StreamWriter(stream))
-                writer.Write(value.ToString(Formatting.Indented) + Environment.NewLine);
+                stream.Write(bytes, 0, bytes.Length);
             if (File.Exists(path)) File.Replace(temporary, path, null);
             else File.Move(temporary, path);
         }
@@ -47,6 +74,8 @@ internal sealed class AdvisorSettings
             catch (UnauthorizedAccessException) { throw new AdvisorConnectionException("settings_write_failed"); }
         }
     }
+
+    internal static void ValidateDraft(JObject value) => Parse(value, false);
 
     private static JObject ReadDocument(string path)
     {
@@ -88,14 +117,14 @@ internal sealed class AdvisorSettings
         return (bool?)value["log_ai_json"] ?? false;
     }
 
-    private static AdvisorSettings Parse(JObject value)
+    private static AdvisorSettings Parse(JObject value, bool requireKey = true)
     {
         if (value["api_key"]?.Type != JTokenType.String) throw new AdvisorConnectionException("api_key_missing");
         var key = ((string)value["api_key"]!).Trim();
-        if (key.Length == 0) throw new AdvisorConnectionException("api_key_missing");
-        if (!Regex.IsMatch(key, @"\A[!-~]{1,512}\z")) throw new AdvisorConnectionException("settings_invalid");
+        if (requireKey && key.Length == 0) throw new AdvisorConnectionException("api_key_missing");
+        if (key.Length != 0 && !Regex.IsMatch(key, @"\A[!-~]{1,512}\z")) throw new AdvisorConnectionException("settings_invalid");
         var model = value["model"] == null ? DefaultModel : value["model"]?.Type == JTokenType.String ? (string)value["model"]! : "";
-        if (!Regex.IsMatch(model, @"\Agemini-[0-9]+(?:\.[0-9]+)?-flash-lite(?:-[a-z0-9-]+)?\z") || model.Length > 100)
+        if (!Regex.IsMatch(model, @"\Agemini-[a-z0-9][a-z0-9._-]*\z") || model.Length > 100)
             throw new AdvisorConnectionException("model_invalid");
         var request = Number(value, "request_timeout_seconds", 60, 5, 120);
         var total = Number(value, "consultation_timeout_seconds", 180, 10, 600);
