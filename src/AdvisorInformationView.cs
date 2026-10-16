@@ -19,8 +19,21 @@ internal sealed class AdvisorInformationView
         var ns = (XNamespace)"http://schemas.microsoft.com/winfx/2006/xaml";
         var root = Element("StackPanel", new XAttribute(XNamespace.Xmlns + "x", ns));
         var index = 0;
+        bool? section = null;
         foreach (var group in AdvisorInformation.Groups)
         {
+            if (section != group.Battle)
+            {
+                root.Add(Element("TextBlock",
+                    new XAttribute("Text", "{DynamicResource Advisor.information." + (group.Battle ? "mission" : "campaign") + "}"),
+                    new XAttribute("FontSize", "16"), new XAttribute("FontWeight", "Bold"),
+                    new XAttribute("Margin", section.HasValue ? "0,24,0,0" : "0,16,0,0")));
+                root.Add(Element("TextBlock",
+                    new XAttribute("Text", "{DynamicResource Advisor.information." + (group.Battle ? "mission_description" : "campaign_description") + "}"),
+                    new XAttribute("FontSize", "12"), new XAttribute("TextWrapping", "Wrap"),
+                    new XAttribute("Opacity", "0.7"), new XAttribute("Margin", "0,6,0,0")));
+                section = group.Battle;
+            }
             root.Add(Box("InformationGroup" + index++, group.TextKey, "0,12,0,6", true));
             foreach (var kind in group.Items)
             {

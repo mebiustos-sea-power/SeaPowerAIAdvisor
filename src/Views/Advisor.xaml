@@ -80,7 +80,13 @@
                HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
         <ScrollViewer x:Name="GeneralSettings" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,12,0,0">
           <StackPanel Margin="0,0,8,0">
-            <TextBlock Text="{DynamicResource Advisor.general.experimental}" FontSize="14" FontWeight="Bold" Margin="0,0,0,10" />
+            <TextBlock Text="{DynamicResource Advisor.general.text_size}" FontSize="14" Margin="0,0,0,6" />
+            <ComboBox x:Name="ConversationTextSize" Width="160" HorizontalAlignment="Left" SelectedIndex="0">
+              <ComboBoxItem Content="{DynamicResource Advisor.general.text_size_small}" />
+              <ComboBoxItem Content="{DynamicResource Advisor.general.text_size_standard}" />
+              <ComboBoxItem Content="{DynamicResource Advisor.general.text_size_large}" />
+            </ComboBox>
+            <TextBlock Text="{DynamicResource Advisor.general.experimental}" FontSize="14" FontWeight="Bold" Margin="0,24,0,10" />
             <CheckBox x:Name="EnableCampaignAdvisor" IsChecked="False" HorizontalContentAlignment="Stretch">
               <TextBlock Text="{DynamicResource Advisor.general.campaign_alpha}" TextWrapping="Wrap" />
             </CheckBox>

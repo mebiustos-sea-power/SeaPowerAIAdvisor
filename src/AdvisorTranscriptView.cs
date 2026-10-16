@@ -18,9 +18,9 @@ internal sealed class AdvisorTranscriptView
     internal AdvisorTranscriptView(StackPanel panel, Action<Action> guard, Action<AdvisorTurn> retry)
     { this.panel = panel; this.guard = guard; this.retry = retry; }
 
-    internal void Show(AdvisorConversation conversation, AdvisorText text, string advisor, string empty, AdvisorNotice? notice)
+    internal void Show(AdvisorConversation conversation, AdvisorText text, string advisor, string empty, AdvisorNotice? notice, AdvisorTextSize textSize)
     {
-        var root = GUI.ParseXaml(AdvisorTranscript.Render(conversation, text, advisor, empty, notice)) as StackPanel
+        var root = GUI.ParseXaml(AdvisorTranscript.Render(conversation, text, advisor, empty, notice, textSize)) as StackPanel
             ?? throw new InvalidOperationException("The Markdown conversation view is not a StackPanel.");
         waitingTurn = null; waitingText = null;
         for (var i = 0; i < conversation.Turns.Count; i++)

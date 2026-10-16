@@ -76,6 +76,40 @@ internal static class MarkdownTests
             var empty = XDocument.Parse(AdvisorTranscript.Render(chat, text, "Advisor", "cleared")).Root!;
             Require(Visible(empty) == "cleared" && !empty.Descendants(Ns + "Button").Any(), "Clearing left an answer or copy action behind");
         });
+        check("Text-size changes rebuild existing Markdown conversation without changing content or formatting structure", () =>
+        {
+            var chat = new AdvisorConversation();
+            const string question = "次の行動を詳しく。\n既存の会話です。";
+            const string answer = "# 優先事項\n\n## 防衛\n\n**佐世保**を守る。\n\n> 未確認の情報\n\n1. 索敵\n\n```text\n  radar < unknown\n```\n\n| 部隊 | 状態 |\n| --- | --- |\n| 護衛 | 待機 |";
+            Require(chat.TryAdd(question, answer, out _), "The existing conversation could not be prepared");
+            var text = AdvisorText.Load("ja");
+            var standard = XDocument.Parse(AdvisorTranscript.Render(chat, text, "Michael Reed", "empty", textSize: AdvisorTextSize.Standard)).Root!;
+            var originalSizes = standard.DescendantsAndSelf().Attributes()
+                .Where(a => a.Name.LocalName is "FontSize" or "TextElement.FontSize")
+                .Select(a => double.Parse(a.Value, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+            Require(originalSizes.Length > 5, "The fixture does not exercise conversation and Markdown typography");
+            foreach (var size in new[] { AdvisorTextSize.Small, AdvisorTextSize.Large })
+            {
+                var rendered = XDocument.Parse(AdvisorTranscript.Render(chat, text, "Michael Reed", "empty", textSize: size)).Root!;
+                var resized = rendered.DescendantsAndSelf().Attributes()
+                    .Where(a => a.Name.LocalName is "FontSize" or "TextElement.FontSize")
+                    .Select(a => double.Parse(a.Value, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+                Require(resized.Length == originalSizes.Length && resized.Zip(originalSizes).All(pair =>
+                    size == AdvisorTextSize.Small ? pair.First < pair.Second : pair.First > pair.Second),
+                    "Part of the existing conversation kept its old size");
+                var heading = rendered.Descendants(Ns + "TextBlock").First(e => Visible(e) == "優先事項");
+                var body = rendered.Descendants(Ns + "StackPanel").Single(e => e.Attribute("TextElement.FontSize") != null);
+                Require(double.Parse(heading.Attribute("FontSize")!.Value, System.Globalization.CultureInfo.InvariantCulture) >
+                    double.Parse(body.Attribute("TextElement.FontSize")!.Value, System.Globalization.CultureInfo.InvariantCulture),
+                    "Resizing removed the heading/body hierarchy");
+                var before = new XElement(standard);
+                foreach (var element in new[] { before, rendered })
+                    element.DescendantsAndSelf().Attributes().Where(a => a.Name.LocalName is "FontSize" or "TextElement.FontSize").Remove();
+                Require(XNode.DeepEquals(before, rendered), "Resizing changed message text, emphasis, colors, table layout or actions");
+            }
+            Require(chat.Exchanges.Single().Question == question && chat.Exchanges.Single().Answer == answer,
+                "Changing the display size altered the saved AI conversation");
+        });
         check("The packaged netstandard Markdown parser renders advice without an external parser DLL", () =>
         {
             using var built = AssemblyDefinition.ReadAssembly(advisorPath);

@@ -7,7 +7,7 @@ namespace SeaPowerAIAdvisor;
 internal static class AdvisorTranscript
 {
     internal static string Render(AdvisorConversation conversation, AdvisorText text, string advisor, string empty,
-        AdvisorNotice? configurationNotice = null)
+        AdvisorNotice? configurationNotice = null, AdvisorTextSize textSize = AdvisorTypography.DefaultSize)
     {
         var root = Element("StackPanel", new XAttribute(XNamespace.Xmlns + "x", "http://schemas.microsoft.com/winfx/2006/xaml"));
         if (configurationNotice != null) root.Add(Error(configurationNotice.Message(text)));
@@ -39,6 +39,7 @@ internal static class AdvisorTranscript
             if (conversation.CanRetry(turn)) row.Add(Action("RetryTurn" + i, text["action.retry"], text["transcript.retry_tip"]));
             root.Add(row);
         }
+        AdvisorTypography.Apply(root, textSize);
         return root.ToString(SaveOptions.DisableFormatting);
     }
 
