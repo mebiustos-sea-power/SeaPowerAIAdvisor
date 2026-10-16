@@ -231,5 +231,11 @@
   "information.aviation": "Air units and airborne flights",
   "information.base_observations": "Base observation records",
   "information.orders": "Published orders",
-  "settings.error.information_invalid": "Check the provided-data settings format."
+  "settings.error.information_invalid": "Check the provided-data settings format.",
+  "ai.common_prompt": "Common prompt (all advisers)",
+  "settings.error.common_prompt_invalid": "The common prompt must be no more than 2,000 characters.",
+  "prompts.error.prompts_missing": "System instruction files are missing. Check the mod's Prompts folder and restart the game.",
+  "prompts.error.prompts_unreadable": "Cannot read the system instruction files. Check the mod's Prompts folder and restart the game.",
+  "prompts.error.prompts_invalid": "Check the system instruction file format and restart the game.",
+  "diagnostics.prompt_failed": "Cannot load the system instructions."
 }

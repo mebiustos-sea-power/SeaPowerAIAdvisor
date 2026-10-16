@@ -11,13 +11,15 @@ namespace SeaPowerAIAdvisor;
 
 internal sealed class AdvisorWindow
 {
+    private const int GeneralTabIndex = 0, AdvisorTabIndex = 1, ConnectionTabIndex = 2,
+        InformationTabIndex = 3, DiagnosticsTabIndex = 4;
     private readonly FrameworkElement view;
     private readonly WindowHost host;
     private readonly Action<Action> guard;
     private readonly IAdvisorSource source;
     private readonly AdvisorOptionsStore options;
     private AdvisorOptions? optionsDraft;
-    private readonly TextBox maxQueryRounds;
+    private readonly TextBox maxQueryRounds, commonPrompt;
     private readonly CheckBox enableCampaign;
     private readonly AdvisorInformationView informationChoices;
     private readonly Func<string> replyLanguage;
@@ -116,6 +118,8 @@ internal sealed class AdvisorWindow
         apiKey = Named<PasswordBox>(content, "ApiKey");
         modelName = Named<TextBox>(content, "ModelName");
         maxQueryRounds = Named<TextBox>(content, "MaxQueryRounds");
+        commonPrompt = Named<TextBox>(content, "CommonPrompt");
+        commonPrompt.MaxLength = AdvisorOptions.MaxCommonPromptLength;
         enableCampaign = Named<CheckBox>(content, "EnableCampaignAdvisor");
         informationChoices = new AdvisorInformationView(Named<StackPanel>(content, "InformationChoices"), guard);
         testConnection = Named<Button>(content, "TestConnection");
@@ -148,7 +152,7 @@ internal sealed class AdvisorWindow
         questionInput = new QuestionInputController(question, () => active != null, StartConsultation, guard);
         question.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(question));
         question.LostKeyboardFocus += (_, _) => guard(() => typing.Release(question));
-        foreach (var input in new[] { profileName, profileRole, profilePersonality, modelName, maxQueryRounds, diagnosticOutput, Named<TextBox>(content, "ProfilePath") })
+        foreach (var input in new[] { profileName, profileRole, profilePersonality, modelName, maxQueryRounds, commonPrompt, diagnosticOutput, Named<TextBox>(content, "ProfilePath") })
         {
             input.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(input));
             input.LostKeyboardFocus += (_, _) => guard(() => typing.Release(input));
@@ -298,8 +302,9 @@ internal sealed class AdvisorWindow
             pendingModel = settings.Model;
             var logDirectory = AdvisorTrace.DirectoryIn(UnityEngine.Application.persistentDataPath);
             var advisorProfile = appliedProfile;
+            var sharedPrompt = options.Current.CommonPrompt;
             active = new AdvisorJob(cancellation =>
-                AdvisorConsultation.RunAsync(logDirectory, session, settings, request, history, cancellation, profile: advisorProfile), warn);
+                AdvisorConsultation.RunAsync(logDirectory, session, settings, request, history, cancellation, profile: advisorProfile, commonPrompt: sharedPrompt), warn);
             SetBusy(true);
             status.Text = text["status.consulting"];
         }
@@ -307,6 +312,11 @@ internal sealed class AdvisorWindow
         {
             FailTurn(turn, AdvisorNotice.Connection(failure));
             warn("Gemini consultation failed: " + failure.Message);
+        }
+        catch (AdvisorPromptException failure)
+        {
+            FailTurn(turn, AdvisorNotice.Prompts(failure));
+            warn("System prompts unavailable: " + failure.Message);
         }
         catch (SituationUnavailableException failure)
         {
@@ -393,8 +403,9 @@ internal sealed class AdvisorWindow
 
     private void RefreshConfigurationNotice()
     {
-        try { _ = AdvisorSettings.Load(settingsPath); configurationNotice = null; }
+        try { _ = AdvisorSettings.Load(settingsPath); _ = AdvisorPrompts.Current; configurationNotice = null; }
         catch (AdvisorConnectionException error) { configurationNotice = AdvisorNotice.Connection(error); }
+        catch (AdvisorPromptException error) { configurationNotice = AdvisorNotice.Prompts(error); }
     }
 
     private void Preview(bool structured)
@@ -420,6 +431,7 @@ internal sealed class AdvisorWindow
                 var language = replyLanguage();
                 var input = source.CreateSession(language, question.Text, options.Current.MaxQueryRounds, options.Current.Information).InitialInput();
                 appliedProfile?.AddAnswerPreferences(input);
+                input["common_prompt"] = options.Current.CommonPrompt;
                 diagnosticOutput.Text = input.ToString(Newtonsoft.Json.Formatting.Indented);
                 diagnosticStatus.Text = text.Format("diagnostics.input_generated", language);
             }
@@ -429,6 +441,12 @@ internal sealed class AdvisorWindow
                 diagnosticStatus.Text = text["diagnostics.situation_ready"];
             }
             diagnosticScrollPending = true;
+        }
+        catch (AdvisorPromptException error)
+        {
+            diagnosticOutput.Text = AdvisorNotice.Prompts(error).Message(text);
+            diagnosticStatus.Text = text["diagnostics.prompt_failed"];
+            warn("System prompts unavailable: " + error.Message);
         }
         catch (SituationUnavailableException error)
         {
@@ -509,9 +527,10 @@ internal sealed class AdvisorWindow
             maxQueryRounds.Text = optionsDraft.MaxQueryRounds.ToString(System.Globalization.CultureInfo.InvariantCulture);
             enableCampaign.IsChecked = optionsDraft.CampaignEnabled;
             informationChoices.Reset(optionsDraft.Information);
+            commonPrompt.Text = optionsDraft.CommonPrompt;
         }
         catch (AdvisorOptionsException failure) { optionsDraft = null; OptionsError(failure); }
-        maxQueryRounds.IsEnabled = enableCampaign.IsEnabled = optionsDraft != null;
+        maxQueryRounds.IsEnabled = commonPrompt.IsEnabled = enableCampaign.IsEnabled = optionsDraft != null;
         logAiJson.IsEnabled = connectionDraft != null;
         saveSettings.IsEnabled = connectionDraft != null && optionsDraft != null;
         UpdateConnectionTestControls();
@@ -524,6 +543,7 @@ internal sealed class AdvisorWindow
         optionsDraft = null;
         informationChoices.Reset(null);
         maxQueryRounds.Text = string.Empty;
+        commonPrompt.Text = string.Empty;
         enableCampaign.IsChecked = false;
         apiKey.Password = string.Empty;
         modelName.Text = string.Empty;
@@ -619,7 +639,7 @@ internal sealed class AdvisorWindow
     {
         if (!int.TryParse(maxQueryRounds.Text, System.Globalization.NumberStyles.Integer,
             System.Globalization.CultureInfo.InvariantCulture, out var rounds)) throw new AdvisorOptionsException("query_rounds_invalid");
-        return new AdvisorOptions(rounds, enableCampaign.IsChecked == true, informationChoices.Value);
+        return new AdvisorOptions(rounds, enableCampaign.IsChecked == true, informationChoices.Value, commonPrompt.Text ?? "");
     }
 
     private void OptionsError(AdvisorOptionsException failure)
@@ -645,15 +665,20 @@ internal sealed class AdvisorWindow
 
     private void FocusSettings()
     {
-        if (settingsTabs.SelectedIndex == 1)
+        if (settingsTabs.SelectedIndex == ConnectionTabIndex)
         {
             if (apiKey.IsEnabled) apiKey.Focus();
             else Named<Button>(content, "CancelSettings").Focus();
         }
-        else if (settingsTabs.SelectedIndex == 2) informationChoices.Focus();
-        else if (settingsTabs.SelectedIndex == 3) captureAction.Focus();
-        else if (profileDraft.UseDefault) profilePersonality.Focus();
-        else profileName.Focus();
+        else if (settingsTabs.SelectedIndex == InformationTabIndex) informationChoices.Focus();
+        else if (settingsTabs.SelectedIndex == DiagnosticsTabIndex) captureAction.Focus();
+        else if (settingsTabs.SelectedIndex == AdvisorTabIndex)
+        {
+            if (profileDraft.UseDefault) profilePersonality.Focus();
+            else profileName.Focus();
+        }
+        else if (enableCampaign.IsEnabled) enableCampaign.Focus();
+        else Named<Button>(content, "CancelSettings").Focus();
     }
 
     private void SetProfileStatus(string message)
@@ -747,7 +772,7 @@ internal sealed class AdvisorWindow
         catch (AdvisorProfileException failure) { ProfileError(failure, true); }
         finally
         {
-            if (settingsPane.Visibility == Visibility.Visible && settingsTabs.SelectedIndex == 0) FocusSettings();
+            if (settingsPane.Visibility == Visibility.Visible && settingsTabs.SelectedIndex == AdvisorTabIndex) FocusSettings();
         }
     }
 
@@ -796,17 +821,17 @@ internal sealed class AdvisorWindow
         }
         catch (AdvisorProfileException failure)
         {
-            settingsTabs.SelectedIndex = 0;
+            settingsTabs.SelectedIndex = AdvisorTabIndex;
             ProfileError(failure, true);
         }
         catch (AdvisorConnectionException failure)
         {
-            settingsTabs.SelectedIndex = 1;
+            settingsTabs.SelectedIndex = ConnectionTabIndex;
             SettingsError(failure);
         }
         catch (AdvisorOptionsException failure)
         {
-            settingsTabs.SelectedIndex = failure.Code == "query_rounds_invalid" ? 1 : failure.Code == "information_invalid" ? 2 : 0;
+            settingsTabs.SelectedIndex = failure.Code is "query_rounds_invalid" or "common_prompt_invalid" ? ConnectionTabIndex : failure.Code == "information_invalid" ? InformationTabIndex : GeneralTabIndex;
             OptionsError(failure);
         }
     }

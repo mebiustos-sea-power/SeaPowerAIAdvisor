@@ -37,7 +37,7 @@
     <Compile Include="..\src\SituationSnapshot.cs" Link="SituationSnapshot.cs" />
     <Compile Include="..\src\FriendlyAviationSnapshot.cs" Link="FriendlyAviationSnapshot.cs" />
     <Compile Include="..\src\CampaignAirReader.cs" Link="CampaignAirReader.cs" />
-    <Compile Include="..\src\AdvisorAnswerPolicy.cs" Link="AdvisorAnswerPolicy.cs" />
+    <Compile Include="..\src\AdvisorPrompts.cs" Link="AdvisorPrompts.cs" />
     <Compile Include="..\src\VictorySnapshot.cs" Link="VictorySnapshot.cs" />
     <Compile Include="..\src\CampaignVictoryReader.cs" Link="CampaignVictoryReader.cs" />
     <Compile Include="..\src\CampaignSituationReader.cs" Link="CampaignSituationReader.cs" />
@@ -50,5 +50,8 @@
     <Compile Include="..\src\CampaignDisplayNames.cs" Link="CampaignDisplayNames.cs" />
     <Reference Include="Newtonsoft.Json" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\Newtonsoft.Json.dll" Private="true" />
     <Reference Include="Mono.Cecil" HintPath="$(SeaPowerDir)\BepInEx\core\Mono.Cecil.dll" Private="true" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="..\package\Prompts\*.json" Link="Prompts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

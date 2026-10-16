@@ -35,6 +35,9 @@ public sealed class Plugin : IAnchorChainMod
                 return;
             }
             options = new AdvisorOptionsStore(AdvisorOptionsStore.PathIn(UnityEngine.Application.persistentDataPath));
+            // A broken prompt package must remain visible without disabling settings or diagnostics.
+            try { _ = AdvisorPrompts.Current; }
+            catch (AdvisorPromptException error) { Log.LogError("System prompts unavailable until restart: " + error.Message); }
             campaignFiles = files;
             AdvisorDependencies.LoadMarkdown(typeof(Plugin).Assembly);
             harmony = new Harmony(ModId);
