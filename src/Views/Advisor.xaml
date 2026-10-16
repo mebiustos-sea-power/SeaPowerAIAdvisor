@@ -100,28 +100,29 @@
                 <Grid.ColumnDefinitions>
                   <ColumnDefinition Width="120" /><ColumnDefinition Width="16" /><ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-                <Border Background="#202B38" BorderBrush="#607080" BorderThickness="1" Padding="4"
-                        Width="120" Height="120" VerticalAlignment="Top">
-                  <Grid>
-                    <Image x:Name="ProfilePreview" Stretch="Uniform" />
-                    <TextBlock x:Name="ProfilePreviewError" Text="{DynamicResource Advisor.portrait.error}" TextWrapping="Wrap"
-                               TextAlignment="Center" VerticalAlignment="Center" FontSize="12" />
-                  </Grid>
-                </Border>
+                <StackPanel Width="120" VerticalAlignment="Top">
+                  <Border Background="#202B38" BorderBrush="#607080" BorderThickness="1" Padding="4"
+                          Width="120" Height="120">
+                    <Grid>
+                      <Image x:Name="ProfilePreview" Stretch="Uniform" />
+                      <TextBlock x:Name="ProfilePreviewError" Text="{DynamicResource Advisor.portrait.error}" TextWrapping="Wrap"
+                                 TextAlignment="Center" VerticalAlignment="Center" FontSize="12" />
+                    </Grid>
+                  </Border>
+                  <Button x:Name="ChoosePortrait" Content="{DynamicResource Advisor.action.choose_portrait}"
+                          Height="30" Padding="10,0" HorizontalAlignment="Stretch" Margin="0,8,0,0" Visibility="Collapsed" />
+                </StackPanel>
                 <StackPanel Grid.Column="2">
                   <TextBlock Text="{DynamicResource Advisor.profile.advisor}" FontSize="12" Margin="0,0,0,6" />
+                  <ComboBox x:Name="AdvisorSelector" HorizontalContentAlignment="Stretch" Margin="0,0,0,8" />
                   <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                    <RadioButton x:Name="DefaultAdvisor" GroupName="AdvisorMode" IsChecked="True"
-                                 Content="{DynamicResource Advisor.profile.default}" Margin="0,0,18,0" />
-                    <RadioButton x:Name="CustomAdvisor" GroupName="AdvisorMode"
-                                 Content="{DynamicResource Advisor.profile.custom}" />
+                    <Button x:Name="AddAdvisor" Content="{DynamicResource Advisor.profile.add}" Padding="10,0" Height="30" />
+                    <Button x:Name="RemoveAdvisor" Content="{DynamicResource Advisor.profile.remove}" Padding="10,0" Height="30" Margin="8,0,0,0" />
                   </StackPanel>
                   <TextBlock Text="{DynamicResource Advisor.profile.name}" FontSize="12" Margin="0,0,0,4" />
                   <TextBox x:Name="ProfileName" FontSize="14" Padding="7" IsReadOnly="True" />
                   <TextBlock Text="{DynamicResource Advisor.profile.role}" FontSize="12" Margin="0,8,0,4" />
                   <TextBox x:Name="ProfileRole" FontSize="14" Padding="7" IsReadOnly="True" />
-                  <Button x:Name="ChoosePortrait" Content="{DynamicResource Advisor.action.choose_portrait}"
-                          Height="30" Padding="10,0" HorizontalAlignment="Left" Margin="0,8,0,0" Visibility="Collapsed" />
                 </StackPanel>
               </Grid>
               <TextBlock Text="{DynamicResource Advisor.profile.personality}" FontSize="12" Margin="0,18,0,4" />

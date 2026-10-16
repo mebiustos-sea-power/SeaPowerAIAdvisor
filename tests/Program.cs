@@ -15,6 +15,7 @@ internal static class Program
             BattleTests.Run(Check);
             InformationTests.Run(Check);
             PromptTests.Run(Check);
+            ProgressTests.Run(Check);
             Require(!AppDomain.CurrentDomain.GetAssemblies().Any(a => a.GetName().Name == "DynamicCampaignMod"), "Battle-only verification loaded DCM");
             Console.WriteLine("PASS " + count + " battle checks (no DCM loaded)");
             return;
@@ -124,6 +125,7 @@ internal static class Program
         PromptTests.Run(Check);
         PromptTests.RunCampaign(args[0], Check);
         ConversationTests.Run(Check);
+        ProgressTests.Run(Check);
         ConnectionTests.Run(Check);
         QuestionInputTests.Run(args[2], Check);
         PresentationTests.Run(args[1], args[0], Check);

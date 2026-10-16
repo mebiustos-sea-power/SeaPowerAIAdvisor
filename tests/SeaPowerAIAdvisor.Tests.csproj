@@ -28,12 +28,15 @@
     <Compile Include="..\src\CampaignInformation.cs" Link="CampaignInformation.cs" />
     <Compile Include="..\src\AdvisorSettings.cs" Link="AdvisorSettings.cs" />
     <Compile Include="..\src\AdvisorProfile.cs" Link="AdvisorProfile.cs" />
+    <Compile Include="..\src\AdvisorPersona.cs" Link="AdvisorPersona.cs" />
+    <Compile Include="..\src\AdvisorProfileDraft.cs" Link="AdvisorProfileDraft.cs" />
     <Compile Include="..\src\PortraitImage.cs" Link="PortraitImage.cs" />
     <Compile Include="..\src\GeminiTransport.cs" Link="GeminiTransport.cs" />
     <Compile Include="..\src\AdvisorTrace.cs" Link="AdvisorTrace.cs" />
     <Compile Include="..\src\AdvisorConsultation.cs" Link="AdvisorConsultation.cs" />
     <Compile Include="..\src\GeminiAdvisor.cs" Link="GeminiAdvisor.cs" />
     <Compile Include="..\src\AdvisorJob.cs" Link="AdvisorJob.cs" />
+    <Compile Include="..\src\AdvisorProgress.cs" Link="AdvisorProgress.cs" />
     <Compile Include="..\src\SituationSnapshot.cs" Link="SituationSnapshot.cs" />
     <Compile Include="..\src\FriendlyAviationSnapshot.cs" Link="FriendlyAviationSnapshot.cs" />
     <Compile Include="..\src\CampaignAirReader.cs" Link="CampaignAirReader.cs" />
