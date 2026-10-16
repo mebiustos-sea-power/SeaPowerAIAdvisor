@@ -116,6 +116,8 @@ internal static class Program
         GeminiTests.Run(args[0], Check);
         ProfileTests.Run(args[1], Check);
         PreferencesTests.Run(Check);
+        ConversationTests.Run(Check);
+        ConnectionTests.Run(Check);
         QuestionInputTests.Run(args[2], Check);
         PresentationTests.Run(args[1], args[0], Check);
         MarkdownTests.Run(args[1], Check);

@@ -63,7 +63,7 @@
   "connection.api_access_denied": "Gemini rejected the request. Check the API key and access settings.",
   "connection.model_unavailable": "The configured Gemini model is unavailable.",
   "connection.rate_limited": "Gemini's usage limit was reached. Try again later.",
-  "connection.request_timeout": "The consultation timed out. Your draft was kept.",
+  "connection.request_timeout": "Gemini did not respond in time. Wait a moment and retry.",
   "connection.network_error": "Cannot connect to Gemini. Check the connection.",
   "connection.output_limit": "Gemini reached its output limit. Narrow the question or adjust max_output_tokens.",
   "connection.response_blocked": "Gemini did not complete an answer.",
@@ -185,5 +185,17 @@
   "settings.error.model_invalid": "Enter a valid Gemini model ID.",
   "settings.error.settings_write_failed": "Cannot save the AI settings.",
   "settings.error.settings_rollback_failed": "Could not restore the AI settings after a failed save. Check gemini.json.",
-  "settings.error_suffix": " [{0}]"
+  "settings.error_suffix": " [{0}]",
+  "action.retry": "Retry",
+  "transcript.waiting": "Waiting for a reply…",
+  "transcript.retry_tip": "Retry the same message.",
+  "status.failed": "Consultation failed.",
+  "connection.model_invalid": "The model name is empty or invalid. Check the Gemini model ID in Settings > AI connection.",
+  "connection.api_bad_request": "Gemini rejected the request. Check the model capabilities and AI connection settings.",
+  "connection.api_error": "Gemini returned a server error. Wait a moment and retry.",
+  "connection.test": "Test connection",
+  "connection.test_running": "Testing connection…",
+  "connection.test_succeeded": "Connection successful.",
+  "connection.test_cancelled": "Connection test cancelled.",
+  "connection.test_tip": "Check a short response with the entered key and model. Uses a small number of tokens; does not save settings."
 }

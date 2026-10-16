@@ -24,6 +24,15 @@ internal sealed class AdvisorSettingsDraft
     private string String(string key, string fallback) => source[key] == null ? fallback :
         source[key]!.Type == JTokenType.String ? (string)source[key]! : throw new AdvisorConnectionException("settings_invalid");
 
+    // Testing uses pending credentials, but the log switch only takes effect after Save.
+    internal AdvisorSettings TestSettings()
+    {
+        var value = (JObject)source.DeepClone();
+        value["api_key"] = ApiKey.Trim();
+        value["model"] = Model.Trim();
+        return AdvisorSettings.Parse(value.ToString(Formatting.None));
+    }
+
     internal byte[] Data()
     {
         var value = (JObject)source.DeepClone();

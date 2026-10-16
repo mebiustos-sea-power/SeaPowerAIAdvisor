@@ -10,7 +10,7 @@ internal sealed class AdvisorQuestion
     internal AdvisorQuestion(string text, string caption, bool shortcut)
     { Text = text; DisplayText = caption; IsShortcut = shortcut; }
 
-    internal string DraftAfterSuccess(string draft) =>
+    internal string DraftAfterSend(string draft) =>
         !IsShortcut && draft == Text ? string.Empty : draft;
 }
 
