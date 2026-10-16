@@ -112,8 +112,7 @@
           <TextBlock x:Name="ProfileStatus" Grid.Row="1" TextWrapping="Wrap" FontSize="12"
                      Margin="0,8,0,0" Visibility="Collapsed" />
           <WrapPanel x:Name="ProfileActions" Grid.Row="2" HorizontalAlignment="Right" Margin="0,12,0,0">
-            <Button x:Name="ReloadProfile" Content="{DynamicResource Advisor.action.reload_profile}" Height="30" Padding="12,0" />
-            <Button x:Name="SaveProfile" Content="{DynamicResource Advisor.action.save_profile}" Height="30" Padding="12,0" Margin="8,0,0,0" />
+            <Button x:Name="SaveProfile" Content="{DynamicResource Advisor.action.save_profile}" Height="30" Padding="12,0" />
           </WrapPanel>
         </Grid>
       </TabItem>

@@ -96,7 +96,6 @@ internal sealed class AdvisorWindow
         settingsAction = Named<Button>(content, "Settings");
         settingsAction.Click += (_, _) => guard(ToggleSettings);
         Named<Button>(content, "SaveProfile").Click += (_, _) => guard(SaveProfile);
-        Named<Button>(content, "ReloadProfile").Click += (_, _) => guard(() => ReloadProfile(true));
         profileDirectory = AdvisorProfile.DirectoryIn(UnityEngine.Application.persistentDataPath);
         settingsPath = AdvisorSettings.PathIn(UnityEngine.Application.persistentDataPath);
         logAiJson = Named<CheckBox>(content, "LogAiJson");
@@ -164,7 +163,7 @@ internal sealed class AdvisorWindow
     {
         if (IsOpen) { Close(); return; }
         RefreshLanguage();
-        ReloadProfile(false);
+        LoadProfile();
         ReloadLogging();
         WindowHostCommands.OpenWindowCommand.Execute(window, view);
         if (!IsOpen) throw new InvalidOperationException("The game window host did not open the advisor.");
@@ -397,11 +396,12 @@ internal sealed class AdvisorWindow
         questionInput.Reset();
         typing.Release();
         if (window.IsKeyboardFocusWithin) window.Keyboard.ClearFocus();
-        // Retain the existing controls and their text; switching panes needs no draft or history storage.
+        // Keep conversation controls intact; leaving settings discards any remaining profile edits.
+        if (!show) DiscardProfileChanges();
         conversationPane.Visibility = show ? Visibility.Collapsed : Visibility.Visible;
         settingsPane.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         paneTitle.Text = text[show ? "pane.settings" : "pane.conversation"];
-        settingsAction.Content = text[show ? "action.back" : "action.settings"];
+        settingsAction.Content = text[show ? "action.cancel_settings" : "action.settings"];
         if (show) { ReloadLogging(); FocusSettings(); }
         else { scrollPending = true; question.Focus(); }
     }
@@ -537,13 +537,13 @@ internal sealed class AdvisorWindow
         }
     }
 
-    private void ReloadProfile(bool notify)
+    private void LoadProfile()
     {
         try
         {
             var profile = AdvisorProfile.Load(profileDirectory);
             ApplyProfile(profile, new AdvisorPortrait(profile.ReadActivePortrait(profileDirectory, DefaultPortrait)));
-            SetProfileStatus(notify ? text["profile.reloaded"] : string.Empty);
+            SetProfileStatus(string.Empty);
         }
         catch (AdvisorProfileException failure) { ProfileError(failure); }
     }
@@ -568,7 +568,7 @@ internal sealed class AdvisorWindow
             ApplyProfile(profile, next);
             if (previous != null && previous.PortraitFile != profile.PortraitFile)
                 previous.DeleteImportedPortrait(profileDirectory, warn);
-            SetProfileStatus(text["profile.saved"]);
+            ToggleSettings();
         }
         catch (AdvisorProfileException failure) { ProfileError(failure, true); }
     }
@@ -583,9 +583,26 @@ internal sealed class AdvisorWindow
         profilePreviewError.Visibility = Visibility.Collapsed;
         profileLoaded = true;
         appliedProfile = profile;
-        profileDraft = new AdvisorProfileDraft(profile);
         speakerName = profile.DisplayName;
         advisorName.Text = profile.DisplayName;
+        ResetProfileEditor(profile);
+        ShowConversation(false);
+    }
+
+    private void DiscardProfileChanges()
+    {
+        portraitSelection = null;
+        ResetProfileEditor(appliedProfile ?? new AdvisorProfile(AdvisorProfile.DefaultName, AdvisorProfile.DefaultPortraitFile, true));
+        ReleasePreview();
+        profilePreview.Source = portrait?.Source;
+        profilePreviewError.Visibility = portrait == null ? Visibility.Visible : Visibility.Collapsed;
+        if (appliedProfile != null && portrait != null) SetProfileStatus(string.Empty);
+    }
+
+    private void ResetProfileEditor(AdvisorProfile profile)
+    {
+        profileDraft = new AdvisorProfileDraft(profile);
+        choosePortrait.IsEnabled = portraitSelection == null;
         updatingProfile = true;
         try
         {
@@ -595,7 +612,6 @@ internal sealed class AdvisorWindow
             profilePersonality.Text = profile.Personality;
         }
         finally { updatingProfile = false; }
-        ShowConversation(false);
     }
 
     private void ReleasePreview()
@@ -655,7 +671,7 @@ internal sealed class AdvisorWindow
         window.Header = text["window.title"];
         var settings = settingsPane.Visibility == Visibility.Visible;
         paneTitle.Text = text[settings ? "pane.settings" : "pane.conversation"];
-        settingsAction.Content = text[settings ? "action.back" : "action.settings"];
+        settingsAction.Content = text[settings ? "action.cancel_settings" : "action.settings"];
         if (!profileLoaded) speakerName = text["speaker.advisor"];
         SetBusy(active != null);
         ShowConversation();
