@@ -7,7 +7,7 @@ using Newtonsoft.Json.Linq;
 
 namespace SeaPowerAIAdvisor;
 
-// Immutable, provider-independent behavior settings. One snapshot is used for an entire consultation.
+// Immutable, provider-independent behavior and presentation settings. Publish only after saving succeeds.
 internal sealed class AdvisorOptions
 {
     internal const int MaxCommonPromptLength = 2000;
@@ -15,11 +15,14 @@ internal sealed class AdvisorOptions
     internal int MaxQueryRounds { get; }
     internal bool CampaignEnabled { get; }
     internal AdvisorInformation Information { get; }
-    internal AdvisorOptions(int maxQueryRounds = AdvisorQueryLimits.DefaultMaxRounds, bool campaignEnabled = false, AdvisorInformation? information = null, string commonPrompt = "")
+    internal AdvisorTextSize TextSize { get; }
+    internal AdvisorOptions(int maxQueryRounds = AdvisorQueryLimits.DefaultMaxRounds, bool campaignEnabled = false, AdvisorInformation? information = null, string commonPrompt = "", AdvisorTextSize textSize = AdvisorTypography.DefaultSize)
     {
         if (maxQueryRounds < 1 || maxQueryRounds > AdvisorQueryLimits.MaximumRounds)
             throw new AdvisorOptionsException("query_rounds_invalid");
         MaxQueryRounds = maxQueryRounds; CampaignEnabled = campaignEnabled; Information = information ?? AdvisorInformation.Default;
+        if (!Enum.IsDefined(typeof(AdvisorTextSize), textSize)) throw new AdvisorOptionsException("options_invalid");
+        TextSize = textSize;
         CommonPrompt = ValidateCommonPrompt(commonPrompt);
     }
     internal static string ValidateCommonPrompt(string value)
@@ -34,7 +37,8 @@ internal sealed class AdvisorOptions
     internal byte[] Data() => Encoding.UTF8.GetBytes(new JObject
     {
         ["max_query_rounds"] = MaxQueryRounds, ["campaign_advisor_enabled"] = CampaignEnabled,
-        ["information_selection"] = Information.Data(), ["common_prompt"] = CommonPrompt
+        ["information_selection"] = Information.Data(), ["common_prompt"] = CommonPrompt,
+        ["conversation_text_size"] = TextSize.ToString().ToLowerInvariant()
     }.ToString(Formatting.Indented) + Environment.NewLine);
 
     internal static AdvisorOptions Parse(string json)
@@ -44,7 +48,7 @@ internal sealed class AdvisorOptions
             using var source = new StringReader(json);
             using var reader = new JsonTextReader(source) { DateParseHandling = DateParseHandling.None, MaxDepth = 5 };
             var value = JObject.Load(reader, new JsonLoadSettings { DuplicatePropertyNameHandling = DuplicatePropertyNameHandling.Error });
-            if (reader.Read() || value.Properties().Any(p => p.Name != "max_query_rounds" && p.Name != "campaign_advisor_enabled" && p.Name != "disabled_information" && p.Name != "information_selection" && p.Name != "common_prompt"))
+            if (reader.Read() || value.Properties().Any(p => p.Name != "max_query_rounds" && p.Name != "campaign_advisor_enabled" && p.Name != "disabled_information" && p.Name != "information_selection" && p.Name != "common_prompt" && p.Name != "conversation_text_size"))
                 throw new AdvisorOptionsException("options_invalid");
             var rounds = AdvisorQueryLimits.DefaultMaxRounds;
             if (value["max_query_rounds"] != null && (value["max_query_rounds"]!.Type != JTokenType.Integer ||
@@ -58,9 +62,19 @@ internal sealed class AdvisorOptions
                 throw new AdvisorOptionsException("information_invalid");
             var information = value["information_selection"] == null ? AdvisorInformation.Parse(value["disabled_information"])
                 : AdvisorInformation.ParseSelections(value["information_selection"]);
-            return new AdvisorOptions(rounds, (bool?)value["campaign_advisor_enabled"] ?? false, information, (string?)value["common_prompt"] ?? "");
+            return new AdvisorOptions(rounds, (bool?)value["campaign_advisor_enabled"] ?? false, information, (string?)value["common_prompt"] ?? "", ParseTextSize(value["conversation_text_size"]));
         }
         catch (JsonException) { throw new AdvisorOptionsException("options_invalid"); }
+    }
+    private static AdvisorTextSize ParseTextSize(JToken? value)
+    {
+        if (value == null) return AdvisorTypography.DefaultSize;
+        if (value.Type != JTokenType.String) throw new AdvisorOptionsException("options_invalid");
+        return (string?)value switch
+        {
+            "small" => AdvisorTextSize.Small, "standard" => AdvisorTextSize.Standard, "large" => AdvisorTextSize.Large,
+            _ => throw new AdvisorOptionsException("options_invalid")
+        };
     }
 }
 

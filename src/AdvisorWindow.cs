@@ -37,7 +37,7 @@ internal sealed class AdvisorWindow
     private readonly TextBox diagnosticOutput, profileName, profileRole, profilePersonality, modelName, fallbackModelName;
     private readonly PasswordBox apiKey, fallbackApiKey;
     private AdvisorSettingsDraft? connectionDraft;
-    private readonly ComboBox advisorSelector;
+    private readonly ComboBox advisorSelector, textSize;
     private readonly Button addAdvisor, removeAdvisor;
     private string[] advisorChoices = Array.Empty<string>();
     private string? portraitSelectionAdvisorId;
@@ -133,6 +133,7 @@ internal sealed class AdvisorWindow
         commonPrompt = Named<TextBox>(content, "CommonPrompt");
         commonPrompt.MaxLength = AdvisorOptions.MaxCommonPromptLength;
         enableCampaign = Named<CheckBox>(content, "EnableCampaignAdvisor");
+        textSize = Named<ComboBox>(content, "ConversationTextSize");
         informationChoices = new AdvisorInformationView(Named<StackPanel>(content, "InformationChoices"), guard);
         testConnection = Named<Button>(content, "TestConnection");
         testFallbackConnection = Named<Button>(content, "TestFallbackConnection");
@@ -495,7 +496,8 @@ internal sealed class AdvisorWindow
     {
         scrollPending = false;
         diagnosticScrollPending = false;
-        transcript.Show(conversation, text, speakerName, empty ?? text["transcript.empty"], configurationNotice);
+        question.FontSize = AdvisorTypography.FontSize(options.Current.TextSize, 15);
+        transcript.Show(conversation, text, speakerName, empty ?? text["transcript.empty"], configurationNotice, options.Current.TextSize);
         UpdateShortcuts();
         if (updateStatus) status.Text = text["status.ready"];
     }
@@ -563,11 +565,12 @@ internal sealed class AdvisorWindow
             optionsDraft = options.Read();
             maxQueryRounds.Text = optionsDraft.MaxQueryRounds.ToString(System.Globalization.CultureInfo.InvariantCulture);
             enableCampaign.IsChecked = optionsDraft.CampaignEnabled;
+            textSize.SelectedIndex = (int)optionsDraft.TextSize;
             informationChoices.Reset(optionsDraft.Information);
             commonPrompt.Text = optionsDraft.CommonPrompt;
         }
         catch (AdvisorOptionsException failure) { optionsDraft = null; OptionsError(failure); }
-        maxQueryRounds.IsEnabled = commonPrompt.IsEnabled = enableCampaign.IsEnabled = optionsDraft != null;
+        maxQueryRounds.IsEnabled = commonPrompt.IsEnabled = enableCampaign.IsEnabled = textSize.IsEnabled = optionsDraft != null;
         logAiJson.IsEnabled = connectionDraft != null;
         saveSettings.IsEnabled = connectionDraft != null && optionsDraft != null;
         UpdateConnectionTestControls();
@@ -582,6 +585,7 @@ internal sealed class AdvisorWindow
         maxQueryRounds.Text = string.Empty;
         commonPrompt.Text = string.Empty;
         enableCampaign.IsChecked = false;
+        textSize.SelectedIndex = (int)options.Current.TextSize;
         apiKey.Password = string.Empty;
         fallbackApiKey.Password = string.Empty;
         modelName.Text = string.Empty;
@@ -687,7 +691,7 @@ internal sealed class AdvisorWindow
     {
         if (!int.TryParse(maxQueryRounds.Text, System.Globalization.NumberStyles.Integer,
             System.Globalization.CultureInfo.InvariantCulture, out var rounds)) throw new AdvisorOptionsException("query_rounds_invalid");
-        return new AdvisorOptions(rounds, enableCampaign.IsChecked == true, informationChoices.Value, commonPrompt.Text ?? "");
+        return new AdvisorOptions(rounds, enableCampaign.IsChecked == true, informationChoices.Value, commonPrompt.Text ?? "", (AdvisorTextSize)textSize.SelectedIndex);
     }
 
     private void OptionsError(AdvisorOptionsException failure)
@@ -725,7 +729,7 @@ internal sealed class AdvisorWindow
             if (profileDraft.UseDefault) profilePersonality.Focus();
             else profileName.Focus();
         }
-        else if (enableCampaign.IsEnabled) enableCampaign.Focus();
+        else if (textSize.IsEnabled) textSize.Focus();
         else Named<Button>(content, "CancelSettings").Focus();
     }
 

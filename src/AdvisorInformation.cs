@@ -27,9 +27,10 @@ internal sealed class InformationItem
 internal sealed class InformationGroup
 {
     internal string TextKey { get; }
+    internal bool Battle { get; }
     internal IReadOnlyList<InformationKind> Items { get; }
-    internal InformationGroup(string label, params InformationKind[] items)
-    { TextKey = "information." + label; Items = Array.AsReadOnly(items); }
+    internal InformationGroup(bool battle, string label, params InformationKind[] items)
+    { Battle = battle; TextKey = "information." + label; Items = Array.AsReadOnly(items); }
 }
 
 // Selection is immutable and independent of the provider and live game. Dependencies are effective permissions.
@@ -63,10 +64,10 @@ internal sealed class AdvisorInformation
     });
     internal static readonly IReadOnlyList<InformationGroup> Groups = Array.AsReadOnly(new[]
     {
-        new InformationGroup("battle_friendly", InformationKind.BattleUnits, InformationKind.BattleGroundUnits, InformationKind.BattleBases, InformationKind.BattleAviation, InformationKind.BattleFuel, InformationKind.BattleDamage, InformationKind.BattleWeapons),
-        new InformationGroup("battle_intelligence", InformationKind.BattleContacts, InformationKind.BattleThreats, InformationKind.BattleBriefing, InformationKind.BattleReports),
-        new InformationGroup("campaign_friendly", InformationKind.CampaignForces, InformationKind.CampaignShips, InformationKind.CampaignFuel, InformationKind.CampaignAmmunition, InformationKind.CampaignDamage, InformationKind.CampaignAviation, InformationKind.CampaignOwnBases, InformationKind.CampaignGroundUnits),
-        new InformationGroup("campaign_intelligence", InformationKind.CampaignContacts, InformationKind.CampaignBases, InformationKind.CampaignOrders, InformationKind.CampaignReports)
+        new InformationGroup(true, "battle_friendly", InformationKind.BattleUnits, InformationKind.BattleGroundUnits, InformationKind.BattleBases, InformationKind.BattleAviation, InformationKind.BattleFuel, InformationKind.BattleDamage, InformationKind.BattleWeapons),
+        new InformationGroup(true, "battle_intelligence", InformationKind.BattleContacts, InformationKind.BattleThreats, InformationKind.BattleBriefing, InformationKind.BattleReports),
+        new InformationGroup(false, "campaign_friendly", InformationKind.CampaignForces, InformationKind.CampaignShips, InformationKind.CampaignFuel, InformationKind.CampaignAmmunition, InformationKind.CampaignDamage, InformationKind.CampaignAviation, InformationKind.CampaignOwnBases, InformationKind.CampaignGroundUnits),
+        new InformationGroup(false, "campaign_intelligence", InformationKind.CampaignContacts, InformationKind.CampaignBases, InformationKind.CampaignOrders, InformationKind.CampaignReports)
     });
     internal static readonly AdvisorInformation All = new(Items.ToDictionary(i => i.Id, _ => true, StringComparer.Ordinal));
     internal static readonly AdvisorInformation Default = new(Items.ToDictionary(i => i.Id, i => i.DefaultEnabled, StringComparer.Ordinal));

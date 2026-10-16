@@ -21,6 +21,7 @@
     <Compile Include="..\src\AdvisorText.cs" Link="AdvisorText.cs" />
     <Compile Include="..\src\AdvisorQuestion.cs" Link="AdvisorQuestion.cs" />
     <Compile Include="..\src\AdvisorTranscript.cs" Link="AdvisorTranscript.cs" />
+    <Compile Include="..\src\AdvisorTypography.cs" Link="AdvisorTypography.cs" />
     <EmbeddedResource Include="..\src\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Localization.%(Filename).json" />
     <Compile Include="..\src\AdvisorSettingsDraft.cs" Link="AdvisorSettingsDraft.cs" />
     <Compile Include="..\src\AdvisorPreferences.cs" Link="AdvisorPreferences.cs" />
