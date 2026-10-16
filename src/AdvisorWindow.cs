@@ -31,13 +31,13 @@ internal sealed class AdvisorWindow
     private readonly PasswordBox apiKey;
     private AdvisorSettingsDraft? connectionDraft;
     private readonly RadioButton defaultAdvisor, customAdvisor;
-    private readonly TextBlock advisorName, activity, portraitError, profilePreviewError, profileStatus, paneTitle;
+    private readonly TextBlock advisorName, activity, portraitError, profilePreviewError, profileStatus;
     private readonly Image portraitImage, profilePreview;
     private readonly FrameworkElement conversationPane, settingsPane;
     private readonly TabControl settingsTabs;
     private readonly CheckBox logAiJson;
     private readonly string settingsPath;
-    private readonly Button settingsAction, saveSettings;
+    private readonly Button saveSettings;
     private readonly string profileDirectory;
     private AdvisorPortrait? portrait, previewPortrait;
     private AdvisorProfileDraft profileDraft = new(new AdvisorProfile(AdvisorProfile.DefaultName, AdvisorProfile.DefaultPortraitFile, true));
@@ -91,14 +91,12 @@ internal sealed class AdvisorWindow
         portraitError = Named<TextBlock>(content, "PortraitError");
         profilePreviewError = Named<TextBlock>(content, "ProfilePreviewError");
         profileStatus = Named<TextBlock>(content, "ProfileStatus");
-        paneTitle = Named<TextBlock>(content, "PaneTitle");
         portraitImage = Named<Image>(content, "Portrait");
         profilePreview = Named<Image>(content, "ProfilePreview");
         conversationPane = Named<FrameworkElement>(content, "ConversationPane");
         settingsPane = Named<FrameworkElement>(content, "SettingsPane");
         settingsTabs = Named<TabControl>(content, "SettingsTabs");
-        settingsAction = Named<Button>(content, "Settings");
-        settingsAction.Click += (_, _) => guard(OpenSettings);
+        Named<Button>(content, "Settings").Click += (_, _) => guard(OpenSettings);
         saveSettings = Named<Button>(content, "SaveSettings");
         saveSettings.Click += (_, _) => guard(SaveSettings);
         Named<Button>(content, "CancelSettings").Click += (_, _) => guard(CancelSettings);
@@ -407,8 +405,6 @@ internal sealed class AdvisorWindow
         BeginConnectionEdit();
         conversationPane.Visibility = Visibility.Collapsed;
         settingsPane.Visibility = Visibility.Visible;
-        settingsAction.Visibility = Visibility.Collapsed;
-        paneTitle.Text = text["pane.settings"];
         FocusSettings();
     }
 
@@ -424,8 +420,6 @@ internal sealed class AdvisorWindow
         DiscardConnectionChanges();
         settingsPane.Visibility = Visibility.Collapsed;
         conversationPane.Visibility = Visibility.Visible;
-        settingsAction.Visibility = Visibility.Visible;
-        paneTitle.Text = text["pane.conversation"];
         scrollPending = true;
         question.Focus();
     }
@@ -717,9 +711,6 @@ internal sealed class AdvisorWindow
         uiLanguage = language;
         ApplyTextResources();
         window.Header = text["window.title"];
-        var settings = settingsPane.Visibility == Visibility.Visible;
-        paneTitle.Text = text[settings ? "pane.settings" : "pane.conversation"];
-        settingsAction.Content = text["action.settings"];
         if (!profileLoaded) speakerName = text["speaker.advisor"];
         SetBusy(active != null);
         ShowConversation();

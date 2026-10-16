@@ -330,6 +330,8 @@ internal static class ProfileTests
                 Named("Transcript").Ancestors().Contains(conversation) &&
                 Named("Portrait").Ancestors().Contains(conversation) &&
                 Named("Send").Ancestors().Contains(conversation) &&
+                Named("Settings").Ancestors().Contains(conversation) &&
+                Named("Settings").Parent == Named("Send").Parent &&
                 Named("Status").Ancestors().Contains(conversation),
                 "Conversation-only controls remain outside the switched pane");
             Require(Named("ProfilePreview").Ancestors().Contains(profile) &&
@@ -345,7 +347,7 @@ internal static class ProfileTests
             Require(actions.Parent == settings &&
                 int.Parse((string)actions.Attribute("Grid.Row")!) == settingsRows.Length - 1 &&
                 (string?)actions.Attribute("HorizontalAlignment") == "Right" &&
-                (string?)settingsRows[0].Attribute("Height") == "*" &&
+                (string?)settingsRows[int.Parse((string)tabs.Attribute("Grid.Row")!)].Attribute("Height") == "*" &&
                 actions.Elements().Select(e => (string?)e.Attribute(x + "Name")).SequenceEqual(new[] { "CancelSettings", "SaveSettings" }),
                 "Save and cancel are not together at the bottom right outside all tabs");
             var output = Named("DiagnosticOutput"); var diagnosticPane = Named("DiagnosticsPane");
