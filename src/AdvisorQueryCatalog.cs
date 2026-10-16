@@ -9,13 +9,13 @@ internal static class AdvisorQueryCatalog
 {
     internal static readonly string[] Queries = {
         "catalog", "list_forces", "get_forces", "list_ships", "get_ships", "list_contacts",
-        "list_bases", "get_base_observations", "list_orders", "get_orders", "list_reports", "get_reports",
+        "list_bases", "get_bases", "list_ground_units", "get_ground_units", "get_base_observations", "list_orders", "get_orders", "list_reports", "get_reports",
         "list_air_units", "get_air_units", "list_air_flights"
     };
 
     internal static JArray Describe(SituationSnapshot snapshot, AdvisorInformation? selection = null)
     {
-        var information = selection ?? AdvisorInformation.All;
+        var information = selection ?? AdvisorInformation.Default;
         var rows = new JArray(
         Category("friendly_task_forces", snapshot.Forces.Count, "Own force names, positions and ship counts; selected force details.", "list_forces", "get_forces"),
         Category("friendly_ships", CountShips(snapshot), "Own ship names and types, and user-enabled fuel, ammunition and damage details.", "list_ships", "get_ships"),
@@ -23,7 +23,9 @@ internal static class AdvisorQueryCatalog
         Category("friendly_air_flights", snapshot.Aviation.Flights.Count, "Own airborne flights: name, aircraft, position, count, selected loadout and return state. These aircraft overlap squadron/wing counts; do not add them again.", "list_air_flights", null),
         Category("observed_contacts", snapshot.Contacts.Count, "Observed enemy contacts with observation time and uncertainty; no live enemy state.", "list_contacts", null),
         Category("public_bases", snapshot.Victory.Bases.Count, "Public base identities and ownership; matching IDs are used by victory objectives.", "list_bases", null),
-        Category("base_observations", snapshot.Bases.Count, "Recorded non-player base sightings only. Friendly-base stocks and defenses are not in this snapshot.", null, "get_base_observations"),
+        Category("friendly_bases", snapshot.Ground.Bases().Count, "Own base aircraft capacity, shipyard and recorded fuel/ammunition stocks; enabled campaign garrison strength. IDs come from public list_bases. Missing stock records remain unknown. No enemy base live state.", null, "get_bases"),
+        Category("friendly_ground_units", snapshot.Ground.Units().Count, "Own campaign ground units: displayed name, current/max campaign strength and disclosed base or own transport. Strength is not a tactical unit count.", "list_ground_units", "get_ground_units"),
+        Category("base_observations", snapshot.Bases.Count, "Recorded non-player base sightings only. Own base details are a separate user-enabled category.", null, "get_base_observations"),
         Category("published_orders", snapshot.Orders.Count, "Published own orders and their briefing text.", "list_orders", "get_orders"),
         Category("recent_player_reports", snapshot.Reports.Count, "Metadata for the retained recent player reports; text is fetched by ID. At most 30 records are retained locally.", "list_reports", "get_reports")
         );
@@ -32,7 +34,7 @@ internal static class AdvisorQueryCatalog
 
     internal static JObject Tool(AdvisorInformation? selection = null)
     {
-        var information = selection ?? AdvisorInformation.All;
+        var information = selection ?? AdvisorInformation.Default;
         var tool = RawTool();
         var properties = (JObject)tool["parameters"]!["properties"]!["requests"]!["items"]!["properties"]!;
         properties["query"]!["enum"] = new JArray(Queries.Where(information.CampaignQuery));

@@ -24,6 +24,18 @@ internal static class CampaignInformation
         if (!information.Allows(InformationKind.CampaignBases)) row.Remove("observation_status");
         return row;
     }
+    internal static JObject Base(JObject row, AdvisorInformation information)
+    {
+        if (!information.Allows(InformationKind.CampaignGroundUnits))
+        { row.Remove("garrison_strength"); row.Remove("garrison_strength_meaning"); }
+        return row;
+    }
+    internal static JObject Ground(JObject row, AdvisorInformation information)
+    {
+        if (!information.Allows(InformationKind.CampaignForces)) row.Remove("force_id");
+        if (!information.Allows(InformationKind.CampaignShips)) row.Remove("ship_id");
+        return row;
+    }
     internal static JObject Aviation(JObject row, AdvisorInformation information)
     {
         if (!information.Allows(InformationKind.CampaignForces)) row.Remove("force_id");

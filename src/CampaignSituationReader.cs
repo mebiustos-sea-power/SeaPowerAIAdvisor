@@ -121,7 +121,7 @@ internal sealed class CampaignSituationReader
             .ThenBy(x => x.Position.Latitude).ThenBy(x => x.Position.Longitude).ThenBy(x => x.Count).ThenBy(x => x.Identified);
         return new SituationSnapshot(now, side, forces, orderedContacts, observedBases, orders.OrderBy(x => x.OfferedAt),
             reports.OrderBy(x => x.At).Skip(Math.Max(0, reports.Count - ReportLimit)), CampaignVictoryReader.Capture(state),
-            CampaignAirReader.Capture(sim, ownForces, forces));
+            CampaignAirReader.Capture(sim, ownForces, forces), CampaignGroundReader.Capture(sim, ownForces.ToArray()));
     }
 
     private bool PublicOrder(object order, DateTime now)

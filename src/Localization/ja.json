@@ -222,7 +222,7 @@
   "information.damage": "損傷",
   "information.weapons": "弾薬・兵器性能",
   "information.contacts": "観測済みの接触情報",
-  "information.threats": "識別済み艦級の公開性能・脅威推定資料",
+  "information.threats": "識別済みユニットの公開性能・脅威推定資料",
   "information.briefing": "ブリーフィング",
   "information.reports": "公開済みの報告",
   "information.forces": "艦隊の基本情報・位置・任務",
@@ -273,5 +273,10 @@
   "settings.error.fallback_model_invalid": "サブに使用する有効なGeminiのモデルIDを入力してください。",
   "progress.model": "モデル：{0}",
   "connection.main_heading": "メインAPI設定（必須）",
-  "connection.sub_heading": "サブAPI設定（任意）"
+  "connection.sub_heading": "サブAPI設定（任意）",
+  "information.own_ground": "地上戦闘部隊",
+  "information.own_bases": "基地・施設",
+  "information.hosted_aviation": "格納中の航空機・航空運用",
+  "information.own_base_status": "自軍基地の防衛・備蓄",
+  "progress.topic.ground": "地上部隊"
 }

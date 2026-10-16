@@ -107,7 +107,7 @@ internal static class Program
         {
             using var built = AssemblyDefinition.ReadAssembly(args[1]);
             Require(built.MainModule.Resources.Any(r => r.Name == "SeaPowerAIAdvisor.Advisor.xaml"), "Embedded window is missing");
-            foreach (var type in new[] { "CampaignSituationReader", "CampaignAirReader", "CampaignVictoryReader", "AdvisorQuerySession", "AdvisorInputBuilder" })
+            foreach (var type in new[] { "CampaignSituationReader", "CampaignGroundReader", "CampaignAirReader", "CampaignVictoryReader", "AdvisorQuerySession", "AdvisorInputBuilder" })
                 Require(!built.MainModule.GetType("SeaPowerAIAdvisor." + type).Methods.Where(m => m.HasBody)
                     .SelectMany(m => m.Body.Instructions).Select(i => i.Operand).OfType<MemberReference>()
                     .Any(m => (m.DeclaringType?.Namespace ?? (m as TypeReference)?.Namespace ?? "").StartsWith("System.Net", StringComparison.Ordinal)),

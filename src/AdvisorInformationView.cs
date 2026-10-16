@@ -12,7 +12,7 @@ internal sealed class AdvisorInformationView
     private readonly StackPanel host;
     private readonly List<(InformationGroup Group, CheckBox Box)> groups = new();
     private readonly List<(InformationKind Kind, CheckBox Box)> items = new();
-    internal AdvisorInformation Value { get; private set; } = AdvisorInformation.All;
+    internal AdvisorInformation Value { get; private set; } = AdvisorInformation.Default;
     internal AdvisorInformationView(StackPanel host, Action<Action> guard)
     {
         this.host = host;
@@ -50,7 +50,7 @@ internal sealed class AdvisorInformationView
     }
     internal void Reset(AdvisorInformation? value)
     {
-        Value = value ?? AdvisorInformation.All;
+        Value = value ?? AdvisorInformation.Default;
         host.IsEnabled = value != null;
         Refresh();
     }

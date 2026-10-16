@@ -9,7 +9,7 @@ namespace SeaPowerAIAdvisor;
 // Queries operate exclusively on the detached player view captured at consultation start.
 internal sealed class BattleQuerySession : IAdvisorQuerySession
 {
-    private static readonly string[] names = { "catalog", "list_units", "get_units", "list_contacts", "get_briefing", "list_reports", "get_reports", "get_unit_capabilities", "get_contact_threats" };
+    private static readonly string[] names = { "catalog", "list_units", "get_units", "list_contacts", "get_briefing", "list_reports", "get_reports", "get_unit_capabilities", "get_contact_threats", "list_ground_units", "get_ground_units", "list_bases", "get_bases", "list_air_units", "get_air_units", "list_air_tasks" };
     private readonly JObject snapshot;
     private readonly AdvisorInformation information;
     private readonly JObject initial;
@@ -24,11 +24,12 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
         if (maxRounds < 1 || maxRounds > MaximumRounds) throw new ArgumentOutOfRangeException(nameof(maxRounds));
         MaxRounds = maxRounds;
         Prompts = prompts ?? AdvisorPrompts.Current;
-        this.information = information ?? AdvisorInformation.All;
+        this.information = information ?? AdvisorInformation.Default;
         information = this.information;
         snapshot = situation.Copy();
+        BattleInformation.Apply(snapshot, information);
         initial = AdvisorInputBuilder.Header(language, question, Prompts, true);
-        initial["schema_version"] = 3;
+        initial["schema_version"] = 4;
         initial["mode"] = "tactical_battle";
         initial["interaction_mode"] = "on_demand";
         initial["consultation_id"] = Id;
@@ -47,13 +48,16 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
             {
                 ["friendly_unit_count"] = Rows("friendly_units").Count,
                 ["observed_contact_count"] = Rows("observed_contacts").Count,
-                ["retained_report_count"] = Rows("published_reports").Count
+                ["retained_report_count"] = Rows("published_reports").Count,
+                ["friendly_ground_unit_count"] = GroundUnits().Count,
+                ["friendly_base_count"] = Rows("friendly_bases").Count,
+                ["hosted_air_unit_count"] = Rows("hosted_air_units").Count
             },
             ["coverage"] = new JObject
             {
                 ["available_on_request"] = new JArray("friendly_units", "unit_capabilities", "observed_contacts", "public_class_threat_references", "mission_briefing", "published_reports"),
-                ["not_included"] = new JArray("current_attack_feasibility", "terrain", "aircraft_readiness",
-                    "contact_observation_times", "contact_error_bounds", "bearing_only_track_geometry", "unlaunched_aircraft", "hidden_triggers"),
+                ["not_included"] = new JArray("current_attack_feasibility", "terrain",
+                    "contact_observation_times", "contact_error_bounds", "bearing_only_track_geometry", "hidden_triggers"),
                 ["reference_scope"] = "this_consultation",
                 ["report_limit"] = 10
             }
@@ -68,6 +72,9 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
         };
         var overview = (JObject)initial["situation"]!["overview"]!;
         if (!information.Allows(InformationKind.BattleUnits)) overview.Remove("friendly_unit_count");
+        if (!information.Allows(InformationKind.BattleGroundUnits)) overview.Remove("friendly_ground_unit_count");
+        if (!information.Allows(InformationKind.BattleBases)) overview.Remove("friendly_base_count");
+        if (!information.Allows(InformationKind.BattleAviation)) overview.Remove("hosted_air_unit_count");
         if (!information.Allows(InformationKind.BattleContacts)) overview.Remove("observed_contact_count");
         if (!information.Allows(InformationKind.BattleReports)) overview.Remove("retained_report_count");
         initial["situation"]!["coverage"]!["available_on_request"] = new JArray(Catalogue().Properties().Select(p => p.Name));
@@ -126,11 +133,44 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
                 Allowed(query, "query", "offset", "limit");
                 return Page(query, new JArray(Rows("friendly_units").OfType<JObject>()
                     .Select(r => new JObject { ["id"] = r["id"]!.DeepClone(), ["display_name"] = r["display_name"]!.DeepClone(), ["kind"] = r["kind"]!.DeepClone() })));
+            case "list_ground_units":
+                Allowed(query, "query", "offset", "limit"); return Page(query, GroundUnits());
+            case "get_ground_units":
+                Allowed(query, "query", "ids"); return SelectRows(query, GroundUnits());
+            case "list_bases":
+                Allowed(query, "query", "offset", "limit"); return Page(query, Rows("friendly_bases"));
+            case "get_bases":
+                Allowed(query, "query", "ids"); return SelectRows(query, "friendly_bases");
+            case "list_air_units":
+                Allowed(query, "query", "offset", "limit", "host_ids");
+                var airUnits = Rows("hosted_air_units").OfType<JObject>();
+                if (query["host_ids"] != null)
+                {
+                    var hostIds = SelectRows(new JObject { ["ids"] = query["host_ids"]!.DeepClone() }, "friendly_units").Select(r => (string)r["id"]!).ToHashSet(StringComparer.Ordinal);
+                    airUnits = airUnits.Where(r => hostIds.Contains((string)r["host_unit_id"]!));
+                }
+                return Page(query, new JArray(airUnits.Select(r => new JObject
+                {
+                    ["id"] = r["id"]!.DeepClone(), ["display_name"] = r["display_name"]!.DeepClone(),
+                    ["kind"] = r["kind"]!.DeepClone(), ["host_unit_id"] = r["host_unit_id"]!.DeepClone(),
+                    ["host_display_name"] = r["host_display_name"]!.DeepClone(),
+                    ["unassigned_aircraft_count"] = r["unassigned_aircraft_count"]!.DeepClone()
+                })));
+            case "get_air_units":
+                Allowed(query, "query", "ids"); return AirUnits(query);
+            case "list_air_tasks":
+                Allowed(query, "query", "offset", "limit", "host_ids", "air_unit_ids"); return AirTasks(query);
             case "list_contacts":
-                Allowed(query, "query", "offset", "limit");
+                Allowed(query, "query", "offset", "limit", "kind");
                 var contacts = (JArray)Rows("observed_contacts").DeepClone();
                 if (!information.Allows(InformationKind.BattleThreats))
                     foreach (var contact in contacts.OfType<JObject>()) contact.Remove("public_class_reference_available");
+                if (query["kind"] != null)
+                {
+                    if (query["kind"]!.Type != JTokenType.String || !contactKinds.Contains((string)query["kind"]!))
+                        throw Error("invalid_arguments", "Use a displayed contact-kind code from the tool schema.");
+                    contacts = new JArray(contacts.OfType<JObject>().Where(c => (string?)c["kind"] == (string)query["kind"]!).Select(c => c.DeepClone()));
+                }
                 return Page(query, contacts);
             case "list_reports":
                 Allowed(query, "query", "offset", "limit");
@@ -162,13 +202,48 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
         }
     }
 
-    private JArray SelectRows(JObject query, string collection)
+    private JArray GroundUnits() => new(Rows("friendly_units").OfType<JObject>().Where(u => (string?)u["unit_category"] == "ground_unit").Select(u => u.DeepClone()));
+    private JArray SelectRows(JObject query, string collection) => SelectRows(query, Rows(collection));
+    private static JArray SelectRows(JObject query, JArray rows)
     {
         if (!(query["ids"] is JArray ids) || ids.Count < 1 || ids.Count > MaxIdsPerQuery ||
             ids.Any(i => i.Type != JTokenType.String) || ids.Values<string>().Distinct(StringComparer.Ordinal).Count() != ids.Count)
             throw Error("invalid_arguments", "Supply a bounded list of unique IDs.");
-        return new JArray(ids.Select(id => Rows(collection).OfType<JObject>().SingleOrDefault(r => (string?)r["id"] == (string?)id)?.DeepClone()
+        return new JArray(ids.Select(id => rows.OfType<JObject>().SingleOrDefault(r => (string?)r["id"] == (string?)id)?.DeepClone()
             ?? throw Error("unknown_id", "An ID is unavailable for this query in this consultation.")));
+    }
+
+    private JObject AirUnits(JObject query)
+    {
+        var units = SelectRows(query, "hosted_air_units");
+        var hostIds = units.Select(u => (string)u["host_unit_id"]!).ToHashSet(StringComparer.Ordinal);
+        var references = units.SelectMany(u => (u["loadouts"] as JArray ?? new JArray()).SelectMany(l =>
+            (l["ammunition"] as JArray ?? new JArray()).Select(a => (string?)a["reference_id"])));
+        var result = Bundle("air_units", units, references);
+        result["hosts"] = new JArray(Rows("aviation_hosts").OfType<JObject>().Where(h => hostIds.Contains((string)h["host_unit_id"]!)).Select(h =>
+        {
+            var host = (JObject)h.DeepClone();
+            host["displayed_task_count"] = ((JArray)host["tasks"]!).Count;
+            host.Remove("tasks");
+            return host;
+        }));
+        return result;
+    }
+
+    private JObject AirTasks(JObject query)
+    {
+        var tasks = Rows("aviation_hosts").OfType<JObject>().SelectMany(h => ((JArray)h["tasks"]!).OfType<JObject>());
+        if (query["host_ids"] != null)
+        {
+            var ids = SelectRows(new JObject { ["ids"] = query["host_ids"]!.DeepClone() }, "friendly_units").Select(h => (string)h["id"]!).ToHashSet(StringComparer.Ordinal);
+            tasks = tasks.Where(t => ids.Contains((string)t["host_unit_id"]!));
+        }
+        if (query["air_unit_ids"] != null)
+        {
+            var ids = SelectRows(new JObject { ["ids"] = query["air_unit_ids"]!.DeepClone() }, "hosted_air_units").Select(u => (string)u["id"]!).ToHashSet(StringComparer.Ordinal);
+            tasks = tasks.Where(t => t["air_unit_id"]!.Type == JTokenType.String && ids.Contains((string)t["air_unit_id"]!));
+        }
+        return Page(query, new JArray(tasks.Select(t => t.DeepClone())));
     }
 
     private JObject Capabilities(JObject query)
@@ -219,10 +294,14 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
     }
     private JObject RawCatalogue() => new()
     {
-        ["friendly_units"] = new JObject { ["item_count"] = Rows("friendly_units").Count, ["list_query"] = "list_units", ["detail_query"] = "get_units", ["description"] = "Own on-map units: displayed names, kind, position, heading and speed only." },
+        ["friendly_units"] = new JObject { ["item_count"] = Rows("friendly_units").Count, ["list_query"] = "list_units", ["detail_query"] = "get_units", ["description"] = "Own on-map units, including user-enabled ground units and bases. Names, kind, positions, heading and speed; get_unit_capabilities supplies enabled status sections." },
+        ["friendly_ground_units"] = new JObject { ["item_count"] = GroundUnits().Count, ["list_query"] = "list_ground_units", ["detail_query"] = "get_ground_units", ["description"] = "Own known ground combat units, SAM/AAA, radar and missile sites. IDs also work with get_unit_capabilities for enabled ammunition/damage sections." },
+        ["friendly_bases"] = new JObject { ["item_count"] = Rows("friendly_bases").Count, ["list_query"] = "list_bases", ["detail_query"] = "get_bases", ["description"] = "Own known airbases, ports and installations: map positions and function. For observed enemy/neutral bases use list_contacts with kind. A known base does not reveal hidden aircraft or future spawns." },
+        ["hosted_air_units"] = new JObject { ["item_count"] = Rows("hosted_air_units").Count, ["list_query"] = "list_air_units", ["detail_query"] = "get_air_units", ["description"] = "Own known base/carrier/ship aviation: displayed unassigned inventory, squadrons, enabled loadouts and flight-deck tasks. list_air_units accepts host_ids. Hosts omitted by unit-category settings are excluded. Use list_air_tasks for paginated preparation/recovery tasks. Read details before recommending aircraft. Inventory/stock/preparation times do not prove immediate launch feasibility. Host task/status text is preserved, not language-parsed." },
+        ["aviation_tasks"] = new JObject { ["item_count"] = Rows("aviation_hosts").Sum(h => ((JArray)h["tasks"]!).Count), ["list_query"] = "list_air_tasks", ["description"] = "Displayed own flight-deck preparation, launch, recovery and cooldown tasks, paginated. Optional host_ids and/or air_unit_ids filter to relevant known hosts/types. Status text is preserved and is not a guarantee of sortie feasibility." },
         ["unit_capabilities"] = new JObject { ["item_count"] = Rows("unit_capabilities").Count, ["query"] = "get_unit_capabilities", ["description"] = "Batch current own-unit status and referenced weapon ranges. Supply current own-unit IDs and only available_sections; omit sections for all enabled sections. References are deduplicated within the result. Counts do not prove weapons are ready to fire." },
         ["public_class_threat_references"] = new JObject { ["query"] = "get_contact_threats", ["description"] = "Batch current contact IDs to obtain public encyclopedia armament candidates and ranges for identified classes. No actual enemy equipment, ammunition, readiness or damage. Use reference evidence for conditional threat estimates, cite names and retain uncertainty." },
-        ["observed_contacts"] = new JObject { ["item_count"] = Rows("observed_contacts").Count, ["list_query"] = "list_contacts", ["description"] = "Player-map contacts, including unknown or neutral posture. Sensor estimates may be stale; no actual enemy state." },
+        ["observed_contacts"] = new JObject { ["item_count"] = Rows("observed_contacts").Count, ["list_query"] = "list_contacts", ["description"] = "Player-map contacts including ground and base symbols, unknown or neutral posture. Optional kind filters e.g. airbase/port/sam/radar. Sensor estimates may be stale; no actual enemy state." },
         ["mission_briefing"] = new JObject { ["query"] = "get_briefing", ["description"] = "The player's currently displayed mission briefing." },
         ["published_reports"] = new JObject { ["item_count"] = Rows("published_reports").Count, ["list_query"] = "list_reports", ["detail_query"] = "get_reports", ["description"] = "Up to 10 already published intelligence reports, oldest to newest." }
     };
@@ -263,8 +342,11 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
             properties["sections"]!["items"]!["enum"] = new JArray(information.BattleSections);
             properties["sections"]!["description"] = "get_unit_capabilities only. Omit for all user-enabled sections; disabled sections cannot be requested.";
         }
+        if (!information.Allows(InformationKind.BattleAviation)) { properties.Remove("host_ids"); properties.Remove("air_unit_ids"); }
+        if (!information.Allows(InformationKind.BattleContacts)) properties.Remove("kind");
         return tool;
     }
+    private static readonly string[] contactKinds = { "air", "helicopter", "surface", "submarine", "airbase", "installation", "mobileunit", "aaa", "mobileaaa", "sam", "radar", "port", "bridge", "missile", "torpedo", "biologic", "invisible", "airdecoy", "subdecoy", "activesonobouy", "passivesonobouy" };
     private static JObject RawTool() => new()
     {
         ["name"] = "query_situation",
@@ -283,7 +365,10 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
                         ["properties"] = new JObject
                         {
                             ["query"] = new JObject { ["type"] = "string", ["enum"] = new JArray(names) },
-                            ["ids"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = MaxIdsPerQuery, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string" }, ["description"] = "get_units, get_reports, get_unit_capabilities or get_contact_threats: relevant IDs already supplied in this consultation." },
+                            ["ids"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = MaxIdsPerQuery, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string" }, ["description"] = "get_* queries: relevant snapshot-local IDs already supplied in this consultation." },
+                            ["host_ids"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = MaxIdsPerQuery, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string" }, ["description"] = "list_air_units/list_air_tasks only: known own host-unit IDs. Omit for all permitted hosts." },
+                            ["air_unit_ids"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = MaxIdsPerQuery, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string" }, ["description"] = "list_air_tasks only: hosted-air-unit IDs from list_air_units. Omit for all types." },
+                            ["kind"] = new JObject { ["type"] = "string", ["enum"] = new JArray(contactKinds), ["description"] = "list_contacts only: filter by the displayed map-symbol classification. airbase and port identify disclosed base symbols; no hidden locations are queried." },
                             ["sections"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = 3, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string", ["enum"] = new JArray("fuel", "damage", "weapons") }, ["description"] = "get_unit_capabilities only. Omit for all three sections." },
                             ["offset"] = new JObject { ["type"] = "integer", ["minimum"] = 0, ["description"] = "Zero-based offset for list queries only." },
                             ["limit"] = new JObject { ["type"] = "integer", ["minimum"] = 1, ["maximum"] = MaxPageSize, ["description"] = "Page size for list queries only." }

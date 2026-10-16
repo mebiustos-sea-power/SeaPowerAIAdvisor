@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using SeaPowerAIAdvisor;
 
-internal static class BattleTests
+internal static partial class BattleTests
 {
     internal static void Run(Action<string, Action> check)
     {
@@ -197,6 +197,7 @@ internal static class BattleTests
             Require(result.ApiRequests == 3 && result.QueryRounds == 2 && result.Queries.Contains("get_units") &&
                 result.Text == "公開目標を優先し、接触を確認してください。", "Battle consultation did not complete");
         });
+        RunGroundAir(check);
     }
 
     private static JObject Request(IAdvisorQuerySession session, params JObject[] queries) =>
@@ -300,6 +301,7 @@ internal static class BattleTests
         internal readonly List<PublicWeapon> PublicWeapons = new() { new PublicWeapon() };
         internal readonly List<PublicClass> PublicClasses = new();
         internal bool Ready = true;
+        internal string ContactKind = "Surface";
         internal Fixture()
         {
             Track = new Track { Object = Secret };
@@ -308,7 +310,7 @@ internal static class BattleTests
         }
         internal BattleSnapshot Capture(bool disclosure = false) => new BattleSituationReader().Capture(
             OwnUnits.Select(u => (object)new { Unit = new { Object = u } }).Concat(new object[] {
-                new { Unit = Track, ObjectViewModel = new { ObjectName = new Reactive<string>("画面で識別した艦") }, VisualType = "Surface", VisualPosture = "Unknown" }
+                new { Unit = Track, ObjectViewModel = new { ObjectName = new Reactive<string>("画面で識別した艦") }, VisualType = ContactKind, VisualPosture = "Unknown" }
             }).ToArray(), new { TaskforceObjects = OwnUnits.ToArray() },
             new object[] { new { IsHidden = false, Text = "輸送船を保護する", Status = 0 }, Hidden },
             new
@@ -345,6 +347,8 @@ internal static class BattleTests
     }
     private sealed class Parameters
     {
+        public object? _flightDeck { get; set; }
+        public string _landUnitSubType { get; set; } = "Installation";
         public double _currentFuelMass = 600;
         public double _maxFuel = 1200;
         public double _defaultMaxFuel = 1000;
@@ -411,6 +415,7 @@ internal static class BattleTests
         public object Position => throw new InvalidOperationException("Read actual enemy position");
         public string Name => throw new InvalidOperationException("Read actual enemy name");
         public object _obp => throw new InvalidOperationException("Read actual enemy capabilities");
+        public object _flightDeck => throw new InvalidOperationException("Read enemy stored aircraft");
         public object AmmunitionAmountDictionary => throw new InvalidOperationException("Read actual enemy ammunition");
         public object Compartments => throw new InvalidOperationException("Read actual enemy damage");
     }

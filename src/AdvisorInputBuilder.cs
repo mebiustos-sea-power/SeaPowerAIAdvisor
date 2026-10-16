@@ -18,13 +18,14 @@ internal static class AdvisorInputBuilder
                 ["player_side_id"] = snapshot.Side,
                 ["coverage"] = new JObject
                 {
-                    ["included"] = new JArray("victory_conditions", "friendly_task_forces", "friendly_air_units", "friendly_air_flights", "observed_contacts", "observed_non_player_bases", "published_orders", "recent_player_reports"),
-                    ["not_included"] = new JArray("friendly_ground_forces", "friendly_base_stocks", "detailed_air_missions", "air_sortie_feasibility", "detailed_routes", "detailed_weapon_capabilities"),
+                    ["included"] = new JArray("victory_conditions", "friendly_task_forces", "friendly_bases", "friendly_ground_units", "friendly_air_units", "friendly_air_flights", "observed_contacts", "observed_non_player_bases", "published_orders", "recent_player_reports"),
+                    ["not_included"] = new JArray("detailed_air_missions", "air_sortie_feasibility", "detailed_routes", "detailed_weapon_capabilities"),
                     ["report_limit"] = CampaignSituationReader.ReportLimit,
                     ["reference_scope"] = "current_snapshot"
                 },
                 ["victory_conditions"] = Victory(snapshot.Victory, snapshot.Side),
                 ["friendly_task_forces"] = new JArray(snapshot.Forces.Select((f, i) => Force(f, i))),
+                ["friendly_bases"] = snapshot.Ground.Bases(), ["friendly_ground_units"] = snapshot.Ground.Units(),
                 ["friendly_air_units"] = new JArray(snapshot.Aviation.Units.Select(AirUnit)),
                 ["friendly_air_flights"] = new JArray(snapshot.Aviation.Flights.Select(AirFlight)),
                 ["observed_contacts"] = new JArray(snapshot.Contacts.Select((c, i) => Contact(c, i, snapshot.At))),

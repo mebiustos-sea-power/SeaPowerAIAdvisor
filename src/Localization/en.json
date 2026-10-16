@@ -222,7 +222,7 @@
   "information.damage": "Damage",
   "information.weapons": "Ammunition and weapon specifications",
   "information.contacts": "Observed contacts",
-  "information.threats": "Public class specifications and threat references",
+  "information.threats": "Public identified-unit specifications and threat references",
   "information.briefing": "Mission briefing",
   "information.reports": "Published reports",
   "information.forces": "Fleet identities, positions and missions",
@@ -273,5 +273,10 @@
   "settings.error.fallback_model_invalid": "Enter a valid Gemini model ID for the sub connection.",
   "progress.model": "Model: {0}",
   "connection.main_heading": "Main API settings (required)",
-  "connection.sub_heading": "Sub API settings (optional)"
+  "connection.sub_heading": "Sub API settings (optional)",
+  "information.own_ground": "Ground combat units",
+  "information.own_bases": "Bases and installations",
+  "information.hosted_aviation": "Hosted aircraft and aviation operations",
+  "information.own_base_status": "Own base defenses and stocks",
+  "progress.topic.ground": "ground units"
 }

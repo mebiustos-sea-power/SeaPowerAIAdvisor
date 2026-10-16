@@ -9,7 +9,8 @@ internal enum InformationKind
 {
     BattleUnits, BattleFuel, BattleDamage, BattleWeapons, BattleContacts, BattleThreats, BattleBriefing, BattleReports,
     CampaignForces, CampaignShips, CampaignFuel, CampaignAmmunition, CampaignDamage, CampaignAviation,
-    CampaignContacts, CampaignBases, CampaignOrders, CampaignReports
+    CampaignContacts, CampaignBases, CampaignOrders, CampaignReports,
+    BattleGroundUnits, BattleBases, BattleAviation, CampaignOwnBases, CampaignGroundUnits
 }
 
 internal sealed class InformationItem
@@ -18,8 +19,9 @@ internal sealed class InformationItem
     internal string Id { get; }
     internal string TextKey { get; }
     internal InformationKind? Requires { get; }
-    internal InformationItem(InformationKind kind, string id, string label, InformationKind? requires = null)
-    { Kind = kind; Id = id; TextKey = "information." + label; Requires = requires; }
+    internal bool DefaultEnabled { get; }
+    internal InformationItem(InformationKind kind, string id, string label, InformationKind? requires = null, bool defaultEnabled = true)
+    { Kind = kind; Id = id; TextKey = "information." + label; Requires = requires; DefaultEnabled = defaultEnabled; }
 }
 
 internal sealed class InformationGroup
@@ -52,37 +54,40 @@ internal sealed class AdvisorInformation
         new InformationItem(InformationKind.CampaignContacts, "campaign_contacts", "contacts"),
         new InformationItem(InformationKind.CampaignBases, "campaign_base_observations", "base_observations"),
         new InformationItem(InformationKind.CampaignOrders, "campaign_orders", "orders"),
-        new InformationItem(InformationKind.CampaignReports, "campaign_reports", "reports")
+        new InformationItem(InformationKind.CampaignReports, "campaign_reports", "reports"),
+        new InformationItem(InformationKind.BattleGroundUnits, "battle_ground_units", "own_ground", InformationKind.BattleUnits),
+        new InformationItem(InformationKind.BattleBases, "battle_bases", "own_bases", InformationKind.BattleUnits),
+        new InformationItem(InformationKind.BattleAviation, "battle_aviation", "hosted_aviation", InformationKind.BattleUnits),
+        new InformationItem(InformationKind.CampaignOwnBases, "campaign_own_bases", "own_base_status"),
+        new InformationItem(InformationKind.CampaignGroundUnits, "campaign_ground_units", "own_ground")
     });
     internal static readonly IReadOnlyList<InformationGroup> Groups = Array.AsReadOnly(new[]
     {
-        new InformationGroup("battle_friendly", InformationKind.BattleUnits, InformationKind.BattleFuel, InformationKind.BattleDamage, InformationKind.BattleWeapons),
+        new InformationGroup("battle_friendly", InformationKind.BattleUnits, InformationKind.BattleGroundUnits, InformationKind.BattleBases, InformationKind.BattleAviation, InformationKind.BattleFuel, InformationKind.BattleDamage, InformationKind.BattleWeapons),
         new InformationGroup("battle_intelligence", InformationKind.BattleContacts, InformationKind.BattleThreats, InformationKind.BattleBriefing, InformationKind.BattleReports),
-        new InformationGroup("campaign_friendly", InformationKind.CampaignForces, InformationKind.CampaignShips, InformationKind.CampaignFuel, InformationKind.CampaignAmmunition, InformationKind.CampaignDamage, InformationKind.CampaignAviation),
+        new InformationGroup("campaign_friendly", InformationKind.CampaignForces, InformationKind.CampaignShips, InformationKind.CampaignFuel, InformationKind.CampaignAmmunition, InformationKind.CampaignDamage, InformationKind.CampaignAviation, InformationKind.CampaignOwnBases, InformationKind.CampaignGroundUnits),
         new InformationGroup("campaign_intelligence", InformationKind.CampaignContacts, InformationKind.CampaignBases, InformationKind.CampaignOrders, InformationKind.CampaignReports)
     });
-    internal static readonly AdvisorInformation All = new(Array.Empty<string>());
-    private readonly HashSet<string> disabled;
-    private AdvisorInformation(IEnumerable<string> disabled) { this.disabled = new HashSet<string>(disabled, StringComparer.Ordinal); }
+    internal static readonly AdvisorInformation All = new(Items.ToDictionary(i => i.Id, _ => true, StringComparer.Ordinal));
+    internal static readonly AdvisorInformation Default = new(Items.ToDictionary(i => i.Id, i => i.DefaultEnabled, StringComparer.Ordinal));
+    private readonly Dictionary<string, bool> selected;
+    private AdvisorInformation(Dictionary<string, bool> selected) { this.selected = selected; }
     internal static InformationItem Item(InformationKind kind) => Items.Single(i => i.Kind == kind);
     internal bool Allows(InformationKind kind)
     {
         var item = Item(kind);
-        return !disabled.Contains(item.Id) && (!item.Requires.HasValue || Allows(item.Requires.Value));
+        return selected[item.Id] && (!item.Requires.HasValue || Allows(item.Requires.Value));
     }
     internal bool CanEdit(InformationKind kind) => !Item(kind).Requires.HasValue || Allows(Item(kind).Requires!.Value);
     internal AdvisorInformation With(InformationKind kind, bool enabled)
     {
-        var next = new HashSet<string>(disabled, StringComparer.Ordinal);
-        if (enabled)
+        var next = new Dictionary<string, bool>(selected, StringComparer.Ordinal);
+        InformationKind? current = kind;
+        do
         {
-            InformationKind? current = kind;
-            while (current.HasValue)
-            {
-                var item = Item(current.Value); next.Remove(item.Id); current = item.Requires;
-            }
-        }
-        else next.Add(Item(kind).Id);
+            var item = Item(current.Value); next[item.Id] = enabled;
+            current = enabled ? item.Requires : null;
+        } while (current.HasValue);
         return new AdvisorInformation(next);
     }
     internal AdvisorInformation With(InformationGroup group, bool enabled)
@@ -93,15 +98,26 @@ internal sealed class AdvisorInformation
     }
     internal bool? State(InformationGroup group) => group.Items.All(Allows) ? true : group.Items.Any(Allows) ? (bool?)null : false;
     internal string Key => string.Join(",", Items.Where(i => !Allows(i.Kind)).Select(i => i.Id));
-    internal JArray Data() => new(Items.Where(i => disabled.Contains(i.Id)).Select(i => i.Id));
+    // Save explicit choices, including children hidden by a disabled parent. Defaults only fill newly introduced items.
+    internal JObject Data() => new(Items.Select(i => new JProperty(i.Id, selected[i.Id])));
+    internal static AdvisorInformation ParseSelections(JToken? token)
+    {
+        if (token == null) return Default;
+        if (!(token is JObject values) || values.Properties().Any(p => p.Value.Type != JTokenType.Boolean || !Items.Any(i => i.Id == p.Name)))
+            throw new AdvisorOptionsException("information_invalid");
+        return new AdvisorInformation(Items.ToDictionary(i => i.Id, i => (bool?)values[i.Id] ?? i.DefaultEnabled, StringComparer.Ordinal));
+    }
+    // Legacy files stored only disabled IDs. Missing legacy items were explicitly on under that format.
     internal static AdvisorInformation Parse(JToken? token)
     {
-        if (token == null) return All;
+        if (token == null) return Default;
         if (!(token is JArray array) || array.Any(i => i.Type != JTokenType.String) ||
             array.Values<string>().Distinct(StringComparer.Ordinal).Count() != array.Count ||
             array.Values<string>().Any(id => !Items.Any(i => i.Id == id)))
             throw new AdvisorOptionsException("information_invalid");
-        return new AdvisorInformation(array.Values<string>()!);
+        var disabled = array.Values<string>().ToHashSet(StringComparer.Ordinal);
+        return new AdvisorInformation(Items.ToDictionary(i => i.Id,
+            i => !disabled.Contains(i.Id) && ((int)i.Kind <= (int)InformationKind.CampaignReports || i.DefaultEnabled), StringComparer.Ordinal));
     }
     internal JArray Excluded(bool battle) => new(Items.Where(i => i.Id.StartsWith(battle ? "battle_" : "campaign_", StringComparison.Ordinal) && !Allows(i.Kind)).Select(i => i.Id));
     internal void AddCoverage(JObject initial, bool battle)
@@ -114,6 +130,8 @@ internal sealed class AdvisorInformation
         "friendly_ships" => Allows(InformationKind.CampaignShips),
         "friendly_air_units" or "friendly_air_flights" => Allows(InformationKind.CampaignAviation),
         "observed_contacts" => Allows(InformationKind.CampaignContacts),
+        "friendly_bases" => Allows(InformationKind.CampaignOwnBases),
+        "friendly_ground_units" => Allows(InformationKind.CampaignGroundUnits),
         "base_observations" => Allows(InformationKind.CampaignBases),
         "published_orders" => Allows(InformationKind.CampaignOrders),
         "recent_player_reports" => Allows(InformationKind.CampaignReports),
@@ -127,6 +145,8 @@ internal sealed class AdvisorInformation
         "list_ships" or "get_ships" => Allows(InformationKind.CampaignShips),
         "list_air_units" or "get_air_units" or "list_air_flights" => Allows(InformationKind.CampaignAviation),
         "list_contacts" => Allows(InformationKind.CampaignContacts),
+        "get_bases" => Allows(InformationKind.CampaignOwnBases),
+        "list_ground_units" or "get_ground_units" => Allows(InformationKind.CampaignGroundUnits),
         "get_base_observations" => Allows(InformationKind.CampaignBases),
         "list_orders" or "get_orders" => Allows(InformationKind.CampaignOrders),
         "list_reports" or "get_reports" => Allows(InformationKind.CampaignReports),
@@ -137,6 +157,9 @@ internal sealed class AdvisorInformation
     internal bool BattleCategory(string category) => category switch
     {
         "friendly_units" => Allows(InformationKind.BattleUnits),
+        "friendly_ground_units" => Allows(InformationKind.BattleGroundUnits),
+        "friendly_bases" => Allows(InformationKind.BattleBases),
+        "hosted_air_units" or "aviation_tasks" => Allows(InformationKind.BattleAviation),
         "unit_capabilities" => BattleSections.Length > 0,
         "observed_contacts" => Allows(InformationKind.BattleContacts),
         "public_class_threat_references" => Allows(InformationKind.BattleThreats),
@@ -148,6 +171,9 @@ internal sealed class AdvisorInformation
     {
         "catalog" => true,
         "list_units" or "get_units" => Allows(InformationKind.BattleUnits),
+        "list_ground_units" or "get_ground_units" => Allows(InformationKind.BattleGroundUnits),
+        "list_bases" or "get_bases" => Allows(InformationKind.BattleBases),
+        "list_air_units" or "get_air_units" or "list_air_tasks" => Allows(InformationKind.BattleAviation),
         "get_unit_capabilities" => BattleSections.Length > 0,
         "list_contacts" => Allows(InformationKind.BattleContacts),
         "get_contact_threats" => Allows(InformationKind.BattleThreats),
