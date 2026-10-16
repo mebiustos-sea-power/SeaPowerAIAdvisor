@@ -27,7 +27,9 @@ internal sealed class AdvisorWindow
     private readonly TextBox question;
     private readonly ScrollViewer transcriptScroll;
     private readonly AdvisorTranscriptView transcript;
-    private readonly TextBox diagnosticOutput, profileName, profilePersonality;
+    private readonly TextBox diagnosticOutput, profileName, profilePersonality, modelName;
+    private readonly PasswordBox apiKey;
+    private AdvisorSettingsDraft? connectionDraft;
     private readonly RadioButton defaultAdvisor, customAdvisor;
     private readonly TextBlock advisorName, activity, portraitError, profilePreviewError, profileStatus, paneTitle;
     private readonly Image portraitImage, profilePreview;
@@ -35,7 +37,7 @@ internal sealed class AdvisorWindow
     private readonly TabControl settingsTabs;
     private readonly CheckBox logAiJson;
     private readonly string settingsPath;
-    private readonly Button settingsAction;
+    private readonly Button settingsAction, saveSettings;
     private readonly string profileDirectory;
     private AdvisorPortrait? portrait, previewPortrait;
     private AdvisorProfileDraft profileDraft = new(new AdvisorProfile(AdvisorProfile.DefaultName, AdvisorProfile.DefaultPortraitFile, true));
@@ -45,7 +47,7 @@ internal sealed class AdvisorWindow
     private readonly Button choosePortrait;
     private string speakerName;
     private bool profileLoaded;
-    private readonly TextBlock status, diagnosticStatus;
+    private readonly TextBlock status, diagnosticStatus, settingsStatus;
     private readonly Button send, captureAction, inputAction;
     private readonly (AdvisorShortcut Shortcut, Button Button)[] shortcuts;
     private AdvisorJob? active;
@@ -96,12 +98,16 @@ internal sealed class AdvisorWindow
         settingsPane = Named<FrameworkElement>(content, "SettingsPane");
         settingsTabs = Named<TabControl>(content, "SettingsTabs");
         settingsAction = Named<Button>(content, "Settings");
-        settingsAction.Click += (_, _) => guard(ToggleSettings);
-        Named<Button>(content, "SaveProfile").Click += (_, _) => guard(SaveProfile);
+        settingsAction.Click += (_, _) => guard(OpenSettings);
+        saveSettings = Named<Button>(content, "SaveSettings");
+        saveSettings.Click += (_, _) => guard(SaveSettings);
+        Named<Button>(content, "CancelSettings").Click += (_, _) => guard(CancelSettings);
+        settingsStatus = Named<TextBlock>(content, "SettingsStatus");
+        apiKey = Named<PasswordBox>(content, "ApiKey");
+        modelName = Named<TextBox>(content, "ModelName");
         profileDirectory = AdvisorProfile.DirectoryIn(UnityEngine.Application.persistentDataPath);
         settingsPath = AdvisorSettings.PathIn(UnityEngine.Application.persistentDataPath);
         logAiJson = Named<CheckBox>(content, "LogAiJson");
-        logAiJson.Click += (_, _) => guard(SaveLogging);
         Named<TextBox>(content, "ProfilePath").Text = AdvisorProfile.SettingsPath(profileDirectory);
         send = Named<Button>(content, "Send");
         send.Click += (_, _) => guard(Send);
@@ -114,8 +120,8 @@ internal sealed class AdvisorWindow
         shortcuts = new[]
         {
             (AdvisorShortcut.NextSteps, Named<Button>(content, "NextSteps")),
-            (AdvisorShortcut.MoreDetail, Named<Button>(content, "MoreDetail")),
-            (AdvisorShortcut.KeyRisks, Named<Button>(content, "KeyRisks"))
+            (AdvisorShortcut.KeyRisks, Named<Button>(content, "KeyRisks")),
+            (AdvisorShortcut.MoreDetail, Named<Button>(content, "MoreDetail"))
         };
         foreach (var item in shortcuts)
             item.Button.Click += (_, _) => guard(() => ConsultShortcut(item.Shortcut, item.Button));
@@ -123,11 +129,13 @@ internal sealed class AdvisorWindow
         questionInput = new QuestionInputController(question, () => active != null, StartConsultation, guard);
         question.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(question));
         question.LostKeyboardFocus += (_, _) => guard(() => typing.Release(question));
-        foreach (var input in new[] { profileName, profilePersonality, diagnosticOutput, Named<TextBox>(content, "ProfilePath") })
+        foreach (var input in new[] { profileName, profilePersonality, modelName, diagnosticOutput, Named<TextBox>(content, "ProfilePath") })
         {
             input.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(input));
             input.LostKeyboardFocus += (_, _) => guard(() => typing.Release(input));
         }
+        apiKey.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(apiKey));
+        apiKey.LostKeyboardFocus += (_, _) => guard(() => typing.Release(apiKey));
         var width = Math.Min(680, view.ActualWidth - 40);
         var height = Math.Min(720, view.ActualHeight - 120);
         if (width < 360 || height < 360) throw new InvalidOperationException("The game view is too small for the advisor prototype.");
@@ -143,7 +151,7 @@ internal sealed class AdvisorWindow
         window.DataContext = window;
         window.Template = view.TryFindResource("WindowLayoutNoScroll") as ControlTemplate
             ?? throw new InvalidOperationException("The game's WindowLayoutNoScroll template is unavailable.");
-        window.OnClosed += (_, _) => guard(() => { CancelActive(); ReleaseInput(); ReleasePortrait(); portraitSelection = null; });
+        window.OnClosed += (_, _) => guard(() => { CancelActive(); ReleaseInput(); ReleasePortrait(); portraitSelection = null; DiscardConnectionChanges(); });
         settingsTabs.SelectionChanged += (_, _) => guard(() =>
         {
             if (!IsOpen || settingsPane.Visibility != Visibility.Visible) return;
@@ -164,10 +172,10 @@ internal sealed class AdvisorWindow
         if (IsOpen) { Close(); return; }
         RefreshLanguage();
         LoadProfile();
-        ReloadLogging();
+        if (settingsPane.Visibility == Visibility.Visible) BeginConnectionEdit();
         WindowHostCommands.OpenWindowCommand.Execute(window, view);
         if (!IsOpen) throw new InvalidOperationException("The game window host did not open the advisor.");
-        // Keep the draft and history while reopening this screen; integrations reset them on a mission change.
+        // Keep conversation and message text; reopened settings reload their saved values.
         choosePortrait.IsEnabled = portraitSelection == null;
         if (settingsPane.Visibility == Visibility.Visible) FocusSettings();
         else question.Focus();
@@ -196,6 +204,7 @@ internal sealed class AdvisorWindow
         CancelActive();
         ReleaseInput();
         portraitSelection = null;
+        DiscardConnectionChanges();
         if (IsOpen) window.CloseWindowNow();
         ReleasePortrait();
     }
@@ -390,61 +399,86 @@ internal sealed class AdvisorWindow
     }
 
 
-    private void ToggleSettings()
+    private void OpenSettings()
     {
-        var show = settingsPane.Visibility != Visibility.Visible;
-        questionInput.Reset();
-        typing.Release();
-        if (window.IsKeyboardFocusWithin) window.Keyboard.ClearFocus();
-        // Keep conversation controls intact; leaving settings discards any remaining profile edits.
-        if (!show) DiscardProfileChanges();
-        conversationPane.Visibility = show ? Visibility.Collapsed : Visibility.Visible;
-        settingsPane.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-        paneTitle.Text = text[show ? "pane.settings" : "pane.conversation"];
-        settingsAction.Content = text[show ? "action.cancel_settings" : "action.settings"];
-        if (show) { ReloadLogging(); FocusSettings(); }
-        else { scrollPending = true; question.Focus(); }
+        if (settingsPane.Visibility == Visibility.Visible) return;
+        ReleaseInput();
+        DiscardProfileChanges();
+        BeginConnectionEdit();
+        conversationPane.Visibility = Visibility.Collapsed;
+        settingsPane.Visibility = Visibility.Visible;
+        settingsAction.Visibility = Visibility.Collapsed;
+        paneTitle.Text = text["pane.settings"];
+        FocusSettings();
     }
 
-    private void ReloadLogging()
+    private void CancelSettings()
     {
+        ReleaseInput();
+        DiscardProfileChanges();
+        ReturnToConversation();
+    }
+
+    private void ReturnToConversation()
+    {
+        DiscardConnectionChanges();
+        settingsPane.Visibility = Visibility.Collapsed;
+        conversationPane.Visibility = Visibility.Visible;
+        settingsAction.Visibility = Visibility.Visible;
+        paneTitle.Text = text["pane.conversation"];
+        scrollPending = true;
+        question.Focus();
+    }
+
+    private void BeginConnectionEdit()
+    {
+        DiscardConnectionChanges();
+        SetSettingsStatus(string.Empty);
         try
         {
-            logAiJson.IsChecked = AdvisorSettings.LoadLogging(settingsPath);
-            logAiJson.IsEnabled = true;
+            connectionDraft = AdvisorSettings.Edit(settingsPath);
+            apiKey.Password = connectionDraft.ApiKey;
+            modelName.Text = connectionDraft.Model;
+            logAiJson.IsChecked = connectionDraft.LogAiJson;
+            apiKey.IsEnabled = modelName.IsEnabled = logAiJson.IsEnabled = saveSettings.IsEnabled = true;
         }
         catch (AdvisorConnectionException failure)
         {
-            logAiJson.IsEnabled = false;
-            LoggingSettingsError(failure);
+            apiKey.IsEnabled = modelName.IsEnabled = logAiJson.IsEnabled = saveSettings.IsEnabled = false;
+            SettingsError(failure);
         }
     }
 
-    private void SaveLogging()
+    private void DiscardConnectionChanges()
     {
-        var enabled = logAiJson.IsChecked == true;
-        try
-        {
-            AdvisorSettings.SaveLogging(settingsPath, enabled);
-            diagnosticStatus.Text = string.Empty;
-        }
-        catch (AdvisorConnectionException failure)
-        {
-            logAiJson.IsChecked = !enabled;
-            LoggingSettingsError(failure);
-        }
+        connectionDraft = null;
+        apiKey.Password = string.Empty;
+        modelName.Text = string.Empty;
+        logAiJson.IsChecked = false;
     }
 
-    private void LoggingSettingsError(AdvisorConnectionException failure)
+    private void SettingsError(AdvisorConnectionException failure)
     {
-        diagnosticStatus.Text = text.Format("developer.settings_error", failure.Code);
-        warn("AI logging settings failed: " + failure.Code);
+        var key = text.Contains("settings.error." + failure.Code) ? failure.Code : "settings_invalid";
+        SetSettingsStatus(text["settings.error." + key] + text.Format("settings.error_suffix", failure.Code));
+        warn("Advisor settings failed: " + failure.Code);
+    }
+
+    private void SetSettingsStatus(string message)
+    {
+        settingsStatus.Text = message;
+        settingsStatus.Visibility = string.IsNullOrEmpty(message) ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void FocusSettings()
     {
-        if (settingsTabs.SelectedIndex != 0) { captureAction.Focus(); return; }
-        if (profileDraft.UseDefault) profilePersonality.Focus();
+        if (settingsTabs.SelectedIndex == 1)
+        {
+            if (apiKey.IsEnabled) apiKey.Focus();
+            else Named<Button>(content, "CancelSettings").Focus();
+        }
+        else if (settingsTabs.SelectedIndex == 2) captureAction.Focus();
+        else if (profileDraft.UseDefault) profilePersonality.Focus();
         else profileName.Focus();
     }
 
@@ -548,29 +582,43 @@ internal sealed class AdvisorWindow
         catch (AdvisorProfileException failure) { ProfileError(failure); }
     }
 
-    private void SaveProfile()
+    private void SaveSettings()
     {
-        if (!string.IsNullOrEmpty(UnityEngine.Input.compositionString))
+        if (QuestionInputController.IsComposing)
         {
-            SetProfileStatus(text["profile.ime"]);
+            SetSettingsStatus(text["profile.ime"]);
             return;
         }
-        if (portraitSelection != null) return;
+        if (portraitSelection != null || connectionDraft == null) return;
+        SetSettingsStatus(string.Empty);
         if (!profileName.IsReadOnly) profileDraft.CustomName = profileName.Text ?? "";
         profileDraft.Personality = profilePersonality.Text ?? "";
+        connectionDraft.ApiKey = apiKey.Password;
+        connectionDraft.Model = modelName.Text ?? "";
+        connectionDraft.LogAiJson = logAiJson.IsChecked == true;
         try
         {
+            _ = connectionDraft.Data();
             var next = new AdvisorPortrait(profileDraft.ReadActivePortrait(profileDirectory, DefaultPortrait));
             AdvisorProfile profile;
-            try { profile = profileDraft.Save(profileDirectory); }
+            try { profile = AdvisorPreferences.Save(profileDraft, connectionDraft, profileDirectory, settingsPath); }
             catch { next.Dispose(); throw; }
             var previous = appliedProfile;
             ApplyProfile(profile, next);
             if (previous != null && previous.PortraitFile != profile.PortraitFile)
                 previous.DeleteImportedPortrait(profileDirectory, warn);
-            ToggleSettings();
+            ReturnToConversation();
         }
-        catch (AdvisorProfileException failure) { ProfileError(failure, true); }
+        catch (AdvisorProfileException failure)
+        {
+            settingsTabs.SelectedIndex = 0;
+            ProfileError(failure, true);
+        }
+        catch (AdvisorConnectionException failure)
+        {
+            settingsTabs.SelectedIndex = 1;
+            SettingsError(failure);
+        }
     }
 
     private void ApplyProfile(AdvisorProfile profile, AdvisorPortrait next)
@@ -671,7 +719,7 @@ internal sealed class AdvisorWindow
         window.Header = text["window.title"];
         var settings = settingsPane.Visibility == Visibility.Visible;
         paneTitle.Text = text[settings ? "pane.settings" : "pane.conversation"];
-        settingsAction.Content = text[settings ? "action.cancel_settings" : "action.settings"];
+        settingsAction.Content = text["action.settings"];
         if (!profileLoaded) speakerName = text["speaker.advisor"];
         SetBusy(active != null);
         ShowConversation();

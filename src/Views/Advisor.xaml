@@ -39,12 +39,14 @@
           <TextBlock x:Name="Activity" Text="{DynamicResource Advisor.activity.idle}" TextWrapping="Wrap" TextAlignment="Center"
                      FontSize="12" Margin="0,12,0,0" Opacity="0.8" />
           <StackPanel Margin="0,18,0,0">
+            <TextBlock Text="{DynamicResource Advisor.quick.heading}" FontSize="12" TextAlignment="Center"
+                       Margin="0,0,0,8" Opacity="0.8" />
             <Button x:Name="NextSteps" Content="{DynamicResource Advisor.preset.next_steps}"
                     ToolTip="{DynamicResource Advisor.preset.next_steps_tip}" Height="34" Margin="0,0,0,8" />
-            <Button x:Name="MoreDetail" Content="{DynamicResource Advisor.preset.more_detail}"
-                    ToolTip="{DynamicResource Advisor.preset.more_detail_tip}" Height="34" Margin="0,0,0,8" IsEnabled="False" />
             <Button x:Name="KeyRisks" Content="{DynamicResource Advisor.preset.key_risks}"
-                    ToolTip="{DynamicResource Advisor.preset.key_risks_tip}" Height="34" />
+                    ToolTip="{DynamicResource Advisor.preset.key_risks_tip}" Height="34" Margin="0,0,0,8" />
+            <Button x:Name="MoreDetail" Content="{DynamicResource Advisor.preset.more_detail}"
+                    ToolTip="{DynamicResource Advisor.preset.more_detail_tip}" Height="34" IsEnabled="False" />
           </StackPanel>
         </StackPanel>
       </ScrollViewer>
@@ -69,13 +71,17 @@
                FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0" />
   </Grid>
   <Grid x:Name="SettingsPane" Grid.Row="1" Visibility="Collapsed">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
     <TabControl x:Name="SettingsTabs" SelectedIndex="0" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
-      <TabItem x:Name="ProfileTab" Header="{DynamicResource Advisor.pane.settings}"
+      <TabItem x:Name="ProfileTab" Header="{DynamicResource Advisor.profile.tab}"
                HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
         <Grid x:Name="ProfileSettings" Margin="0,12,0,0">
           <Grid.RowDefinitions>
             <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
           </Grid.RowDefinitions>
           <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
@@ -114,10 +120,20 @@
           </ScrollViewer>
           <TextBlock x:Name="ProfileStatus" Grid.Row="1" TextWrapping="Wrap" FontSize="12"
                      Margin="0,8,0,0" Visibility="Collapsed" />
-          <WrapPanel x:Name="ProfileActions" Grid.Row="2" HorizontalAlignment="Right" Margin="0,12,0,0">
-            <Button x:Name="SaveProfile" Content="{DynamicResource Advisor.action.save_profile}" Height="30" Padding="12,0" />
-          </WrapPanel>
         </Grid>
+      </TabItem>
+      <TabItem x:Name="ConnectionTab" Header="{DynamicResource Advisor.connection.tab}"
+               HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,12,0,0">
+          <StackPanel Margin="0,0,8,0">
+            <TextBlock Text="{DynamicResource Advisor.connection.api_key}" FontSize="12" Margin="0,0,0,4" />
+            <PasswordBox x:Name="ApiKey" FontSize="14" Padding="7" MaxLength="512" ShowLastCharacterDuration="0" />
+            <TextBlock Text="{DynamicResource Advisor.connection.model}" FontSize="12" Margin="0,18,0,4" />
+            <TextBox x:Name="ModelName" FontSize="14" Padding="7" MaxLength="100" />
+            <TextBlock Text="{DynamicResource Advisor.connection.model_hint}" FontSize="12" TextWrapping="Wrap"
+                       Margin="0,6,0,0" Opacity="0.7" />
+          </StackPanel>
+        </ScrollViewer>
       </TabItem>
       <TabItem x:Name="DiagnosticsTab" Header="{DynamicResource Advisor.diagnostics.heading}"
                HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
@@ -146,5 +162,11 @@
         </Grid>
       </TabItem>
     </TabControl>
+    <TextBlock x:Name="SettingsStatus" Grid.Row="1" TextWrapping="Wrap" FontSize="12"
+               Margin="0,8,0,0" Visibility="Collapsed" />
+    <WrapPanel x:Name="SettingsActions" Grid.Row="2" HorizontalAlignment="Right" Margin="0,12,0,0">
+      <Button x:Name="CancelSettings" Content="{DynamicResource Advisor.action.cancel_settings}" Height="30" Padding="12,0" />
+      <Button x:Name="SaveSettings" Content="{DynamicResource Advisor.action.save_settings}" Height="30" Padding="12,0" Margin="8,0,0,0" />
+    </WrapPanel>
   </Grid>
 </Grid>

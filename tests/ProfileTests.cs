@@ -288,7 +288,7 @@ internal static class ProfileTests
             catch (FileNotFoundException) { return; }
             throw new InvalidOperationException("A missing packaged dependency was hidden");
         }));
-        check("Settings and diagnostics use separate tabs with a single save-and-return action at the bottom right", () =>
+        check("Settings tabs share bottom save and cancel actions and the API key input stays masked", () =>
         {
             var view = assembly.MainModule.Resources.OfType<EmbeddedResource>().Single(r => r.Name == "SeaPowerAIAdvisor.Advisor.xaml");
             using var stream = view.GetResourceStream(); var root = XDocument.Load(stream).Root!;
@@ -296,9 +296,11 @@ internal static class ProfileTests
             XElement Named(string name) => root.Descendants().Single(e => (string?)e.Attribute(x + "Name") == name);
             var settings = Named("SettingsPane"); var tabs = Named("SettingsTabs");
             var profile = Named("ProfileTab"); var diagnostics = Named("DiagnosticsTab");
+            var connection = Named("ConnectionTab");
             Require((string?)settings.Attribute("Visibility") == "Collapsed" &&
                 tabs.Parent == settings && tabs.Name.LocalName == "TabControl" &&
-                (string?)tabs.Attribute("SelectedIndex") == "0" && profile.Parent == tabs && diagnostics.Parent == tabs,
+                (string?)tabs.Attribute("SelectedIndex") == "0" &&
+                tabs.Elements().Select(e => (string?)e.Attribute(x + "Name")).SequenceEqual(new[] { "ProfileTab", "ConnectionTab", "DiagnosticsTab" }),
                 "Settings and diagnostics are not separate tabs with settings selected initially");
             Require(Named("Capture").Ancestors().Contains(diagnostics) &&
                 Named("Input").Ancestors().Contains(diagnostics) &&
@@ -314,6 +316,12 @@ internal static class ProfileTests
                     Named(shortcut).AncestorsAndSelf().Any(e => name.ElementsAfterSelf().Contains(e)),
                     "A quick action is not below the portrait and name");
             Require(left.Parent?.Name.LocalName == "ScrollViewer", "Quick actions can be clipped in a short window");
+            Require(Named("NextSteps").Parent!.Elements().Where(e => e.Name.LocalName == "Button")
+                .Select(e => (string?)e.Attribute(x + "Name")).SequenceEqual(new[] { "NextSteps", "KeyRisks", "MoreDetail" }),
+                "Follow-up detail is not after the two independent quick consultations");
+            Require(Named("ApiKey").Ancestors().Contains(connection) && Named("ApiKey").Name.LocalName == "PasswordBox" &&
+                (string?)Named("ApiKey").Attribute("ShowLastCharacterDuration") == "0" &&
+                Named("ModelName").Ancestors().Contains(connection), "Connection credentials are not in a masked input on their own tab");
             var conversation = Named("ConversationPane");
             Require(conversation.Parent == root && settings.Parent == root &&
                 (string?)conversation.Attribute("Grid.Row") == (string?)settings.Attribute("Grid.Row"),
@@ -332,15 +340,14 @@ internal static class ProfileTests
                 (string?)Named("ProfilePersonality").Attribute("IsReadOnly") != "True" &&
                 (string?)Named("ProfilePersonality").Attribute("IsEnabled") != "False" &&
                 Named("ProfileStatus").Ancestors().Contains(profile), "Profile controls are outside their tab");
-            var profilePane = Named("ProfileSettings"); var actions = Named("ProfileActions");
-            var profileRows = profilePane.Element(profilePane.Name.Namespace + "Grid.RowDefinitions")!.Elements().ToArray();
-            Require(actions.Parent == profilePane &&
-                int.Parse((string)actions.Attribute("Grid.Row")!) == profileRows.Length - 1 &&
+            var actions = Named("SettingsActions");
+            var settingsRows = settings.Element(settings.Name.Namespace + "Grid.RowDefinitions")!.Elements().ToArray();
+            Require(actions.Parent == settings &&
+                int.Parse((string)actions.Attribute("Grid.Row")!) == settingsRows.Length - 1 &&
                 (string?)actions.Attribute("HorizontalAlignment") == "Right" &&
-                (string?)profileRows[0].Attribute("Height") == "*" &&
-                Named("SaveProfile").Parent == actions && actions.Elements().Count() == 1 &&
-                !root.Descendants().Any(e => (string?)e.Attribute(x + "Name") == "ReloadProfile"),
-                "Settings do not have a single save-and-return action at the bottom right");
+                (string?)settingsRows[0].Attribute("Height") == "*" &&
+                actions.Elements().Select(e => (string?)e.Attribute(x + "Name")).SequenceEqual(new[] { "CancelSettings", "SaveSettings" }),
+                "Save and cancel are not together at the bottom right outside all tabs");
             var output = Named("DiagnosticOutput"); var diagnosticPane = Named("DiagnosticsPane");
             var rows = diagnosticPane.Element(diagnosticPane.Name.Namespace + "Grid.RowDefinitions")!.Elements().ToArray();
             Require(output.Parent == diagnosticPane && output.Attribute("Height") == null &&
