@@ -6,6 +6,9 @@
     <Compile Include="..\src\AdvisorMarkdown.cs" Link="AdvisorMarkdown.cs" />
     <Compile Include="..\src\IAdvisorQuerySession.cs" Link="IAdvisorQuerySession.cs" />
     <Compile Include="..\src\AdvisorSource.cs" Link="AdvisorSource.cs" />
+    <Compile Include="..\src\BattleValue.cs" Link="BattleValue.cs" />
+    <Compile Include="..\src\BattleCapabilityReader.cs" Link="BattleCapabilityReader.cs" />
+    <Compile Include="..\src\BattleReferenceCatalog.cs" Link="BattleReferenceCatalog.cs" />
     <Compile Include="..\src\BattleSnapshot.cs" Link="BattleSnapshot.cs" />
     <Compile Include="..\src\BattleQuerySession.cs" Link="BattleQuerySession.cs" />
     <Compile Include="..\src\BattleSituationReader.cs" Link="BattleSituationReader.cs" />

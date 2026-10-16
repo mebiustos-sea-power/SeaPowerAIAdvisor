@@ -9,7 +9,7 @@ namespace SeaPowerAIAdvisor;
 // Queries operate exclusively on the detached player view captured at consultation start.
 internal sealed class BattleQuerySession : IAdvisorQuerySession
 {
-    private static readonly string[] names = { "catalog", "list_units", "get_units", "list_contacts", "get_briefing", "list_reports", "get_reports" };
+    private static readonly string[] names = { "catalog", "list_units", "get_units", "list_contacts", "get_briefing", "list_reports", "get_reports", "get_unit_capabilities", "get_contact_threats" };
     private readonly JObject snapshot;
     private readonly JObject initial;
     public string Id { get; } = Guid.NewGuid().ToString("N");
@@ -27,14 +27,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
         initial["mode"] = "tactical_battle";
         initial["interaction_mode"] = "on_demand";
         initial["consultation_id"] = Id;
-        initial["instructions"]!["evidence_policy"] =
-            "Use only this consultation's player-known battle evidence. Never fill gaps using real-world history, typical armaments, geography-based guesses, or prior adviser assertions. " +
-            "Prior advice is not evidence; explicitly correct unsupported earlier recommendations. Query relevant current unit details, public briefing and published reports before proposing concrete actions. " +
-            "Public objectives and their displayed status are the only disclosed victory conditions. Hidden scoring rules, enemy objectives, future events and actual enemy state are unavailable. " +
-            "Contact positions are sensor estimates or extrapolations, not exact enemy positions. A missing position, observation time or error bound is unknown. " +
-            "Do not infer freshness from captured_at_utc; it is capture time, not detection time. Unknown posture is not confirmed hostile. " +
-            "The prototype has no ammunition, damage, fuel, aircraft readiness, range or detailed capabilities. Names alone prove none of these. Do not invent aircraft, weapons or specific attack feasibility. " +
-            "When giving advice, provide useful priorities and next checks; make unsupported operational options explicitly conditional. Preserve supplied display names and never print internal IDs or tool syntax.";
+        initial["instructions"]!["evidence_policy"] = AdvisorAnswerPolicy.BattleEvidence;
         initial["instructions"]!["retrieval"] = "Use query_situation for relevant evidence. Known IDs can be queried directly; batch independent requests. Answer using gathered facts when the retrieval budget ends.";
         initial["situation"] = new JObject
         {
@@ -55,8 +48,8 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
             },
             ["coverage"] = new JObject
             {
-                ["available_on_request"] = new JArray("friendly_units", "observed_contacts", "mission_briefing", "published_reports"),
-                ["not_included"] = new JArray("ammunition", "damage", "fuel", "aircraft_readiness", "detailed_weapon_capabilities",
+                ["available_on_request"] = new JArray("friendly_units", "unit_capabilities", "observed_contacts", "public_class_threat_references", "mission_briefing", "published_reports"),
+                ["not_included"] = new JArray("current_attack_feasibility", "terrain", "aircraft_readiness",
                     "contact_observation_times", "contact_error_bounds", "bearing_only_track_geometry", "unlaunched_aircraft", "hidden_triggers"),
                 ["reference_scope"] = "this_consultation",
                 ["report_limit"] = 10
@@ -129,6 +122,13 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
                 Allowed(query, "query", "offset", "limit");
                 return Page(query, new JArray(Rows("published_reports").OfType<JObject>()
                     .Select(r => new JObject { ["id"] = r["id"]!.DeepClone(), ["published_at_utc"] = r["published_at_utc"]!.DeepClone() })));
+            case "get_unit_capabilities":
+                Allowed(query, "query", "ids", "sections"); return Capabilities(query);
+            case "get_contact_threats":
+                Allowed(query, "query", "ids");
+                var references = SelectRows(query, "contact_threat_references");
+                return Bundle("contacts", references, references.OfType<JObject>()
+                    .SelectMany(r => (r["possible_weapon_reference_ids"] as JArray ?? new JArray()).Values<string>()));
             case "get_units":
             case "get_reports":
                 Allowed(query, "query", "ids");
@@ -148,10 +148,56 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
         }
     }
 
+    private JArray SelectRows(JObject query, string collection)
+    {
+        if (!(query["ids"] is JArray ids) || ids.Count < 1 || ids.Count > MaxIdsPerQuery ||
+            ids.Any(i => i.Type != JTokenType.String) || ids.Values<string>().Distinct(StringComparer.Ordinal).Count() != ids.Count)
+            throw Error("invalid_arguments", "Supply a bounded list of unique IDs.");
+        return new JArray(ids.Select(id => Rows(collection).OfType<JObject>().SingleOrDefault(r => (string?)r["id"] == (string?)id)?.DeepClone()
+            ?? throw Error("unknown_id", "An ID is unavailable for this query in this consultation.")));
+    }
+
+    private JObject Capabilities(JObject query)
+    {
+        var sections = new[] { "fuel", "damage", "weapons" };
+        if (query["sections"] != null)
+        {
+            if (!(query["sections"] is JArray selected) || selected.Count < 1 || selected.Count > 3 ||
+                selected.Any(s => s.Type != JTokenType.String || !sections.Contains((string)s!)) ||
+                selected.Values<string>().Distinct(StringComparer.Ordinal).Count() != selected.Count)
+                throw Error("invalid_arguments", "Sections must be unique fuel, damage or weapons values.");
+            sections = selected.Values<string>().ToArray()!;
+        }
+        var rows = new JArray();
+        var references = new System.Collections.Generic.List<string>();
+        foreach (var original in SelectRows(query, "unit_capabilities").OfType<JObject>())
+        {
+            var unit = new JObject { ["id"] = original["id"]!.DeepClone(), ["display_name"] = original["display_name"]!.DeepClone() };
+            foreach (var section in sections) unit[section] = original[section]!.DeepClone();
+            if (sections.Contains("weapons"))
+                references.AddRange(((JArray)original["weapons"]!["ammunition"]!).OfType<JObject>().Select(w => (string)w["reference_id"]!));
+            rows.Add(unit);
+        }
+        return Bundle("units", rows, references);
+    }
+
+    private JObject Bundle(string name, JArray rows, System.Collections.Generic.IEnumerable<string?> references)
+    {
+        var ids = references.ToHashSet(StringComparer.Ordinal);
+        return new JObject
+        {
+            [name] = rows,
+            ["weapon_references"] = new JArray(Rows("weapon_references").OfType<JObject>()
+                .Where(w => ids.Contains((string?)w["id"])).Select(w => w.DeepClone()))
+        };
+    }
+
     private JArray Rows(string name) => (JArray)snapshot[name]!;
     private JObject Catalogue() => new()
     {
         ["friendly_units"] = new JObject { ["item_count"] = Rows("friendly_units").Count, ["list_query"] = "list_units", ["detail_query"] = "get_units", ["description"] = "Own on-map units: displayed names, kind, position, heading and speed only." },
+        ["unit_capabilities"] = new JObject { ["item_count"] = Rows("unit_capabilities").Count, ["query"] = "get_unit_capabilities", ["description"] = "Batch current own-unit fuel, damage and ammunition plus referenced weapon ranges. Supply current own-unit IDs; optional sections: fuel, damage, weapons. References are deduplicated within the result. Counts do not prove weapons are ready to fire." },
+        ["public_class_threat_references"] = new JObject { ["query"] = "get_contact_threats", ["description"] = "Batch current contact IDs to obtain public encyclopedia armament candidates and ranges for identified classes. No actual enemy equipment, ammunition, readiness or damage. Use reference evidence for conditional threat estimates, cite names and retain uncertainty." },
         ["observed_contacts"] = new JObject { ["item_count"] = Rows("observed_contacts").Count, ["list_query"] = "list_contacts", ["description"] = "Player-map contacts, including unknown or neutral posture. Sensor estimates may be stale; no actual enemy state." },
         ["mission_briefing"] = new JObject { ["query"] = "get_briefing", ["description"] = "The player's currently displayed mission briefing." },
         ["published_reports"] = new JObject { ["item_count"] = Rows("published_reports").Count, ["list_query"] = "list_reports", ["detail_query"] = "get_reports", ["description"] = "Up to 10 already published intelligence reports, oldest to newest." }
@@ -200,7 +246,8 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
                         ["properties"] = new JObject
                         {
                             ["query"] = new JObject { ["type"] = "string", ["enum"] = new JArray(names) },
-                            ["ids"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = MaxIdsPerQuery, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string" }, ["description"] = "get_units or get_reports only: IDs already supplied in this consultation." },
+                            ["ids"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = MaxIdsPerQuery, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string" }, ["description"] = "get_units, get_reports, get_unit_capabilities or get_contact_threats: relevant IDs already supplied in this consultation." },
+                            ["sections"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = 3, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string", ["enum"] = new JArray("fuel", "damage", "weapons") }, ["description"] = "get_unit_capabilities only. Omit for all three sections." },
                             ["offset"] = new JObject { ["type"] = "integer", ["minimum"] = 0, ["description"] = "Zero-based offset for list queries only." },
                             ["limit"] = new JObject { ["type"] = "integer", ["minimum"] = 1, ["maximum"] = MaxPageSize, ["description"] = "Page size for list queries only." }
                         }

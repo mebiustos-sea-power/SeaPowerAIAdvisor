@@ -1,10 +1,9 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Reflection;
 using Newtonsoft.Json.Linq;
+using static SeaPowerAIAdvisor.BattleValue;
 
 namespace SeaPowerAIAdvisor;
 
@@ -12,12 +11,14 @@ namespace SeaPowerAIAdvisor;
 internal sealed class BattleSituationReader
 {
     internal BattleSnapshot Capture(object knownUnits, object player, object objectives, object eventLog,
-        DateTime now, string missionName, bool enemyControl)
+        DateTime now, string missionName, bool enemyControl, BattleCapabilityReader knowledge)
     {
         if (enemyControl) throw new SituationUnavailableException("battle_disclosure");
         var ownObjects = Sequence(Member(player, "TaskforceObjects")).ToArray();
         var units = new JArray();
         var contacts = new JArray();
+        var capabilities = new JArray();
+        var threats = new JArray();
         foreach (var mapUnit in Sequence(knownUnits))
         {
             var vehicle = Required(mapUnit, "Unit");
@@ -34,6 +35,8 @@ internal sealed class BattleSituationReader
                     ["heading_deg"] = Number(Required(Required(identity, "Heading"), "Value")),
                     ["speed_knots"] = Number(Required(identity, "_velocityInKnots"))
                 });
+                var row = (JObject)units.Last!;
+                capabilities.Add(knowledge.CaptureOwn(identity, (string)row["id"]!, (string)row["display_name"]!));
                 continue;
             }
             var positionEstimate = Member(vehicle, "PositionEstimate");
@@ -42,13 +45,18 @@ internal sealed class BattleSituationReader
             var displayName = classKnown && viewModel != null
                 ? Reactive<string>(viewModel, "ObjectName")
                 : "Contact " + Convert.ToString(Required(vehicle, "Id"), CultureInfo.InvariantCulture);
+            var identified = Reactive<bool>(vehicle, "Identified");
+            var observedClass = identified && classKnown ? (string)Required(Required(vehicle, "Class"), "Value") : null;
+            var reference = knowledge.References.ClassReference(observedClass);
             contacts.Add(new JObject
             {
                 ["id"] = "observed_contact_" + (contacts.Count + 1).ToString(CultureInfo.InvariantCulture),
                 ["display_name"] = displayName,
                 ["kind"] = Code(Member(mapUnit, "VisualType")),
                 ["posture"] = Code(Member(mapUnit, "VisualPosture")),
-                ["identified"] = Reactive<bool>(vehicle, "Identified"),
+                ["identified"] = identified,
+                ["class_display_name"] = reference["class_display_name"]?.DeepClone() ?? JValue.CreateNull(),
+                ["public_class_reference_available"] = (string?)reference["status"] == "available",
                 ["class_known"] = classKnown,
                 ["position"] = positionEstimate != null ? Position(Required(positionEstimate, "Item1")) : JValue.CreateNull(),
                 ["position_source"] = positionEstimate == null ? "unknown" : (bool)Required(vehicle, "HasLiveTrack") ? "observed_estimate" : "extrapolated_estimate",
@@ -56,6 +64,10 @@ internal sealed class BattleSituationReader
                 ["observation_time_utc"] = JValue.CreateNull(),
                 ["position_error_nm"] = JValue.CreateNull()
             });
+            reference["id"] = contacts.Last!["id"]!.DeepClone();
+            reference["display_name"] = displayName;
+            reference["observed_posture"] = contacts.Last!["posture"]!.DeepClone();
+            threats.Add(reference);
         }
         var visibleObjectives = new JArray();
         foreach (var objective in Sequence(objectives))
@@ -89,6 +101,9 @@ internal sealed class BattleSituationReader
             ["public_objectives"] = visibleObjectives,
             ["mission_briefing"] = Reactive<string>(eventLog, "MissionBriefing"),
             ["friendly_units"] = units,
+            ["unit_capabilities"] = capabilities,
+            ["contact_threat_references"] = threats,
+            ["weapon_references"] = knowledge.References.SnapshotWeapons(),
             ["observed_contacts"] = contacts,
             ["published_reports"] = reports
         });
@@ -97,29 +112,6 @@ internal sealed class BattleSituationReader
     private static JObject Position(object position) => AdvisorInputBuilder.Position(new MapPosition(
         Number(Required(position, "Latitude")), Number(Required(position, "Longitude"))));
 
-    private static double Number(object value)
-    {
-        var result = Convert.ToDouble(value, CultureInfo.InvariantCulture);
-        if (double.IsNaN(result) || double.IsInfinity(result)) throw new InvalidOperationException("Invalid displayed battle value.");
-        return result;
-    }
-
-    private static string Code(object? value) => value != null
-        ? value.ToString()!.ToLowerInvariant()
-        : throw new InvalidOperationException("A displayed battle classification is missing.");
     private static T Reactive<T>(object value, string name) => (T)Required(Required(value, name), "Value");
-    private static IEnumerable<object> Sequence(object? value) => (value as IEnumerable
-        ?? throw new InvalidOperationException("A battle UI collection is unavailable.")).Cast<object>();
-    private static object Required(object value, string name) => Member(value, name)
-        ?? throw new InvalidOperationException(value.GetType().FullName + "." + name + " is unavailable.");
-
-    internal static object? Member(object value, string name)
-    {
-        const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
-        var type = value.GetType();
-        var property = type.GetProperty(name, flags);
-        if (property != null) return property.GetValue(value);
-        var field = type.GetField(name, flags) ?? throw new MissingMemberException(type.FullName, name);
-        return field.GetValue(value);
-    }
+    private static IEnumerable<object> Sequence(object? value) => Rows(value);
 }
