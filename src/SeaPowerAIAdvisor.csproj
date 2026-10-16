@@ -22,6 +22,7 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Views\Advisor.xaml" LogicalName="SeaPowerAIAdvisor.Advisor.xaml" />
+    <EmbeddedResource Include="Views\BattleHudButton.xaml" LogicalName="SeaPowerAIAdvisor.BattleHudButton.xaml" />
     <EmbeddedResource Include="Assets\advisor-default.png" LogicalName="SeaPowerAIAdvisor.DefaultPortrait.png" />
     <EmbeddedResource Include="Localization\*.json" LogicalName="SeaPowerAIAdvisor.Localization.%(Filename).json" />
   </ItemGroup>

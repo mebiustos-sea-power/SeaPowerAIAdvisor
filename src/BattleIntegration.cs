@@ -16,8 +16,7 @@ internal sealed class BattleIntegration
     private FrameworkElement? uiRoot;
     private object? mission;
     private object? player;
-    private Grid? overlay;
-    private ToggleButton? launcher;
+    private BattleHudButton? launcher;
     private AdvisorWindow? advisor;
 
     internal BattleIntegration(Action<Action> guard, Action<string> warn) { this.guard = guard; this.warn = warn; }
@@ -36,27 +35,19 @@ internal sealed class BattleIntegration
         }
         if (launcher == null)
         {
-            overlay = root.OverlayCanvasNew ?? throw new InvalidOperationException("The battle overlay grid is unavailable.");
-            launcher = new ToggleButton
-            {
-                Content = "AI", ToolTip = AdvisorText.Load(GameLanguage.Read())["battle.launcher"],
-                Width = 44, Height = 30, FontSize = 15,
-                HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(0, 100, 16, 0)
-            };
-            Panel.SetZIndex(launcher, 100);
-            launcher.Click += (_, _) => guard(() =>
+            var button = new BattleHudButton(root, AdvisorText.Load(GameLanguage.Read())["battle.launcher"]);
+            launcher = button;
+            button.Control.Click += (_, _) => guard(() =>
             {
                 var host = FindHost(current.RootControl) ?? throw new InvalidOperationException("The battle window host is unavailable.");
                 advisor ??= new AdvisorWindow(root, host, guard, new BattleAdvisorSource(Capture), GameLanguage.Read, warn);
                 advisor.Toggle();
-                launcher.IsChecked = advisor.IsOpen;
+                button.Control.IsChecked = advisor.IsOpen;
             });
-            overlay.Children.Add(launcher);
         }
-        launcher.Visibility = current.IsHudVisible ? Visibility.Visible : Visibility.Collapsed;
+        launcher.Control.Visibility = current.IsHudVisible ? Visibility.Visible : Visibility.Collapsed;
         advisor?.Tick();
-        launcher.IsChecked = advisor?.IsOpen == true;
+        launcher.Control.IsChecked = advisor?.IsOpen == true;
     }
 
     private BattleSnapshot Capture()
@@ -112,8 +103,9 @@ internal sealed class BattleIntegration
         try { advisor?.Close(); }
         finally
         {
-            if (overlay != null && launcher != null) overlay.Children.Remove(launcher);
-            advisor = null; launcher = null; overlay = null; model = null; view = null; uiRoot = null; mission = null; player = null;
+            var previous = launcher;
+            advisor = null; launcher = null; model = null; view = null; uiRoot = null; mission = null; player = null;
+            previous?.Dispose();
         }
     }
 }
