@@ -63,7 +63,7 @@
   "connection.api_access_denied": "Geminiが要求を受け付けませんでした。APIキー・利用設定を確認してください。",
   "connection.model_unavailable": "設定されたGeminiモデルを利用できません。",
   "connection.rate_limited": "Geminiの利用上限に達しました。時間をおいて再度相談してください。",
-  "connection.request_timeout": "相談が時間切れになりました。下書きは保持しています。",
+  "connection.request_timeout": "Geminiから時間内に応答がありませんでした。時間をおいて再試行してください。",
   "connection.network_error": "Geminiへ接続できません。通信状態を確認してください。",
   "connection.output_limit": "Geminiの出力上限に達しました。質問を絞るかmax_output_tokensを調整してください。",
   "connection.response_blocked": "Geminiが回答を完了できませんでした。",
@@ -185,5 +185,17 @@
   "settings.error.model_invalid": "有効なGeminiのモデルIDを入力してください。",
   "settings.error.settings_write_failed": "AI設定を保存できません。",
   "settings.error.settings_rollback_failed": "保存失敗後にAI設定を元に戻せませんでした。gemini.jsonを確認してください。",
-  "settings.error_suffix": " [{0}]"
+  "settings.error_suffix": " [{0}]",
+  "action.retry": "再試行",
+  "transcript.waiting": "応答待ち…",
+  "transcript.retry_tip": "同じメッセージで再試行します。",
+  "status.failed": "相談に失敗しました。",
+  "connection.model_invalid": "モデル名が未入力、または形式が正しくありません。設定の「AI接続」でGeminiのモデルIDを確認してください。",
+  "connection.api_bad_request": "Geminiが要求を受け付けませんでした。モデルの対応機能とAI接続設定を確認してください。",
+  "connection.api_error": "Gemini側でエラーが発生しました。時間をおいて再試行してください。",
+  "connection.test": "接続テスト",
+  "connection.test_running": "接続テスト中…",
+  "connection.test_succeeded": "接続できました。",
+  "connection.test_cancelled": "接続テストを中止しました。",
+  "connection.test_tip": "入力中のキーとモデルで短い応答を確認します。少量のトークンを使用し、設定は保存しません。"
 }

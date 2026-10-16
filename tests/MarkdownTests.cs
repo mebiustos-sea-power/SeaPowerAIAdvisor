@@ -68,12 +68,12 @@ internal static class MarkdownTests
             const string answer = "## 判断\n\n**防衛**を優先します。";
             Require(chat.TryAdd(question, answer, out _), "The consultation was rejected");
             var exchange = chat.Exchanges.Single();
-            var view = XDocument.Parse(AdvisorTranscript.Render(chat.Exchanges, text["speaker.you"], "{Binding Name}", "コピー", "原文", "empty")).Root!;
+            var view = XDocument.Parse(AdvisorTranscript.Render(chat, text, "{Binding Name}", "empty")).Root!;
             Require(exchange.Answer == answer && exchange.Question == question.Text, "Rendering changed API history or the copied Markdown");
             Require(Visible(view).Contains(question.DisplayText) && !Visible(view).Contains(question.Text), "An internal English prompt was shown to the player");
             Require(view.Descendants(Ns + "TextBlock").Any(e => (string?)e.Attribute("Text") == "{}{Binding Name}"), "An advisor name became a binding");
             chat.Clear();
-            var empty = XDocument.Parse(AdvisorTranscript.Render(chat.Exchanges, "You", "Advisor", "Copy", "Original", "cleared")).Root!;
+            var empty = XDocument.Parse(AdvisorTranscript.Render(chat, text, "Advisor", "cleared")).Root!;
             Require(Visible(empty) == "cleared" && !empty.Descendants(Ns + "Button").Any(), "Clearing left an answer or copy action behind");
         });
         check("The packaged netstandard Markdown parser renders advice without an external parser DLL", () =>

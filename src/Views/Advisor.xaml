@@ -1,6 +1,11 @@
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Margin="14"
       TextElement.Foreground="{DynamicResource Brush.Foreground.Highlight}">
+  <Grid.Resources>
+    <SolidColorBrush x:Key="AdvisorErrorBrush" Color="#FF9B8F" />
+    <SolidColorBrush x:Key="AdvisorPlayerNameBrush" Color="#9BC7FF" />
+    <SolidColorBrush x:Key="AdvisorNameBrush" Color="#E8D39A" />
+  </Grid.Resources>
   <Grid x:Name="ConversationPane">
     <Grid.RowDefinitions>
       <RowDefinition Height="*" />
@@ -125,6 +130,11 @@
             <TextBox x:Name="ModelName" FontSize="14" Padding="7" MaxLength="100" />
             <TextBlock Text="{DynamicResource Advisor.connection.model_hint}" FontSize="12" TextWrapping="Wrap"
                        Margin="0,6,0,0" Opacity="0.7" />
+            <Button x:Name="TestConnection" Content="{DynamicResource Advisor.connection.test}" HorizontalAlignment="Left"
+                    Height="30" Padding="12,0" Margin="0,18,0,0" ToolTip="{DynamicResource Advisor.connection.test_tip}" />
+            <TextBlock x:Name="ConnectionTestStatus" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0" />
+            <TextBlock x:Name="ConnectionTestError" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0"
+                       Foreground="{DynamicResource AdvisorErrorBrush}" Visibility="Collapsed" />
           </StackPanel>
         </ScrollViewer>
       </TabItem>

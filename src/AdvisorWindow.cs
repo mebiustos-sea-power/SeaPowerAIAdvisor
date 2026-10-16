@@ -47,11 +47,14 @@ internal sealed class AdvisorWindow
     private readonly Button choosePortrait;
     private string speakerName;
     private bool profileLoaded;
-    private readonly TextBlock status, diagnosticStatus, settingsStatus;
-    private readonly Button send, captureAction, inputAction;
+    private readonly TextBlock status, diagnosticStatus, settingsStatus, connectionTestStatus, connectionTestError;
+    private bool settingsInputError;
+    private readonly Button send, captureAction, inputAction, testConnection;
     private readonly (AdvisorShortcut Shortcut, Button Button)[] shortcuts;
     private AdvisorJob? active;
-    private AdvisorQuestion? pendingQuestion;
+    private AdvisorTurn? pendingTurn;
+    private AdvisorNotice? configurationNotice;
+    private AdvisorJob? connectionTest;
     private string? pendingModel;
     private bool scrollPending;
     private bool diagnosticScrollPending;
@@ -75,7 +78,7 @@ internal sealed class AdvisorWindow
         ApplyTextResources();
         question = Named<TextBox>(content, "Question");
         transcriptScroll = Named<ScrollViewer>(content, "Transcript");
-        transcript = new AdvisorTranscriptView(Named<StackPanel>(content, "TranscriptMessages"), guard);
+        transcript = new AdvisorTranscriptView(Named<StackPanel>(content, "TranscriptMessages"), guard, RetryConsultation);
         status = Named<TextBlock>(content, "Status");
         diagnosticStatus = Named<TextBlock>(content, "DiagnosticStatus");
         diagnosticOutput = Named<TextBox>(content, "DiagnosticOutput");
@@ -103,6 +106,12 @@ internal sealed class AdvisorWindow
         settingsStatus = Named<TextBlock>(content, "SettingsStatus");
         apiKey = Named<PasswordBox>(content, "ApiKey");
         modelName = Named<TextBox>(content, "ModelName");
+        testConnection = Named<Button>(content, "TestConnection");
+        connectionTestStatus = Named<TextBlock>(content, "ConnectionTestStatus");
+        connectionTestError = Named<TextBlock>(content, "ConnectionTestError");
+        testConnection.Click += (_, _) => guard(TestConnection);
+        apiKey.PasswordChanged += (_, _) => guard(ClearConnectionTestResult);
+        modelName.TextChanged += (_, _) => guard(ClearConnectionTestResult);
         profileDirectory = AdvisorProfile.DirectoryIn(UnityEngine.Application.persistentDataPath);
         settingsPath = AdvisorSettings.PathIn(UnityEngine.Application.persistentDataPath);
         logAiJson = Named<CheckBox>(content, "LogAiJson");
@@ -170,6 +179,8 @@ internal sealed class AdvisorWindow
         if (IsOpen) { Close(); return; }
         RefreshLanguage();
         LoadProfile();
+        RefreshConfigurationNotice();
+        ShowConversation(false);
         if (settingsPane.Visibility == Visibility.Visible) BeginConnectionEdit();
         WindowHostCommands.OpenWindowCommand.Execute(window, view);
         if (!IsOpen) throw new InvalidOperationException("The game window host did not open the advisor.");
@@ -181,10 +192,11 @@ internal sealed class AdvisorWindow
 
     internal void Tick()
     {
-        if (!IsOpen) { CancelActive(); questionInput.Reset(); typing.Release(); ReleasePortrait(); return; }
+        if (!IsOpen) { CancelActive(); CancelConnectionTest(); questionInput.Reset(); typing.Release(); ReleasePortrait(); return; }
         CompletePortraitSelection();
         questionInput.Tick();
         CompleteActive();
+        CompleteConnectionTest();
         if (diagnosticScrollPending)
         {
             diagnosticOutput.ScrollToHome();
@@ -231,7 +243,14 @@ internal sealed class AdvisorWindow
 
     private void StartConsultation() => StartConsultation(new AdvisorQuestion(question.Text ?? string.Empty));
 
-    private void StartConsultation(AdvisorQuestion request)
+    private void RetryConsultation(AdvisorTurn turn)
+    {
+        if (!conversation.CanRetry(turn)) return;
+        questionInput.Reset();
+        StartConsultation(turn.Request, turn);
+    }
+
+    private void StartConsultation(AdvisorQuestion request, AdvisorTurn? retry = null)
     {
         if (active != null || conversationPane.Visibility != Visibility.Visible) return;
         if (QuestionInputController.IsComposing)
@@ -246,12 +265,18 @@ internal sealed class AdvisorWindow
             question.Focus();
             return;
         }
+        var turn = retry ?? conversation.Begin(request);
+        if (retry != null) conversation.Retry(turn);
+        else question.Text = request.DraftAfterSend(question.Text ?? string.Empty);
+        configurationNotice = null;
+        ShowConversation(false);
+        scrollPending = true;
         try
         {
             var settings = AdvisorSettings.Load(settingsPath);
             var session = source.CreateSession(replyLanguage(), request.Text);
             var history = conversation.Exchanges.ToArray();
-            pendingQuestion = request;
+            pendingTurn = turn;
             pendingModel = settings.Model;
             var logDirectory = AdvisorTrace.DirectoryIn(UnityEngine.Application.persistentDataPath);
             var advisorProfile = appliedProfile;
@@ -260,11 +285,20 @@ internal sealed class AdvisorWindow
             SetBusy(true);
             status.Text = text["status.consulting"];
         }
-        catch (AdvisorConnectionException failure) { ConnectionError(failure); }
+        catch (AdvisorConnectionException failure)
+        {
+            FailTurn(turn, AdvisorNotice.Connection(failure));
+            warn("Gemini consultation failed: " + failure.Message);
+        }
         catch (SituationUnavailableException failure)
         {
-            status.Text = text["situation.error." + failure.Code];
+            FailTurn(turn, AdvisorNotice.Situation(failure.Code));
             warn("Consultation refused: " + failure.Message);
+        }
+        catch
+        {
+            FailTurn(turn, AdvisorNotice.Unexpected());
+            throw;
         }
     }
 
@@ -272,22 +306,45 @@ internal sealed class AdvisorWindow
     {
         var job = active;
         if (job == null || !job.Completion.IsCompleted) return;
-        var sentQuestion = pendingQuestion ?? throw new InvalidOperationException("The pending question is missing.");
+        var turn = pendingTurn ?? throw new InvalidOperationException("The pending turn is missing.");
         var model = pendingModel;
         active = null;
-        pendingQuestion = null;
+        pendingTurn = null;
         var completion = job.TakeCompleted();
         SetBusy(false);
-        if (completion.UnexpectedError != null) throw completion.UnexpectedError;
-        if (completion.IsCancelled) { status.Text = text["status.cancelled"]; return; }
-        if (completion.Error != null) { ConnectionError(completion.Error); return; }
-        var result = completion.Result ?? throw new InvalidOperationException("The completed consultation has no result.");
-        if (!conversation.TryAdd(sentQuestion, result.Text, out _))
-            throw new InvalidOperationException("The completed consultation is not a valid exchange.");
-        question.Text = sentQuestion.DraftAfterSuccess(question.Text ?? string.Empty);
-        ShowConversation();
-        status.Text = text.Format("status.completed", model ?? string.Empty, result.QueryRounds, result.ApiRequests,
-            result.TotalTokens.HasValue ? text.Format("status.token_count", result.TotalTokens.Value) : text["status.tokens_unknown"]);
+        if (completion.UnexpectedError != null)
+        {
+            FailTurn(turn, AdvisorNotice.Unexpected());
+            throw completion.UnexpectedError;
+        }
+        if (completion.IsCancelled)
+        {
+            turn.Cancel();
+            ShowConversation(false);
+            status.Text = text["status.cancelled"];
+        }
+        else if (completion.Error != null)
+        {
+            FailTurn(turn, AdvisorNotice.Connection(completion.Error));
+            warn("Gemini consultation failed: " + completion.Error.Message);
+        }
+        else
+        {
+            var result = completion.Result ?? throw new InvalidOperationException("The completed consultation has no result.");
+            turn.Complete(result.Text);
+            ShowConversation(false);
+            status.Text = text.Format("status.completed", model ?? string.Empty, result.QueryRounds, result.ApiRequests,
+                result.TotalTokens.HasValue ? text.Format("status.token_count", result.TotalTokens.Value) : text["status.tokens_unknown"]);
+        }
+        scrollPending = true;
+    }
+
+    private void FailTurn(AdvisorTurn turn, AdvisorNotice error)
+    {
+        turn.Fail(error);
+        pendingTurn = null;
+        ShowConversation(false);
+        status.Text = text["status.failed"];
         scrollPending = true;
     }
 
@@ -299,38 +356,27 @@ internal sealed class AdvisorWindow
         inputAction.IsEnabled = !busy;
         activity.Text = text[busy ? "activity.busy" : "activity.idle"];
         UpdateShortcuts();
+        UpdateConnectionTestControls();
     }
 
     private void CancelActive()
     {
         if (active == null) return;
-        var job = active; active = null; pendingQuestion = null;
+        var job = active; active = null;
+        var turn = pendingTurn ?? throw new InvalidOperationException("The pending turn is missing.");
+        pendingTurn = null;
         job.Dispose();
+        turn.Cancel();
         SetBusy(false);
+        ShowConversation(false);
         status.Text = text["status.cancelled"];
+        scrollPending = true;
     }
 
-    private void ConnectionError(AdvisorConnectionException failure)
+    private void RefreshConfigurationNotice()
     {
-        var key = failure.Code switch
-        {
-            "settings_missing" or "settings_unreadable" => "settings_missing",
-            "api_key_missing" => "api_key_missing",
-            "settings_invalid" or "model_invalid" => "settings_invalid",
-            "api_access_denied" or "api_bad_request" => "api_access_denied",
-            "model_unavailable" => "model_unavailable",
-            "diagnostic_log_error" => "diagnostic_log_error",
-            "rate_limited" => "rate_limited",
-            "request_timeout" or "consultation_timeout" => "request_timeout",
-            "network_error" => "network_error",
-            "output_limit" => "output_limit",
-            "response_blocked" or "generation_failed" => "response_blocked",
-            "request_budget" or "request_limit" => "request_budget",
-            _ => "unknown"
-        };
-        status.Text = text["connection." + key];
-        status.Text += " [" + failure.Code + (failure.HttpStatus.HasValue ? " / HTTP " + failure.HttpStatus : "") + "]";
-        warn("Gemini consultation failed: " + failure.Message);
+        try { _ = AdvisorSettings.Load(settingsPath); configurationNotice = null; }
+        catch (AdvisorConnectionException error) { configurationNotice = AdvisorNotice.Connection(error); }
     }
 
     private void Preview(bool structured)
@@ -374,11 +420,11 @@ internal sealed class AdvisorWindow
         }
     }
 
-    private void ShowConversation(bool updateStatus = true)
+    private void ShowConversation(bool updateStatus = true, string? empty = null)
     {
         scrollPending = false;
         diagnosticScrollPending = false;
-        transcript.Show(conversation.Exchanges, text, speakerName, text["transcript.empty"]);
+        transcript.Show(conversation, text, speakerName, empty ?? text["transcript.empty"], configurationNotice);
         UpdateShortcuts();
         if (updateStatus) status.Text = text["status.ready"];
     }
@@ -390,7 +436,8 @@ internal sealed class AdvisorWindow
         conversation.Clear();
         scrollPending = false;
         diagnosticScrollPending = false;
-        transcript.Empty(text["transcript.cleared"]);
+        RefreshConfigurationNotice();
+        ShowConversation(false, text["transcript.cleared"]);
         UpdateShortcuts();
         status.Text = text["status.new_question"];
         question.Focus();
@@ -420,6 +467,8 @@ internal sealed class AdvisorWindow
         DiscardConnectionChanges();
         settingsPane.Visibility = Visibility.Collapsed;
         conversationPane.Visibility = Visibility.Visible;
+        RefreshConfigurationNotice();
+        ShowConversation(false);
         scrollPending = true;
         question.Focus();
     }
@@ -434,32 +483,123 @@ internal sealed class AdvisorWindow
             apiKey.Password = connectionDraft.ApiKey;
             modelName.Text = connectionDraft.Model;
             logAiJson.IsChecked = connectionDraft.LogAiJson;
-            apiKey.IsEnabled = modelName.IsEnabled = logAiJson.IsEnabled = saveSettings.IsEnabled = true;
+            logAiJson.IsEnabled = saveSettings.IsEnabled = true;
+            UpdateConnectionTestControls();
         }
         catch (AdvisorConnectionException failure)
         {
-            apiKey.IsEnabled = modelName.IsEnabled = logAiJson.IsEnabled = saveSettings.IsEnabled = false;
+            connectionDraft = null;
+            logAiJson.IsEnabled = saveSettings.IsEnabled = false;
+            UpdateConnectionTestControls();
             SettingsError(failure);
         }
     }
 
     private void DiscardConnectionChanges()
     {
+        CancelConnectionTest();
         connectionDraft = null;
         apiKey.Password = string.Empty;
         modelName.Text = string.Empty;
         logAiJson.IsChecked = false;
+        ClearConnectionTestResult();
+        UpdateConnectionTestControls();
+    }
+
+    private void TestConnection()
+    {
+        if (connectionTest != null) { CancelConnectionTest(); return; }
+        if (active != null || connectionDraft == null || settingsPane.Visibility != Visibility.Visible) return;
+        if (settingsInputError) SetSettingsStatus(string.Empty);
+        if (QuestionInputController.IsComposing) { ShowConnectionTestError(text["profile.ime"]); return; }
+        try
+        {
+            ReadConnectionDraft();
+            var settings = connectionDraft.TestSettings();
+            var directory = AdvisorTrace.DirectoryIn(UnityEngine.Application.persistentDataPath);
+            ClearConnectionTestResult();
+            connectionTest = new AdvisorJob(cancellation => GeminiConnectionTest.RunAsync(directory, settings, cancellation), warn);
+            connectionTestStatus.Text = text["connection.test_running"];
+            UpdateConnectionTestControls();
+        }
+        catch (AdvisorConnectionException error) { ShowConnectionTestError(AdvisorNotice.Connection(error).Message(text)); }
+    }
+
+    private void CompleteConnectionTest()
+    {
+        var job = connectionTest;
+        if (job == null || !job.Completion.IsCompleted) return;
+        connectionTest = null;
+        var completion = job.TakeCompleted();
+        UpdateConnectionTestControls();
+        if (completion.UnexpectedError != null)
+        {
+            ShowConnectionTestError(AdvisorNotice.Unexpected().Message(text));
+            throw completion.UnexpectedError;
+        }
+        if (completion.IsCancelled) connectionTestStatus.Text = text["connection.test_cancelled"];
+        else if (completion.Error != null)
+        {
+            ShowConnectionTestError(AdvisorNotice.Connection(completion.Error).Message(text));
+            warn("Gemini connection test failed: " + completion.Error.Message);
+        }
+        else
+        {
+            _ = completion.Result ?? throw new InvalidOperationException("The connection test has no result.");
+            connectionTestStatus.Text = text["connection.test_succeeded"];
+        }
+    }
+
+    private void CancelConnectionTest()
+    {
+        if (connectionTest == null) return;
+        var job = connectionTest; connectionTest = null;
+        job.Dispose();
+        UpdateConnectionTestControls();
+        connectionTestStatus.Text = text["connection.test_cancelled"];
+    }
+
+    private void UpdateConnectionTestControls()
+    {
+        apiKey.IsEnabled = modelName.IsEnabled = connectionDraft != null && connectionTest == null;
+        testConnection.IsEnabled = connectionDraft != null && active == null;
+        testConnection.Content = text[connectionTest == null ? "connection.test" : "action.cancel"];
+    }
+
+    private void ClearConnectionTestResult()
+    {
+        if (connectionTest != null) return;
+        connectionTestStatus.Text = string.Empty;
+        connectionTestError.Text = string.Empty;
+        connectionTestError.Visibility = Visibility.Collapsed;
+    }
+
+    private void ShowConnectionTestError(string message)
+    {
+        connectionTestStatus.Text = string.Empty;
+        connectionTestError.Text = message;
+        connectionTestError.Visibility = Visibility.Visible;
+    }
+
+    private void ReadConnectionDraft()
+    {
+        if (connectionDraft == null) throw new InvalidOperationException("The connection draft is missing.");
+        connectionDraft.ApiKey = apiKey.Password;
+        connectionDraft.Model = modelName.Text ?? string.Empty;
+        connectionDraft.LogAiJson = logAiJson.IsChecked == true;
     }
 
     private void SettingsError(AdvisorConnectionException failure)
     {
         var key = text.Contains("settings.error." + failure.Code) ? failure.Code : "settings_invalid";
         SetSettingsStatus(text["settings.error." + key] + text.Format("settings.error_suffix", failure.Code));
+        settingsInputError = failure.Code is "api_key_missing" or "model_invalid" or "settings_invalid";
         warn("Advisor settings failed: " + failure.Code);
     }
 
     private void SetSettingsStatus(string message)
     {
+        settingsInputError = false;
         settingsStatus.Text = message;
         settingsStatus.Visibility = string.IsNullOrEmpty(message) ? Visibility.Collapsed : Visibility.Visible;
     }
@@ -584,12 +724,11 @@ internal sealed class AdvisorWindow
             return;
         }
         if (portraitSelection != null || connectionDraft == null) return;
+        CancelConnectionTest();
         SetSettingsStatus(string.Empty);
         if (!profileName.IsReadOnly) profileDraft.CustomName = profileName.Text ?? "";
         profileDraft.Personality = profilePersonality.Text ?? "";
-        connectionDraft.ApiKey = apiKey.Password;
-        connectionDraft.Model = modelName.Text ?? "";
-        connectionDraft.LogAiJson = logAiJson.IsChecked == true;
+        ReadConnectionDraft();
         try
         {
             _ = connectionDraft.Data();
