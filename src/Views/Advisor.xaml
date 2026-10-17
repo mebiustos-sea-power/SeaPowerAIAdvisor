@@ -117,6 +117,7 @@
           <TabItem x:Name="AdvisorUseTab" Header="{DynamicResource Advisor.settings.selection_tab}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
               <StackPanel Margin="0,8,8,0">
+                <TextBlock Text="{DynamicResource Advisor.profile.selection_hint}" FontSize="12" TextWrapping="Wrap" Opacity="0.85" Margin="0,0,0,12" />
                 <TextBlock Text="{DynamicResource Advisor.settings.active_advisor}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,6" />
                 <ComboBox x:Name="ActiveAdvisorSelector" MinHeight="30" />
                 <WrapPanel HorizontalAlignment="Right" Margin="0,8,0,0">
@@ -179,6 +180,7 @@
           <TabItem x:Name="ApiUseTab" Header="{DynamicResource Advisor.settings.selection_tab}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
               <StackPanel Margin="0,8,8,0">
+                <TextBlock Text="{DynamicResource Advisor.connection.selection_hint}" FontSize="12" TextWrapping="Wrap" Opacity="0.85" Margin="0,0,0,12" />
                 <TextBlock Text="{DynamicResource Advisor.connection.main_heading}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,6" />
                 <ComboBox x:Name="MainApiConfiguration" MinHeight="30" />
                 <TextBlock Text="{DynamicResource Advisor.connection.sub_heading}" FontSize="12" TextWrapping="Wrap" Margin="0,20,0,6" />
