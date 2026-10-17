@@ -143,15 +143,14 @@ internal static class OptionsTests
         public Task<JObject> GenerateAsync(AdvisorSettings settings, JObject body, CancellationToken cancellation)
         {
             Calls++;
-            var initial = JObject.Parse((string)body["contents"]![0]!["parts"]![0]!["text"]!);
-            Require((int?)initial["query_limits"]?["max_rounds"] == limit, "The AI was told a different limit from the adapter");
+            if (Calls == 1)
+                Require((int?)InteractionFixture.Initial(body)["query_limits"]?["max_rounds"] == limit, "The AI was told a different limit from the adapter");
             var querying = Calls <= limit;
-            Require((string?)body["toolConfig"]!["functionCallingConfig"]!["mode"] == (querying ? "AUTO" : "NONE"),
+            Require((string?)body["generation_config"]!["tool_choice"] == (querying ? "auto" : "none"),
                 "Tools were disabled too early or remained enabled for the final answer");
             var part = querying ? new JObject { ["functionCall"] = new JObject { ["name"] = "query_situation",
                 ["args"] = new JObject { ["requests"] = new JArray(new JObject { ["query"] = "catalog" }) } } } : new JObject { ["text"] = "回答" };
-            return Task.FromResult(new JObject { ["candidates"] = new JArray(new JObject { ["finishReason"] = "STOP",
-                ["content"] = new JObject { ["role"] = "model", ["parts"] = new JArray(part) } }) });
+            return Task.FromResult(InteractionFixture.Reply(part));
         }
     }
     private static void InTemp(Action<string> action)

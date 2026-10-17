@@ -46,37 +46,47 @@ internal static class FallbackModelTests
         {
             var settings = AdvisorSettings.Parse(new JObject { ["api_key"] = MainKey, ["fallback_api_key"] = BackupKey,
                 ["model"] = Primary, ["fallback_model"] = Secondary, ["log_ai_json"] = true }.ToString());
-            var session = Session(); var paths = new List<string>(); var keys = new List<string>(); var progress = new List<AdvisorProgress>();
+            var session = Session(); var models = new List<string>(); var keys = new List<string>(); var progress = new List<AdvisorProgress>();
             JObject? initial = null;
+            JToken? carried = null;
+            string? primaryId = null, backupId = null;
             var handler = new Handler(async (request,token) =>
             {
-                paths.Add(request.RequestUri!.AbsolutePath); keys.Add(request.Headers.GetValues("x-goog-api-key").Single());
+                keys.Add(request.Headers.GetValues("x-goog-api-key").Single());
+                Require(request.RequestUri!.AbsolutePath == "/v1beta/interactions", "Wrong interaction endpoint");
                 var json = await request.Content!.ReadAsStringAsync(token); var body = JObject.Parse(json);
-                switch (paths.Count)
+                models.Add((string)body["model"]!);
+                switch (models.Count)
                 {
                     case 1:
-                        initial = JObject.Parse((string)body["contents"]![0]!["parts"]![0]!["text"]!);
-                        return Response(200,Reply(Tool("get_contact_threats","PRIMARY_SIGNATURE","observed_contact_1")));
+                        initial = InteractionFixture.Initial(body);
+                        var first = JObject.Parse(Reply(Tool("get_contact_threats","PRIMARY_SIGNATURE","observed_contact_1")));
+                        primaryId = (string)first["id"]!;
+                        return Response(200, first.ToString(Formatting.None));
                     case 2:
-                        Require(json.Contains("PRIMARY_SIGNATURE",StringComparison.Ordinal) && json.Contains("Frozen weapon",StringComparison.Ordinal), "The original tool exchange was lost before fallback");
+                        Require((string?)body["previous_interaction_id"] == primaryId && !json.Contains("PRIMARY_SIGNATURE",StringComparison.Ordinal) &&
+                            json.Contains("Frozen weapon",StringComparison.Ordinal), "The original tool result was lost before fallback");
                         return Response(429,"{}");
                     case 3:
-                        var contents = (JArray)body["contents"]!;
-                        var input = JObject.Parse((string)contents[0]!["parts"]![0]!["text"]!);
+                        var input = InteractionFixture.Initial(body);
                         var continuation = (JObject)input["continuation"]!;
-                        Require(contents.Count == 1 && (string?)contents[0]!["role"] == "user" && !json.Contains("PRIMARY_SIGNATURE",StringComparison.Ordinal) &&
+                        Require(body["previous_interaction_id"] == null && (string?)body["input"]![0]!["type"] == "user_input" &&
+                            !json.Contains("PRIMARY_SIGNATURE",StringComparison.Ordinal) &&
                             (int)continuation["query_rounds_used"]! == 1 && (int)continuation["remaining_query_rounds"]! == 1 &&
                             continuation["completed_retrievals"]!.Count() == 1 && continuation.ToString().Contains("Frozen weapon",StringComparison.Ordinal) && session.RoundsUsed == 1,
-                            "A different model received foreign signed context, lost evidence or reset retrieval limits");
+                            "A different model received foreign context, lost evidence or reset retrieval limits");
+                        carried = continuation["completed_retrievals"]![0]!["response"]!["results"]![0]!["data"]!.DeepClone();
                         input.Remove("continuation");
                         Require(JToken.DeepEquals(input,initial), "Model switching changed the question, language, objectives, history or preferences");
-                        return Response(200,Reply(Tool("get_contact_threats","BACKUP_SIGNATURE","observed_contact_1")));
+                        var next = JObject.Parse(Reply(Tool("get_contact_threats","BACKUP_SIGNATURE","observed_contact_1")));
+                        backupId = (string)next["id"]!;
+                        return Response(200, next.ToString(Formatting.None));
                     default:
-                        Require(!json.Contains("PRIMARY_SIGNATURE",StringComparison.Ordinal) && json.Contains("BACKUP_SIGNATURE",StringComparison.Ordinal) &&
-                            (string?)body["toolConfig"]!["functionCallingConfig"]!["mode"] == "NONE", "Later backup calls lost their own signatures or exceeded the retrieval limit");
-                        var carried = JObject.Parse((string)body["contents"]![0]!["parts"]![0]!["text"]!)["continuation"]!["completed_retrievals"]![0]!["response"]!["results"]![0]!["data"]!;
-                        var latest = body["contents"]![2]!["parts"]![0]!["functionResponse"]!["response"]!["results"]![0]!["data"]!;
-                        Require(carried["weapon_references"]!.Count() == 1 && !latest["weapon_references"]!.HasValues &&
+                        Require((string?)body["previous_interaction_id"] == backupId &&
+                            !json.Contains("PRIMARY_SIGNATURE",StringComparison.Ordinal) && !json.Contains("BACKUP_SIGNATURE",StringComparison.Ordinal) &&
+                            (string?)body["generation_config"]!["tool_choice"] == "none", "Later backup calls lost their server context or exceeded the limit");
+                        var latest = InteractionFixture.Result(body)["results"]![0]!["data"]!;
+                        Require(carried!["weapon_references"]!.Count() == 1 && !latest["weapon_references"]!.HasValues &&
                             (string?)latest["contacts"]![0]!["possible_weapon_reference_ids"]![0] == (string?)carried["weapon_references"]![0]!["id"],
                             "Fallback lost the original definition or resent it instead of resolving the current reference");
                         return Response(200,Reply(new JObject { ["text"] = "Backup answer" }));
@@ -85,7 +95,7 @@ internal static class FallbackModelTests
             var result = await AdvisorConsultation.RunAsync(directory,session,settings,new AdvisorQuestion("Question"),new[] { new ChatExchange("Earlier","Earlier answer") },
                 CancellationToken.None,trace => new GeminiTransport(handler,trace),profile:new AdvisorProfile("Officer","portrait.png",customPersonality:"Style"),
                 commonPrompt:"Shared preference",progress:progress.Add);
-            Require(paths.SequenceEqual(new[] { Primary,Primary,Secondary,Secondary }.Select(m => "/v1beta/models/"+m+":generateContent")) &&
+            Require(models.SequenceEqual(new[] { Primary,Primary,Secondary,Secondary }) &&
                 keys.SequenceEqual(new[] { MainKey,MainKey,BackupKey,BackupKey }) && result.Model == Secondary && result.QueryRounds == 2 && result.ApiRequests == 4 &&
                 progress.Last().Model == Secondary && progress.First().Model == Primary, "The selected key/model pair or final model report was incorrect");
             var records = File.ReadAllLines(Directory.GetFiles(directory,"*.jsonl").Single()).Select(JObject.Parse).ToArray();
@@ -108,8 +118,7 @@ internal static class FallbackModelTests
         return new JObject { ["thoughtSignature"]=signature,["functionCall"]=new JObject {
             ["name"]="query_situation",["args"]=new JObject { ["requests"]=new JArray(query) } } };
     }
-    private static string Reply(params JObject[] parts) => new JObject { ["candidates"]=new JArray(new JObject {
-        ["finishReason"]="STOP",["content"]=new JObject { ["role"]="model",["parts"]=new JArray(parts) } }) }.ToString(Formatting.None);
+    private static string Reply(params JObject[] parts) => InteractionFixture.Reply(parts).ToString(Formatting.None);
     private static HttpResponseMessage Response(int status,string body) => new((HttpStatusCode)status) { Content=new StringContent(body) };
     private sealed class Handler : HttpMessageHandler
     {

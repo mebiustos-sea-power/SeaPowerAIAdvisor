@@ -189,13 +189,13 @@ internal static partial class BattleTests
                 new JObject { ["query"] = "get_air_units", ["ids"] = new JArray("hosted_air_unit_1") }) } } };
             else
             {
-                var response = body["contents"]![2]!["parts"]![0]!["functionResponse"]!["response"]!;
+                var response = InteractionFixture.Result(body);
                 Require((string?)response["status"] == "ok" && ((JArray)response["results"]!).Count == 3 &&
                     (int?)response["results"]![2]!["data"]!["air_units"]![0]!["unassigned_aircraft_count"] == 4,
                     "Actual function response lost permitted ground/aviation evidence");
                 part = new JObject { ["text"] = "格納機と準備状況を確認して運用してください。" };
             }
-            return Task.FromResult(new JObject { ["candidates"] = new JArray(new JObject { ["finishReason"] = "STOP", ["content"] = new JObject { ["role"] = "model", ["parts"] = new JArray(part) } }) });
+            return Task.FromResult(InteractionFixture.Reply(part));
         }
     }
 }

@@ -82,7 +82,7 @@ internal static class GeminiTests
                 var expectedRules = session.InitialInput()["instructions"]!.ToString(Formatting.None);
                 var fake = new Fake((n, body, token) =>
                 {
-                    var initial = JObject.Parse((string)body["contents"]![0]!["parts"]![0]!["text"]!);
+                    var initial = InteractionFixture.Initial(body);
                     var preferences = (JObject)initial["advisor_preferences"]!;
                     Require((string?)preferences["name"] == profile.DisplayName &&
                         (string?)preferences["personality_and_tone"] == personality &&
@@ -90,7 +90,7 @@ internal static class GeminiTests
                         !body.ToString().Contains(inactivePersonality, StringComparison.Ordinal),
                         "Wrong active personality or inactive/private profile settings were sent");
                     Require((string?)initial["reply_language"] == "fr" && (string?)initial["common_prompt"] == commonPrompt, "Style changed the reply language or omitted shared preferences");
-                    var system = (string)body["systemInstruction"]!["parts"]![0]!["text"]!;
+                    var system = (string)body["system_instruction"]!;
                     Require(system.Contains(expectedRules, StringComparison.Ordinal) &&
                         system.Contains(session.Prompts.PreferencesPolicy, StringComparison.Ordinal) &&
                         (personality.Length == 0 || !system.Contains(personality, StringComparison.Ordinal)) &&
@@ -108,13 +108,13 @@ internal static class GeminiTests
             var handler = new Handler(async (request, cancellation) =>
             {
                 Require(request.RequestUri!.Host == "generativelanguage.googleapis.com" && request.RequestUri.Scheme == "https" &&
-                    request.Method == HttpMethod.Post && request.RequestUri.Query == "", "Wrong Gemini endpoint");
+                    request.Method == HttpMethod.Post && request.RequestUri.Query == "" && request.RequestUri.AbsolutePath == "/v1beta/interactions", "Wrong Gemini endpoint");
                 Require(request.Headers.GetValues("x-goog-api-key").Single() == MockKey, "API key header missing");
                 Require(!(await request.Content!.ReadAsStringAsync()).Contains(MockKey, StringComparison.Ordinal), "Key entered request JSON");
-                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"candidates\":[]}") };
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"status\":\"failed\"}") };
             });
             using var transport = new GeminiTransport(handler);
-            await transport.GenerateAsync(Settings(), new JObject { ["contents"] = new JArray() }, CancellationToken.None);
+            await transport.GenerateAsync(Settings(), new JObject { ["model"] = Settings().RequestModel, ["input"] = "Test" }, CancellationToken.None);
             Require(handler.Calls == 1, "Unexpected HTTP retry");
         }));
         check("HTTP failures and malformed responses expose bounded error codes without response-body secrets", () => Async(async () =>
@@ -132,40 +132,55 @@ internal static class GeminiTests
                 { Content = new StringContent(new string('x', GeminiTransport.MaxResponseBytes + 1)) })));
             await ThrowsCodeAsync("response_too_large", () => large.GenerateAsync(Settings(), new JObject(), CancellationToken.None));
         }));
-        check("Gemini can request a force list then ship readiness while preserving call IDs and thought signatures", () => Async(async () =>
+        check("Each consultation chains interactions and sends only the latest function results, preserving call IDs and usage", () => Async(async () =>
         {
             var session = Session(assembly);
+            string? previous = null;
             var transport = new Fake((n, body, cancellation) =>
             {
-                Require(!body.ToString().Contains(MockKey, StringComparison.Ordinal), "Key leaked to model");
-                Require(body["tools"]![0]!["functionDeclarations"]![0]!["parametersJsonSchema"] != null, "Function JSON schema missing");
-                if (n == 1) return Reply(new JObject { ["functionCall"] = Call(session, "list_forces", "c1"), ["thoughtSignature"] = "opaque-first" });
-                var contents = body["contents"]!;
-                Require((string?)contents[1]!["parts"]![0]!["thoughtSignature"] == "opaque-first" &&
-                    (string?)contents[2]!["parts"]![0]!["functionResponse"]!["id"] == "c1", "First function history changed");
-                if (n == 2)
+                if (n == 5)
                 {
-                    var id = contents[2]!["parts"]![0]!["functionResponse"]!["response"]!["results"]![0]!["data"]!["items"]![0]!["id"]!;
-                    return Reply(new JObject { ["functionCall"] = Call(session, "list_ships", "c2", "force_ids", new JArray(id.DeepClone())), ["thoughtSignature"] = "opaque-second" });
+                    Require(body["previous_interaction_id"] == null && InteractionFixture.Initial(body)["continuation"] == null,
+                        "A later consultation inherited the earlier server conversation");
+                    return Reply(new JObject { ["text"] = "Fresh answer" });
                 }
-                if (n == 3)
+                Require(body["tools"]![0]!["parameters"] != null && (bool?)body["store"] == true, "Function schema or stored conversation missing");
+                Require((string?)body["previous_interaction_id"] == previous && !body.ToString().Contains("opaque-", StringComparison.Ordinal),
+                    "The wrong interaction was continued or signed model history was resent");
+                JObject response;
+                if (n == 1)
                 {
-                    var id = contents[4]!["parts"]![0]!["functionResponse"]!["response"]!["results"]![0]!["data"]!["items"]![0]!["id"]!;
-                    return Reply(new JObject { ["functionCall"] = Call(session, "get_ships", "c3", "ids", new JArray(id.DeepClone())), ["thoughtSignature"] = "opaque-third" });
+                    Require(InteractionFixture.Initial(body)["situation"] != null, "Initial evidence missing");
+                    response = Reply(new JObject { ["functionCall"] = Call(session, "list_forces", "c1"), ["thoughtSignature"] = "opaque-first" });
                 }
-                return Reply(new JObject { ["thought"] = true, ["text"] = "hidden reasoning" }, new JObject { ["text"] = "自軍艦0：燃料60%、弾薬40%、損傷20%。" });
+                else
+                {
+                    Require(body["input"]!.Count() == 1 && (string?)body["input"]![0]!["type"] == "function_result" &&
+                        (string?)body["input"]![0]!["call_id"] == "c" + (n - 1), "Old inputs were resent or a function result lost its call ID");
+                    var data = InteractionFixture.Result(body)["results"]![0]!["data"]!;
+                    if (n == 2)
+                        response = Reply(new JObject { ["functionCall"] = Call(session, "list_ships", "c2", "force_ids", new JArray(data["items"]![0]!["id"]!.DeepClone())) });
+                    else if (n == 3)
+                        response = Reply(new JObject { ["functionCall"] = Call(session, "get_ships", "c3", "ids", new JArray(data["items"]![0]!["id"]!.DeepClone())) });
+                    else response = Reply(new JObject { ["thought"] = true, ["text"] = "hidden reasoning" }, new JObject { ["text"] = "自軍艦0：燃料60%、弾薬40%、損傷20%。" });
+                }
+                previous = (string)response["id"]!;
+                return response;
             });
-            var result = await new GeminiAdvisor(transport).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None);
+            var advisor = new GeminiAdvisor(transport);
+            var result = await advisor.ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None);
             Require(result.ApiRequests == 4 && result.QueryRounds == 3 && result.TotalTokens == 40 &&
                 !result.Text.Contains("hidden reasoning", StringComparison.Ordinal) &&
                 result.Queries.SequenceEqual(new[] { "list_forces", "list_ships", "get_ships" }), "Hierarchical consultation or usage changed");
+            var next = await advisor.ConsultAsync(Session(assembly), Settings(), Array.Empty<ChatExchange>(), CancellationToken.None);
+            Require(next.Text == "Fresh answer" && next.ApiRequests == 1 && next.QueryRounds == 0, "A new consultation did not start independently");
         }));
         check("The adapter binds the active snapshot and rejects model attempts to choose a consultation", () => Async(async () =>
         {
             var session = Session(assembly);
             var transport = new Fake((n, body, cancellation) =>
             {
-                var schema = body["tools"]![0]!["functionDeclarations"]![0]!["parametersJsonSchema"]!;
+                var schema = body["tools"]![0]!["parameters"]!;
                 Require(schema["properties"]!["consultation_id"] == null, "The model still has to echo host-owned identity");
                 if (n == 1)
                 {
@@ -173,7 +188,7 @@ internal static class GeminiTests
                     call["args"]!["consultation_id"] = "a-prior-consultation";
                     return Reply(new JObject { ["functionCall"] = call });
                 }
-                var result = body["contents"]!.Last!["parts"]![0]!["functionResponse"]!["response"]!;
+                var result = InteractionFixture.Result(body);
                 Require((string?)result["consultation_id"] == session.Id, "The adapter selected a different snapshot");
                 if (n == 2)
                 {
@@ -198,12 +213,11 @@ internal static class GeminiTests
             var transport = new Fake((n, body, cancellation) =>
             {
                 if (n == 1) return Reply(modelParts);
-                var contents = body["contents"]!;
-                Require(JToken.DeepEquals(contents[1]!["parts"], new JArray(modelParts.Select(p => p.DeepClone()))), "Model part ordering or signature changed");
-                var replies = contents[2]!["parts"]!;
-                Require(replies.Count() == 2 && (string?)replies[0]!["functionResponse"]!["id"] == "parallel-1" &&
-                    (string?)replies[1]!["functionResponse"]!["id"] == "parallel-2" &&
-                    (string?)replies[1]!["functionResponse"]!["response"]!["results"]![0]!["query"] == "list_contacts", "Parallel result mapping changed");
+                var replies = body["input"]!;
+                Require(body["previous_interaction_id"] != null && !body.ToString().Contains("first-signature", StringComparison.Ordinal), "Parallel continuation resent model history");
+                Require(replies.Count() == 2 && (string?)replies[0]!["call_id"] == "parallel-1" &&
+                    (string?)replies[1]!["call_id"] == "parallel-2" &&
+                    (string?)InteractionFixture.Result(body, 1)["results"]![0]!["query"] == "list_contacts", "Parallel result mapping changed");
                 return Reply(new JObject { ["text"] = "観測情報を確認しました。" });
             });
             var result = await new GeminiAdvisor(transport).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None);
@@ -215,8 +229,8 @@ internal static class GeminiTests
             var transport = new Fake((n, body, cancellation) =>
             {
                 if (n <= AdvisorQueryLimits.DefaultMaxRounds) return Reply(new JObject { ["functionCall"] = Call(session, "catalog", "round-" + n) });
-                Require((string?)body["toolConfig"]!["functionCallingConfig"]!["mode"] == "NONE", "Tools still enabled after query limit");
-                var response = Reply(new JObject { ["text"] = "取得上限の範囲で回答します。" }); response.Remove("usageMetadata"); return response;
+                Require((string?)body["generation_config"]!["tool_choice"] == "none", "Tools still enabled after query limit");
+                var response = Reply(new JObject { ["text"] = "取得上限の範囲で回答します。" }); response.Remove("usage"); return response;
             });
             var result = await new GeminiAdvisor(transport).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None);
             Require(result.ApiRequests == (AdvisorQueryLimits.DefaultMaxRounds + 1) && result.QueryRounds == 5 && result.TotalTokens == null, "Wrong API cap or fabricated usage");
@@ -236,7 +250,7 @@ internal static class GeminiTests
                 var handler = new Handler(async (request, token) =>
                 {
                     var body = JObject.Parse(await request.Content!.ReadAsStringAsync(token));
-                    var input = JObject.Parse((string)body["contents"]![0]!["parts"]![0]!["text"]!);
+                    var input = InteractionFixture.Initial(body);
                     var sent = input["prior_dialogue"]!.ToArray();
                     var expected = history.TakeLast(options.HistoryExchanges).ToArray();
                     Require(sent.Length == expected.Length && sent.Select((row, i) =>
@@ -274,7 +288,7 @@ internal static class GeminiTests
                     var session = new AdvisorQuerySession(QueryTests.Capture(new SituationTests.Fixture(assembly)), language, request.Text);
                     var transport = new Fake((n, body, c) =>
                     {
-                        var input = JObject.Parse((string)body["contents"]![0]!["parts"]![0]!["text"]!);
+                        var input = InteractionFixture.Initial(body);
                         Require((string?)input["question"] == request.Text && (string?)input["reply_language"] == language,
                             "The button caption or UI fallback locale replaced the actual question or reply language");
                         var history = input["prior_dialogue"]!.ToArray();
@@ -299,11 +313,27 @@ internal static class GeminiTests
         {
             foreach (var (finish, code) in new[] { ("MAX_TOKENS", "output_limit"), ("SAFETY", "generation_failed") })
             {
-                var transport = new Fake((n, b, c) => { var r = Reply(new JObject { ["text"] = "partial" }); r["candidates"]![0]!["finishReason"] = finish; return r; });
+                var transport = new Fake((n, b, c) => { var r = Reply(new JObject { ["text"] = "partial" }); r["status"] = finish == "MAX_TOKENS" ? "incomplete" : "failed"; return r; });
                 await ThrowsCodeAsync(code, () => new GeminiAdvisor(transport).ConsultAsync(Session(assembly), Settings(), Array.Empty<ChatExchange>(), CancellationToken.None));
             }
-            var blocked = new Fake((n, b, c) => new JObject { ["candidates"] = new JArray() });
-            await ThrowsCodeAsync("response_blocked", () => new GeminiAdvisor(blocked).ConsultAsync(Session(assembly), Settings(), Array.Empty<ChatExchange>(), CancellationToken.None));
+            var blocked = new Fake((n, b, c) => new JObject { ["status"] = "failed" });
+            await ThrowsCodeAsync("generation_failed", () => new GeminiAdvisor(blocked).ConsultAsync(Session(assembly), Settings(), Array.Empty<ChatExchange>(), CancellationToken.None));
+        }));
+        check("Missing or duplicate function-call identities are rejected before any situation query executes", () => Async(async () =>
+        {
+            foreach (var malformed in new[] { "missing_id", "duplicate_id", "invalid_arguments" })
+            {
+                var session = Session(assembly);
+                var call = new JObject { ["type"] = "function_call", ["id"] = "call-1", ["name"] = "query_situation",
+                    ["arguments"] = new JObject { ["requests"] = new JArray(new JObject { ["query"] = "catalog" }) } };
+                if (malformed == "missing_id") call.Remove("id");
+                if (malformed == "invalid_arguments") call["arguments"] = "not an argument object";
+                var steps = new JArray(call);
+                if (malformed == "duplicate_id") steps.Add(call.DeepClone());
+                var fake = new Fake((_, _, _) => new JObject { ["id"] = "interaction-1", ["status"] = "requires_action", ["steps"] = steps.DeepClone() });
+                await ThrowsCodeAsync("invalid_function_call", () => new GeminiAdvisor(fake).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None));
+                Require(fake.Calls == 1 && session.RoundsUsed == 0, "An ambiguous function call executed a query or triggered another billable request");
+            }
         }));
         check("Cancellation after an API response prevents query execution and subsequent requests", () => Async(async () =>
         {
@@ -344,11 +374,7 @@ internal static class GeminiTests
     {
         ["id"] = id, ["name"] = "query_situation", ["args"] = new JObject { ["requests"] = new JArray(QueryTests.Q(name, key, value)) }
     };
-    private static JObject Reply(params JObject[] parts) => new()
-    {
-        ["candidates"] = new JArray(new JObject { ["finishReason"] = "STOP", ["content"] = new JObject { ["role"] = "model", ["parts"] = new JArray(parts) } }),
-        ["usageMetadata"] = new JObject { ["totalTokenCount"] = 10 }
-    };
+    private static JObject Reply(params JObject[] parts) => InteractionFixture.Reply(parts);
     private static void Async(Func<Task> run) => run().GetAwaiter().GetResult();
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
     private static void ThrowsCode(string code, Action run)
