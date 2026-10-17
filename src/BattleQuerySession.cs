@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using Newtonsoft.Json.Linq;
@@ -18,6 +19,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
     public int MaxRounds { get; }
     public AdvisorPrompts Prompts { get; }
     private int returnedBytes;
+    private readonly HashSet<string> deliveredWeaponReferences = new(StringComparer.Ordinal);
 
     internal BattleQuerySession(BattleSnapshot situation, string language, string? question, int maxRounds = DefaultMaxRounds, AdvisorInformation? information = null, AdvisorPrompts? prompts = null)
     {
@@ -29,7 +31,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
         snapshot = situation.Copy();
         BattleInformation.Apply(snapshot, information);
         initial = AdvisorInputBuilder.Header(language, question, Prompts, true);
-        initial["schema_version"] = 4;
+        initial["schema_version"] = 5;
         initial["mode"] = "tactical_battle";
         initial["interaction_mode"] = "on_demand";
         initial["consultation_id"] = Id;
@@ -79,6 +81,9 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
         if (!information.Allows(InformationKind.BattleReports)) overview.Remove("retained_report_count");
         initial["situation"]!["coverage"]!["available_on_request"] = new JArray(Catalogue().Properties().Select(p => p.Name));
         information.AddCoverage(initial, true);
+        if (information.Allows(InformationKind.BattleWeapons) || information.Allows(InformationKind.BattleThreats))
+            initial["situation"]!["coverage"]!["weapon_reference_delivery"] =
+                "weapon_references adds definitions once per consultation. Reuse IDs in earlier results; an empty array means no new definitions.";
         returnedBytes = Bytes(initial);
         if (returnedBytes > MaxTotalBytes) throw new InvalidOperationException("Mandatory battle input exceeds the consultation payload limit.");
     }
@@ -103,12 +108,14 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
                     throw Error("invalid_arguments", "Each query needs a query name.");
                 results.Add(new JObject { ["query"] = query["query"]!.DeepClone(), ["data"] = Dispatch(query) });
             }
+            var delivered = DeduplicateWeaponReferences(results);
             var response = Envelope("ok");
             response["results"] = results;
             var bytes = Bytes(response);
             if (bytes > MaxResponseBytes) throw Error("response_too_large", "Request smaller pages or fewer IDs.");
             if (returnedBytes + bytes > MaxTotalBytes) throw Error("payload_limit", "The consultation payload budget is exhausted.");
             returnedBytes += bytes;
+            deliveredWeaponReferences.UnionWith(delivered);
             return response;
         }
         catch (AdvisorQueryException error)
@@ -273,6 +280,22 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
         return Bundle("units", rows, references);
     }
 
+    // Commit first-delivery IDs only after the whole response passes the payload limits.
+    private HashSet<string> DeduplicateWeaponReferences(JArray results)
+    {
+        var delivered = new HashSet<string>(deliveredWeaponReferences, StringComparer.Ordinal);
+        foreach (var result in results.OfType<JObject>())
+        {
+            if (result["data"] is not JObject bundle || bundle["weapon_references"] is not JArray definitions) continue;
+            foreach (var definition in definitions.OfType<JObject>().ToArray())
+            {
+                var id = (string?)definition["id"] ?? throw new InvalidOperationException("A weapon reference ID is missing.");
+                if (!delivered.Add(id)) definition.Remove();
+            }
+        }
+        return delivered;
+    }
+
     private JObject Bundle(string name, JArray rows, System.Collections.Generic.IEnumerable<string?> references)
     {
         var ids = references.ToHashSet(StringComparer.Ordinal);
@@ -294,16 +317,16 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
     }
     private JObject RawCatalogue() => new()
     {
-        ["friendly_units"] = new JObject { ["item_count"] = Rows("friendly_units").Count, ["list_query"] = "list_units", ["detail_query"] = "get_units", ["description"] = "Own on-map units, including user-enabled ground units and bases. Names, kind, positions, heading and speed; get_unit_capabilities supplies enabled status sections." },
-        ["friendly_ground_units"] = new JObject { ["item_count"] = GroundUnits().Count, ["list_query"] = "list_ground_units", ["detail_query"] = "get_ground_units", ["description"] = "Own known ground combat units, SAM/AAA, radar and missile sites. IDs also work with get_unit_capabilities for enabled ammunition/damage sections." },
-        ["friendly_bases"] = new JObject { ["item_count"] = Rows("friendly_bases").Count, ["list_query"] = "list_bases", ["detail_query"] = "get_bases", ["description"] = "Own known airbases, ports and installations: map positions and function. For observed enemy/neutral bases use list_contacts with kind. A known base does not reveal hidden aircraft or future spawns." },
-        ["hosted_air_units"] = new JObject { ["item_count"] = Rows("hosted_air_units").Count, ["list_query"] = "list_air_units", ["detail_query"] = "get_air_units", ["description"] = "Own known base/carrier/ship aviation: displayed unassigned inventory, squadrons, enabled loadouts and flight-deck tasks. list_air_units accepts host_ids. Hosts omitted by unit-category settings are excluded. Use list_air_tasks for paginated preparation/recovery tasks. Read details before recommending aircraft. Inventory/stock/preparation times do not prove immediate launch feasibility. Host task/status text is preserved, not language-parsed." },
-        ["aviation_tasks"] = new JObject { ["item_count"] = Rows("aviation_hosts").Sum(h => ((JArray)h["tasks"]!).Count), ["list_query"] = "list_air_tasks", ["description"] = "Displayed own flight-deck preparation, launch, recovery and cooldown tasks, paginated. Optional host_ids and/or air_unit_ids filter to relevant known hosts/types. Status text is preserved and is not a guarantee of sortie feasibility." },
-        ["unit_capabilities"] = new JObject { ["item_count"] = Rows("unit_capabilities").Count, ["query"] = "get_unit_capabilities", ["description"] = "Batch current own-unit status and referenced weapon ranges. Supply current own-unit IDs and only available_sections; omit sections for all enabled sections. References are deduplicated within the result. Counts do not prove weapons are ready to fire." },
-        ["public_class_threat_references"] = new JObject { ["query"] = "get_contact_threats", ["description"] = "Batch current contact IDs to obtain public encyclopedia armament candidates and ranges for identified classes. No actual enemy equipment, ammunition, readiness or damage. Use reference evidence for conditional threat estimates, cite names and retain uncertainty." },
-        ["observed_contacts"] = new JObject { ["item_count"] = Rows("observed_contacts").Count, ["list_query"] = "list_contacts", ["description"] = "Player-map contacts permitted by user settings, including ground/base symbols and unknown posture. Neutral posture is included only when enabled. Optional kind filters e.g. airbase/port/sam/radar. Sensor estimates may be stale; no actual enemy state." },
-        ["mission_briefing"] = new JObject { ["query"] = "get_briefing", ["description"] = "The player's currently displayed mission briefing." },
-        ["published_reports"] = new JObject { ["item_count"] = Rows("published_reports").Count, ["list_query"] = "list_reports", ["detail_query"] = "get_reports", ["description"] = "Up to 10 already published intelligence reports, oldest to newest." }
+        ["friendly_units"] = new JObject { ["item_count"] = Rows("friendly_units").Count, ["list_query"] = "list_units", ["detail_query"] = "get_units", ["description"] = "Own on-map identities, positions, heading and speed." },
+        ["friendly_ground_units"] = new JObject { ["item_count"] = GroundUnits().Count, ["list_query"] = "list_ground_units", ["detail_query"] = "get_ground_units", ["description"] = "Own ground combat units, SAM/AAA, radar and missile sites; IDs support capability queries." },
+        ["friendly_bases"] = new JObject { ["item_count"] = Rows("friendly_bases").Count, ["list_query"] = "list_bases", ["detail_query"] = "get_bases", ["description"] = "Own airbases, ports and installations. Observed opposing/neutral facilities are contacts." },
+        ["hosted_air_units"] = new JObject { ["item_count"] = Rows("hosted_air_units").Count, ["list_query"] = "list_air_units", ["detail_query"] = "get_air_units", ["description"] = "Own hosted inventory, squadrons, loadouts and host status. Filter by host_ids; tasks use list_air_tasks." },
+        ["aviation_tasks"] = new JObject { ["item_count"] = Rows("aviation_hosts").Sum(h => ((JArray)h["tasks"]!).Count), ["list_query"] = "list_air_tasks", ["description"] = "Displayed preparation, launch, recovery and cooldown tasks. Filter by host_ids or air_unit_ids." },
+        ["unit_capabilities"] = new JObject { ["item_count"] = Rows("unit_capabilities").Count, ["query"] = "get_unit_capabilities", ["description"] = "Own fuel/damage/weapons by available_sections; omit sections for all enabled." },
+        ["public_class_threat_references"] = new JObject { ["query"] = "get_contact_threats", ["description"] = "Identified-class public encyclopedia armament alternatives and ranges." },
+        ["observed_contacts"] = new JObject { ["item_count"] = Rows("observed_contacts").Count, ["list_query"] = "list_contacts", ["description"] = "Displayed contact classifications and estimated positions. Neutral only when enabled; optional kind filter." },
+        ["mission_briefing"] = new JObject { ["query"] = "get_briefing", ["description"] = "Displayed mission briefing." },
+        ["published_reports"] = new JObject { ["item_count"] = Rows("published_reports").Count, ["list_query"] = "list_reports", ["detail_query"] = "get_reports", ["description"] = "Retained published reports, oldest first; body by ID." }
     };
 
     private JObject Envelope(string status) => new()
@@ -340,7 +363,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
         else
         {
             properties["sections"]!["items"]!["enum"] = new JArray(information.BattleSections);
-            properties["sections"]!["description"] = "get_unit_capabilities only. Omit for all user-enabled sections; disabled sections cannot be requested.";
+            properties["sections"]!["description"] = "get_unit_capabilities only; omit for all enabled sections.";
         }
         if (!information.Allows(InformationKind.BattleAviation)) { properties.Remove("host_ids"); properties.Remove("air_unit_ids"); }
         if (!information.Allows(InformationKind.BattleContacts)) properties.Remove("kind");
@@ -350,7 +373,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
     private static JObject RawTool() => new()
     {
         ["name"] = "query_situation",
-        ["description"] = "Read only this consultation's player-known battle snapshot. The host selects the consultation; supply requests only. Batch independent queries, use get_* for known IDs, and respect pagination.",
+        ["description"] = "Query the current player-known battle snapshot. Supply a requests batch; the host binds the consultation.",
         ["parameters"] = new JObject
         {
             ["type"] = "object", ["additionalProperties"] = false, ["required"] = new JArray("requests"),
@@ -365,11 +388,11 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
                         ["properties"] = new JObject
                         {
                             ["query"] = new JObject { ["type"] = "string", ["enum"] = new JArray(names) },
-                            ["ids"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = MaxIdsPerQuery, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string" }, ["description"] = "get_* queries: relevant snapshot-local IDs already supplied in this consultation." },
-                            ["host_ids"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = MaxIdsPerQuery, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string" }, ["description"] = "list_air_units/list_air_tasks only: known own host-unit IDs. Omit for all permitted hosts." },
-                            ["air_unit_ids"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = MaxIdsPerQuery, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string" }, ["description"] = "list_air_tasks only: hosted-air-unit IDs from list_air_units. Omit for all types." },
-                            ["kind"] = new JObject { ["type"] = "string", ["enum"] = new JArray(contactKinds), ["description"] = "list_contacts only: filter by the displayed map-symbol classification. airbase and port identify disclosed base symbols; no hidden locations are queried." },
-                            ["sections"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = 3, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string", ["enum"] = new JArray("fuel", "damage", "weapons") }, ["description"] = "get_unit_capabilities only. Omit for all three sections." },
+                            ["ids"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = MaxIdsPerQuery, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string" }, ["description"] = "get_* only: IDs already supplied in this consultation." },
+                            ["host_ids"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = MaxIdsPerQuery, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string" }, ["description"] = "list_air_units/list_air_tasks: optional own host-unit filter." },
+                            ["air_unit_ids"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = MaxIdsPerQuery, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string" }, ["description"] = "list_air_tasks: optional hosted-air-unit filter." },
+                            ["kind"] = new JObject { ["type"] = "string", ["enum"] = new JArray(contactKinds), ["description"] = "list_contacts: displayed map-symbol kind." },
+                            ["sections"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = 3, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string", ["enum"] = new JArray("fuel", "damage", "weapons") }, ["description"] = "get_unit_capabilities: selected sections; omit for all enabled." },
                             ["offset"] = new JObject { ["type"] = "integer", ["minimum"] = 0, ["description"] = "Zero-based offset for list queries only." },
                             ["limit"] = new JObject { ["type"] = "integer", ["minimum"] = 1, ["maximum"] = MaxPageSize, ["description"] = "Page size for list queries only." }
                         }

@@ -87,6 +87,58 @@ internal static partial class BattleTests
             var bad = session.Execute(Request(session, new JObject { ["query"] = "get_unit_capabilities", ["ids"] = new JArray("own_unit_1"), ["sections"] = new JArray("enemy_loadout") }));
             Require((string?)bad["error"]!["code"] == "invalid_arguments", "An unsupported section was accepted");
         });
+        check("Weapon definitions are delivered once across unit, aircraft and contact queries while evidence and new definitions remain available", () =>
+        {
+            var f = GroundFixture(out _);
+            f.Own.AmmunitionAmountDictionary["test_missile"] = 0;
+            var extra = new PublicWeapon { IniRef = "followup_weapon", MaxLaunchRange = new Distance(55) };
+            f.PublicWeapons.Add(extra); f.PublicClasses[0].WeaponEntries.Add(extra);
+            var snapshot = f.Capture();
+            var original = snapshot.Copy().ToString();
+            var session = new BattleQuerySession(snapshot, "ja", "Compare capabilities", 20);
+            var first = session.Execute(Request(session,
+                new JObject { ["query"] = "get_unit_capabilities", ["ids"] = new JArray("own_unit_1") },
+                new JObject { ["query"] = "get_air_units", ["ids"] = new JArray("hosted_air_unit_1") }));
+            var own = first["results"]![0]!["data"]!; var air = first["results"]![1]!["data"]!;
+            var reference = own["weapon_references"]![0]!;
+            Require(own["weapon_references"]!.Count() == 1 && !air["weapon_references"]!.HasValues &&
+                (int?)own["units"]![0]!["weapons"]!["ammunition"]![0]!["remaining_count"] == 0 &&
+                (string?)air["air_units"]![0]!["loadouts"]![0]!["ammunition"]![0]!["reference_id"] == (string?)reference["id"] &&
+                (double?)reference["maximum_launch_range_nm"] == 70,
+                "A same-batch duplicate survived or removing its definition changed ammunition or aircraft references");
+            var threat = session.Execute(Request(session, new JObject { ["query"] = "get_contact_threats", ["ids"] = new JArray("observed_contact_1") }))["results"]![0]!["data"]!;
+            Require(threat["weapon_references"]!.Count() == 1 && (double?)threat["weapon_references"]![0]!["maximum_launch_range_nm"] == 55 &&
+                threat["contacts"]![0]!["possible_weapon_reference_ids"]!.Count() == 2,
+                "A later query lost a new weapon definition or repeated an already delivered definition");
+            var repeated = session.Execute(Request(session,
+                new JObject { ["query"] = "get_unit_capabilities", ["ids"] = new JArray("own_unit_1") },
+                new JObject { ["query"] = "get_air_units", ["ids"] = new JArray("hosted_air_unit_1") },
+                new JObject { ["query"] = "get_contact_threats", ["ids"] = new JArray("observed_contact_1") }));
+            Require((string?)repeated["status"] == "ok" && repeated["results"]!.All(r => !r["data"]!["weapon_references"]!.HasValues) &&
+                snapshot.Copy().ToString() == original, "Previously delivered definitions were repeated or the captured evidence was changed");
+            var fresh = new BattleQuerySession(snapshot, "en", "New consultation");
+            Require(fresh.Execute(Request(fresh, new JObject { ["query"] = "get_unit_capabilities", ["ids"] = new JArray("own_unit_1") }))["results"]![0]!["data"]!["weapon_references"]!.Count() == 1,
+                "A new consultation incorrectly reused another consultation's delivered IDs");
+        });
+        check("Rejected query batches do not mark unreturned weapon definitions as delivered", () =>
+        {
+            foreach (var error in new[] { "unknown_id", "response_too_large" })
+            {
+                var data = new Fixture().Capture().Copy();
+                if (error == "response_too_large") data["mission_briefing"] = new string('x', AdvisorQueryLimits.MaxResponseBytes);
+                var session = new BattleQuerySession(new BattleSnapshot(data), "en", "Evidence", 20);
+                var next = error == "unknown_id"
+                    ? new JObject { ["query"] = "get_contact_threats", ["ids"] = new JArray("not_a_current_contact") }
+                    : new JObject { ["query"] = "get_briefing" };
+                var rejected = session.Execute(Request(session,
+                    new JObject { ["query"] = "get_unit_capabilities", ["ids"] = new JArray("own_unit_1") }, next));
+                Require((string?)rejected["error"]?["code"] == error && rejected["results"] == null,
+                    "A rejected batch returned partial evidence or failed for the wrong reason");
+                var retry = session.Execute(Request(session, new JObject { ["query"] = "get_unit_capabilities", ["ids"] = new JArray("own_unit_1") }));
+                Require((string?)retry["status"] == "ok" && retry["results"]![0]!["data"]!["weapon_references"]!.Count() == 1 && session.RoundsUsed == 2,
+                    "An unsuccessful delivery suppressed the later first definition or reset retrieval limits");
+            }
+        });
         check("Enemy threat references use observed classes and public variants without reading actual enemy state", () =>
         {
             var f = new Fixture();
@@ -328,7 +380,10 @@ internal static partial class BattleTests
                 var data = body["contents"]![4]!["parts"]![0]!["functionResponse"]!["response"]!["results"]!;
                 Require((int?)data[0]!["data"]!["units"]![0]!["weapons"]!["ammunition"]![0]!["remaining_count"] == 8 &&
                     (string?)data[1]!["data"]!["contacts"]![0]!["evidence_kind"] == "public_class_reference" &&
-                    (double?)data[1]!["data"]!["weapon_references"]![0]!["maximum_launch_range_nm"] == 70,
+                    !data[1]!["data"]!["weapon_references"]!.HasValues &&
+                    (double?)data[0]!["data"]!["weapon_references"]![0]!["maximum_launch_range_nm"] == 70 &&
+                    (string?)data[1]!["data"]!["contacts"]![0]!["possible_weapon_reference_ids"]![0] ==
+                    (string?)data[0]!["data"]!["weapon_references"]![0]!["id"],
                     "The provider did not receive inventory and sourced conditional threat evidence");
                 part = new JObject { ["text"] = "公開性能に基づく推定です。敵の実際の搭載と残弾は不明です。" };
             }
