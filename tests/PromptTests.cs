@@ -25,11 +25,11 @@ internal static class PromptTests
             input["instructions"]!["task"] = "CONSUMER_MUTATION";
             var fake = new CaptureTransport(body =>
             {
-                var system = (string)body["systemInstruction"]!["parts"]![0]!["text"]!;
+                var system = (string)body["system_instruction"]!;
                 Require(system.Contains("EXTERNAL_COMMON_V1", StringComparison.Ordinal) && system.Contains("EXTERNAL_TASK_V1", StringComparison.Ordinal) &&
                     system.Contains("EXTERNAL_BATTLE_V1", StringComparison.Ordinal) && !system.Contains("CONSUMER_MUTATION", StringComparison.Ordinal) &&
                     !system.Contains("EXTERNAL_COMMON_V2", StringComparison.Ordinal), "A reread, hardcoded policy or mutable consumer copy replaced the loaded instructions");
-                var sent = JObject.Parse((string)body["contents"]![0]!["parts"]![0]!["text"]!);
+                var sent = InteractionFixture.Initial(body);
                 Require((string?)sent["common_prompt"] == "Shared preference" && (string?)sent["reply_language"] == "ja",
                     "The common preference or game reply language did not reach the request");
             });
@@ -126,8 +126,7 @@ internal static class PromptTests
         public Task<JObject> GenerateAsync(AdvisorSettings settings, JObject body, CancellationToken cancellation)
         {
             Calls++; inspect(body);
-            return Task.FromResult(new JObject { ["candidates"] = new JArray(new JObject { ["finishReason"] = "STOP",
-                ["content"] = new JObject { ["role"] = "model", ["parts"] = new JArray(new JObject { ["text"] = "Answer" }) } }) });
+            return Task.FromResult(InteractionFixture.Reply(new JObject { ["text"] = "Answer" }));
         }
     }
     private static void Require(bool value, string message) { if (!value) throw new InvalidOperationException(message); }

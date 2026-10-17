@@ -44,14 +44,16 @@ internal static class GeminiAirSmoke
         {
             var response = await inner.GenerateAsync(settings, body, token);
             var calls = new JArray();
-            foreach (var part in response["candidates"]?[0]?["content"]?["parts"] ?? new JArray())
-                if (part["functionCall"] is JObject call) calls.Add(call.DeepClone());
+            foreach (var step in response["steps"] ?? new JArray())
+                if ((string?)step["type"] == "function_call") calls.Add(step.DeepClone());
             var previousResults = new JArray();
-            foreach (var content in body["contents"] ?? new JArray())
-                foreach (var part in content["parts"] ?? new JArray())
-                    if (part["functionResponse"]?["response"] is JObject result)
-                        previousResults.Add(new JObject { ["round"] = result["round"]?.DeepClone(),
-                            ["status"] = result["status"]?.DeepClone(), ["error"] = result["error"]?.DeepClone() });
+            foreach (var step in body["input"] ?? new JArray())
+                if ((string?)step["type"] == "function_result")
+                {
+                    var result = JObject.Parse((string)step["result"]![0]!["text"]!);
+                    previousResults.Add(new JObject { ["round"] = result["round"]?.DeepClone(),
+                        ["status"] = result["status"]?.DeepClone(), ["error"] = result["error"]?.DeepClone() });
+                }
             Trace.Add(new JObject { ["calls"] = calls, ["received_query_results"] = previousResults });
             return response;
         }

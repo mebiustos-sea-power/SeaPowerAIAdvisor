@@ -33,7 +33,7 @@ internal sealed class AdvisorTrace : IDisposable
         {
             Write("consultation_started", new JObject
             {
-                ["mod_version"] = typeof(AdvisorTrace).Assembly.GetName().Version!.ToString(),
+                ["mod_version"] = typeof(AdvisorTrace).Assembly.GetName().Version!.ToString(), ["api"] = "interactions",
                 ["model"] = settings.RequestModel, ["fallback_model"] = settings.FallbackModel, ["display_question"] = question.DisplayText,
                 ["question_source"] = question.IsShortcut ? "shortcut" : "typed"
             });

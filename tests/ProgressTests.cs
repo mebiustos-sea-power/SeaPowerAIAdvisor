@@ -22,14 +22,18 @@ internal static class ProgressTests
             {
                 Require(events.Last().ApiRequest == call && events.Last().Rounds == call - 1,
                     "API progress was not published before the matching network request");
-                var input = JObject.Parse((string)body["contents"]![0]!["parts"]![0]!["text"]!);
-                Require((string?)input["advisor_preferences"]!["name"] == "Alice" &&
-                    (string?)input["advisor_preferences"]!["personality_and_tone"] == "Active style" &&
+                if (call == 1)
+                {
+                    var input = InteractionFixture.Initial(body);
+                    Require((string?)input["advisor_preferences"]!["name"] == "Alice" &&
+                        (string?)input["advisor_preferences"]!["personality_and_tone"] == "Active style", "Active preferences missing");
+                }
+                Require(
                     !body.ToString().Contains("PRIVATE_", StringComparison.Ordinal) && !body.ToString().Contains("alice-id", StringComparison.Ordinal),
                     "Inactive registrations, role, image path or private identity leaked to Gemini");
                 if (call == 1) return Reply(Call("catalog"));
                 if (call == 2) return Reply(Call("list_units", "get_briefing"));
-                Require((string?)body["toolConfig"]!["functionCallingConfig"]!["mode"] == "NONE", "Final answer allowed more retrievals");
+                Require((string?)body["generation_config"]!["tool_choice"] == "none", "Final answer allowed more retrievals");
                 return Reply(new JObject { ["text"] = "Answer" });
             });
             var answer = await new GeminiAdvisor(transport).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None,
@@ -113,8 +117,7 @@ internal static class ProgressTests
     private static AdvisorSettings Settings() => AdvisorSettings.Parse("{\"api_key\":\"mock_key_no_network\"}");
     private static JObject Call(params string[] names) => new() { ["functionCall"] = new JObject {
         ["name"] = "query_situation", ["args"] = new JObject { ["requests"] = new JArray(names.Select(n => new JObject { ["query"] = n })) } } };
-    private static JObject Reply(params JObject[] parts) => new() { ["candidates"] = new JArray(new JObject {
-        ["finishReason"] = "STOP", ["content"] = new JObject { ["role"] = "model", ["parts"] = new JArray(parts) } }) };
+    private static JObject Reply(params JObject[] parts) => InteractionFixture.Reply(parts);
     private sealed class Fake : IGeminiTransport
     {
         private readonly Func<int, JObject, CancellationToken, JObject> generate; private int count;

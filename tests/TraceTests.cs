@@ -40,7 +40,7 @@ internal static class TraceTests
                 else
                 {
                     var body = JObject.Parse(json);
-                    Require(body["contents"]![2]!["parts"]![0]!["functionResponse"]!["response"]!["results"]![0]!["data"] != null,
+                    Require(InteractionFixture.Result(body)["results"]![0]!["data"] != null,
                         "The follow-up request omitted the returned situation data");
                     response = Reply(new JObject { ["text"] = "具体的な回答𠮷\nLine two" });
                 }
@@ -230,11 +230,7 @@ internal static class TraceTests
         return records.ToArray();
     }
     private static HttpResponseMessage Response(int status, string body) => new((HttpStatusCode)status) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
-    private static string Reply(JObject part) => new JObject
-    {
-        ["candidates"] = new JArray(new JObject { ["finishReason"] = "STOP", ["content"] = new JObject { ["role"] = "model", ["parts"] = new JArray(part) } }),
-        ["usageMetadata"] = new JObject { ["totalTokenCount"] = 10 }
-    }.ToString(Formatting.Indented);
+    private static string Reply(JObject part) => InteractionFixture.Reply(part).ToString(Formatting.None);
     private static void InTemp(Func<string, Task> test)
     {
         var directory = Path.Combine(Path.GetTempPath(), "SeaPowerAIAdvisor-trace-" + Guid.NewGuid().ToString("N"));

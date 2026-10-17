@@ -20,11 +20,11 @@ internal static class ConnectionTests
             draft.ApiKey = "changed_mock_key"; draft.Model = "gemini-another-model"; draft.LogAiJson = true;
             var handler = new Handler(async (request, token) =>
             {
-                Require(request.RequestUri!.AbsolutePath.EndsWith("/gemini-another-model:generateContent", StringComparison.Ordinal) &&
-                    request.Headers.GetValues("x-goog-api-key").Single() == "changed_mock_key", "Saved credentials were used instead of the pending edits");
                 var body = JObject.Parse(await request.Content!.ReadAsStringAsync(token));
-                Require(body.Properties().Select(p => p.Name).OrderBy(x => x).SequenceEqual(new[] { "contents", "generationConfig" }) &&
-                    body["contents"] is JArray contents && contents.Count == 1 && contents[0]!["parts"] is JArray parts && parts.Count == 1 &&
+                Require(request.RequestUri!.AbsolutePath == "/v1beta/interactions" && (string?)body["model"] == "gemini-another-model" &&
+                    request.Headers.GetValues("x-goog-api-key").Single() == "changed_mock_key", "Saved credentials were used instead of the pending edits");
+                Require(body["tools"] == null && body["system_instruction"] == null && body["previous_interaction_id"] == null && (bool?)body["store"] == false &&
+                    body["input"] is JArray input && input.Count == 1 && input[0]!["content"] is JArray parts && parts.Count == 1 &&
                     (string?)parts[0]!["text"] == "Connection test. Reply only with OK.",
                     "A connection check included game data, tools, personality or conversation history");
                 return Response(Reply());
@@ -42,10 +42,10 @@ internal static class ConnectionTests
             foreach (var pair in new[] { (400, "api_bad_request"), (403, "api_access_denied"), (404, "model_unavailable"), (429, "rate_limited"), (503, "api_error") })
                 await Fails(pair.Item2, () => Run(new Handler((_, _) => Task.FromResult(new HttpResponseMessage((HttpStatusCode)pair.Item1)
                     { Content = new StringContent("{\"error\":\"rejected\"}") }))));
-            await Fails("response_blocked", () => Run(new Handler((_, _) => Task.FromResult(Response(new JObject { ["candidates"] = new JArray() })))));
-            var truncated = Reply(); truncated["candidates"]![0]!["finishReason"] = "MAX_TOKENS";
+            await Fails("generation_failed", () => Run(new Handler((_, _) => Task.FromResult(Response(new JObject { ["status"] = "failed" })))));
+            var truncated = Reply(); truncated["status"] = "incomplete";
             await Fails("output_limit", () => Run(new Handler((_, _) => Task.FromResult(Response(truncated)))));
-            var thought = Reply(); thought["candidates"]![0]!["content"]!["parts"]![0]!["thought"] = true;
+            var thought = Reply(); thought["steps"] = new JArray(new JObject { ["type"] = "thought", ["signature"] = "hidden" });
             await Fails("empty_response", () => Run(new Handler((_, _) => Task.FromResult(Response(thought)))));
         }));
         check("Connection tests distinguish timeouts from explicit cancellation and do not retry automatically", () => Async(async () =>
@@ -67,8 +67,7 @@ internal static class ConnectionTests
     private static Task<AdviceResult> Run(Handler handler, CancellationToken cancellation = default) => GeminiConnectionTest.RunAsync(
         "unused-connection-test-directory", new AdvisorSettingsDraft(new JObject { ["api_key"] = Key }).TestSettings(), cancellation,
         trace => new GeminiTransport(handler, trace));
-    private static JObject Reply() => new() { ["candidates"] = new JArray(new JObject { ["finishReason"] = "STOP",
-        ["content"] = new JObject { ["role"] = "model", ["parts"] = new JArray(new JObject { ["text"] = "OK" }) } }) };
+    private static JObject Reply() => InteractionFixture.Reply(new JObject { ["text"] = "OK" });
     private static HttpResponseMessage Response(JObject body) => new(HttpStatusCode.OK) { Content = new StringContent(body.ToString()) };
     private static async Task Fails(string code, Func<Task<AdviceResult>> action)
     {

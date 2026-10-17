@@ -36,26 +36,42 @@ internal static class FallbackTests
             foreach (var invalid in new JToken[] { JValue.CreateNull(), new JValue(42), new JValue("has\ncontrol"), new JValue(new string('x', 513)) })
                 Throws("settings_invalid", () => AdvisorSettings.Parse(new JObject { ["api_key"] = Main, ["fallback_api_key"] = invalid }.ToString()));
         }));
-        check("A mid-consultation switch resends the same signed request and keeps subsequent retrievals on fallback until a new consultation", () => Async(async () =>
+        check("A mid-consultation switch starts a new server conversation with evidence and keeps subsequent retrievals on fallback", () => Async(async () =>
         {
             var keys = new List<string>(); var bodies = new List<string>(); var events = new List<AdvisorProgress>();
             var switches = 0; var session = Session(2);
+            string? primaryId = null, backupId = null;
             using var transport = new GeminiTransport(new Handler(async (request, token) =>
             {
                 keys.Add(Key(request)); bodies.Add(await request.Content!.ReadAsStringAsync(token));
                 var call = keys.Count;
-                if (call == 1) return Response(200, Reply(Tool("catalog", "signature-A")));
-                if (call == 2) return Response(429, "{\"error\":\"quota\"}");
+                if (call == 1)
+                {
+                    var first = JObject.Parse(Reply(Tool("catalog", "signature-A"))); primaryId = (string)first["id"]!;
+                    Require(JObject.Parse(bodies.Last())["previous_interaction_id"] == null, "Initial consultation reused another conversation");
+                    return Response(200, first.ToString(Formatting.None));
+                }
+                if (call == 2)
+                {
+                    Require((string?)JObject.Parse(bodies.Last())["previous_interaction_id"] == primaryId, "Primary continuation lost its interaction ID");
+                    return Response(429, "{\"error\":\"quota\"}");
+                }
                 if (call == 3)
                 {
-                    Require(bodies[2] == bodies[1] && bodies[2].Contains("signature-A", StringComparison.Ordinal) &&
-                        bodies[2].Contains("functionResponse", StringComparison.Ordinal) && session.RoundsUsed == 1,
-                        "Switching restarted the consultation, repeated a query or modified signed history");
-                    return Response(200, Reply(Tool("get_briefing", "signature-B")));
+                    var body = JObject.Parse(bodies.Last());
+                    var continuation = InteractionFixture.Initial(body)["continuation"]!;
+                    Require(body["previous_interaction_id"] == null && !body.ToString().Contains("signature-A", StringComparison.Ordinal) &&
+                        continuation["completed_retrievals"]!.Count() == 1 && (int?)continuation["query_rounds_used"] == 1 &&
+                        session.RoundsUsed == 1, "Fallback reused a foreign conversation, lost evidence or reset queries");
+                    var next = JObject.Parse(Reply(Tool("get_briefing", "signature-B"))); backupId = (string)next["id"]!;
+                    return Response(200, next.ToString(Formatting.None));
                 }
+                var current = JObject.Parse(bodies.Last());
                 if (call == 4)
-                    Require((string?)JObject.Parse(bodies.Last())["toolConfig"]!["functionCallingConfig"]!["mode"] == "NONE",
-                        "Failover reset the retrieval limit instead of requesting the final answer");
+                    Require((string?)current["generation_config"]!["tool_choice"] == "none" &&
+                        (string?)current["previous_interaction_id"] == backupId, "Failover reset the limit or lost the backup conversation");
+                else Require(current["previous_interaction_id"] == null && InteractionFixture.Initial(current)["continuation"] == null,
+                    "A new consultation inherited an earlier server conversation or fallback context");
                 return Response(200, Reply(new JObject { ["text"] = "Answer" }));
             }));
             var advisor = new GeminiAdvisor(transport, _ => switches++);
@@ -138,13 +154,14 @@ internal static class FallbackTests
         {
             var draft = new AdvisorSettingsDraft(new JObject { ["api_key"] = Main, ["fallback_api_key"] = Backup, ["model"] = "gemini-test-model", ["fallback_model"] = "gemini-connection-backup" });
             var keys = new List<string>();
-            var handler = new Handler((request, token) =>
+            var handler = new Handler(async (request, token) =>
             {
                 keys.Add(Key(request));
                 var expectedModel = Key(request) == Main ? "gemini-test-model" : "gemini-connection-backup";
-                Require(request.RequestUri!.AbsolutePath.EndsWith("/" + expectedModel + ":generateContent", StringComparison.Ordinal),
+                var body = JObject.Parse(await request.Content!.ReadAsStringAsync(token));
+                Require(request.RequestUri!.AbsolutePath == "/v1beta/interactions" && (string?)body["model"] == expectedModel,
                     "The connection test used the other key's model");
-                return Task.FromResult(Key(request) == Main ? Response(503,"{}") : Response(200, Reply(new JObject { ["text"] = "OK" })));
+                return Key(request) == Main ? Response(503,"{}") : Response(200, Reply(new JObject { ["text"] = "OK" }));
             });
             await Fails("api_error", () => GeminiConnectionTest.RunAsync("unused-fallback-tests", draft.TestSettings(), CancellationToken.None, trace => new GeminiTransport(handler, trace)));
             var result = await GeminiConnectionTest.RunAsync("unused-fallback-tests", draft.TestSettings(true), CancellationToken.None, trace => new GeminiTransport(handler, trace));
@@ -188,9 +205,7 @@ internal static class FallbackTests
     }), "ja", "Question", maxRounds: maxRounds);
     private static JObject Tool(string query, string signature) => new() { ["thoughtSignature"] = signature, ["functionCall"] = new JObject {
         ["id"] = query, ["name"] = "query_situation", ["args"] = new JObject { ["requests"] = new JArray(new JObject { ["query"] = query }) } } };
-    private static string Reply(params JObject[] parts) => new JObject { ["candidates"] = new JArray(new JObject {
-        ["finishReason"] = "STOP", ["content"] = new JObject { ["role"] = "model", ["parts"] = new JArray(parts) } }),
-        ["usageMetadata"] = new JObject { ["totalTokenCount"] = 12 } }.ToString(Formatting.None);
+    private static string Reply(params JObject[] parts) => InteractionFixture.Reply(parts).ToString(Formatting.None);
     private static string Key(HttpRequestMessage request) => request.Headers.GetValues("x-goog-api-key").Single();
     private static HttpResponseMessage Response(int status, string body) => new((HttpStatusCode)status) { Content = new StringContent(body) };
     private sealed class Handler : HttpMessageHandler

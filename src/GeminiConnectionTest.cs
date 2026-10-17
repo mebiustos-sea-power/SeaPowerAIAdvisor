@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -17,27 +16,16 @@ internal static class GeminiConnectionTest
         try
         {
             using var transport = transportFactory == null ? new GeminiTransport(trace) : transportFactory(trace);
-            var body = new JObject
+            var body = GeminiInteraction.Request(settings, new JArray(new JObject
             {
-                ["contents"] = new JArray(new JObject { ["role"] = "user",
-                    ["parts"] = new JArray(new JObject { ["text"] = "Connection test. Reply only with OK." }) }),
-                ["generationConfig"] = new JObject { ["candidateCount"] = 1, ["maxOutputTokens"] = settings.MaxOutputTokens }
-            };
+                ["type"] = "user_input", ["content"] = new JArray(new JObject
+                { ["type"] = "text", ["text"] = "Connection test. Reply only with OK." })
+            }), store: false);
             var response = await transport.GenerateAsync(settings, body, cancellation).ConfigureAwait(false);
             cancellation.ThrowIfCancellationRequested();
-            if (!(response["candidates"] is JArray candidates) || candidates.Count != 1 || !(candidates[0] is JObject candidate))
-                throw new AdvisorConnectionException("response_blocked");
-            var finish = (string?)candidate["finishReason"];
-            if (finish == "MAX_TOKENS" || finish == "CONTINUATION") throw new AdvisorConnectionException("output_limit");
-            if (finish != "STOP") throw new AdvisorConnectionException("generation_failed");
-            if (!(candidate["content"] is JObject content) || (string?)content["role"] != "model" || !(content["parts"] is JArray parts))
-                throw new AdvisorConnectionException("invalid_response");
-            var answer = string.Concat(parts.OfType<JObject>().Where(p => (bool?)p["thought"] != true)
-                .Select(p => p["text"]?.Type == JTokenType.String ? (string)p["text"]! : ""));
-            if (string.IsNullOrWhiteSpace(answer)) throw new AdvisorConnectionException("empty_response");
-            long? tokens = response["usageMetadata"]?["totalTokenCount"]?.Type == JTokenType.Integer &&
-                long.TryParse(response["usageMetadata"]!["totalTokenCount"]!.ToString(), out var count) && count >= 0 ? count : (long?)null;
-            var result = new AdviceResult(answer, 1, 0, tokens, model: settings.RequestModel);
+            var interaction = GeminiInteraction.Read(response);
+            if (interaction.Calls.Length != 0) throw new AdvisorConnectionException("unexpected_function_call");
+            var result = new AdviceResult(interaction.Text, 1, 0, interaction.TotalTokens, model: settings.RequestModel);
             trace?.Finish("completed", result);
             return result;
         }

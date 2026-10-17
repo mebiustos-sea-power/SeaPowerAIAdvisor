@@ -34,7 +34,7 @@ internal sealed class GeminiTransport : IGeminiTransport, IDisposable
             cancellation.ThrowIfCancellationRequested();
             var json = body.ToString(Formatting.None);
             using var request = new HttpRequestMessage(HttpMethod.Post,
-                "https://generativelanguage.googleapis.com/v1beta/models/" + settings.RequestModel + ":generateContent");
+                "https://generativelanguage.googleapis.com/v1beta/interactions");
             request.Headers.Add("x-goog-api-key", settings.RequestApiKey);
             request.Content = new StringContent(json, Encoding.UTF8, "application/json");
             trace?.Request(index, json, settings.IsFallbackKey, settings.RequestModel);

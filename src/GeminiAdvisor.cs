@@ -52,7 +52,8 @@ internal sealed class GeminiAdvisor
         initial["prior_dialogue"] = new JArray(history.Skip(Math.Max(0, history.Count - historyExchanges))
             .Select(h => new JObject { ["question"] = h.Question, ["answer"] = h.Answer, ["advisor_name"] = h.AdvisorName }));
         initial["omitted_prior_exchange_count"] = Math.Max(0, history.Count - historyExchanges);
-        var contents = new JArray(new JObject { ["role"] = "user", ["parts"] = new JArray(new JObject { ["text"] = initial.ToString(Formatting.None) }) });
+        var input = GeminiInteraction.UserInput(initial);
+        string? previousInteraction = null;
         var system = session.Prompts.SystemInstruction(instructions);
         var bytesSent = 0;
         long totalTokens = 0;
@@ -62,7 +63,7 @@ internal sealed class GeminiAdvisor
         var lastQueries = Array.Empty<string>();
         var lastApiRequest = 0;
         var retrievals = new JArray();
-        var modelContextChanged = false;
+        var fallbackContextCreated = false;
         var connection = new GeminiFallback(transport, settings, error =>
         {
             usageKnown = false; // A lost response may have consumed tokens that we cannot measure.
@@ -73,27 +74,17 @@ internal sealed class GeminiAdvisor
         {
             cancellation.ThrowIfCancellationRequested();
             var allow = toolsAllowed && session.RoundsUsed < session.MaxRounds && api < maxApiRequests;
-            var body = new JObject
-            {
-                ["systemInstruction"] = new JObject { ["parts"] = new JArray(new JObject { ["text"] = system }) },
-                ["contents"] = contents.DeepClone(),
-                ["tools"] = new JArray(new JObject { ["functionDeclarations"] = new JArray(new JObject
-                {
-                    ["name"] = tool["name"]!.DeepClone(), ["description"] = tool["description"]!.DeepClone(),
-                    ["parametersJsonSchema"] = tool["parameters"]!.DeepClone()
-                }) }),
-                ["toolConfig"] = new JObject { ["functionCallingConfig"] = new JObject { ["mode"] = allow ? "AUTO" : "NONE" } },
-                ["generationConfig"] = new JObject { ["candidateCount"] = 1, ["maxOutputTokens"] = settings.MaxOutputTokens }
-            };
             var response = await connection.GenerateAsync(fallback =>
             {
-                if (fallback && !modelContextChanged && settings.FallbackModel != settings.Model)
+                // Keys may belong to different projects, even when their model names match.
+                if (fallback && !fallbackContextCreated)
                 {
-                    contents = ModelContext(initial, retrievals, session.RoundsUsed, session.MaxRounds);
-                    modelContextChanged = true;
+                    input = ContinuationInput(initial, retrievals, session.RoundsUsed, session.MaxRounds);
+                    previousInteraction = null;
+                    fallbackContextCreated = true;
                 }
-                body["contents"] = contents.DeepClone();
-                return body;
+                return GeminiInteraction.Request(fallback ? settings.ForFallback() : settings, input,
+                    previousInteraction, system, tool, allow);
             }, cancellation, (requestNumber, fallback, request) =>
             {
                 var size = AdvisorQueryLimits.Bytes(request);
@@ -104,33 +95,16 @@ internal sealed class GeminiAdvisor
                     requestNumber, session.RoundsUsed, session.MaxRounds, lastQueries, fallback, fallback ? settings.FallbackModel : settings.Model));
             }).ConfigureAwait(false);
             cancellation.ThrowIfCancellationRequested();
-            var count = response["usageMetadata"]?["totalTokenCount"];
-            if (count?.Type == JTokenType.Integer && long.TryParse(count.ToString(), out var measured) && measured >= 0)
-                totalTokens += measured;
+            var interaction = GeminiInteraction.Read(response);
+            if (interaction.TotalTokens.HasValue) totalTokens += interaction.TotalTokens.Value;
             else usageKnown = false;
-            if (!(response["candidates"] is JArray candidates) || candidates.Count != 1 ||
-                !(candidates[0] is JObject candidate)) throw new AdvisorConnectionException("response_blocked");
-            var finish = (string?)candidate["finishReason"];
-            if (finish == "MAX_TOKENS" || finish == "CONTINUATION") throw new AdvisorConnectionException("output_limit");
-            if (finish != "STOP") throw new AdvisorConnectionException("generation_failed");
-            if (!(candidate["content"] is JObject content) || (string?)content["role"] != "model" ||
-                !(content["parts"] is JArray parts)) throw new AdvisorConnectionException("invalid_response");
-            var calls = parts.OfType<JObject>().Where(p => p["functionCall"] != null).Select(p => p["functionCall"] as JObject
-                ?? throw new AdvisorConnectionException("invalid_response")).ToArray();
+            var calls = interaction.Calls;
             if (calls.Length == 0)
-            {
-                var answer = string.Concat(parts.OfType<JObject>().Where(p => (bool?)p["thought"] != true)
-                    .Select(p => p["text"]?.Type == JTokenType.String ? (string)p["text"]! : ""));
-                if (string.IsNullOrWhiteSpace(answer)) throw new AdvisorConnectionException("empty_response");
-                return new AdviceResult(answer, connection.ApiRequests, session.RoundsUsed, usageKnown ? totalTokens : (long?)null, queriesUsed, connection.UsingFallback ? settings.FallbackModel : settings.Model);
-            }
+                return new AdviceResult(interaction.Text, connection.ApiRequests, session.RoundsUsed,
+                    usageKnown ? totalTokens : (long?)null, queriesUsed, connection.UsingFallback ? settings.FallbackModel : settings.Model);
             if (!allow || calls.Length > AdvisorQueryLimits.MaxQueriesPerRound) throw new AdvisorConnectionException("unexpected_function_call");
-            foreach (var call in calls)
-                if ((string?)call["name"] != "query_situation" || !(call["args"] is JObject) ||
-                    (call["id"] != null && call["id"]!.Type != JTokenType.String))
-                    throw new AdvisorConnectionException("invalid_function_call");
-            // Preserve every model part, in its original order, including opaque thought signatures.
-            contents.Add(content.DeepClone());
+            if (calls.Any(call => (string?)call["name"] != "query_situation")) throw new AdvisorConnectionException("invalid_function_call");
+            previousInteraction = interaction.Id;
             var combined = Combine(session, calls);
             var knownQueries = ((JArray)tool["parameters"]!["properties"]!["requests"]!["items"]!["properties"]!["query"]!["enum"]!).Values<string>().ToHashSet(StringComparer.Ordinal);
             var pendingQueries = (combined["requests"] as JArray ?? new JArray()).OfType<JObject>().Select(q =>
@@ -152,33 +126,31 @@ internal sealed class GeminiAdvisor
                 var reply = (JObject)result.DeepClone();
                 if (result["results"] is JArray results)
                 {
-                    var length = ((JArray)call["args"]!["requests"]!).Count;
+                    var length = ((JArray)call["arguments"]!["requests"]!).Count;
                     reply["results"] = new JArray(results.Skip(offset).Take(length).Select(r => r.DeepClone()));
                     offset += length;
                 }
-                var function = new JObject { ["name"] = "query_situation", ["response"] = reply };
-                if (call["id"] != null) function["id"] = call["id"]!.DeepClone();
-                replies.Add(new JObject { ["functionResponse"] = function });
+                replies.Add(GeminiInteraction.FunctionResult(call, reply));
             }
-            contents.Add(new JObject { ["role"] = "user", ["parts"] = replies });
+            input = replies;
             var errorCode = (string?)result["error"]?["code"];
             if (errorCode == "payload_limit" || errorCode == "round_limit") toolsAllowed = false;
         }
         throw new AdvisorConnectionException("request_limit");
     }
 
-    // A different model receives actual retrieved evidence as user data, without inheriting another model's signed reasoning.
-    private static JArray ModelContext(JObject initial, JArray retrievals, int roundsUsed, int maxRounds)
+    // A new key receives retrieved evidence as user data, without depending on access to the previous project's conversation.
+    private static JArray ContinuationInput(JObject initial, JArray retrievals, int roundsUsed, int maxRounds)
     {
-        var input = (JObject)initial.DeepClone();
-        input["continuation"] = new JObject
+        var context = (JObject)initial.DeepClone();
+        context["continuation"] = new JObject
         {
-            ["reason"] = "fallback_model_changed",
+            ["reason"] = "fallback_connection_changed",
             ["query_rounds_used"] = roundsUsed,
             ["remaining_query_rounds"] = Math.Max(0, maxRounds - roundsUsed),
             ["completed_retrievals"] = retrievals.DeepClone()
         };
-        return new JArray(new JObject { ["role"] = "user", ["parts"] = new JArray(new JObject { ["text"] = input.ToString(Formatting.None) }) });
+        return GeminiInteraction.UserInput(context);
     }
 
     private static JObject Combine(IAdvisorQuerySession session, JObject[] calls)
@@ -186,7 +158,7 @@ internal sealed class GeminiAdvisor
         var requests = new JArray();
         foreach (var call in calls)
         {
-            var args = (JObject)call["args"]!;
+            var args = (JObject)call["arguments"]!;
             // The adapter owns session identity. The model chooses queries, never the snapshot.
             // Malformed arguments still consume one bounded round and surface as a structured error.
             if (args.Properties().Any(p => p.Name != "requests"))
