@@ -309,6 +309,8 @@
   "settings.api_category": "API connections",
   "settings.back_chat": "Back to chat",
   "settings.active_advisor": "Active advisor",
+  "profile.selection_hint": "You can add or edit advisors in the Registrations tab.",
+  "connection.selection_hint": "You can add or edit API connections in the Registrations tab.",
   "settings.selection_tab": "Selection",
   "settings.registration_tab": "Registrations",
   "settings.edit": "Edit",

@@ -309,6 +309,8 @@
   "settings.api_category": "API接続",
   "settings.back_chat": "会話に戻る",
   "settings.active_advisor": "使用するアドバイザー",
+  "profile.selection_hint": "アドバイザーの追加・編集は「登録・編集」タブで行えます。",
+  "connection.selection_hint": "API接続の追加・編集は「登録・編集」タブで行えます。",
   "settings.selection_tab": "選択",
   "settings.registration_tab": "登録・編集",
   "settings.edit": "編集",
