@@ -3,7 +3,7 @@ using Newtonsoft.Json.Linq;
 
 namespace SeaPowerAIAdvisor;
 
-// Apply unit-category permissions once to the detached snapshot. All query routes use this projection.
+// Apply unit and contact permissions once to the detached snapshot. All query routes use this projection.
 internal static class BattleInformation
 {
     internal static void Apply(JObject snapshot, AdvisorInformation information)
@@ -20,6 +20,13 @@ internal static class BattleInformation
             foreach (var row in ((JArray)snapshot["hosted_air_units"]!).OfType<JObject>()) row.Remove("loadouts");
         if (!information.Allows(InformationKind.BattleAviation))
             foreach (var row in ((JArray)snapshot["friendly_bases"]!).OfType<JObject>()) row.Remove("has_aviation_facility");
+        var contacts = (JArray)snapshot["observed_contacts"]!;
+        foreach (var contact in contacts.OfType<JObject>().Where(c =>
+            !information.Allows(InformationKind.BattleContacts) ||
+            ((string?)c["posture"] == "neutral" && !information.Allows(InformationKind.BattleNeutralContacts))).ToArray()) contact.Remove();
+        var contactIds = contacts.OfType<JObject>().Select(c => (string)c["id"]!).ToHashSet(System.StringComparer.Ordinal);
+        foreach (var reference in ((JArray)snapshot["contact_threat_references"]!).OfType<JObject>()
+            .Where(r => !contactIds.Contains((string)r["id"]!)).ToArray()) reference.Remove();
     }
     private static bool Permitted(JObject unit, AdvisorInformation information) =>
         information.Allows(InformationKind.BattleUnits) && ((string?)unit["unit_category"] switch
