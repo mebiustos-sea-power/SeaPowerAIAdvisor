@@ -317,6 +317,17 @@
   "settings.back_categories": "カテゴリに戻る",
   "settings.saved": "保存しました。",
   "settings.delete_question": "「{0}」を削除しますか？削除はすぐに反映されます。",
-  "settings.discard_question": "未保存の変更を破棄して戻りますか？保存・削除済みの内容は維持されます。",
-  "settings.discard_action": "破棄して戻る"
+  "settings.discard_question": "未反映の変更を破棄して戻りますか？反映済みの内容は維持されます。",
+  "settings.discard_action": "破棄して戻る",
+  "developer.diagnostics": "診断",
+  "developer.prompts.tab": "プロンプト",
+  "developer.prompts.description": "一時適用した内容は次の相談から使われ、Sea Powerの終了で消えます。プロンプトファイルは変更しません。",
+  "developer.prompts.apply": "一時適用",
+  "developer.prompts.reset": "起動時の内容に戻す",
+  "developer.prompts.original": "起動時の内容を使用しています。",
+  "developer.prompts.active": "一時変更を適用中です。",
+  "developer.prompts.pending": "未適用の編集があります。",
+  "developer.prompts.applied": "次の相談から使用する内容を一時適用しました。",
+  "developer.prompts.restored": "次の相談から起動時の内容を使用します。",
+  "developer.prompts.invalid": "「{0}」の編集を適用できません。文字列を確認し、各ファイルの内容をUTF-8で64 KiB以内にしてください。"
 }

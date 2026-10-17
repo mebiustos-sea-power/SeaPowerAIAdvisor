@@ -17,6 +17,7 @@ internal sealed class AdvisorSettingsController
     private readonly AdvisorApiSettingsView api;
     private readonly AdvisorProfileSettingsView profiles;
     private readonly AdvisorInformationView information;
+    private readonly AdvisorPromptSettingsView promptEditor;
     private readonly Action<Action> guard;
     private readonly Action releaseInput, changed, back;
     private readonly Func<bool> consultationBusy;
@@ -49,6 +50,7 @@ internal sealed class AdvisorSettingsController
         size = Named<ComboBox>("ConversationTextSize"); campaign = Named<CheckBox>("EnableCampaignAdvisor"); log = Named<CheckBox>("LogAiJson");
         information = new AdvisorInformationView(Named<StackPanel>("InformationChoices"), guard);
         test = Named<Button>("TestConnection"); testStatus = Named<TextBlock>("ConnectionTestStatus"); testError = Named<TextBlock>("ConnectionTestError");
+        promptEditor = new AdvisorPromptSettingsView(content, text, guard, typing, changed, warn);
         apiStore = new AdvisorApiSettingsStore(settingsPath, () => text()["connection.configuration_name_pattern"]);
         api = new AdvisorApiSettingsView(content, apiStore, text, guard, typing, ApiChanged, Saved, () => Notice(text()["profile.ime"], true), ApiError, ConfirmDelete);
         profiles = new AdvisorProfileSettingsView(content, profileDirectory, text, defaultPortrait, guard, typing,
@@ -78,7 +80,7 @@ internal sealed class AdvisorSettingsController
     }
     internal void Close()
     {
-        CancelTest(); HideConfirmation(); profiles.Close(); api.Close(); current = null; available = false;
+        CancelTest(); HideConfirmation(); profiles.Close(); api.Close(); promptEditor.Close(); current = null; available = false;
         pane.Visibility = Visibility.Collapsed; chat.Visibility = Visibility.Visible;
     }
     private void OpenCategory(Category category)
@@ -91,7 +93,11 @@ internal sealed class AdvisorSettingsController
         {
             if (category == Category.Profile) { Named<TabControl>("ProfileCategory").SelectedIndex = 0; profiles.Open(); profiles.Focus(); }
             else if (category == Category.Api) { Named<TabControl>("ApiCategory").SelectedIndex = 0; api.Open(); api.Focus(); }
-            else if (category == Category.Developer) { log.IsChecked = apiStore.Read().LogAiJson; log.Focus(); }
+            else if (category == Category.Developer)
+            {
+                Named<TabControl>("DeveloperCategory").SelectedIndex = 0;
+                log.IsChecked = apiStore.Read().LogAiJson; promptEditor.Open(); log.Focus();
+            }
             else
             {
                 var saved = options.Read();
@@ -114,10 +120,10 @@ internal sealed class AdvisorSettingsController
         Category.Developer => log.IsChecked.ToString(),
         _ => ""
     };
-    private bool HasChanges => available && (current == Category.Profile ? profiles.HasChanges : current == Category.Api ? api.HasChanges : Snapshot() != baseline);
+    private bool HasChanges => available && ((current == Category.Developer && promptEditor.HasChanges) || (current == Category.Profile ? profiles.HasChanges : current == Category.Api ? api.HasChanges : Snapshot() != baseline));
     private void BackToHome()
     {
-        void Go() { CancelTest(); profiles.Close(); api.Close(); current = null; available = false; releaseInput(); page.Visibility = Visibility.Collapsed; home.Visibility = Visibility.Visible; Named<Button>("OpenGeneralCategory").Focus(); }
+        void Go() { CancelTest(); profiles.Close(); api.Close(); promptEditor.Close(); current = null; available = false; releaseInput(); page.Visibility = Visibility.Collapsed; home.Visibility = Visibility.Visible; Named<Button>("OpenGeneralCategory").Focus(); }
         if (HasChanges) Confirm(text()["settings.discard_question"], text()["settings.discard_action"], Go); else Go();
     }
     private void ConfirmDelete(string name, Action action) => Confirm(text().Format("settings.delete_question", name), text()["profile.remove"], action);
