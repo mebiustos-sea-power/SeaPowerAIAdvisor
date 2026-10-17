@@ -145,8 +145,25 @@
                HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,12,0,0">
           <StackPanel Margin="0,0,8,0">
-            <TextBlock Text="{DynamicResource Advisor.connection.main_heading}" FontSize="14" FontWeight="Bold" Margin="0,0,0,10" />
-            <TextBlock Text="{DynamicResource Advisor.connection.api_key}" FontSize="12" Margin="0,0,0,4" />
+            <TextBlock Text="{DynamicResource Advisor.connection.main_heading}" FontSize="14" FontWeight="Bold" Margin="0,0,0,8" />
+            <ComboBox x:Name="MainApiConfiguration" MinHeight="30" />
+            <TextBlock Text="{DynamicResource Advisor.connection.sub_heading}" FontSize="14" FontWeight="Bold" Margin="0,18,0,8" />
+            <TextBlock Text="{DynamicResource Advisor.connection.fallback_hint}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8" Opacity="0.7" />
+            <ComboBox x:Name="SubApiConfiguration" MinHeight="30" />
+            <TextBlock Text="{DynamicResource Advisor.connection.configurations_heading}" FontSize="14" FontWeight="Bold" Margin="0,22,0,10" />
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <ComboBox x:Name="ApiConfigurationSelector" MinHeight="30" />
+              <Button x:Name="AddApiConfiguration" Grid.Column="1" Content="{DynamicResource Advisor.profile.add}" Height="30" Padding="12,0" Margin="8,0,0,0" />
+              <Button x:Name="RemoveApiConfiguration" Grid.Column="2" Content="{DynamicResource Advisor.profile.remove}" Height="30" Padding="12,0" Margin="8,0,0,0" />
+            </Grid>
+            <TextBlock Text="{DynamicResource Advisor.connection.configuration_name}" FontSize="12" Margin="0,12,0,4" />
+            <TextBox x:Name="ApiConfigurationName" FontSize="14" Padding="7" MaxLength="80" />
+            <TextBlock Text="{DynamicResource Advisor.connection.api_key}" FontSize="12" Margin="0,12,0,4" />
             <PasswordBox x:Name="ApiKey" FontSize="14" Padding="7" MaxLength="512" ShowLastCharacterDuration="0"
                          Background="{DynamicResource Brush.TextBox.Background}" CaretBrush="{DynamicResource Brush.TextBox.ForegroundFocus}" />
             <TextBlock Text="{DynamicResource Advisor.connection.model}" FontSize="12" Margin="0,12,0,4" />
@@ -155,19 +172,6 @@
                     HorizontalAlignment="Left" Height="30" Padding="12,0" Margin="0,10,0,0" ToolTip="{DynamicResource Advisor.connection.test_tip}" />
             <TextBlock x:Name="ConnectionTestStatus" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0" />
             <TextBlock x:Name="ConnectionTestError" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0"
-                       Foreground="{DynamicResource AdvisorErrorBrush}" Visibility="Collapsed" />
-            <TextBlock Text="{DynamicResource Advisor.connection.sub_heading}" FontSize="14" FontWeight="Bold" Margin="0,22,0,10" />
-            <TextBlock Text="{DynamicResource Advisor.connection.fallback_hint}" FontSize="12" TextWrapping="Wrap"
-                       Margin="0,0,0,10" Opacity="0.7" />
-            <TextBlock Text="{DynamicResource Advisor.connection.api_key}" FontSize="12" Margin="0,0,0,4" />
-            <PasswordBox x:Name="FallbackApiKey" FontSize="14" Padding="7" MaxLength="512" ShowLastCharacterDuration="0"
-                         Background="{DynamicResource Brush.TextBox.Background}" CaretBrush="{DynamicResource Brush.TextBox.ForegroundFocus}" />
-            <TextBlock Text="{DynamicResource Advisor.connection.model}" FontSize="12" Margin="0,12,0,4" />
-            <TextBox x:Name="FallbackModelName" FontSize="14" Padding="7" MaxLength="100" />
-            <Button x:Name="TestFallbackConnection" Content="{DynamicResource Advisor.connection.test}"
-                    HorizontalAlignment="Left" Height="30" Padding="12,0" Margin="0,10,0,0" ToolTip="{DynamicResource Advisor.connection.test_tip}" />
-            <TextBlock x:Name="SubConnectionTestStatus" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0" />
-            <TextBlock x:Name="SubConnectionTestError" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0"
                        Foreground="{DynamicResource AdvisorErrorBrush}" Visibility="Collapsed" />
             <TextBlock Text="{DynamicResource Advisor.ai.consultation}" FontSize="14" FontWeight="Bold" Margin="0,22,0,10" />
             <TextBlock Text="{DynamicResource Advisor.ai.max_query_rounds}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,4" />

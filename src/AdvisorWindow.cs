@@ -34,8 +34,8 @@ internal sealed class AdvisorWindow
     private readonly TextBox question;
     private readonly ScrollViewer transcriptScroll;
     private readonly AdvisorTranscriptView transcript;
-    private readonly TextBox diagnosticOutput, profileName, profileRole, profilePersonality, modelName, fallbackModelName;
-    private readonly PasswordBox apiKey, fallbackApiKey;
+    private readonly TextBox diagnosticOutput, profileName, profileRole, profilePersonality;
+    private readonly AdvisorApiSettingsView apiSettings;
     private AdvisorSettingsDraft? connectionDraft;
     private readonly ComboBox advisorSelector, textSize;
     private readonly Button addAdvisor, removeAdvisor;
@@ -57,18 +57,15 @@ internal sealed class AdvisorWindow
     private readonly Button choosePortrait;
     private string speakerName;
     private bool profileLoaded;
-    private readonly TextBlock status, diagnosticStatus, settingsStatus, mainConnectionTestStatus, mainConnectionTestError;
-    private readonly TextBlock subConnectionTestStatus, subConnectionTestError;
-    private TextBlock TestStatus => testingFallback ? subConnectionTestStatus : mainConnectionTestStatus;
-    private TextBlock TestError => testingFallback ? subConnectionTestError : mainConnectionTestError;
+    private readonly TextBlock status, diagnosticStatus, settingsStatus, connectionTestStatus, connectionTestError;
     private bool settingsInputError;
-    private readonly Button send, captureAction, inputAction, testConnection, testFallbackConnection;
+    private readonly Button send, captureAction, inputAction, testConnection;
     private readonly (AdvisorShortcut Shortcut, Button Button)[] shortcuts;
     private AdvisorJob? active;
     private AdvisorTurn? pendingTurn;
     private AdvisorNotice? configurationNotice;
     private AdvisorJob? connectionTest;
-    private bool testingFallback;
+    private string testingApiName = "";
     private string? pendingModel;
     private bool scrollPending;
     private bool diagnosticScrollPending;
@@ -125,10 +122,6 @@ internal sealed class AdvisorWindow
         saveSettings.Click += (_, _) => guard(SaveSettings);
         Named<Button>(content, "CancelSettings").Click += (_, _) => guard(CancelSettings);
         settingsStatus = Named<TextBlock>(content, "SettingsStatus");
-        apiKey = Named<PasswordBox>(content, "ApiKey");
-        fallbackApiKey = Named<PasswordBox>(content, "FallbackApiKey");
-        modelName = Named<TextBox>(content, "ModelName");
-        fallbackModelName = Named<TextBox>(content, "FallbackModelName");
         maxQueryRounds = Named<TextBox>(content, "MaxQueryRounds");
         historyExchanges = Named<TextBox>(content, "HistoryExchanges");
         commonPrompt = Named<TextBox>(content, "CommonPrompt");
@@ -137,17 +130,11 @@ internal sealed class AdvisorWindow
         textSize = Named<ComboBox>(content, "ConversationTextSize");
         informationChoices = new AdvisorInformationView(Named<StackPanel>(content, "InformationChoices"), guard);
         testConnection = Named<Button>(content, "TestConnection");
-        testFallbackConnection = Named<Button>(content, "TestFallbackConnection");
-        mainConnectionTestStatus = Named<TextBlock>(content, "ConnectionTestStatus");
-        mainConnectionTestError = Named<TextBlock>(content, "ConnectionTestError");
-        subConnectionTestStatus = Named<TextBlock>(content, "SubConnectionTestStatus");
-        subConnectionTestError = Named<TextBlock>(content, "SubConnectionTestError");
-        testConnection.Click += (_, _) => guard(() => TestConnection(false));
-        testFallbackConnection.Click += (_, _) => guard(() => TestConnection(true));
-        apiKey.PasswordChanged += (_, _) => guard(ClearConnectionTestResult);
-        fallbackApiKey.PasswordChanged += (_, _) => guard(ClearConnectionTestResult);
-        modelName.TextChanged += (_, _) => guard(ClearConnectionTestResult);
-        fallbackModelName.TextChanged += (_, _) => guard(ClearConnectionTestResult);
+        connectionTestStatus = Named<TextBlock>(content, "ConnectionTestStatus");
+        connectionTestError = Named<TextBlock>(content, "ConnectionTestError");
+        apiSettings = new AdvisorApiSettingsView(content, () => text, guard, typing, () =>
+        { ClearConnectionTestResult(); UpdateConnectionTestControls(); });
+        testConnection.Click += (_, _) => guard(TestConnection);
         profileDirectory = AdvisorProfile.DirectoryIn(UnityEngine.Application.persistentDataPath);
         settingsPath = AdvisorSettings.PathIn(UnityEngine.Application.persistentDataPath);
         logAiJson = Named<CheckBox>(content, "LogAiJson");
@@ -172,12 +159,7 @@ internal sealed class AdvisorWindow
         questionInput = new QuestionInputController(question, () => active != null, StartConsultation, guard);
         question.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(question));
         question.LostKeyboardFocus += (_, _) => guard(() => typing.Release(question));
-        foreach (var input in new[] { profileName, profileRole, profilePersonality, modelName, fallbackModelName, maxQueryRounds, commonPrompt, diagnosticOutput, Named<TextBox>(content, "ProfilePath") })
-        {
-            input.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(input));
-            input.LostKeyboardFocus += (_, _) => guard(() => typing.Release(input));
-        }
-        foreach (var input in new[] { apiKey, fallbackApiKey })
+        foreach (var input in new[] { profileName, profileRole, profilePersonality, maxQueryRounds, commonPrompt, diagnosticOutput, Named<TextBox>(content, "ProfilePath") })
         {
             input.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(input));
             input.LostKeyboardFocus += (_, _) => guard(() => typing.Release(input));
@@ -198,9 +180,9 @@ internal sealed class AdvisorWindow
         window.Template = view.TryFindResource("WindowLayoutNoScroll") as ControlTemplate
             ?? throw new InvalidOperationException("The game's WindowLayoutNoScroll template is unavailable.");
         window.OnClosed += (_, _) => guard(OnWindowClosed);
-        settingsTabs.SelectionChanged += (_, _) => guard(() =>
+        settingsTabs.SelectionChanged += (_, e) => guard(() =>
         {
-            if (!IsOpen || settingsPane.Visibility != Visibility.Visible) return;
+            if (!Equals(e.Source, settingsTabs) || !IsOpen || settingsPane.Visibility != Visibility.Visible) return;
             ReleaseInput();
             FocusSettings();
         });
@@ -554,11 +536,8 @@ internal sealed class AdvisorWindow
         SetSettingsStatus(string.Empty);
         try
         {
-            connectionDraft = AdvisorSettings.Edit(settingsPath);
-            apiKey.Password = connectionDraft.ApiKey;
-            fallbackApiKey.Password = connectionDraft.FallbackApiKey;
-            modelName.Text = connectionDraft.Model;
-            fallbackModelName.Text = connectionDraft.FallbackModel;
+            connectionDraft = AdvisorSettings.Edit(settingsPath, text["connection.configuration_name_pattern"]);
+            apiSettings.Reset(connectionDraft);
             logAiJson.IsChecked = connectionDraft.LogAiJson;
         }
         catch (AdvisorConnectionException failure) { connectionDraft = null; SettingsError(failure); }
@@ -589,30 +568,28 @@ internal sealed class AdvisorWindow
         commonPrompt.Text = string.Empty;
         enableCampaign.IsChecked = false;
         textSize.SelectedIndex = (int)options.Current.TextSize;
-        apiKey.Password = string.Empty;
-        fallbackApiKey.Password = string.Empty;
-        modelName.Text = string.Empty;
-        fallbackModelName.Text = string.Empty;
+        apiSettings.Reset(null);
         logAiJson.IsChecked = false;
         ClearConnectionTestResult();
         UpdateConnectionTestControls();
     }
 
-    private void TestConnection(bool fallback)
+    private void TestConnection()
     {
         if (connectionTest != null) { CancelConnectionTest(); return; }
         if (active != null || connectionDraft == null || settingsPane.Visibility != Visibility.Visible) return;
         if (settingsInputError) SetSettingsStatus(string.Empty);
-        testingFallback = fallback;
+        if (apiSettings.SelectedId == null) return;
+        testingApiName = apiSettings.SelectedName;
         if (QuestionInputController.IsComposing) { ShowConnectionTestError(text["profile.ime"]); return; }
         try
         {
             ReadConnectionDraft();
-            var settings = connectionDraft.TestSettings(fallback);
+            var settings = connectionDraft.TestConfiguration(apiSettings.SelectedId);
             var directory = AdvisorTrace.DirectoryIn(UnityEngine.Application.persistentDataPath);
             ClearConnectionTestResult();
             connectionTest = new AdvisorJob(cancellation => GeminiConnectionTest.RunAsync(directory, settings, cancellation), warn);
-            TestStatus.Text = ConnectionTestMessage(text["connection.test_running"]);
+            connectionTestStatus.Text = ConnectionTestMessage(text["connection.test_running"]);
             UpdateConnectionTestControls();
         }
         catch (AdvisorConnectionException error) { ShowConnectionTestError(AdvisorNotice.Connection(error).Message(text)); }
@@ -630,7 +607,7 @@ internal sealed class AdvisorWindow
             ShowConnectionTestError(AdvisorNotice.Unexpected().Message(text));
             throw completion.UnexpectedError;
         }
-        if (completion.IsCancelled) TestStatus.Text = ConnectionTestMessage(text["connection.test_cancelled"]);
+        if (completion.IsCancelled) connectionTestStatus.Text = ConnectionTestMessage(text["connection.test_cancelled"]);
         else if (completion.Error != null)
         {
             ShowConnectionTestError(AdvisorNotice.Connection(completion.Error).Message(text));
@@ -639,7 +616,7 @@ internal sealed class AdvisorWindow
         else
         {
             _ = completion.Result ?? throw new InvalidOperationException("The connection test has no result.");
-            TestStatus.Text = ConnectionTestMessage(text["connection.test_succeeded"]);
+            connectionTestStatus.Text = ConnectionTestMessage(text["connection.test_succeeded"]);
         }
     }
 
@@ -649,44 +626,38 @@ internal sealed class AdvisorWindow
         var job = connectionTest; connectionTest = null;
         job.Dispose();
         UpdateConnectionTestControls();
-        TestStatus.Text = ConnectionTestMessage(text["connection.test_cancelled"]);
+        connectionTestStatus.Text = ConnectionTestMessage(text["connection.test_cancelled"]);
     }
 
     private void UpdateConnectionTestControls()
     {
-        apiKey.IsEnabled = fallbackApiKey.IsEnabled = modelName.IsEnabled = fallbackModelName.IsEnabled = connectionDraft != null && connectionTest == null;
-        var canTest = connectionDraft != null && active == null;
-        testConnection.IsEnabled = canTest && (connectionTest == null || !testingFallback);
-        testFallbackConnection.IsEnabled = canTest && (connectionTest == null || testingFallback);
-        testConnection.Content = text[connectionTest != null && !testingFallback ? "action.cancel" : "connection.test"];
-        testFallbackConnection.Content = text[connectionTest != null && testingFallback ? "action.cancel" : "connection.test"];
+        apiSettings.SetBusy(connectionTest != null);
+        testConnection.IsEnabled = connectionDraft != null && apiSettings.SelectedId != null && active == null;
+        testConnection.Content = text[connectionTest != null ? "action.cancel" : "connection.test"];
     }
 
     private string ConnectionTestMessage(string message) => text.Format("connection.test_result",
-        text[testingFallback ? "connection.fallback_key_name" : "connection.primary_key_name"], message);
+        testingApiName, message);
 
     private void ClearConnectionTestResult()
     {
         if (connectionTest != null) return;
-        foreach (var label in new[] { mainConnectionTestStatus, subConnectionTestStatus }) label.Text = string.Empty;
-        foreach (var label in new[] { mainConnectionTestError, subConnectionTestError })
-        { label.Text = string.Empty; label.Visibility = Visibility.Collapsed; }
+        connectionTestStatus.Text = string.Empty;
+        connectionTestError.Text = string.Empty;
+        connectionTestError.Visibility = Visibility.Collapsed;
     }
 
     private void ShowConnectionTestError(string message)
     {
-        TestStatus.Text = string.Empty;
-        TestError.Text = ConnectionTestMessage(message);
-        TestError.Visibility = Visibility.Visible;
+        connectionTestStatus.Text = string.Empty;
+        connectionTestError.Text = ConnectionTestMessage(message);
+        connectionTestError.Visibility = Visibility.Visible;
     }
 
     private void ReadConnectionDraft()
     {
         if (connectionDraft == null) throw new InvalidOperationException("The connection draft is missing.");
-        connectionDraft.ApiKey = apiKey.Password;
-        connectionDraft.FallbackApiKey = fallbackApiKey.Password;
-        connectionDraft.Model = modelName.Text ?? string.Empty;
-        connectionDraft.FallbackModel = fallbackModelName.Text ?? string.Empty;
+        apiSettings.Read();
         connectionDraft.LogAiJson = logAiJson.IsChecked == true;
     }
 
@@ -709,7 +680,8 @@ internal sealed class AdvisorWindow
     {
         var key = text.Contains("settings.error." + failure.Code) ? failure.Code : "settings_invalid";
         SetSettingsStatus(text["settings.error." + key] + text.Format("settings.error_suffix", failure.Code));
-        settingsInputError = failure.Code is "api_key_missing" or "model_invalid" or "fallback_model_invalid" or "settings_invalid";
+        settingsInputError = failure.Code is "api_key_missing" or "model_invalid" or "fallback_model_invalid" or "settings_invalid" or
+            "api_configuration_name_invalid" or "api_main_missing" or "api_selection_invalid" or "api_selection_same" or "fallback_key_missing";
         warn("Advisor settings failed: " + failure.Code);
     }
 
@@ -724,8 +696,7 @@ internal sealed class AdvisorWindow
     {
         if (settingsTabs.SelectedIndex == ConnectionTabIndex)
         {
-            if (apiKey.IsEnabled) apiKey.Focus();
-            else Named<Button>(content, "CancelSettings").Focus();
+            if (!apiSettings.Focus()) Named<Button>(content, "CancelSettings").Focus();
         }
         else if (settingsTabs.SelectedIndex == InformationTabIndex) informationChoices.Focus();
         else if (settingsTabs.SelectedIndex == DiagnosticsTabIndex) captureAction.Focus();

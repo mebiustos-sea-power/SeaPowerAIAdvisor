@@ -26,10 +26,10 @@ internal static class FallbackModelTests
             var legacy = AdvisorSettings.Load(path);
             Require(legacy.FallbackModel == Primary && legacy.ForFallback().RequestModel == Primary && File.ReadAllBytes(path).SequenceEqual(before),
                 "Reading a legacy shared model reset or rewrote user settings");
-            var draft = AdvisorSettings.Edit(path); draft.FallbackModel = Secondary; _ = draft.Data();
-            Require(AdvisorSettings.Edit(path).FallbackModel == Primary && File.ReadAllBytes(path).SequenceEqual(before), "A pending model edit was saved immediately");
+            var draft = AdvisorSettings.Edit(path); draft.Sub!.Model = Secondary; _ = draft.Data();
+            Require(AdvisorSettings.Edit(path).Sub!.Model == Primary && File.ReadAllBytes(path).SequenceEqual(before), "A pending model edit was saved immediately");
             AdvisorSettings.WriteBytes(path,draft.Data());
-            draft = AdvisorSettings.Edit(path); draft.Model = "gemini-renamed-main"; AdvisorSettings.WriteBytes(path,draft.Data());
+            draft = AdvisorSettings.Edit(path); draft.Main.Model = "gemini-renamed-main"; AdvisorSettings.WriteBytes(path,draft.Data());
             var loaded = AdvisorSettings.Load(path);
             Require(loaded.RequestModel == "gemini-renamed-main" && loaded.ForFallback().RequestModel == Secondary &&
                 draft.TestSettings().RequestModel == "gemini-renamed-main" && draft.TestSettings(true).RequestModel == Secondary,
