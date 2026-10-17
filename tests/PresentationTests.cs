@@ -119,6 +119,10 @@ internal static class PresentationTests
             Require(!AdvisorShortcut.MoreDetail.IsAvailable(false, chat.Exchanges.Count), "More detail has no answer to refer to");
             chat.TryAdd("Question", "Answer", out _);
             Require(AdvisorShortcut.MoreDetail.IsAvailable(false, chat.Exchanges.Count), "More detail did not enable after an answer");
+            Require(!AdvisorShortcut.MoreDetail.IsAvailable(false, chat.Exchanges.Count, 0) &&
+                AdvisorShortcut.NextSteps.IsAvailable(false, chat.Exchanges.Count, 0) && AdvisorShortcut.KeyRisks.IsAvailable(false, chat.Exchanges.Count, 0) &&
+                AdvisorShortcut.MoreDetail.IsAvailable(false, chat.Exchanges.Count, 1),
+                "Disabling sent history left a contextless follow-up available or disabled independent questions");
             chat.Clear();
             Require(!AdvisorShortcut.MoreDetail.IsAvailable(false, chat.Exchanges.Count), "Clear left More detail enabled");
         });

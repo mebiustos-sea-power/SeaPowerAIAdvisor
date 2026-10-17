@@ -19,7 +19,7 @@ internal sealed class AdvisorWindow
     private readonly IAdvisorSource source;
     private readonly AdvisorOptionsStore options;
     private AdvisorOptions? optionsDraft;
-    private readonly TextBox maxQueryRounds, commonPrompt;
+    private readonly TextBox maxQueryRounds, historyExchanges, commonPrompt;
     private readonly CheckBox enableCampaign;
     private readonly AdvisorInformationView informationChoices;
     private readonly Func<string> replyLanguage;
@@ -130,6 +130,7 @@ internal sealed class AdvisorWindow
         modelName = Named<TextBox>(content, "ModelName");
         fallbackModelName = Named<TextBox>(content, "FallbackModelName");
         maxQueryRounds = Named<TextBox>(content, "MaxQueryRounds");
+        historyExchanges = Named<TextBox>(content, "HistoryExchanges");
         commonPrompt = Named<TextBox>(content, "CommonPrompt");
         commonPrompt.MaxLength = AdvisorOptions.MaxCommonPromptLength;
         enableCampaign = Named<CheckBox>(content, "EnableCampaignAdvisor");
@@ -279,7 +280,7 @@ internal sealed class AdvisorWindow
 
     private void ConsultShortcut(AdvisorShortcut shortcut, Button button)
     {
-        if (conversationPane.Visibility != Visibility.Visible || !shortcut.IsAvailable(active != null, conversation.Exchanges.Count)) return;
+        if (conversationPane.Visibility != Visibility.Visible || !shortcut.IsAvailable(active != null, conversation.Exchanges.Count, options.Current.HistoryExchanges)) return;
         questionInput.Reset();
         StartConsultation(shortcut.Prepare(button.Content as string
             ?? throw new InvalidOperationException("The shortcut caption is unavailable.")));
@@ -310,6 +311,7 @@ internal sealed class AdvisorWindow
             return;
         }
         conversation.UseInformationPolicy(options.Current.Information.Key);
+        var history = conversation.Exchanges.ToArray();
         var answeringName = appliedProfile?.DisplayName ?? speakerName;
         var answeringId = appliedProfile?.ActiveId ?? AdvisorProfile.DefaultId;
         var turn = retry ?? conversation.Begin(request, answeringName, answeringId);
@@ -322,14 +324,14 @@ internal sealed class AdvisorWindow
         {
             var settings = AdvisorSettings.Load(settingsPath);
             var session = source.CreateSession(replyLanguage(), request.Text, options.Current.MaxQueryRounds, options.Current.Information);
-            var history = conversation.Exchanges.ToArray();
+            var historyLimit = options.Current.HistoryExchanges;
             pendingTurn = turn;
             pendingModel = settings.Model;
             var logDirectory = AdvisorTrace.DirectoryIn(UnityEngine.Application.persistentDataPath);
             var advisorProfile = appliedProfile;
             var sharedPrompt = options.Current.CommonPrompt;
             active = new AdvisorJob((cancellation, progress) =>
-                AdvisorConsultation.RunAsync(logDirectory, session, settings, request, history, cancellation, profile: advisorProfile, commonPrompt: sharedPrompt, progress: progress), warn);
+                AdvisorConsultation.RunAsync(logDirectory, session, settings, request, history, cancellation, profile: advisorProfile, commonPrompt: sharedPrompt, progress: progress, historyExchanges: historyLimit), warn);
             SetBusy(true);
             status.Text = text["status.consulting"];
         }
@@ -564,13 +566,14 @@ internal sealed class AdvisorWindow
         {
             optionsDraft = options.Read();
             maxQueryRounds.Text = optionsDraft.MaxQueryRounds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            historyExchanges.Text = optionsDraft.HistoryExchanges.ToString(System.Globalization.CultureInfo.InvariantCulture);
             enableCampaign.IsChecked = optionsDraft.CampaignEnabled;
             textSize.SelectedIndex = (int)optionsDraft.TextSize;
             informationChoices.Reset(optionsDraft.Information);
             commonPrompt.Text = optionsDraft.CommonPrompt;
         }
         catch (AdvisorOptionsException failure) { optionsDraft = null; OptionsError(failure); }
-        maxQueryRounds.IsEnabled = commonPrompt.IsEnabled = enableCampaign.IsEnabled = textSize.IsEnabled = optionsDraft != null;
+        maxQueryRounds.IsEnabled = historyExchanges.IsEnabled = commonPrompt.IsEnabled = enableCampaign.IsEnabled = textSize.IsEnabled = optionsDraft != null;
         logAiJson.IsEnabled = connectionDraft != null;
         saveSettings.IsEnabled = connectionDraft != null && optionsDraft != null;
         UpdateConnectionTestControls();
@@ -691,7 +694,9 @@ internal sealed class AdvisorWindow
     {
         if (!int.TryParse(maxQueryRounds.Text, System.Globalization.NumberStyles.Integer,
             System.Globalization.CultureInfo.InvariantCulture, out var rounds)) throw new AdvisorOptionsException("query_rounds_invalid");
-        return new AdvisorOptions(rounds, enableCampaign.IsChecked == true, informationChoices.Value, commonPrompt.Text ?? "", (AdvisorTextSize)textSize.SelectedIndex);
+        if (!int.TryParse(historyExchanges.Text, System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var exchanges)) throw new AdvisorOptionsException("history_exchanges_invalid");
+        return new AdvisorOptions(rounds, enableCampaign.IsChecked == true, informationChoices.Value, commonPrompt.Text ?? "", (AdvisorTextSize)textSize.SelectedIndex, exchanges);
     }
 
     private void OptionsError(AdvisorOptionsException failure)
@@ -931,7 +936,7 @@ internal sealed class AdvisorWindow
         }
         catch (AdvisorOptionsException failure)
         {
-            settingsTabs.SelectedIndex = failure.Code is "query_rounds_invalid" or "common_prompt_invalid" ? ConnectionTabIndex : failure.Code == "information_invalid" ? InformationTabIndex : GeneralTabIndex;
+            settingsTabs.SelectedIndex = failure.Code is "query_rounds_invalid" or "history_exchanges_invalid" or "common_prompt_invalid" ? ConnectionTabIndex : failure.Code == "information_invalid" ? InformationTabIndex : GeneralTabIndex;
             OptionsError(failure);
         }
     }
@@ -1017,7 +1022,7 @@ internal sealed class AdvisorWindow
     private void UpdateShortcuts()
     {
         foreach (var item in shortcuts)
-            item.Button.IsEnabled = item.Shortcut.IsAvailable(active != null, conversation.Exchanges.Count);
+            item.Button.IsEnabled = item.Shortcut.IsAvailable(active != null, conversation.Exchanges.Count, options.Current.HistoryExchanges);
     }
 
     private void ApplyTextResources()

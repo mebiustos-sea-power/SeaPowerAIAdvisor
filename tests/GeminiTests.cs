@@ -225,17 +225,41 @@ internal static class GeminiTests
             await ThrowsCodeAsync("unexpected_function_call", () => new GeminiAdvisor(repeated).ConsultAsync(bad, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None));
             Require(repeated.Calls == (AdvisorQueryLimits.DefaultMaxRounds + 1), "Extra billable retry after disabled tools");
         }));
-        check("Only recent real dialogue is supplied and historical context is separate from the new snapshot", () => Async(async () =>
+        check("Saved history limits send only the latest complete exchanges, including zero, without deleting visible conversation", () => Async(async () =>
         {
-            var history = Enumerable.Range(0, 8).Select(i => new ChatExchange("質問" + i, "回答" + i)).ToArray();
-            var transport = new Fake((n, body, c) =>
+            var chat = new AdvisorConversation();
+            for (var i = 0; i < 20; i++) chat.Begin(new AdvisorQuestion("質問" + i), "Advisor " + i).Complete("回答" + i);
+            var history = chat.Exchanges.ToArray();
+            foreach (var count in new int?[] { null, 0, 1, 3, 20 })
             {
-                var input = JObject.Parse((string)body["contents"]![0]!["parts"]![0]!["text"]!);
-                Require(input["prior_dialogue"]!.Count() == 3 && (string?)input["prior_dialogue"]![0]!["question"] == "質問5" &&
-                    (int)input["omitted_prior_exchange_count"]! == 5 && input["situation"]!["victory_conditions"] != null, "History retention changed current evidence");
-                return Reply(new JObject { ["text"] = "回答" });
-            });
-            await new GeminiAdvisor(transport).ConsultAsync(Session(assembly), Settings(), history, CancellationToken.None);
+                var options = AdvisorOptions.Parse(System.Text.Encoding.UTF8.GetString(new AdvisorOptions(historyExchanges: count ?? 3).Data()));
+                var handler = new Handler(async (request, token) =>
+                {
+                    var body = JObject.Parse(await request.Content!.ReadAsStringAsync(token));
+                    var input = JObject.Parse((string)body["contents"]![0]!["parts"]![0]!["text"]!);
+                    var sent = input["prior_dialogue"]!.ToArray();
+                    var expected = history.TakeLast(options.HistoryExchanges).ToArray();
+                    Require(sent.Length == expected.Length && sent.Select((row, i) =>
+                        (string?)row["question"] == expected[i].Question && (string?)row["answer"] == expected[i].Answer &&
+                        (string?)row["advisor_name"] == expected[i].AdvisorName).All(x => x),
+                        "The configured limit sent too many, too few, out-of-order or mismatched past exchanges");
+                    Require((int)input["omitted_prior_exchange_count"]! == history.Length - sent.Length &&
+                        input["situation"]!["victory_conditions"] != null, "History selection changed current evidence or omission counts");
+                    if (options.HistoryExchanges == 0)
+                        Require(!input.ToString().Contains("質問", StringComparison.Ordinal) && !input.ToString().Contains("回答", StringComparison.Ordinal),
+                            "Past dialogue was embedded elsewhere despite disabling history");
+                    return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Reply(new JObject { ["text"] = "Answer" }).ToString(Formatting.None)) };
+                });
+                var session = Session(assembly);
+                if (count.HasValue)
+                    await AdvisorConsultation.RunAsync("unused-history-test", session, Settings(), new AdvisorQuestion("Current question"), history,
+                        CancellationToken.None, _ => new GeminiTransport(handler), historyExchanges: options.HistoryExchanges);
+                else
+                    await AdvisorConsultation.RunAsync("unused-history-test", session, Settings(), new AdvisorQuestion("Current question"), history,
+                        CancellationToken.None, _ => new GeminiTransport(handler));
+                Require(handler.Calls == 1 && chat.Turns.Count == 20 && chat.Exchanges.SequenceEqual(history),
+                    "Selecting history caused extra API calls or removed visible dialogue");
+            }
         }));
         check("Shortcut questions and history use internal English while display and reply languages stay independent", () => Async(async () =>
         {
