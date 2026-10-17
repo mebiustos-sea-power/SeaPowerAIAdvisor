@@ -41,71 +41,36 @@ internal static class OptionsTests
             catch (AdvisorOptionsException error) when (error.Code == "options_unreadable") { return; }
             throw new InvalidOperationException("A directory at the settings path was treated as missing settings");
         }));
-        check("Shared save publishes campaign and retrieval settings together while discarded edits leave saved state intact", () => InTemp(directory =>
+        check("Category saves preserve current values in other categories and discarded candidates do not apply", () => InTemp(directory =>
         {
             var store = new AdvisorOptionsStore(Path.Combine(directory, "options.json"));
-            var pending = new AdvisorOptions(7, true, AdvisorInformation.All.With(InformationKind.BattleWeapons, false), "共通の希望", AdvisorTextSize.Large, historyExchanges: 0);
-            Require(!store.Current.CampaignEnabled && store.Read().MaxQueryRounds == 5 && store.Current.TextSize == AdvisorTextSize.Small && store.Current.HistoryExchanges == 3, "Pending edits took effect before save");
-            var connection = new AdvisorSettingsDraft(new JObject { ["api_key"] = "" });
-            AdvisorPreferences.Save(new AdvisorProfileDraft(new AdvisorProfile("Saved advisor", "portrait.png")), connection, store, pending,
-                directory, Path.Combine(directory, "gemini.json"));
-            Require(store.Current.CampaignEnabled && store.Current.MaxQueryRounds == 7 && store.Current.TextSize == AdvisorTextSize.Large && store.Read().TextSize == AdvisorTextSize.Large &&
-                new AdvisorOptionsStore(store.Path).Current.MaxQueryRounds == 7 && new AdvisorOptionsStore(store.Path).Current.HistoryExchanges == 0 &&
-                store.Current.HistoryExchanges == 0 && store.Read().HistoryExchanges == 0 && !store.Read().Information.Allows(InformationKind.BattleWeapons) &&
-                !store.Current.Information.Allows(InformationKind.BattleWeapons) && store.Current.CommonPrompt == "共通の希望" && store.Read().CommonPrompt == "共通の希望" && AdvisorProfile.Load(directory).DisplayName == "Saved advisor",
-                "The common save did not publish and persist all settings");
-            var discarded = new AdvisorOptions(1, false, textSize: AdvisorTextSize.Small, historyExchanges: 20);
-            _ = discarded.Data();
-            Require(store.Current.CampaignEnabled && store.Read().CampaignEnabled && store.Read().MaxQueryRounds == 7 &&
-                !store.Read().Information.Allows(InformationKind.BattleWeapons) && store.Read().CommonPrompt == "共通の希望" && store.Current.TextSize == AdvisorTextSize.Large && store.Read().TextSize == AdvisorTextSize.Large && store.Current.HistoryExchanges == 0 && store.Read().HistoryExchanges == 0,
-                "Discarding an edited candidate changed runtime or saved options");
+            store.SaveGeneral(AdvisorTextSize.Large, true);
+            // A second window or file edit saves consultation options after this page was opened.
+            var other = new AdvisorOptionsStore(store.Path); other.SaveConsultation(7, 0, "共通の希望");
+            store.SaveInformation(AdvisorInformation.All.With(InformationKind.BattleWeapons, false));
+            store.SaveGeneral(AdvisorTextSize.Standard, false);
+            var saved = new AdvisorOptionsStore(store.Path).Current;
+            Require(!saved.CampaignEnabled && saved.TextSize == AdvisorTextSize.Standard && saved.MaxQueryRounds == 7 && saved.HistoryExchanges == 0 &&
+                saved.CommonPrompt == "共通の希望" && !saved.Information.Allows(InformationKind.BattleWeapons), "Saving stale category values lost another completed change");
+            var discarded = new AdvisorOptions(1, true, historyExchanges: 20); _ = discarded.Data();
+            Require(store.Read().MaxQueryRounds == 7 && store.Current.HistoryExchanges == 0, "Discarded edits became active");
             foreach (var size in Enum.GetValues<AdvisorTextSize>())
-            {
-                var candidate = new AdvisorOptions(textSize: size);
-                var parsed = AdvisorOptions.Parse(System.Text.Encoding.UTF8.GetString(candidate.Data()));
-                Require(parsed.TextSize == size, "A text-size choice did not survive a settings round trip");
-            }
+                Require(AdvisorOptions.Parse(System.Text.Encoding.UTF8.GetString(new AdvisorOptions(textSize: size).Data())).TextSize == size, "Text size did not round-trip");
         }));
-        check("A failed save restores options and credentials without publishing partial runtime changes", () => InTemp(directory =>
+        check("An options write failure leaves runtime options unchanged and does not touch other categories", () => InTemp(directory =>
         {
-            foreach (var existing in new[] { false, true })
-            {
-                var folder = Path.Combine(directory, existing ? "existing" : "new"); Directory.CreateDirectory(folder);
-                var store = new AdvisorOptionsStore(Path.Combine(folder, "options.json"));
-                if (existing) store.Write(new AdvisorOptions());
-                var optionBytes = File.Exists(store.Path) ? File.ReadAllBytes(store.Path) : null;
-                var connectionPath = Path.Combine(folder, "gemini.json");
-                File.WriteAllText(connectionPath, "{\"api_key\":\"mock_original\"}");
-                var connectionBytes = File.ReadAllBytes(connectionPath);
-                Directory.CreateDirectory(AdvisorProfile.SettingsPath(folder));
-                try
-                {
-                    AdvisorPreferences.Save(new AdvisorProfileDraft(new AdvisorProfile("Unsaved", "portrait.png")),
-                        new AdvisorSettingsDraft(new JObject { ["api_key"] = "mock_changed" }), store, new AdvisorOptions(9, true, AdvisorInformation.All.With(InformationKind.BattleWeapons, false), "未保存の希望", AdvisorTextSize.Standard, historyExchanges: 0), folder, connectionPath);
-                }
-                catch (AdvisorProfileException error) when (error.Code == "profile_write_failed")
-                {
-                    Require(File.ReadAllBytes(connectionPath).SequenceEqual(connectionBytes) &&
-                        (optionBytes == null ? !File.Exists(store.Path) : File.ReadAllBytes(store.Path).SequenceEqual(optionBytes)) &&
-                        !store.Current.CampaignEnabled && store.Current.MaxQueryRounds == 5 && store.Current.Information.Allows(InformationKind.BattleWeapons) && store.Current.CommonPrompt == "" && store.Current.TextSize == AdvisorTextSize.Small && store.Current.HistoryExchanges == 3, "A profile failure left a partial save active");
-                    continue;
-                }
-                throw new InvalidOperationException("Expected a failed profile save");
-            }
-            var blocked = Path.Combine(directory, "blocked.json");
-            var blockedStore = new AdvisorOptionsStore(blocked);
-            Directory.CreateDirectory(blocked);
-            var path = Path.Combine(directory, "gemini.json"); File.WriteAllText(path, "{\"api_key\":\"mock_original\"}");
-            var before = File.ReadAllBytes(path);
-            try { AdvisorPreferences.Save(new AdvisorProfileDraft(new AdvisorProfile("Unsaved", "portrait.png")),
-                new AdvisorSettingsDraft(new JObject { ["api_key"] = "mock_changed" }), blockedStore, new AdvisorOptions(3, true), directory, path); }
+            var parent = Path.Combine(directory, "blocked"); Directory.CreateDirectory(parent);
+            var store = new AdvisorOptionsStore(Path.Combine(parent, "options.json"));
+            Directory.Delete(parent); File.WriteAllText(parent, "blocked parent");
+            var apiPath = Path.Combine(directory, "gemini.json"); File.WriteAllText(apiPath, "untouched");
+            try { store.SaveGeneral(AdvisorTextSize.Large, true); }
             catch (AdvisorOptionsException error) when (error.Code == "options_write_failed")
             {
-                Require(File.ReadAllBytes(path).SequenceEqual(before) && !File.Exists(AdvisorProfile.SettingsPath(directory)) &&
-                    !blockedStore.Current.CampaignEnabled, "An options write failure changed another setting");
+                Require(store.Current.TextSize == AdvisorTextSize.Small && !store.Current.CampaignEnabled && File.ReadAllText(apiPath) == "untouched" &&
+                    !File.Exists(AdvisorProfile.SettingsPath(directory)), "A failed options write published changes or modified another category");
                 return;
             }
-            throw new InvalidOperationException("Expected an options write failure");
+            throw new InvalidOperationException("Expected options write failure");
         }));
         check("Both game modes advertise and enforce configured retrieval rounds and retain one final answer request", () =>
         {

@@ -69,7 +69,22 @@ internal sealed class AdvisorSettings
         catch (UnauthorizedAccessException) { throw new AdvisorConnectionException("settings_write_failed"); }
     }
 
-    internal static void ValidateDraft(JObject value) => Parse(value, false);
+    internal static void ValidateDraft(JObject value)
+    {
+        var library = AdvisorApiLibrary.Read(value);
+        foreach (var entry in library.Configurations)
+            _ = ParseLegacy(AdvisorApiLibrary.Connection(value, entry), true);
+        ValidateParameters(value);
+    }
+
+    private static void ValidateParameters(JObject value)
+    {
+        var request = Number(value, "request_timeout_seconds", 60, 5, 120);
+        var total = Number(value, "consultation_timeout_seconds", 180, 10, 600);
+        if (total < request) throw new AdvisorConnectionException("settings_invalid");
+        _ = Number(value, "max_output_tokens", 4096, 256, 8192);
+        _ = Logging(value);
+    }
 
     private static JObject ReadDocument(string path)
     {
@@ -120,12 +135,12 @@ internal sealed class AdvisorSettings
             return ParseLegacy(value, requireKey);
         }
         var library = AdvisorApiLibrary.Read(value);
-        var main = library.Find(library.MainId)!;
+        var main = library.Find(library.MainId) ?? throw new AdvisorConnectionException("api_main_missing");
         var sub = library.Find(library.SubId);
         if (sub != null && sub.ApiKey.Length == 0) throw new AdvisorConnectionException("fallback_key_missing");
         var resolved = ParseLegacy(AdvisorApiLibrary.Connection(value, main, sub), requireKey);
         foreach (var configuration in library.Configurations.Where(c => c.Id != library.MainId && c.Id != library.SubId))
-            _ = ParseLegacy(AdvisorApiLibrary.Connection(value, configuration), false);
+            _ = ParseLegacy(AdvisorApiLibrary.Connection(value, configuration), true);
         return resolved;
     }
 

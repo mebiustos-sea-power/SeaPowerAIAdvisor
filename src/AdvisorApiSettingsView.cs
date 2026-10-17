@@ -4,146 +4,116 @@ using Noesis;
 
 namespace SeaPowerAIAdvisor;
 
-// Edits registered connections and role assignments; persistence and network tests belong to the window.
+// Registration forms and role selections are separate operations; no whole-settings draft is saved here.
 internal sealed class AdvisorApiSettingsView
 {
     private readonly ComboBox main, sub, selector;
     private readonly TextBox name, model;
     private readonly PasswordBox key;
-    private readonly Button add, remove;
+    private readonly Button add, edit, remove, saveEntry, cancelEntry, saveAssignments;
+    private readonly FrameworkElement editorPane, useTab;
+    private readonly AdvisorApiSettingsStore store;
     private readonly Func<AdvisorText> text;
-    private readonly Action changed;
+    private readonly Action changed, saved, compositionNotice;
+    private readonly Action<AdvisorConnectionException> error;
+    private readonly Action<string, Action> confirmDelete;
     private readonly TypingScope typing;
-    private AdvisorSettingsDraft? draft;
+    private AdvisorSettingsDraft? data;
+    private AdvisorApiConfigurationDraft? editor;
     private string[] ids = Array.Empty<string>();
-    private string? selectedId;
-    private bool updating, busy;
-    internal string? SelectedId => selectedId;
-    internal string SelectedName => Caption(draft?.Find(selectedId));
+    private bool updating, busy, adding;
+    internal bool Editing => editor != null;
+    internal string TestName => name.Text ?? "";
+    private string? MainId => main.SelectedIndex <= 0 ? null : ids[main.SelectedIndex - 1];
+    private string? SubId => sub.SelectedIndex <= 0 ? null : ids[sub.SelectedIndex - 1];
+    private string? SelectedId => selector.SelectedIndex < 0 ? null : ids[selector.SelectedIndex];
+    internal bool HasChanges => Editing || (data != null && (MainId != data.MainId || SubId != data.SubId));
 
-    internal AdvisorApiSettingsView(FrameworkElement content, Func<AdvisorText> text, Action<Action> guard, TypingScope typing, Action changed)
+    internal AdvisorApiSettingsView(FrameworkElement content, AdvisorApiSettingsStore store, Func<AdvisorText> text,
+        Action<Action> guard, TypingScope typing, Action changed, Action saved, Action compositionNotice, Action<AdvisorConnectionException> error, Action<string, Action> confirmDelete)
     {
-        this.text = text; this.typing = typing; this.changed = changed;
-        T Named<T>(string id) where T : class => content.FindName(id) as T
-            ?? throw new InvalidOperationException("The API settings control is missing: " + id);
-        main = Named<ComboBox>("MainApiConfiguration"); sub = Named<ComboBox>("SubApiConfiguration");
-        selector = Named<ComboBox>("ApiConfigurationSelector");
+        this.store = store; this.text = text; this.typing = typing; this.changed = changed;
+        this.saved = saved; this.compositionNotice = compositionNotice; this.error = error; this.confirmDelete = confirmDelete;
+        T Named<T>(string id) where T : class => content.FindName(id) as T ?? throw new InvalidOperationException("Missing API control: " + id);
+        main = Named<ComboBox>("MainApiConfiguration"); sub = Named<ComboBox>("SubApiConfiguration"); selector = Named<ComboBox>("ApiConfigurationSelector");
         name = Named<TextBox>("ApiConfigurationName"); model = Named<TextBox>("ModelName"); key = Named<PasswordBox>("ApiKey");
-        add = Named<Button>("AddApiConfiguration"); remove = Named<Button>("RemoveApiConfiguration");
-        name.TextChanged += (_, _) => guard(Rename);
-        model.TextChanged += (_, _) => guard(NotifyChanged);
-        key.PasswordChanged += (_, _) => guard(NotifyChanged);
-        main.SelectionChanged += (_, _) => guard(() => Assign(false));
-        sub.SelectionChanged += (_, _) => guard(() => Assign(true));
-        selector.SelectionChanged += (_, _) => guard(Select);
-        add.Click += (_, _) => guard(Add); remove.Click += (_, _) => guard(Remove);
+        add = Named<Button>("AddApiConfiguration"); edit = Named<Button>("EditApiConfiguration"); remove = Named<Button>("RemoveApiConfiguration");
+        saveEntry = Named<Button>("SaveApiEntry"); cancelEntry = Named<Button>("CancelApiEntry"); saveAssignments = Named<Button>("SaveApiAssignments");
+        editorPane = Named<FrameworkElement>("ApiEditor"); useTab = Named<FrameworkElement>("ApiUseTab");
+        void Bind(Button button, Action action) => button.Click += (_, _) => guard(() => Run(action));
+        Bind(add, Add); Bind(edit, Edit); Bind(remove, Remove); Bind(saveEntry, SaveEntry); Bind(cancelEntry, CancelEntry); Bind(saveAssignments, SaveAssignments);
+        selector.SelectionChanged += (_, _) => guard(() => { if (!updating) SetBusy(busy); });
+        name.TextChanged += (_, _) => guard(NotifyChanged); model.TextChanged += (_, _) => guard(NotifyChanged); key.PasswordChanged += (_, _) => guard(NotifyChanged);
         foreach (var input in new[] { name, model })
-        {
-            input.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(input));
-            input.LostKeyboardFocus += (_, _) => guard(() => typing.Release(input));
-        }
-        key.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(key));
-        key.LostKeyboardFocus += (_, _) => guard(() => typing.Release(key));
+        { input.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(input)); input.LostKeyboardFocus += (_, _) => guard(() => typing.Release(input)); }
+        key.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(key)); key.LostKeyboardFocus += (_, _) => guard(() => typing.Release(key));
     }
-
-    internal void Reset(AdvisorSettingsDraft? value)
-    { draft = value; Refresh(value?.Configurations.FirstOrDefault()?.Id); }
-
-    internal void Read()
-    {
-        var entry = draft?.Find(selectedId);
-        if (entry == null) return;
-        entry.Name = name.Text ?? ""; entry.ApiKey = key.Password; entry.Model = model.Text ?? "";
-    }
-
+    private void Run(Action action) { try { action(); } catch (AdvisorConnectionException failure) { error(failure); } }
+    internal void Open() { editor = null; Refresh(store.Read(), null, false); }
+    internal void Close() { editor = null; Refresh(null, null, false); }
+    internal void Focus() { if (main.IsEnabled) main.Focus(); }
+    internal AdvisorSettings TestSettings()
+    { ReadEditor(); return store.Test(editor ?? throw new AdvisorConnectionException("api_selection_invalid")); }
+    private void ReadEditor()
+    { if (editor != null) { editor.Name = name.Text ?? ""; editor.ApiKey = key.Password; editor.Model = model.Text ?? ""; } }
     internal void SetBusy(bool value)
     {
         busy = value;
-        main.IsEnabled = sub.IsEnabled = selector.IsEnabled = add.IsEnabled = draft != null && !busy;
-        name.IsEnabled = key.IsEnabled = model.IsEnabled = remove.IsEnabled = draft?.Find(selectedId) != null && !busy;
+        main.IsEnabled = sub.IsEnabled = saveAssignments.IsEnabled = useTab.IsEnabled = data != null && !busy && !Editing;
+        selector.IsEnabled = add.IsEnabled = data != null && !busy && !Editing;
+        edit.IsEnabled = remove.IsEnabled = data != null && SelectedId != null && !busy && !Editing;
+        name.IsEnabled = model.IsEnabled = key.IsEnabled = saveEntry.IsEnabled = cancelEntry.IsEnabled = Editing && !busy;
     }
-
-    internal bool Focus()
-    { if (!main.IsEnabled) return false; main.Focus(); return true; }
-
-    private string Caption(AdvisorApiConfigurationDraft? entry) => string.IsNullOrWhiteSpace(entry?.Name)
-        ? text()["connection.unnamed_configuration"] : entry!.Name;
-
-    private void Refresh(string? selection)
+    private void Refresh(AdvisorSettingsDraft? value, string? selection, bool keepAssignments)
     {
+        var selectedMain = keepAssignments ? MainId : value?.MainId;
+        var selectedSub = keepAssignments ? SubId : value?.SubId;
         updating = true;
         try
         {
-            ids = draft?.Configurations.Select(c => c.Id).ToArray() ?? Array.Empty<string>();
+            data = value; ids = value?.Configurations.Select(c => c.Id).ToArray() ?? Array.Empty<string>();
             main.Items.Clear(); sub.Items.Clear(); selector.Items.Clear();
             main.Items.Add(new ComboBoxItem { Content = text()["connection.choose_configuration"] });
             sub.Items.Add(new ComboBoxItem { Content = text()["connection.no_sub"] });
             foreach (var id in ids)
-            {
-                var caption = Caption(draft!.Find(id));
-                foreach (var control in new[] { main, sub, selector }) control.Items.Add(new ComboBoxItem { Content = caption });
-            }
-            main.SelectedIndex = Array.IndexOf(ids, draft?.MainId) + 1;
-            sub.SelectedIndex = Array.IndexOf(ids, draft?.SubId) + 1;
-            selectedId = selection;
-            selector.SelectedIndex = Array.IndexOf(ids, selectedId);
-            Display();
+                foreach (var control in new[] { main, sub, selector }) control.Items.Add(new ComboBoxItem { Content = value!.Find(id)!.Name });
+            main.SelectedIndex = Array.IndexOf(ids, selectedMain) + 1; sub.SelectedIndex = Array.IndexOf(ids, selectedSub) + 1;
+            selector.SelectedIndex = selection == null ? (ids.Length == 0 ? -1 : 0) : Array.IndexOf(ids, selection);
+            editorPane.Visibility = Visibility.Collapsed; name.Text = model.Text = ""; key.Password = "";
         }
         finally { updating = false; }
         SetBusy(busy);
     }
-
-    private void Display()
+    private void NotifyChanged() { if (!updating) changed(); }
+    private void ShowEditor(AdvisorApiConfigurationDraft value, bool isNew)
     {
-        var entry = draft?.Find(selectedId);
-        name.Text = entry?.Name ?? ""; key.Password = entry?.ApiKey ?? ""; model.Text = entry?.Model ?? "";
+        editor = value; adding = isNew; updating = true;
+        try { name.Text = value.Name; model.Text = value.Model; key.Password = value.ApiKey; }
+        finally { updating = false; }
+        editorPane.Visibility = Visibility.Visible; saveEntry.Content = text()[adding ? "settings.register" : "settings.save_form"];
+        SetBusy(false); changed(); typing.Release(); name.Focus();
     }
-
-    private void Select()
+    private void Add() { if (data != null && !Editing) ShowEditor(store.Read().Add(text()["connection.configuration_name_pattern"]), true); }
+    private void Edit()
     {
-        if (updating || busy || draft == null) return;
-        Read();
-        selectedId = selector.SelectedIndex < 0 ? null : ids[selector.SelectedIndex];
-        updating = true;
-        try { Display(); } finally { updating = false; }
-        SetBusy(false); changed();
+        if (SelectedId == null || Editing) return;
+        var entry = store.Read().Find(SelectedId) ?? throw new AdvisorConnectionException("api_selection_invalid");
+        ShowEditor(new AdvisorApiConfigurationDraft(entry.Build()), false);
     }
-
-    private void Assign(bool fallback)
+    private void CancelEntry()
+    { var id = adding ? SelectedId : editor?.Id; editor = null; Refresh(store.Read(), id, true); changed(); }
+    private void SaveEntry()
     {
-        if (updating || busy || draft == null) return;
-        var index = (fallback ? sub : main).SelectedIndex;
-        var id = index <= 0 ? null : ids[index - 1];
-        if (fallback) draft.SubId = id; else draft.MainId = id;
-        SetBusy(false);
+        if (QuestionInputController.IsComposing) { compositionNotice(); return; }
+        ReadEditor(); var entry = editor ?? throw new AdvisorConnectionException("api_selection_invalid");
+        var result = store.SaveEntry(entry, adding); editor = null; Refresh(result, entry.Id, true); changed(); saved();
     }
-
-    private void Rename()
-    {
-        if (updating || busy || draft?.Find(selectedId) is not AdvisorApiConfigurationDraft entry) return;
-        entry.Name = name.Text ?? "";
-        var index = Array.IndexOf(ids, selectedId);
-        var caption = Caption(entry);
-        ((ComboBoxItem)selector.Items[index]).Content = caption;
-        ((ComboBoxItem)main.Items[index + 1]).Content = caption;
-        ((ComboBoxItem)sub.Items[index + 1]).Content = caption;
-        changed();
-    }
-
-    private void NotifyChanged()
-    { if (!updating && !busy) changed(); }
-
-    private void Add()
-    {
-        if (busy || draft == null) return;
-        Read(); var entry = draft.Add(text()["connection.configuration_name_pattern"]);
-        Refresh(entry.Id); changed(); typing.Release(); name.Focus();
-    }
-
+    private void SaveAssignments()
+    { var result = store.Assign(MainId, SubId); Refresh(result, SelectedId, false); changed(); saved(); }
     private void Remove()
     {
-        if (busy || draft == null || selectedId == null) return;
-        Read(); draft.Remove(selectedId);
-        Refresh(draft.Configurations.FirstOrDefault()?.Id); changed(); typing.Release(); selector.Focus();
+        if (SelectedId == null || Editing) return;
+        var id = SelectedId; var caption = data!.Find(id)!.Name;
+        confirmDelete(caption, () => Run(() => { var result = store.Remove(id); Refresh(result, null, true); changed(); saved(); }));
     }
 }

@@ -342,78 +342,30 @@ internal static class ProfileTests
             catch (FileNotFoundException) { return; }
             throw new InvalidOperationException("A missing packaged dependency was hidden");
         }));
-        check("Settings tabs share bottom save and cancel actions and the API key input stays masked", () =>
+        check("Settings categories replace the conversation area, isolate form actions and keep API keys masked", () =>
         {
             var view = assembly.MainModule.Resources.OfType<EmbeddedResource>().Single(r => r.Name == "SeaPowerAIAdvisor.Advisor.xaml");
             using var stream = view.GetResourceStream(); var root = XDocument.Load(stream).Root!;
             XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
             XElement Named(string name) => root.Descendants().Single(e => (string?)e.Attribute(x + "Name") == name);
-            var settings = Named("SettingsPane"); var tabs = Named("SettingsTabs");
-            var general = Named("GeneralTab"); var profile = Named("AdvisorTab"); var diagnostics = Named("DiagnosticsTab");
-            var connection = Named("ConnectionTab");
-            Require((string?)settings.Attribute("Visibility") == "Collapsed" &&
-                tabs.Parent == settings && tabs.Name.LocalName == "TabControl" &&
-                (string?)tabs.Attribute("SelectedIndex") == "0" &&
-                tabs.Elements().Select(e => (string?)e.Attribute(x + "Name")).SequenceEqual(new[] { "GeneralTab", "AdvisorTab", "ConnectionTab", "InformationTab", "DiagnosticsTab" }),
-                "Settings and diagnostics are not separate tabs with settings selected initially");
-            Require(Named("Capture").Ancestors().Contains(diagnostics) &&
-                Named("Input").Ancestors().Contains(diagnostics) &&
-                Named("ProfilePath").Ancestors().Contains(diagnostics) &&
-                Named("DiagnosticStatus").Ancestors().Contains(diagnostics),
-                "Diagnostics or the settings path remain in the profile tab");
-            var name = Named("AdvisorName"); var portrait = Named("Portrait");
-            Require(name.Parent == portrait.Ancestors().First(e => e.Name.LocalName == "StackPanel") &&
-                name.ElementsBeforeSelf().Any(e => e.DescendantsAndSelf().Contains(portrait)), "The name is not below the portrait");
-            var left = name.Parent!;
-            foreach (var shortcut in new[] { "NextSteps", "MoreDetail", "KeyRisks" })
-                Require(Named(shortcut).Ancestors().Contains(left) &&
-                    Named(shortcut).AncestorsAndSelf().Any(e => name.ElementsAfterSelf().Contains(e)),
-                    "A quick action is not below the portrait and name");
-            Require(left.Parent?.Name.LocalName == "ScrollViewer", "Quick actions can be clipped in a short window");
-            Require(Named("NextSteps").Parent!.Elements().Where(e => e.Name.LocalName == "Button")
-                .Select(e => (string?)e.Attribute(x + "Name")).SequenceEqual(new[] { "NextSteps", "KeyRisks", "MoreDetail" }),
-                "Follow-up detail is not after the two independent quick consultations");
-            Require(Named("ApiKey").Ancestors().Contains(connection) && Named("ApiKey").Name.LocalName == "PasswordBox" &&
-                (string?)Named("ApiKey").Attribute("ShowLastCharacterDuration") == "0" &&
-                Named("MainApiConfiguration").Ancestors().Contains(connection) && Named("SubApiConfiguration").Ancestors().Contains(connection) &&
-                Named("ApiConfigurationSelector").Ancestors().Contains(connection) && Named("ApiConfigurationName").Ancestors().Contains(connection) &&
-                Named("ModelName").Ancestors().Contains(connection) && Named("MaxQueryRounds").Ancestors().Contains(connection) &&
-                Named("CommonPrompt").Ancestors().Contains(connection) &&
-                Named("EnableCampaignAdvisor").Ancestors().Contains(general), "AI settings or campaign opt-in are in the wrong tab");
-            var conversation = Named("ConversationPane");
-            Require(conversation.Parent == root && settings.Parent == root &&
-                (string?)conversation.Attribute("Grid.Row") == (string?)settings.Attribute("Grid.Row"),
-                "Settings do not replace the entire conversation area");
-            Require(Named("Question").Parent == conversation &&
-                Named("Transcript").Ancestors().Contains(conversation) &&
-                Named("Portrait").Ancestors().Contains(conversation) &&
-                Named("Send").Ancestors().Contains(conversation) &&
-                Named("Settings").Ancestors().Contains(conversation) &&
-                Named("Settings").Parent == Named("Send").Parent &&
-                Named("Status").Ancestors().Contains(conversation),
-                "Conversation-only controls remain outside the switched pane");
-            Require(Named("ProfilePreview").Ancestors().Contains(profile) &&
-                Named("ProfileName").Ancestors().Contains(profile) &&
-                Named("ChoosePortrait").Ancestors().Contains(profile) &&
-                Named("AdvisorSelector").Ancestors().Contains(profile) && Named("AddAdvisor").Ancestors().Contains(profile) && Named("RemoveAdvisor").Ancestors().Contains(profile) &&
-                Named("ProfilePersonality").Ancestors().Contains(profile) &&
-                (string?)Named("ProfilePersonality").Attribute("IsReadOnly") != "True" &&
-                (string?)Named("ProfilePersonality").Attribute("IsEnabled") != "False" &&
-                Named("ProfileStatus").Ancestors().Contains(profile), "Profile controls are outside their tab");
-            var actions = Named("SettingsActions");
-            var settingsRows = settings.Element(settings.Name.Namespace + "Grid.RowDefinitions")!.Elements().ToArray();
-            Require(actions.Parent == settings &&
-                int.Parse((string)actions.Attribute("Grid.Row")!) == settingsRows.Length - 1 &&
-                (string?)actions.Attribute("HorizontalAlignment") == "Right" &&
-                (string?)settingsRows[int.Parse((string)tabs.Attribute("Grid.Row")!)].Attribute("Height") == "*" &&
-                actions.Elements().Select(e => (string?)e.Attribute(x + "Name")).SequenceEqual(new[] { "CancelSettings", "SaveSettings" }),
-                "Save and cancel are not together at the bottom right outside all tabs");
-            var output = Named("DiagnosticOutput"); var diagnosticPane = Named("DiagnosticsPane");
-            var rows = diagnosticPane.Element(diagnosticPane.Name.Namespace + "Grid.RowDefinitions")!.Elements().ToArray();
-            Require(output.Parent == diagnosticPane && output.Attribute("Height") == null &&
-                (string?)rows[int.Parse((string)output.Attribute("Grid.Row")!)].Attribute("Height") == "*",
-                "Diagnostic output cannot expand within its own tab");
+            var settings = Named("SettingsPane"); var home = Named("SettingsHome"); var conversation = Named("ConversationPane");
+            Require(settings.Parent == root && conversation.Parent == root && (string?)settings.Attribute("Visibility") == "Collapsed", "Settings do not replace the whole conversation");
+            foreach (var button in new[] { "OpenGeneralCategory", "OpenProfileCategory", "OpenApiCategory", "OpenConsultationCategory", "OpenInformationCategory", "OpenDeveloperCategory" })
+                Require(Named(button).Ancestors().Contains(home), "A category is inaccessible from the settings home");
+            foreach (var control in new[] { "Portrait", "Question", "Transcript", "Send", "Status" })
+                Require(Named(control).Ancestors().Contains(conversation), "Conversation controls leak into settings");
+            foreach (var control in new[] { "ProfilePreview", "ChoosePortrait", "ProfileName", "ProfilePersonality", "SaveProfileEntry", "CancelProfileEntry" })
+                Require(Named(control).Ancestors().Contains(Named("ProfileEditor")), "An advisor edit action is not local to its form");
+            foreach (var control in new[] { "ApiKey", "ModelName", "TestConnection", "ConnectionTestStatus", "SaveApiEntry", "CancelApiEntry" })
+                Require(Named(control).Ancestors().Contains(Named("ApiEditor")), "An API edit or test result is not local to its form");
+            Require(Named("ApiKey").Name.LocalName == "PasswordBox" && (string?)Named("ApiKey").Attribute("ShowLastCharacterDuration") == "0", "API input can expose the entered key");
+            Require(Named("SettingsConfirmation").Parent == root && (string?)Named("SettingsConfirmation").Attribute("Visibility") == "Collapsed" &&
+                Named("AcceptConfirmation").Ancestors().Contains(Named("SettingsConfirmation")), "Delete and discard confirmations are not available outside the disabled page");
+            var output = Named("DiagnosticOutput"); var diagnostics = Named("DeveloperCategory");
+            var rows = diagnostics.Element(diagnostics.Name.Namespace + "Grid.RowDefinitions")!.Elements().ToArray();
+            Require(output.Parent == diagnostics && output.Attribute("Height") == null && (string?)rows[int.Parse((string)output.Attribute("Grid.Row")!)].Attribute("Height") == "*", "Diagnostics cannot use the remaining page height");
         });
+
     }
 
     private static void InTemp(Action<string> action)

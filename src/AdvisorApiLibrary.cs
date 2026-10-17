@@ -39,14 +39,16 @@ internal sealed class AdvisorApiLibrary
             var main = new AdvisorApiConfiguration("api-1", Name(1), String("api_key", ""), String("model", AdvisorSettings.DefaultModel));
             var key = String("fallback_api_key", "");
             var model = String("fallback_model", main.Model);
-            var configurations = new List<AdvisorApiConfiguration> { main };
-            // Keep a model-only sub configuration as an unassigned entry, rather than losing the saved choice.
-            if (key.Trim().Length > 0 || (source["fallback_model"] != null && model.Length > 0))
-                configurations.Add(new AdvisorApiConfiguration("api-2", Name(2), key, model));
-            return new AdvisorApiLibrary(configurations, main.Id, key.Trim().Length == 0 ? null : "api-2");
+            var configurations = new List<AdvisorApiConfiguration>();
+            if (main.ApiKey.Length > 0 && main.Model.Length > 0) configurations.Add(main);
+            var sub = new AdvisorApiConfiguration("api-2", Name(2), key, model);
+            // Missing fields are unconfigured, including legacy model-only sub settings.
+            if (sub.ApiKey.Length > 0 && sub.Model.Length > 0) configurations.Add(sub);
+            return new AdvisorApiLibrary(configurations, configurations.Contains(main) ? main.Id : null,
+                configurations.Contains(sub) ? sub.Id : null);
         }
         if (source["schema_version"]!.Type != JTokenType.Integer || source["schema_version"]!.ToString(Newtonsoft.Json.Formatting.None) != "2" ||
-            source["api_configurations"] is not JArray entries || source["main_api_id"]?.Type != JTokenType.String ||
+            source["api_configurations"] is not JArray entries || source["main_api_id"] == null || source["main_api_id"]!.Type is not (JTokenType.String or JTokenType.Null) ||
             source["sub_api_id"] == null || source["sub_api_id"]!.Type is not (JTokenType.String or JTokenType.Null) ||
             new[] { "api_key", "fallback_api_key", "model", "fallback_model" }.Any(k => source[k] != null)) throw Invalid();
         var items = new List<AdvisorApiConfiguration>();
@@ -57,7 +59,7 @@ internal sealed class AdvisorApiLibrary
                 fields.Any(f => item[f]?.Type != JTokenType.String)) throw Invalid();
             items.Add(new AdvisorApiConfiguration((string)item["id"]!, (string)item["name"]!, (string)item["api_key"]!, (string)item["model"]!));
         }
-        var result = new AdvisorApiLibrary(items, (string)source["main_api_id"]!, (string?)source["sub_api_id"]);
+        var result = new AdvisorApiLibrary(items, (string?)source["main_api_id"], (string?)source["sub_api_id"]);
         result.ValidateAssignments();
         return result;
     }
@@ -69,9 +71,8 @@ internal sealed class AdvisorApiLibrary
         if (Configurations.Any(c => c.Name.Length == 0 || c.Name.Length > 80 || c.Name.Any(char.IsControl)) ||
             Configurations.Select(c => c.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != Configurations.Count)
             throw new AdvisorConnectionException("api_configuration_name_invalid");
-        if (MainId == null || MainId.Length == 0) throw new AdvisorConnectionException("api_main_missing");
-        if (Find(MainId) == null || (SubId != null && Find(SubId) == null)) throw new AdvisorConnectionException("api_selection_invalid");
-        if (MainId == SubId) throw new AdvisorConnectionException("api_selection_same");
+        if ((MainId != null && Find(MainId) == null) || (SubId != null && Find(SubId) == null)) throw new AdvisorConnectionException("api_selection_invalid");
+        if (MainId != null && MainId == SubId) throw new AdvisorConnectionException("api_selection_same");
     }
 
     internal JObject Document(JObject source, bool log)
@@ -80,7 +81,7 @@ internal sealed class AdvisorApiLibrary
         var result = Shared(source);
         result["schema_version"] = SchemaVersion;
         result["api_configurations"] = new JArray(Configurations.Select(c => c.Json()));
-        result["main_api_id"] = MainId;
+        result["main_api_id"] = MainId == null ? JValue.CreateNull() : new JValue(MainId);
         result["sub_api_id"] = SubId == null ? JValue.CreateNull() : new JValue(SubId);
         result["log_ai_json"] = log;
         return result;

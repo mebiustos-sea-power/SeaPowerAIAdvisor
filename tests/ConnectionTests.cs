@@ -37,8 +37,9 @@ internal static class ConnectionTests
         }));
         check("Connection checks reject missing settings and provider failures instead of reporting false success", () => Async(async () =>
         {
-            Throws("api_key_missing", () => new AdvisorSettingsDraft(new JObject()).TestSettings());
-            Throws("model_invalid", () => new AdvisorSettingsDraft(new JObject { ["api_key"] = Key, ["model"] = "" }).TestSettings());
+            Throws("api_main_missing", () => new AdvisorSettingsDraft(new JObject()).TestSettings());
+            var incomplete = new AdvisorSettingsDraft(new JObject()); var entry = incomplete.Add(); entry.ApiKey = Key; entry.Model = "";
+            Throws("model_invalid", () => incomplete.TestConfiguration(entry.Id));
             foreach (var pair in new[] { (400, "api_bad_request"), (403, "api_access_denied"), (404, "model_unavailable"), (429, "rate_limited"), (503, "api_error") })
                 await Fails(pair.Item2, () => Run(new Handler((_, _) => Task.FromResult(new HttpResponseMessage((HttpStatusCode)pair.Item1)
                     { Content = new StringContent("{\"error\":\"rejected\"}") }))));
