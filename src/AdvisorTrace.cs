@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -9,10 +10,12 @@ using Newtonsoft.Json.Linq;
 
 namespace SeaPowerAIAdvisor;
 
-// One local append-only stream per consultation. Receives bodies, never HTTP headers or settings JSON.
+// Consultation identity and redaction are separate from the shared game-run log file.
+// Receives bodies, never HTTP headers or settings JSON.
 internal sealed class AdvisorTrace : IDisposable
 {
-    private readonly StreamWriter writer;
+    private static readonly AdvisorLogRun Log = new();
+    private bool disposed;
     private readonly string[] secrets;
     private readonly string id;
     private readonly Stopwatch clock = Stopwatch.StartNew();
@@ -25,20 +28,13 @@ internal sealed class AdvisorTrace : IDisposable
         this.id = id;
         secrets = new[] { settings.ApiKey, settings.FallbackApiKey }.Where(k => k.Length > 0)
             .SelectMany(KeyVariants).Distinct().OrderByDescending(k => k.Length).ToArray();
-        Directory.CreateDirectory(directory);
-        FilePath = Path.Combine(directory, "consultation-" + DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss.fff'Z'", CultureInfo.InvariantCulture) +
-            "-" + Guid.NewGuid().ToString("N") + ".jsonl");
-        writer = new StreamWriter(new FileStream(FilePath, FileMode.CreateNew, FileAccess.Write, FileShare.Read), new UTF8Encoding(false));
-        try
+        FilePath = Path.GetFullPath(Path.Combine(directory, "ai-communication.jsonl"));
+        Write("consultation_started", new JObject
         {
-            Write("consultation_started", new JObject
-            {
-                ["mod_version"] = typeof(AdvisorTrace).Assembly.GetName().Version!.ToString(), ["api"] = "interactions",
-                ["model"] = settings.RequestModel, ["fallback_model"] = settings.FallbackModel, ["display_question"] = question.DisplayText,
-                ["question_source"] = question.IsShortcut ? "shortcut" : "typed"
-            });
-        }
-        catch { writer.Dispose(); throw; }
+            ["mod_version"] = typeof(AdvisorTrace).Assembly.GetName().Version!.ToString(), ["api"] = "interactions",
+            ["model"] = settings.RequestModel, ["fallback_model"] = settings.FallbackModel, ["display_question"] = question.DisplayText,
+            ["question_source"] = question.IsShortcut ? "shortcut" : "typed"
+        });
     }
 
     internal static AdvisorTrace? Start(string directory, string id, AdvisorSettings settings, AdvisorQuestion question)
@@ -77,6 +73,7 @@ internal sealed class AdvisorTrace : IDisposable
 
     private void Write(string kind, JObject record)
     {
+        if (disposed) throw new ObjectDisposedException(nameof(AdvisorTrace));
         record["schema_version"] = 1;
         record["consultation_id"] = id;
         record["sequence"] = ++sequence;
@@ -86,8 +83,7 @@ internal sealed class AdvisorTrace : IDisposable
         RedactToken(record);
         try
         {
-            writer.WriteLine(record.ToString(Formatting.None));
-            writer.Flush();
+            Log.Write(FilePath, record.ToString(Formatting.None));
         }
         catch (IOException) { throw new AdvisorConnectionException("diagnostic_log_error"); }
         catch (UnauthorizedAccessException) { throw new AdvisorConnectionException("diagnostic_log_error"); }
@@ -154,9 +150,25 @@ internal sealed class AdvisorTrace : IDisposable
         return value;
     }
 
-    public void Dispose()
+    public void Dispose() => disposed = true;
+}
+
+// One instance lives for the game run; it touches a file only when an enabled trace writes.
+internal sealed class AdvisorLogRun
+{
+    private readonly object gate = new();
+    private readonly HashSet<string> initialized = new(StringComparer.OrdinalIgnoreCase);
+
+    internal void Write(string path, string line)
     {
-        try { writer.Dispose(); }
-        catch (IOException) { throw new AdvisorConnectionException("diagnostic_log_error"); }
+        lock (gate)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            var mode = initialized.Contains(path) ? FileMode.Append : FileMode.Create;
+            // Close each record's writer so ending a consultation cannot close another one's log.
+            using (var writer = new StreamWriter(new FileStream(path, mode, FileAccess.Write, FileShare.Read), new UTF8Encoding(false)))
+                writer.WriteLine(line);
+            initialized.Add(path);
+        }
     }
 }
