@@ -29,6 +29,7 @@ internal sealed class AdvisorShortcut
     private AdvisorShortcut(string key, string prompt, bool history = false)
     { LabelKey = key; Prompt = prompt; RequiresHistory = history; }
 
-    internal bool IsAvailable(bool busy, int exchangeCount) => !busy && (!RequiresHistory || exchangeCount > 0);
+    internal bool IsAvailable(bool busy, int exchangeCount, int historyExchanges = AdvisorOptions.DefaultHistoryExchanges) =>
+        !busy && (!RequiresHistory || (exchangeCount > 0 && historyExchanges > 0));
     internal AdvisorQuestion Prepare(string caption) => new(Prompt, caption, true);
 }

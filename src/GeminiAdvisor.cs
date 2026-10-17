@@ -23,24 +23,24 @@ internal sealed class AdviceResult
 internal sealed class GeminiAdvisor
 {
     internal const int MaxTotalRequestBytes = 1_000_000;
-    internal const int ContextExchanges = 3;
     private readonly IGeminiTransport transport;
     private readonly Action<AdvisorConnectionException>? switched;
     internal GeminiAdvisor(IGeminiTransport transport, Action<AdvisorConnectionException>? switched = null)
     { this.transport = transport; this.switched = switched; }
 
     internal async Task<AdviceResult> ConsultAsync(IAdvisorQuerySession session, AdvisorSettings settings,
-        IReadOnlyList<ChatExchange> history, CancellationToken cancellation, AdvisorProfile? profile = null, string commonPrompt = "", Action<AdvisorProgress>? progress = null)
+        IReadOnlyList<ChatExchange> history, CancellationToken cancellation, AdvisorProfile? profile = null, string commonPrompt = "", Action<AdvisorProgress>? progress = null, int historyExchanges = AdvisorOptions.DefaultHistoryExchanges)
     {
+        historyExchanges = AdvisorOptions.ValidateHistoryExchanges(historyExchanges);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
         deadline.CancelAfter(TimeSpan.FromSeconds(settings.ConsultationTimeoutSeconds));
-        try { return await RunAsync(session, settings, history, deadline.Token, profile, commonPrompt, progress).ConfigureAwait(false); }
+        try { return await RunAsync(session, settings, history, deadline.Token, profile, commonPrompt, progress, historyExchanges).ConfigureAwait(false); }
         catch (OperationCanceledException) when (!cancellation.IsCancellationRequested)
         { throw new AdvisorConnectionException("consultation_timeout"); }
     }
 
     private async Task<AdviceResult> RunAsync(IAdvisorQuerySession session, AdvisorSettings settings,
-        IReadOnlyList<ChatExchange> history, CancellationToken cancellation, AdvisorProfile? profile, string commonPrompt, Action<AdvisorProgress>? progress)
+        IReadOnlyList<ChatExchange> history, CancellationToken cancellation, AdvisorProfile? profile, string commonPrompt, Action<AdvisorProgress>? progress, int historyExchanges)
     {
         var maxApiRequests = session.MaxRounds + 1;
         var initial = session.InitialInput();
@@ -49,9 +49,9 @@ internal sealed class GeminiAdvisor
         var tool = (JObject)initial["query_tool"]!;
         var instructions = initial["instructions"]!.DeepClone();
         initial.Remove("instructions"); initial.Remove("query_tool");
-        initial["prior_dialogue"] = new JArray(history.Skip(Math.Max(0, history.Count - ContextExchanges))
+        initial["prior_dialogue"] = new JArray(history.Skip(Math.Max(0, history.Count - historyExchanges))
             .Select(h => new JObject { ["question"] = h.Question, ["answer"] = h.Answer, ["advisor_name"] = h.AdvisorName }));
-        initial["omitted_prior_exchange_count"] = Math.Max(0, history.Count - ContextExchanges);
+        initial["omitted_prior_exchange_count"] = Math.Max(0, history.Count - historyExchanges);
         var contents = new JArray(new JObject { ["role"] = "user", ["parts"] = new JArray(new JObject { ["text"] = initial.ToString(Formatting.None) }) });
         var system = session.Prompts.SystemInstruction(instructions);
         var bytesSent = 0;

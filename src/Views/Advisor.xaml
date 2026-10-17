@@ -173,6 +173,9 @@
             <TextBlock Text="{DynamicResource Advisor.ai.max_query_rounds}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,4" />
             <TextBox x:Name="MaxQueryRounds" FontSize="14" Padding="7" Width="80" HorizontalAlignment="Left" MaxLength="2"
                      ToolTip="{DynamicResource Advisor.ai.max_query_rounds_tip}" />
+            <TextBlock Text="{DynamicResource Advisor.ai.history_exchanges}" FontSize="12" TextWrapping="Wrap" Margin="0,18,0,4" />
+            <TextBox x:Name="HistoryExchanges" FontSize="14" Padding="7" Width="80" HorizontalAlignment="Left" MaxLength="2"
+                     ToolTip="{DynamicResource Advisor.ai.history_exchanges_tip}" />
             <TextBlock Text="{DynamicResource Advisor.ai.common_prompt}" FontSize="12" Margin="0,18,0,4" />
             <TextBox x:Name="CommonPrompt" Height="120" AcceptsReturn="True" AcceptsTab="False"
                      TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"

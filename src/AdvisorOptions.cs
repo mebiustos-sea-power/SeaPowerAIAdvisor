@@ -11,12 +11,15 @@ namespace SeaPowerAIAdvisor;
 internal sealed class AdvisorOptions
 {
     internal const int MaxCommonPromptLength = 2000;
+    internal const int DefaultHistoryExchanges = 3;
+    internal const int MaximumHistoryExchanges = AdvisorConversation.MaxExchanges;
     internal string CommonPrompt { get; }
     internal int MaxQueryRounds { get; }
+    internal int HistoryExchanges { get; }
     internal bool CampaignEnabled { get; }
     internal AdvisorInformation Information { get; }
     internal AdvisorTextSize TextSize { get; }
-    internal AdvisorOptions(int maxQueryRounds = AdvisorQueryLimits.DefaultMaxRounds, bool campaignEnabled = false, AdvisorInformation? information = null, string commonPrompt = "", AdvisorTextSize textSize = AdvisorTypography.DefaultSize)
+    internal AdvisorOptions(int maxQueryRounds = AdvisorQueryLimits.DefaultMaxRounds, bool campaignEnabled = false, AdvisorInformation? information = null, string commonPrompt = "", AdvisorTextSize textSize = AdvisorTypography.DefaultSize, int historyExchanges = DefaultHistoryExchanges)
     {
         if (maxQueryRounds < 1 || maxQueryRounds > AdvisorQueryLimits.MaximumRounds)
             throw new AdvisorOptionsException("query_rounds_invalid");
@@ -24,6 +27,12 @@ internal sealed class AdvisorOptions
         if (!Enum.IsDefined(typeof(AdvisorTextSize), textSize)) throw new AdvisorOptionsException("options_invalid");
         TextSize = textSize;
         CommonPrompt = ValidateCommonPrompt(commonPrompt);
+        HistoryExchanges = ValidateHistoryExchanges(historyExchanges);
+    }
+    internal static int ValidateHistoryExchanges(int value)
+    {
+        if (value < 0 || value > MaximumHistoryExchanges) throw new AdvisorOptionsException("history_exchanges_invalid");
+        return value;
     }
     internal static string ValidateCommonPrompt(string value)
     {
@@ -38,7 +47,8 @@ internal sealed class AdvisorOptions
     {
         ["max_query_rounds"] = MaxQueryRounds, ["campaign_advisor_enabled"] = CampaignEnabled,
         ["information_selection"] = Information.Data(), ["common_prompt"] = CommonPrompt,
-        ["conversation_text_size"] = TextSize.ToString().ToLowerInvariant()
+        ["conversation_text_size"] = TextSize.ToString().ToLowerInvariant(),
+        ["history_exchanges"] = HistoryExchanges
     }.ToString(Formatting.Indented) + Environment.NewLine);
 
     internal static AdvisorOptions Parse(string json)
@@ -48,12 +58,16 @@ internal sealed class AdvisorOptions
             using var source = new StringReader(json);
             using var reader = new JsonTextReader(source) { DateParseHandling = DateParseHandling.None, MaxDepth = 5 };
             var value = JObject.Load(reader, new JsonLoadSettings { DuplicatePropertyNameHandling = DuplicatePropertyNameHandling.Error });
-            if (reader.Read() || value.Properties().Any(p => p.Name != "max_query_rounds" && p.Name != "campaign_advisor_enabled" && p.Name != "disabled_information" && p.Name != "information_selection" && p.Name != "common_prompt" && p.Name != "conversation_text_size"))
+            if (reader.Read() || value.Properties().Any(p => p.Name != "max_query_rounds" && p.Name != "campaign_advisor_enabled" && p.Name != "disabled_information" && p.Name != "information_selection" && p.Name != "common_prompt" && p.Name != "conversation_text_size" && p.Name != "history_exchanges"))
                 throw new AdvisorOptionsException("options_invalid");
             var rounds = AdvisorQueryLimits.DefaultMaxRounds;
             if (value["max_query_rounds"] != null && (value["max_query_rounds"]!.Type != JTokenType.Integer ||
                 !int.TryParse(value["max_query_rounds"]!.ToString(), out rounds)))
                 throw new AdvisorOptionsException("query_rounds_invalid");
+            var historyExchanges = DefaultHistoryExchanges;
+            if (value["history_exchanges"] != null && (value["history_exchanges"]!.Type != JTokenType.Integer ||
+                !int.TryParse(value["history_exchanges"]!.ToString(), out historyExchanges)))
+                throw new AdvisorOptionsException("history_exchanges_invalid");
             if (value["campaign_advisor_enabled"] != null && value["campaign_advisor_enabled"]!.Type != JTokenType.Boolean)
                 throw new AdvisorOptionsException("options_invalid");
             if (value["common_prompt"] != null && value["common_prompt"]!.Type != JTokenType.String)
@@ -62,7 +76,7 @@ internal sealed class AdvisorOptions
                 throw new AdvisorOptionsException("information_invalid");
             var information = value["information_selection"] == null ? AdvisorInformation.Parse(value["disabled_information"])
                 : AdvisorInformation.ParseSelections(value["information_selection"]);
-            return new AdvisorOptions(rounds, (bool?)value["campaign_advisor_enabled"] ?? false, information, (string?)value["common_prompt"] ?? "", ParseTextSize(value["conversation_text_size"]));
+            return new AdvisorOptions(rounds, (bool?)value["campaign_advisor_enabled"] ?? false, information, (string?)value["common_prompt"] ?? "", ParseTextSize(value["conversation_text_size"]), historyExchanges);
         }
         catch (JsonException) { throw new AdvisorOptionsException("options_invalid"); }
     }
