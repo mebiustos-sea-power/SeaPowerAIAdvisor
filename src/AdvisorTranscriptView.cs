@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
 using Noesis;
 
 namespace SeaPowerAIAdvisor;
@@ -8,11 +11,23 @@ internal sealed class AdvisorTranscriptView
     private readonly StackPanel panel;
     private readonly Action<Action> guard;
     private readonly Action<AdvisorTurn> retry;
+    private readonly Stopwatch clock = Stopwatch.StartNew();
+    private readonly Dictionary<(AdvisorTurn Turn, bool Answer), double> copiedUntil = new();
+    private readonly List<CopyBinding> copyButtons = new();
     private AdvisorTurn? waitingTurn;
     private TextBlock? waitingText;
     internal void UpdateProgress(AdvisorTurn turn, AdvisorText text)
     {
         if (ReferenceEquals(turn, waitingTurn) && waitingText != null) waitingText.Text = AdvisorProgress.Format(turn.Progress, text);
+    }
+
+    internal void Tick()
+    {
+        if (copiedUntil.Count == 0) return;
+        var now = clock.Elapsed.TotalSeconds;
+        foreach (var binding in copyButtons)
+            if (copiedUntil.TryGetValue(binding.Key, out var until) && now >= until)
+            { copiedUntil.Remove(binding.Key); binding.SetCopied(false); }
     }
 
     internal AdvisorTranscriptView(StackPanel panel, Action<Action> guard, Action<AdvisorTurn> retry)
@@ -23,9 +38,14 @@ internal sealed class AdvisorTranscriptView
         var root = GUI.ParseXaml(AdvisorTranscript.Render(conversation, text, advisor, empty, notice, textSize)) as StackPanel
             ?? throw new InvalidOperationException("The Markdown conversation view is not a StackPanel.");
         waitingTurn = null; waitingText = null;
+        copyButtons.Clear();
+        var now = clock.Elapsed.TotalSeconds;
+        foreach (var key in copiedUntil.Keys.Where(key => !conversation.Turns.Contains(key.Turn) || copiedUntil[key] <= now).ToArray())
+            copiedUntil.Remove(key);
         for (var i = 0; i < conversation.Turns.Count; i++)
         {
             var turn = conversation.Turns[i];
+            BindCopy(root, "CopyQuestion" + i, turn.Request.IsShortcut ? turn.Request.Text : turn.Request.DisplayText, turn, false);
             if (turn.State == AdvisorTurnState.Waiting)
             {
                 waitingTurn = turn;
@@ -33,12 +53,7 @@ internal sealed class AdvisorTranscriptView
                     ?? throw new InvalidOperationException("The waiting progress label is missing.");
             }
             if (turn.Exchange != null)
-            {
-                var answer = turn.Exchange.Answer;
-                var copy = root.FindName("CopyAnswer" + i) as Button
-                    ?? throw new InvalidOperationException("The answer copy button is missing.");
-                copy.Click += (_, _) => guard(() => UnityEngine.GUIUtility.systemCopyBuffer = answer);
-            }
+                BindCopy(root, "CopyAnswer" + i, turn.Exchange.Answer, turn, true);
             if (conversation.CanRetry(turn))
             {
                 var button = root.FindName("RetryTurn" + i) as Button
@@ -48,5 +63,30 @@ internal sealed class AdvisorTranscriptView
         }
         panel.Children.Clear();
         panel.Children.Add(root);
+    }
+
+    private void BindCopy(FrameworkElement root, string name, string value, AdvisorTurn turn, bool answer)
+    {
+        var button = root.FindName(name) as Button
+            ?? throw new InvalidOperationException("The conversation copy button is missing: " + name);
+        var binding = new CopyBinding(button, (turn, answer));
+        copyButtons.Add(binding);
+        binding.SetCopied(copiedUntil.ContainsKey(binding.Key));
+        binding.Button.Click += (_, _) => guard(() =>
+        {
+            if (!binding.Button.IsEnabled) return;
+            UnityEngine.GUIUtility.systemCopyBuffer = value;
+            copiedUntil[binding.Key] = clock.Elapsed.TotalSeconds + 2;
+            binding.SetCopied(true);
+        });
+    }
+
+    private sealed class CopyBinding
+    {
+        internal Button Button { get; }
+        internal (AdvisorTurn Turn, bool Answer) Key { get; }
+        internal CopyBinding(Button button, (AdvisorTurn Turn, bool Answer) key)
+        { Button = button; Key = key; }
+        internal void SetCopied(bool value) => Button.IsEnabled = !value;
     }
 }
