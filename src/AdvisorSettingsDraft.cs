@@ -40,6 +40,13 @@ internal sealed class AdvisorSettingsDraft
         return added;
     }
 
+    internal void Put(AdvisorApiConfigurationDraft entry)
+    {
+        var index = configurations.FindIndex(c => c.Id == entry.Id);
+        var copy = new AdvisorApiConfigurationDraft(entry.Build());
+        if (index < 0) configurations.Add(copy); else configurations[index] = copy;
+    }
+
     internal void Remove(string id)
     {
         var item = Find(id) ?? throw new AdvisorConnectionException("api_selection_invalid");

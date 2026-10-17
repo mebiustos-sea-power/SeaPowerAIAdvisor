@@ -25,7 +25,7 @@
     <EmbeddedResource Include="..\src\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Localization.%(Filename).json" />
     <Compile Include="..\src\AdvisorSettingsDraft.cs" Link="AdvisorSettingsDraft.cs" />
     <Compile Include="..\src\AdvisorApiLibrary.cs" Link="AdvisorApiLibrary.cs" />
-    <Compile Include="..\src\AdvisorPreferences.cs" Link="AdvisorPreferences.cs" />
+    <Compile Include="..\src\AdvisorSettingsOperations.cs" Link="AdvisorSettingsOperations.cs" />
     <Compile Include="..\src\AdvisorConfigFile.cs" Link="AdvisorConfigFile.cs" />
     <Compile Include="..\src\AdvisorOptions.cs" Link="AdvisorOptions.cs" />
     <Compile Include="..\src\AdvisorInformation.cs" Link="AdvisorInformation.cs" />

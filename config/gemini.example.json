@@ -1,14 +1,7 @@
 {
   "schema_version": 2,
-  "api_configurations": [
-    {
-      "id": "api-1",
-      "name": "API setting 1",
-      "api_key": "",
-      "model": "gemini-3.5-flash-lite"
-    }
-  ],
-  "main_api_id": "api-1",
+  "api_configurations": [],
+  "main_api_id": null,
   "sub_api_id": null,
   "request_timeout_seconds": 60,
   "consultation_timeout_seconds": 180,

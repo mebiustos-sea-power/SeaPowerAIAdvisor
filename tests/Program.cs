@@ -123,7 +123,7 @@ internal static class Program
         AirTests.Run(args[0], Check);
         GeminiTests.Run(args[0], Check);
         ProfileTests.Run(args[1], Check);
-        PreferencesTests.Run(Check);
+        SettingsOperationsTests.Run(Check);
         OptionsTests.Run(args[0], Check);
         InformationTests.Run(Check);
         InformationTests.RunCampaign(args[0], Check);

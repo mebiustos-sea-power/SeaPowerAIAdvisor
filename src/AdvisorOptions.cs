@@ -123,6 +123,22 @@ internal sealed class AdvisorOptionsStore
         catch (IOException) { throw new AdvisorOptionsException("options_write_failed"); }
         catch (UnauthorizedAccessException) { throw new AdvisorOptionsException("options_write_failed"); }
     }
+    internal void SaveGeneral(AdvisorTextSize size, bool campaign)
+    {
+        var saved = Read();
+        Save(new AdvisorOptions(saved.MaxQueryRounds, campaign, saved.Information, saved.CommonPrompt, size, saved.HistoryExchanges));
+    }
+    internal void SaveConsultation(int rounds, int history, string prompt)
+    {
+        var saved = Read();
+        Save(new AdvisorOptions(rounds, saved.CampaignEnabled, saved.Information, prompt, saved.TextSize, history));
+    }
+    internal void SaveInformation(AdvisorInformation information)
+    {
+        var saved = Read();
+        Save(new AdvisorOptions(saved.MaxQueryRounds, saved.CampaignEnabled, information, saved.CommonPrompt, saved.TextSize, saved.HistoryExchanges));
+    }
+    private void Save(AdvisorOptions value) { Write(value); Apply(value); }
     internal void Apply(AdvisorOptions value) { Current = value; }
 }
 

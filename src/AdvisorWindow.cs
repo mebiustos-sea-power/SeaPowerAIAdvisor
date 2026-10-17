@@ -1,6 +1,4 @@
 using System;
-using System.ComponentModel;
-using System.Threading.Tasks;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -11,64 +9,37 @@ namespace SeaPowerAIAdvisor;
 
 internal sealed class AdvisorWindow
 {
-    private const int GeneralTabIndex = 0, AdvisorTabIndex = 1, ConnectionTabIndex = 2,
-        InformationTabIndex = 3, DiagnosticsTabIndex = 4;
-    private readonly FrameworkElement view;
+    private readonly FrameworkElement view, content, conversationPane;
     private readonly WindowHost host;
     private readonly Action<Action> guard;
     private readonly IAdvisorSource source;
     private readonly AdvisorOptionsStore options;
-    private AdvisorOptions? optionsDraft;
-    private readonly TextBox maxQueryRounds, historyExchanges, commonPrompt;
-    private readonly CheckBox enableCampaign;
-    private readonly AdvisorInformationView informationChoices;
     private readonly Func<string> replyLanguage;
     private readonly Action<string> warn;
     private readonly AdvisorConversation conversation = new();
     private readonly TypingScope typing = new();
     private readonly QuestionInputController questionInput;
     private readonly Window window;
-    private readonly FrameworkElement content;
+    private readonly AdvisorSettingsController settings;
     private AdvisorText text;
     private string uiLanguage;
-    private readonly TextBox question;
+    private readonly TextBox question, diagnosticOutput;
     private readonly ScrollViewer transcriptScroll;
     private readonly AdvisorTranscriptView transcript;
-    private readonly TextBox diagnosticOutput, profileName, profileRole, profilePersonality;
-    private readonly AdvisorApiSettingsView apiSettings;
-    private AdvisorSettingsDraft? connectionDraft;
-    private readonly ComboBox advisorSelector, textSize;
-    private readonly Button addAdvisor, removeAdvisor;
-    private string[] advisorChoices = Array.Empty<string>();
-    private string? portraitSelectionAdvisorId;
-    private readonly TextBlock advisorName, advisorRole, activity, portraitError, profilePreviewError, profileStatus;
-    private readonly Image portraitImage, profilePreview;
-    private readonly FrameworkElement conversationPane, settingsPane;
-    private readonly TabControl settingsTabs;
-    private readonly CheckBox logAiJson;
-    private readonly string settingsPath;
-    private readonly Button saveSettings;
-    private readonly string profileDirectory;
-    private AdvisorPortrait? portrait, previewPortrait;
-    private AdvisorProfileDraft profileDraft = new(new AdvisorProfile(AdvisorProfile.DefaultName, AdvisorProfile.DefaultPortraitFile, true));
-    private bool updatingProfile;
+    private readonly TextBlock advisorName, advisorRole, activity, portraitError, status, diagnosticStatus;
+    private readonly Image portraitImage;
+    private readonly string settingsPath, profileDirectory;
+    private AdvisorPortrait? portrait;
     private AdvisorProfile? appliedProfile;
-    private Task<string?>? portraitSelection;
-    private readonly Button choosePortrait;
     private string speakerName;
     private bool profileLoaded;
-    private readonly TextBlock status, diagnosticStatus, settingsStatus, connectionTestStatus, connectionTestError;
-    private bool settingsInputError;
-    private readonly Button send, captureAction, inputAction, testConnection;
+    private readonly Button send, captureAction, inputAction;
     private readonly (AdvisorShortcut Shortcut, Button Button)[] shortcuts;
     private AdvisorJob? active;
     private AdvisorTurn? pendingTurn;
     private AdvisorNotice? configurationNotice;
-    private AdvisorJob? connectionTest;
-    private string testingApiName = "";
     private string? pendingModel;
-    private bool scrollPending;
-    private bool diagnosticScrollPending;
+    private bool scrollPending, diagnosticScrollPending;
 
     internal AdvisorWindow(FrameworkElement view, WindowHost host, Action<Action> guard, IAdvisorSource source, Func<string> replyLanguage, Action<string> warn, AdvisorOptionsStore options)
     {
@@ -94,51 +65,14 @@ internal sealed class AdvisorWindow
         status = Named<TextBlock>(content, "Status");
         diagnosticStatus = Named<TextBlock>(content, "DiagnosticStatus");
         diagnosticOutput = Named<TextBox>(content, "DiagnosticOutput");
-        profileName = Named<TextBox>(content, "ProfileName");
-        profileRole = Named<TextBox>(content, "ProfileRole");
-        profileRole.MaxLength = AdvisorProfile.MaxRoleLength;
-        profilePersonality = Named<TextBox>(content, "ProfilePersonality");
-        profilePersonality.MaxLength = AdvisorProfile.MaxPersonalityLength;
-        advisorSelector = Named<ComboBox>(content, "AdvisorSelector");
-        addAdvisor = Named<Button>(content, "AddAdvisor");
-        removeAdvisor = Named<Button>(content, "RemoveAdvisor");
-        addAdvisor.Click += (_, _) => guard(AddAdvisor);
-        removeAdvisor.Click += (_, _) => guard(RemoveAdvisor);
-        choosePortrait = Named<Button>(content, "ChoosePortrait");
-        choosePortrait.Click += (_, _) => guard(ChoosePortrait);
         advisorName = Named<TextBlock>(content, "AdvisorName");
         advisorRole = Named<TextBlock>(content, "AdvisorRole");
         activity = Named<TextBlock>(content, "Activity");
         portraitError = Named<TextBlock>(content, "PortraitError");
-        profilePreviewError = Named<TextBlock>(content, "ProfilePreviewError");
-        profileStatus = Named<TextBlock>(content, "ProfileStatus");
         portraitImage = Named<Image>(content, "Portrait");
-        profilePreview = Named<Image>(content, "ProfilePreview");
         conversationPane = Named<FrameworkElement>(content, "ConversationPane");
-        settingsPane = Named<FrameworkElement>(content, "SettingsPane");
-        settingsTabs = Named<TabControl>(content, "SettingsTabs");
-        Named<Button>(content, "Settings").Click += (_, _) => guard(OpenSettings);
-        saveSettings = Named<Button>(content, "SaveSettings");
-        saveSettings.Click += (_, _) => guard(SaveSettings);
-        Named<Button>(content, "CancelSettings").Click += (_, _) => guard(CancelSettings);
-        settingsStatus = Named<TextBlock>(content, "SettingsStatus");
-        maxQueryRounds = Named<TextBox>(content, "MaxQueryRounds");
-        historyExchanges = Named<TextBox>(content, "HistoryExchanges");
-        commonPrompt = Named<TextBox>(content, "CommonPrompt");
-        commonPrompt.MaxLength = AdvisorOptions.MaxCommonPromptLength;
-        enableCampaign = Named<CheckBox>(content, "EnableCampaignAdvisor");
-        textSize = Named<ComboBox>(content, "ConversationTextSize");
-        informationChoices = new AdvisorInformationView(Named<StackPanel>(content, "InformationChoices"), guard);
-        testConnection = Named<Button>(content, "TestConnection");
-        connectionTestStatus = Named<TextBlock>(content, "ConnectionTestStatus");
-        connectionTestError = Named<TextBlock>(content, "ConnectionTestError");
-        apiSettings = new AdvisorApiSettingsView(content, () => text, guard, typing, () =>
-        { ClearConnectionTestResult(); UpdateConnectionTestControls(); });
-        testConnection.Click += (_, _) => guard(TestConnection);
         profileDirectory = AdvisorProfile.DirectoryIn(UnityEngine.Application.persistentDataPath);
         settingsPath = AdvisorSettings.PathIn(UnityEngine.Application.persistentDataPath);
-        logAiJson = Named<CheckBox>(content, "LogAiJson");
-        Named<TextBox>(content, "ProfilePath").Text = AdvisorProfile.SettingsPath(profileDirectory);
         send = Named<Button>(content, "Send");
         send.Click += (_, _) => guard(Send);
         Named<Button>(content, "Clear").Click += (_, _) => guard(Clear);
@@ -159,7 +93,7 @@ internal sealed class AdvisorWindow
         questionInput = new QuestionInputController(question, () => active != null, StartConsultation, guard);
         question.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(question));
         question.LostKeyboardFocus += (_, _) => guard(() => typing.Release(question));
-        foreach (var input in new[] { profileName, profileRole, profilePersonality, maxQueryRounds, commonPrompt, diagnosticOutput, Named<TextBox>(content, "ProfilePath") })
+        foreach (var input in new[] { diagnosticOutput })
         {
             input.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(input));
             input.LostKeyboardFocus += (_, _) => guard(() => typing.Release(input));
@@ -180,14 +114,13 @@ internal sealed class AdvisorWindow
         window.Template = view.TryFindResource("WindowLayoutNoScroll") as ControlTemplate
             ?? throw new InvalidOperationException("The game's WindowLayoutNoScroll template is unavailable.");
         window.OnClosed += (_, _) => guard(OnWindowClosed);
-        settingsTabs.SelectionChanged += (_, e) => guard(() =>
-        {
-            if (!Equals(e.Source, settingsTabs) || !IsOpen || settingsPane.Visibility != Visibility.Visible) return;
-            ReleaseInput();
-            FocusSettings();
-        });
-        advisorSelector.SelectionChanged += (_, _) => guard(ChangeAdvisor);
-        profileName.TextChanged += (_, _) => guard(UpdateAdvisorCaption);
+        settings = new AdvisorSettingsController(content, () => text, options, profileDirectory, settingsPath, DefaultPortrait,
+            guard, typing, ReleaseInput, () => active != null, ApplyProfile, () =>
+            {
+                conversation.UseInformationPolicy(options.Current.Information.Key);
+                RefreshConfigurationNotice(); ShowConversation(false);
+            }, ReturnToConversation, warn);
+        Named<Button>(content, "Settings").Click += (_, _) => guard(settings.Open);
         try { AdvisorProfile.EnsureCreated(profileDirectory, DefaultPortrait, text["advisor.role"]); }
         catch (AdvisorProfileException failure) { ProfileError(failure); }
         ShowConversation();
@@ -205,18 +138,16 @@ internal sealed class AdvisorWindow
         WindowHostCommands.OpenWindowCommand.Execute(window, view);
         if (!IsOpen) throw new InvalidOperationException("The game window host did not open the advisor.");
         // Reopen the conversation with its history and message text intact.
-        choosePortrait.IsEnabled = portraitSelection == null;
         question.Focus();
     }
 
     internal void Tick()
     {
-        if (!IsOpen) { CancelActive(); CancelConnectionTest(); questionInput.Reset(); typing.Release(); ReleasePortrait(); return; }
-        CompletePortraitSelection();
+        if (!IsOpen) { CancelActive(); questionInput.Reset(); typing.Release(); ReleasePortrait(); return; }
+        settings.Tick();
         questionInput.Tick();
         CompleteActive();
         UpdateActiveProgress();
-        CompleteConnectionTest();
         if (diagnosticScrollPending)
         {
             diagnosticOutput.ScrollToHome();
@@ -239,10 +170,7 @@ internal sealed class AdvisorWindow
     {
         CancelActive();
         ReleaseInput();
-        DiscardProfileChanges();
-        DiscardConnectionChanges();
-        settingsPane.Visibility = Visibility.Collapsed;
-        conversationPane.Visibility = Visibility.Visible;
+        settings.Close();
         ReleasePortrait();
     }
 
@@ -404,7 +332,7 @@ internal sealed class AdvisorWindow
         inputAction.IsEnabled = !busy;
         activity.Text = text[busy ? "activity.busy" : "activity.idle"];
         UpdateShortcuts();
-        UpdateConnectionTestControls();
+        settings.UpdateBusy();
     }
 
     private void CancelActive()
@@ -501,489 +429,38 @@ internal sealed class AdvisorWindow
     }
 
 
-    private void OpenSettings()
-    {
-        if (settingsPane.Visibility == Visibility.Visible) return;
-        ReleaseInput();
-        DiscardProfileChanges();
-        BeginConnectionEdit();
-        conversationPane.Visibility = Visibility.Collapsed;
-        settingsPane.Visibility = Visibility.Visible;
-        FocusSettings();
-    }
-
-    private void CancelSettings()
-    {
-        ReleaseInput();
-        DiscardProfileChanges();
-        ReturnToConversation();
-    }
-
     private void ReturnToConversation()
     {
-        DiscardConnectionChanges();
-        settingsPane.Visibility = Visibility.Collapsed;
-        conversationPane.Visibility = Visibility.Visible;
-        RefreshConfigurationNotice();
-        ShowConversation(false);
-        scrollPending = true;
-        question.Focus();
-    }
-
-    private void BeginConnectionEdit()
-    {
-        DiscardConnectionChanges();
-        SetSettingsStatus(string.Empty);
-        try
-        {
-            connectionDraft = AdvisorSettings.Edit(settingsPath, text["connection.configuration_name_pattern"]);
-            apiSettings.Reset(connectionDraft);
-            logAiJson.IsChecked = connectionDraft.LogAiJson;
-        }
-        catch (AdvisorConnectionException failure) { connectionDraft = null; SettingsError(failure); }
-        try
-        {
-            optionsDraft = options.Read();
-            maxQueryRounds.Text = optionsDraft.MaxQueryRounds.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            historyExchanges.Text = optionsDraft.HistoryExchanges.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            enableCampaign.IsChecked = optionsDraft.CampaignEnabled;
-            textSize.SelectedIndex = (int)optionsDraft.TextSize;
-            informationChoices.Reset(optionsDraft.Information);
-            commonPrompt.Text = optionsDraft.CommonPrompt;
-        }
-        catch (AdvisorOptionsException failure) { optionsDraft = null; OptionsError(failure); }
-        maxQueryRounds.IsEnabled = historyExchanges.IsEnabled = commonPrompt.IsEnabled = enableCampaign.IsEnabled = textSize.IsEnabled = optionsDraft != null;
-        logAiJson.IsEnabled = connectionDraft != null;
-        saveSettings.IsEnabled = connectionDraft != null && optionsDraft != null;
-        UpdateConnectionTestControls();
-    }
-
-    private void DiscardConnectionChanges()
-    {
-        CancelConnectionTest();
-        connectionDraft = null;
-        optionsDraft = null;
-        informationChoices.Reset(null);
-        maxQueryRounds.Text = string.Empty;
-        commonPrompt.Text = string.Empty;
-        enableCampaign.IsChecked = false;
-        textSize.SelectedIndex = (int)options.Current.TextSize;
-        apiSettings.Reset(null);
-        logAiJson.IsChecked = false;
-        ClearConnectionTestResult();
-        UpdateConnectionTestControls();
-    }
-
-    private void TestConnection()
-    {
-        if (connectionTest != null) { CancelConnectionTest(); return; }
-        if (active != null || connectionDraft == null || settingsPane.Visibility != Visibility.Visible) return;
-        if (settingsInputError) SetSettingsStatus(string.Empty);
-        if (apiSettings.SelectedId == null) return;
-        testingApiName = apiSettings.SelectedName;
-        if (QuestionInputController.IsComposing) { ShowConnectionTestError(text["profile.ime"]); return; }
-        try
-        {
-            ReadConnectionDraft();
-            var settings = connectionDraft.TestConfiguration(apiSettings.SelectedId);
-            var directory = AdvisorTrace.DirectoryIn(UnityEngine.Application.persistentDataPath);
-            ClearConnectionTestResult();
-            connectionTest = new AdvisorJob(cancellation => GeminiConnectionTest.RunAsync(directory, settings, cancellation), warn);
-            connectionTestStatus.Text = ConnectionTestMessage(text["connection.test_running"]);
-            UpdateConnectionTestControls();
-        }
-        catch (AdvisorConnectionException error) { ShowConnectionTestError(AdvisorNotice.Connection(error).Message(text)); }
-    }
-
-    private void CompleteConnectionTest()
-    {
-        var job = connectionTest;
-        if (job == null || !job.Completion.IsCompleted) return;
-        connectionTest = null;
-        var completion = job.TakeCompleted();
-        UpdateConnectionTestControls();
-        if (completion.UnexpectedError != null)
-        {
-            ShowConnectionTestError(AdvisorNotice.Unexpected().Message(text));
-            throw completion.UnexpectedError;
-        }
-        if (completion.IsCancelled) connectionTestStatus.Text = ConnectionTestMessage(text["connection.test_cancelled"]);
-        else if (completion.Error != null)
-        {
-            ShowConnectionTestError(AdvisorNotice.Connection(completion.Error).Message(text));
-            warn("Gemini connection test failed: " + completion.Error.Message);
-        }
-        else
-        {
-            _ = completion.Result ?? throw new InvalidOperationException("The connection test has no result.");
-            connectionTestStatus.Text = ConnectionTestMessage(text["connection.test_succeeded"]);
-        }
-    }
-
-    private void CancelConnectionTest()
-    {
-        if (connectionTest == null) return;
-        var job = connectionTest; connectionTest = null;
-        job.Dispose();
-        UpdateConnectionTestControls();
-        connectionTestStatus.Text = ConnectionTestMessage(text["connection.test_cancelled"]);
-    }
-
-    private void UpdateConnectionTestControls()
-    {
-        apiSettings.SetBusy(connectionTest != null);
-        testConnection.IsEnabled = connectionDraft != null && apiSettings.SelectedId != null && active == null;
-        testConnection.Content = text[connectionTest != null ? "action.cancel" : "connection.test"];
-    }
-
-    private string ConnectionTestMessage(string message) => text.Format("connection.test_result",
-        testingApiName, message);
-
-    private void ClearConnectionTestResult()
-    {
-        if (connectionTest != null) return;
-        connectionTestStatus.Text = string.Empty;
-        connectionTestError.Text = string.Empty;
-        connectionTestError.Visibility = Visibility.Collapsed;
-    }
-
-    private void ShowConnectionTestError(string message)
-    {
-        connectionTestStatus.Text = string.Empty;
-        connectionTestError.Text = ConnectionTestMessage(message);
-        connectionTestError.Visibility = Visibility.Visible;
-    }
-
-    private void ReadConnectionDraft()
-    {
-        if (connectionDraft == null) throw new InvalidOperationException("The connection draft is missing.");
-        apiSettings.Read();
-        connectionDraft.LogAiJson = logAiJson.IsChecked == true;
-    }
-
-    private AdvisorOptions ReadOptionsDraft()
-    {
-        if (!int.TryParse(maxQueryRounds.Text, System.Globalization.NumberStyles.Integer,
-            System.Globalization.CultureInfo.InvariantCulture, out var rounds)) throw new AdvisorOptionsException("query_rounds_invalid");
-        if (!int.TryParse(historyExchanges.Text, System.Globalization.NumberStyles.Integer,
-            System.Globalization.CultureInfo.InvariantCulture, out var exchanges)) throw new AdvisorOptionsException("history_exchanges_invalid");
-        return new AdvisorOptions(rounds, enableCampaign.IsChecked == true, informationChoices.Value, commonPrompt.Text ?? "", (AdvisorTextSize)textSize.SelectedIndex, exchanges);
-    }
-
-    private void OptionsError(AdvisorOptionsException failure)
-    {
-        SetSettingsStatus(text["settings.error." + failure.Code] + text.Format("settings.error_suffix", failure.Code));
-        warn("Advisor options failed: " + failure.Code);
-    }
-
-    private void SettingsError(AdvisorConnectionException failure)
-    {
-        var key = text.Contains("settings.error." + failure.Code) ? failure.Code : "settings_invalid";
-        SetSettingsStatus(text["settings.error." + key] + text.Format("settings.error_suffix", failure.Code));
-        settingsInputError = failure.Code is "api_key_missing" or "model_invalid" or "fallback_model_invalid" or "settings_invalid" or
-            "api_configuration_name_invalid" or "api_main_missing" or "api_selection_invalid" or "api_selection_same" or "fallback_key_missing";
-        warn("Advisor settings failed: " + failure.Code);
-    }
-
-    private void SetSettingsStatus(string message)
-    {
-        settingsInputError = false;
-        settingsStatus.Text = message;
-        settingsStatus.Visibility = string.IsNullOrEmpty(message) ? Visibility.Collapsed : Visibility.Visible;
-    }
-
-    private void FocusSettings()
-    {
-        if (settingsTabs.SelectedIndex == ConnectionTabIndex)
-        {
-            if (!apiSettings.Focus()) Named<Button>(content, "CancelSettings").Focus();
-        }
-        else if (settingsTabs.SelectedIndex == InformationTabIndex) informationChoices.Focus();
-        else if (settingsTabs.SelectedIndex == DiagnosticsTabIndex) captureAction.Focus();
-        else if (settingsTabs.SelectedIndex == AdvisorTabIndex)
-        {
-            if (profileDraft.UseDefault) profilePersonality.Focus();
-            else profileName.Focus();
-        }
-        else if (textSize.IsEnabled) textSize.Focus();
-        else Named<Button>(content, "CancelSettings").Focus();
-    }
-
-    private void SetProfileStatus(string message)
-    {
-        profileStatus.Text = message;
-        profileStatus.Visibility = string.IsNullOrEmpty(message) ? Visibility.Collapsed : Visibility.Visible;
-    }
-
-    private void UpdateProfileControls()
-    {
-        profileName.Text = profileDraft.UseDefault ? AdvisorProfile.DefaultName : profileDraft.CustomName;
-        profileName.IsReadOnly = profileDraft.UseDefault;
-        profileRole.Text = profileDraft.UseDefault ? text["advisor.role"] : profileDraft.CustomRole;
-        profileRole.IsReadOnly = profileDraft.UseDefault;
-        choosePortrait.Visibility = profileDraft.UseDefault ? Visibility.Collapsed : Visibility.Visible;
-        UpdateProfileActions();
-    }
-
-    private void UpdateProfileActions()
-    {
-        advisorSelector.IsEnabled = addAdvisor.IsEnabled = portraitSelection == null;
-        removeAdvisor.IsEnabled = !profileDraft.UseDefault && portraitSelection == null;
-        choosePortrait.IsEnabled = portraitSelection == null;
-    }
-
-    private void ReadProfileDraft()
-    {
-        if (!profileName.IsReadOnly)
-        {
-            profileDraft.CustomName = profileName.Text ?? "";
-            profileDraft.CustomRole = profileRole.Text ?? "";
-        }
-        profileDraft.Personality = profilePersonality.Text ?? "";
-    }
-
-    private void RefreshAdvisorSelector()
-    {
-        var wasUpdating = updatingProfile; updatingProfile = true;
-        try
-        {
-            advisorChoices = new[] { AdvisorProfile.DefaultId }.Concat(profileDraft.Advisers.Select(a => a.Id)).ToArray();
-            advisorSelector.Items.Clear();
-            advisorSelector.Items.Add(new ComboBoxItem { Content = text.Format("profile.default_choice", AdvisorProfile.DefaultName) });
-            foreach (var adviser in profileDraft.Advisers)
-                advisorSelector.Items.Add(new ComboBoxItem { Content = string.IsNullOrWhiteSpace(adviser.Name) ? text["profile.new_name"] : adviser.Name });
-            advisorSelector.SelectedIndex = Array.IndexOf(advisorChoices, profileDraft.SelectedId);
-        }
-        finally { updatingProfile = wasUpdating; }
-    }
-
-    private void UpdateAdvisorCaption()
-    {
-        if (updatingProfile || profileName.IsReadOnly || advisorSelector.SelectedIndex < 1) return;
-        ((ComboBoxItem)advisorSelector.Items[advisorSelector.SelectedIndex]).Content =
-            string.IsNullOrWhiteSpace(profileName.Text) ? text["profile.new_name"] : profileName.Text;
-    }
-
-    private void ChangeAdvisor()
-    {
-        if (updatingProfile || advisorSelector.SelectedIndex < 0) return;
-        ReadProfileDraft();
-        profileDraft.Select(advisorChoices[advisorSelector.SelectedIndex]);
-        UpdateProfileControls();
-        profilePersonality.Text = profileDraft.Personality;
-        RefreshProfilePreview();
-        ReleaseInput(); advisorSelector.Focus();
-    }
-
-    private void AddAdvisor()
-    {
-        if (portraitSelection != null) return;
-        ReadProfileDraft();
-        profileDraft.Add(text["profile.new_name"], text["advisor.role"]);
-        RefreshAdvisorSelector(); UpdateProfileControls();
-        profilePersonality.Text = profileDraft.Personality;
-        RefreshProfilePreview(); ReleaseInput(); profileName.Focus();
-    }
-
-    private void RemoveAdvisor()
-    {
-        if (profileDraft.UseDefault || portraitSelection != null) return;
-        ReadProfileDraft(); profileDraft.Remove(profileDraft.SelectedId);
-        RefreshAdvisorSelector(); UpdateProfileControls();
-        profilePersonality.Text = profileDraft.Personality;
-        RefreshProfilePreview(); ReleaseInput(); advisorSelector.Focus();
-    }
-
-    private void RefreshProfilePreview()
-    {
-        try
-        {
-            SetProfilePreview(new AdvisorPortrait(profileDraft.ReadActivePortrait(profileDirectory, DefaultPortrait)));
-            SetProfileStatus(string.Empty);
-        }
-        catch (AdvisorProfileException failure)
-        {
-            ReleasePreview();
-            profilePreviewError.Visibility = Visibility.Visible;
-            profilePreviewError.Text = text["portrait.settings_error"];
-            ProfileError(failure, true);
-        }
-    }
-
-    private void SetProfilePreview(AdvisorPortrait next)
-    {
-        ReleasePreview();
-        previewPortrait = next;
-        profilePreview.Source = next.Source;
-        profilePreviewError.Visibility = Visibility.Collapsed;
-    }
-
-    private void ChoosePortrait()
-    {
-        if (profileDraft.UseDefault || portraitSelection != null) return;
-        ReleaseInput();
-        portraitSelectionAdvisorId = profileDraft.SelectedCustomId;
-        portraitSelection = PortraitFileDialog.OpenAsync(text["profile.choose_title"], text["profile.image_filter"]);
-        UpdateProfileActions();
-    }
-
-    private void CompletePortraitSelection()
-    {
-        if (portraitSelection == null || !portraitSelection.IsCompleted) return;
-        var selection = portraitSelection;
-        var targetId = portraitSelectionAdvisorId ?? throw new InvalidOperationException("The portrait selection adviser is missing.");
-        portraitSelection = null; portraitSelectionAdvisorId = null;
-        UpdateProfileActions();
-        try
-        {
-            var path = selection.GetAwaiter().GetResult();
-            if (path == null) return;
-            var selected = new AdvisorProfile(AdvisorProfile.DefaultName, path);
-            var image = selected.ReadPortrait(profileDirectory);
-            var next = new AdvisorPortrait(image);
-            profileDraft.SelectPortrait(targetId, image);
-            if (profileDraft.UseDefault) { next.Dispose(); RefreshProfilePreview(); }
-            else SetProfilePreview(next);
-            SetProfileStatus(text["profile.image_selected"]);
-        }
-        catch (Win32Exception error)
-        {
-            SetProfileStatus(text["profile.error.portrait_dialog_failed"]);
-            warn("Advisor portrait selection failed: " + error);
-        }
-        catch (AdvisorProfileException failure) { ProfileError(failure, true); }
-        finally
-        {
-            if (settingsPane.Visibility == Visibility.Visible && settingsTabs.SelectedIndex == AdvisorTabIndex) FocusSettings();
-        }
+        ReleaseInput(); RefreshConfigurationNotice(); ShowConversation(false); scrollPending = true; question.Focus();
     }
 
     private void LoadProfile()
     {
-        try
-        {
-            var profile = AdvisorProfile.Load(profileDirectory);
-            ApplyProfile(profile, new AdvisorPortrait(profile.ReadActivePortrait(profileDirectory, DefaultPortrait)));
-            SetProfileStatus(string.Empty);
-        }
+        try { ApplyProfile(AdvisorProfile.Load(profileDirectory)); }
         catch (AdvisorProfileException failure) { ProfileError(failure); }
     }
 
-    private void SaveSettings()
+    private void ApplyProfile(AdvisorProfile profile)
     {
-        if (QuestionInputController.IsComposing)
-        {
-            SetSettingsStatus(text["profile.ime"]);
-            return;
-        }
-        if (portraitSelection != null || connectionDraft == null || optionsDraft == null) return;
-        CancelConnectionTest();
-        SetSettingsStatus(string.Empty);
-        ReadProfileDraft();
-        ReadConnectionDraft();
-        try
-        {
-            _ = connectionDraft.Data();
-            var nextOptions = ReadOptionsDraft();
-            var next = new AdvisorPortrait(profileDraft.ReadActivePortrait(profileDirectory, DefaultPortrait));
-            AdvisorProfile profile;
-            try { profile = AdvisorPreferences.Save(profileDraft, connectionDraft, options, nextOptions, profileDirectory, settingsPath); }
-            catch { next.Dispose(); throw; }
-            conversation.UseInformationPolicy(nextOptions.Information.Key);
-            var previous = appliedProfile;
-            ApplyProfile(profile, next);
-            previous?.DeleteUnusedPortraits(profileDirectory, profile, warn);
-            ReturnToConversation();
-        }
-        catch (AdvisorProfileException failure)
-        {
-            settingsTabs.SelectedIndex = AdvisorTabIndex;
-            ProfileError(failure, true);
-        }
-        catch (AdvisorConnectionException failure)
-        {
-            settingsTabs.SelectedIndex = ConnectionTabIndex;
-            SettingsError(failure);
-        }
-        catch (AdvisorOptionsException failure)
-        {
-            settingsTabs.SelectedIndex = failure.Code is "query_rounds_invalid" or "history_exchanges_invalid" or "common_prompt_invalid" ? ConnectionTabIndex : failure.Code == "information_invalid" ? InformationTabIndex : GeneralTabIndex;
-            OptionsError(failure);
-        }
-    }
-
-    private void ApplyProfile(AdvisorProfile profile, AdvisorPortrait next)
-    {
-        ReleasePortrait();
-        portrait = next;
-        portraitImage.Source = next.Source;
-        profilePreview.Source = next.Source;
-        portraitError.Visibility = Visibility.Collapsed;
-        profilePreviewError.Visibility = Visibility.Collapsed;
-        profileLoaded = true;
-        appliedProfile = profile;
-        speakerName = profile.DisplayName;
-        advisorName.Text = profile.DisplayName;
+        var next = new AdvisorPortrait(profile.ReadActivePortrait(profileDirectory, DefaultPortrait));
+        ReleasePortrait(); portrait = next; portraitImage.Source = next.Source;
+        portraitError.Visibility = Visibility.Collapsed; profileLoaded = true; appliedProfile = profile;
+        speakerName = profile.DisplayName; advisorName.Text = profile.DisplayName;
         advisorRole.Text = profile.UseDefault ? text["advisor.role"] : profile.CustomRole;
         advisorRole.Visibility = advisorRole.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
-        ResetProfileEditor(profile);
         ShowConversation(false);
-    }
-
-    private void DiscardProfileChanges()
-    {
-        portraitSelection = null; portraitSelectionAdvisorId = null;
-        ResetProfileEditor(appliedProfile ?? new AdvisorProfile(AdvisorProfile.DefaultName, AdvisorProfile.DefaultPortraitFile, true));
-        ReleasePreview();
-        profilePreview.Source = portrait?.Source;
-        profilePreviewError.Visibility = portrait == null ? Visibility.Visible : Visibility.Collapsed;
-        if (appliedProfile != null && portrait != null) SetProfileStatus(string.Empty);
-    }
-
-    private void ResetProfileEditor(AdvisorProfile profile)
-    {
-        profileDraft = new AdvisorProfileDraft(profile);
-        choosePortrait.IsEnabled = portraitSelection == null;
-        updatingProfile = true;
-        try
-        {
-            RefreshAdvisorSelector();
-            UpdateProfileControls();
-            profilePersonality.Text = profile.Personality;
-        }
-        finally { updatingProfile = false; }
-    }
-
-    private void ReleasePreview()
-    {
-        profilePreview.Source = null;
-        var previous = previewPortrait;
-        previewPortrait = null;
-        previous?.Dispose();
     }
 
     private void ReleasePortrait()
     {
-        ReleasePreview();
-        portraitImage.Source = null;
-        var previous = portrait;
-        portrait = null;
-        previous?.Dispose();
+        portraitImage.Source = null; var previous = portrait; portrait = null; previous?.Dispose();
     }
 
-    private void ProfileError(AdvisorProfileException failure, bool preservePortrait = false)
+    private void ProfileError(AdvisorProfileException failure)
     {
-        if (!preservePortrait || portrait == null)
-        {
-            ReleasePortrait();
-            if (!profileLoaded) advisorName.Text = text["speaker.advisor"];
-            portraitError.Visibility = Visibility.Visible;
-            portraitError.Text = text["portrait.settings_error"];
-            profilePreviewError.Visibility = Visibility.Visible;
-            profilePreviewError.Text = text["portrait.settings_error"];
-        }
-        var key = text.Contains("profile.error." + failure.Code) ? failure.Code : "profile_invalid";
-        SetProfileStatus(text["profile.error." + key] + text.Format("profile.error_suffix", failure.Code));
+        ReleasePortrait();
+        if (!profileLoaded) advisorName.Text = text["speaker.advisor"];
+        portraitError.Visibility = Visibility.Visible; portraitError.Text = text["portrait.settings_error"];
         warn("Advisor profile failed: " + failure.Code);
     }
 

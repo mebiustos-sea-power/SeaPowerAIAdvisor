@@ -36,7 +36,7 @@ internal static class ApiLibraryTests
             var accepted = File.ReadAllBytes(path);
             loaded.Main.Name = "Discarded rename";
             var originalMainId = loaded.MainId; loaded.MainId = loaded.SubId; loaded.SubId = originalMainId;
-            loaded.Add(); _ = loaded.Data();
+            var discarded = loaded.Add(); discarded.ApiKey = "mock_discarded"; _ = loaded.Data();
             Require(File.ReadAllBytes(path).SequenceEqual(accepted) && AdvisorSettings.Edit(path).Main.Name == "API設定1",
                 "Discarding registration or role edits changed the saved settings");
         }));
@@ -83,13 +83,13 @@ internal static class ApiLibraryTests
             var extra = draft.Add(); extra.ApiKey = SubKey; extra.Model = "gemini-extra";
             draft.Remove(mainId);
             Require(draft.MainId == null && draft.Configurations.Single().Id == extra.Id, "Deleting main silently selected a different credential");
-            Throws("api_main_missing", () => draft.Data());
+            Throws("api_main_missing", () => AdvisorSettings.Parse(Encoding.UTF8.GetString(draft.Data())));
             draft.MainId = extra.Id;
             Require(AdvisorSettings.Parse(Encoding.UTF8.GetString(draft.Data())).ApiKey == SubKey, "A replacement could not be selected explicitly");
             draft.Remove(extra.Id);
-            Throws("api_main_missing", () => draft.Data());
-            var last = draft.Add(); draft.MainId = last.Id; _ = draft.Data();
-            Throws("api_key_missing", () => AdvisorSettings.Parse(Encoding.UTF8.GetString(draft.Data())));
+            Throws("api_main_missing", () => AdvisorSettings.Parse(Encoding.UTF8.GetString(draft.Data())));
+            var last = draft.Add(); draft.MainId = last.Id;
+            Throws("api_key_missing", () => draft.Data());
         });
         check("Invalid or ambiguous API libraries fail visibly instead of reverting to legacy or another registered credential", () =>
         {
@@ -106,9 +106,9 @@ internal static class ApiLibraryTests
             Bad("api_selection_same", data => data["sub_api_id"] = data["main_api_id"]!.DeepClone());
             var legacy = Legacy(); legacy.Remove("fallback_api_key"); legacy["fallback_model"] = "gemini-model-only";
             var modelOnly = new AdvisorSettingsDraft(legacy);
-            Require(modelOnly.SubId == null && modelOnly.Configurations.Any(c => c.Model == "gemini-model-only") &&
+            Require(modelOnly.SubId == null && modelOnly.Configurations.Count == 1 &&
                 AdvisorSettings.Parse(Encoding.UTF8.GetString(modelOnly.Data())).FallbackApiKey == "",
-                "Migration lost a model-only setting or unexpectedly enabled fallback");
+                "Incomplete legacy sub was registered or unexpectedly enabled fallback");
         });
     }
     private static JObject Legacy() => new() { ["api_key"] = MainKey, ["fallback_api_key"] = SubKey,
