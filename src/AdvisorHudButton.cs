@@ -2,37 +2,33 @@ using System;
 using System.IO;
 using System.Linq;
 using Noesis;
-using SeapowerUI;
 
 namespace SeaPowerAIAdvisor;
 
-// Own the added HUD column with its button so scene teardown can restore the shared layout.
-internal sealed class BattleHudButton : IDisposable
+// Both game screens own their added HUD column so teardown restores the shared layout.
+internal sealed class AdvisorHudButton : IDisposable
 {
     private readonly Grid grid;
     private readonly ColumnDefinition column;
     internal ToggleButton Control { get; }
 
-    internal BattleHudButton(MainGameView view, string tooltip)
+    internal AdvisorHudButton(Grid grid, ToggleButton reference, string tooltip)
     {
-        grid = view.FindName("DisplayAreaGrid") as Grid
-            ?? throw new InvalidOperationException("The battle HUD grid is unavailable.");
-        var reference = view.FindName("UnitStatusWindow") as ToggleButton
-            ?? throw new InvalidOperationException("The battle HUD toggle button is unavailable.");
+        this.grid = grid;
         var columnIndex = grid.ColumnDefinitions.Count;
         var row = Grid.GetRow(reference);
         if (!grid.Children.Contains(reference) || columnIndex <= Grid.GetColumn(reference) ||
             row >= grid.RowDefinitions.Count)
-            throw new InvalidOperationException("The battle HUD toggle layout has changed.");
+            throw new InvalidOperationException("The HUD toggle layout has changed.");
 
-        using var source = typeof(BattleHudButton).Assembly.GetManifestResourceStream("SeaPowerAIAdvisor.BattleHudButton.xaml")
-            ?? throw new FileNotFoundException("The embedded battle advisor button view is missing.");
+        using var source = typeof(AdvisorHudButton).Assembly.GetManifestResourceStream("SeaPowerAIAdvisor.AdvisorHudButton.xaml")
+            ?? throw new FileNotFoundException("The embedded advisor HUD button view is missing.");
         using var reader = new StreamReader(source);
         Control = GUI.ParseXaml(reader.ReadToEnd()) as ToggleButton
-            ?? throw new InvalidOperationException("The battle advisor button view is not a ToggleButton.");
+            ?? throw new InvalidOperationException("The advisor HUD button view is not a ToggleButton.");
         Control.ToolTip = tooltip;
-        Control.Width = reference.Width;
-        Control.Height = reference.Height;
+        Control.Width = double.IsNaN(reference.Width) ? reference.ActualWidth : reference.Width;
+        Control.Height = double.IsNaN(reference.Height) ? reference.ActualHeight : reference.Height;
         Control.Margin = reference.Margin;
         Grid.SetColumn(Control, columnIndex);
         Grid.SetRow(Control, row);

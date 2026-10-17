@@ -1,5 +1,7 @@
 using System;
 using System.Linq;
+using System.IO;
+using System.Text;
 using System.Xml.Linq;
 using Mono.Cecil;
 using SeaPowerAIAdvisor;
@@ -86,22 +88,23 @@ internal static class Program
             Require(session.Fields.Any(f => f.Name == "CampaignSceneIndex" && f.HasConstant && f.Constant is int), "Scene contract changed");
             Console.WriteLine("Campaign assembly: " + original.Name.Version);
         });
-        Check("Installed strategy toolbar supports an advisor entry in its own layout", () =>
+        Check("Installed campaign exposes the bottom-right HUD toggle used by the advisor", () =>
         {
-            using var original = AssemblyDefinition.ReadAssembly(args[0]);
-            var ui = original.MainModule.GetType("DynamicCampaignMod.UI.CampaignUI");
-            Require(ui.Fields.Any(f => f.Name == "_strategyView" && f.FieldType.FullName == "Noesis.FrameworkElement"), "Strategy view contract changed");
-            var resource = original.MainModule.Resources.OfType<EmbeddedResource>().Single(r => r.Name == "StrategyBar.xaml");
-            using var stream = resource.GetResourceStream();
-            var root = XDocument.Load(stream).Root!;
+            var assets = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(args[2]))!, "sharedassets5.assets");
+            var data = File.ReadAllBytes(assets);
+            var start = data.AsSpan().IndexOf(Encoding.UTF8.GetBytes("<UserControl x:Class=\"SeapowerUI.CampaignView\""));
+            Require(start >= 0, "The game's campaign view XAML is unavailable");
+            const string closing = "</UserControl>";
+            var end = data.AsSpan(start).IndexOf(Encoding.UTF8.GetBytes(closing));
+            Require(end >= 0, "The game's campaign view XAML is incomplete");
+            var root = XDocument.Parse(Encoding.UTF8.GetString(data, start, end + closing.Length)).Root!;
             XNamespace ns = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
             XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
-            Require(root.Name == ns + "Grid" && root.Elements(ns + "Border").Count(b =>
-                (string?)b.Attribute("Grid.Column") == "0" && b.Element(ns + "StackPanel") != null) == 1,
-                "No unique toolbar container to participate in layout");
-            Require(root.Element(ns + "Grid.Resources")!.Elements(ns + "Style").Any(e =>
-                (string?)e.Attribute(x + "Key") == "StrategyButton" && ((string?)e.Attribute("TargetType"))!.Contains("ToggleButton")),
-                "Toolbar button styling contract changed");
+            var grid = root.Element(ns + "Grid") ?? throw new InvalidOperationException("The campaign content is no longer a Grid");
+            var reference = grid.Elements(ns + "ToggleButton").Single(e => (string?)e.Attribute(x + "Name") == "EventLogWindow");
+            Require((int?)reference.Attribute("Grid.Column") == grid.Element(ns + "Grid.ColumnDefinitions")!.Elements().Count() - 1 &&
+                (int?)reference.Attribute("Grid.Row") == grid.Element(ns + "Grid.RowDefinitions")!.Elements().Count() - 1,
+                "The campaign's event log toggle is no longer in the bottom-right HUD cell");
         });
         Check("Built advisor embeds its view and keeps networking out of the knowledge boundary", () =>
         {
