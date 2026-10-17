@@ -179,6 +179,56 @@ internal static partial class BattleTests
             Require(contact["class_display_name"] != null && contact["public_class_reference_available"] == null,
                 "Disabling public references removed observed identification or leaked reference availability");
         });
+        check("Neutral selection filters counts, pages and threat routes by displayed posture and preserves mandatory context", () =>
+        {
+            var data = new Fixture { ContactPosture = "Neutral" }.Capture().Copy();
+            var neutral = (JObject)data["observed_contacts"]![0]!;
+            var reference = (JObject)data["contact_threat_references"]![0]!;
+            var template = (JObject)reference.DeepClone();
+            reference["possible_weapon_reference_ids"] = new JArray("neutral_weapon_only");
+            ((JArray)data["weapon_references"]!).Add(new JObject { ["id"] = "neutral_weapon_only", ["display_name"] = "Neutral-only public reference" });
+            foreach (var (id, posture, kind) in new[] {
+                ("observed_contact_2", "neutral", "air"), ("observed_contact_3", "unknown", "surface"),
+                ("observed_contact_4", "allied", "surface"), ("observed_contact_5", "enemy", "surface") })
+            {
+                var contact = (JObject)neutral.DeepClone();
+                contact["id"] = id; contact["posture"] = posture; contact["kind"] = kind;
+                var threat = (JObject)template.DeepClone(); threat["id"] = id; threat["observed_posture"] = posture;
+                ((JArray)data["observed_contacts"]!).Add(contact);
+                ((JArray)data["contact_threat_references"]!).Add(threat);
+            }
+            var snapshot = new BattleSnapshot(data);
+            var off = new BattleQuerySession(snapshot, "ja", "What now?", 20);
+            var initial = off.InitialInput();
+            Require((int?)initial["situation"]!["overview"]!["observed_contact_count"] == 3 &&
+                (int?)initial["knowledge_catalog"]!["observed_contacts"]!["item_count"] == 3 &&
+                JToken.DeepEquals(initial["situation"]!["victory_conditions"]!["objectives"], data["public_objectives"]),
+                "Neutral counts were disclosed or public objectives were changed");
+            var page = off.Execute(Request(off, new JObject { ["query"] = "list_contacts", ["limit"] = 1 }))["results"]![0]!["data"]!;
+            Require((int?)page["total_count"] == 3 && (string?)page["items"]![0]!["id"] == "observed_contact_3" && (int?)page["next_offset"] == 1,
+                "Neutral contacts were filtered after pagination or an unknown contact was removed");
+            var next = off.Execute(Request(off, new JObject { ["query"] = "list_contacts", ["offset"] = 1, ["limit"] = 1 }))["results"]![0]!["data"]!;
+            Require((string?)next["items"]![0]!["id"] == "observed_contact_4", "A retained allied contact was removed or pages skipped a row");
+            var air = off.Execute(Request(off, new JObject { ["query"] = "list_contacts", ["kind"] = "air" }))["results"]![0]!["data"]!;
+            Require((int?)air["total_count"] == 0 && !air["items"]!.HasValues, "A kind filter bypassed the neutral-aircraft exclusion");
+            var threats = off.Execute(Request(off, new JObject { ["query"] = "get_contact_threats", ["ids"] = new JArray("observed_contact_3", "observed_contact_4", "observed_contact_5") }));
+            Require((string?)threats["status"] == "ok" && threats["results"]![0]!["data"]!["contacts"]!.Count() == 3 &&
+                threats["results"]![0]!["data"]!["weapon_references"]!.HasValues && !threats.ToString().Contains("neutral_weapon_only", StringComparison.Ordinal),
+                "Retained threat references were lost or neutral-only weapon data was returned");
+            var rejected = off.Execute(Request(off, new JObject { ["query"] = "get_contact_threats", ["ids"] = new JArray("observed_contact_3", "observed_contact_1") }));
+            Require((string?)rejected["error"]?["code"] == "unknown_id" && rejected["results"] == null,
+                "Direct or mixed-ID requests recovered an excluded neutral contact");
+            var briefing = off.Execute(Request(off, new JObject { ["query"] = "get_briefing" }))["results"]![0]!["data"]!["text"];
+            Require(JToken.DeepEquals(briefing, data["mission_briefing"]), "Neutral filtering changed the briefing text");
+            var on = new BattleQuerySession(snapshot, "en", "Show neutral contacts", information: AdvisorInformation.Default.With(InformationKind.BattleNeutralContacts, true));
+            var restored = on.Execute(Request(on, new JObject { ["query"] = "list_contacts" },
+                new JObject { ["query"] = "get_contact_threats", ["ids"] = new JArray("observed_contact_1") }));
+            Require((int?)on.InitialInput()["situation"]!["overview"]!["observed_contact_count"] == 5 &&
+                (int?)restored["results"]![0]!["data"]!["total_count"] == 5 &&
+                restored["results"]![1]!["data"]!["weapon_references"]!.Any(w => (string?)w["id"] == "neutral_weapon_only") &&
+                snapshot.Copy()["observed_contacts"]!.Count() == 5,
+                "Enabling neutral data did not restore both kinds or filtering mutated the captured snapshot");
+        });
         check("Gemini receives the restricted tool schema and a disabled request returns no data", () =>
         {
             var policy = AdvisorInformation.All.With(InformationKind.BattleWeapons, false);
@@ -302,6 +352,7 @@ internal static partial class BattleTests
         internal readonly List<PublicClass> PublicClasses = new();
         internal bool Ready = true;
         internal string ContactKind = "Surface";
+        internal string ContactPosture = "Unknown";
         internal Fixture()
         {
             Track = new Track { Object = Secret };
@@ -310,7 +361,7 @@ internal static partial class BattleTests
         }
         internal BattleSnapshot Capture(bool disclosure = false) => new BattleSituationReader().Capture(
             OwnUnits.Select(u => (object)new { Unit = new { Object = u } }).Concat(new object[] {
-                new { Unit = Track, ObjectViewModel = new { ObjectName = new Reactive<string>("画面で識別した艦") }, VisualType = ContactKind, VisualPosture = "Unknown" }
+                new { Unit = Track, ObjectViewModel = new { ObjectName = new Reactive<string>("画面で識別した艦") }, VisualType = ContactKind, VisualPosture = ContactPosture }
             }).ToArray(), new { TaskforceObjects = OwnUnits.ToArray() },
             new object[] { new { IsHidden = false, Text = "輸送船を保護する", Status = 0 }, Hidden },
             new
