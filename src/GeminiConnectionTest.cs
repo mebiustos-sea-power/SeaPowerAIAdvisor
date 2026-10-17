@@ -23,7 +23,7 @@ internal static class GeminiConnectionTest
             }), store: false);
             var response = await transport.GenerateAsync(settings, body, cancellation).ConfigureAwait(false);
             cancellation.ThrowIfCancellationRequested();
-            var interaction = GeminiInteraction.Read(response);
+            var interaction = GeminiInteraction.Read(response, requireStoredId: false);
             if (interaction.Calls.Length != 0) throw new AdvisorConnectionException("unexpected_function_call");
             var result = new AdviceResult(interaction.Text, 1, 0, interaction.TotalTokens, model: settings.RequestModel);
             trace?.Finish("completed", result);

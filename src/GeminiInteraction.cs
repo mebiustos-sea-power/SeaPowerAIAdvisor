@@ -8,12 +8,12 @@ namespace SeaPowerAIAdvisor;
 // Wire format only. Consultation lifetime, retrieval limits and credential handoff belong to GeminiAdvisor.
 internal sealed class GeminiInteraction
 {
-    internal string Id { get; }
+    internal string? Id { get; }
     internal JObject[] Calls { get; }
     internal string Text { get; }
     internal long? TotalTokens { get; }
 
-    private GeminiInteraction(string id, JObject[] calls, string text, long? totalTokens)
+    private GeminiInteraction(string? id, JObject[] calls, string text, long? totalTokens)
     { Id = id; Calls = calls; Text = text; TotalTokens = totalTokens; }
 
     internal static JObject Request(AdvisorSettings settings, JArray input, string? previous = null,
@@ -50,14 +50,17 @@ internal sealed class GeminiInteraction
         ["result"] = new JArray(new JObject { ["type"] = "text", ["text"] = result.ToString(Formatting.None) })
     };
 
-    internal static GeminiInteraction Read(JObject response)
+    internal static GeminiInteraction Read(JObject response, bool requireStoredId = true)
     {
         if (response["status"]?.Type != JTokenType.String) throw new AdvisorConnectionException("invalid_response");
         var status = (string)response["status"]!;
         if (status == "incomplete") throw new AdvisorConnectionException("output_limit");
         if (status is "failed" or "cancelled") throw new AdvisorConnectionException("generation_failed");
         if (status is not ("completed" or "requires_action")) throw new AdvisorConnectionException("invalid_response");
-        if (response["id"]?.Type != JTokenType.String || string.IsNullOrWhiteSpace((string?)response["id"]) ||
+        // Unstored connection checks may omit the ID; stored consultations still require it.
+        var id = response["id"];
+        if ((requireStoredId && id == null) ||
+            (id != null && (id.Type != JTokenType.String || string.IsNullOrWhiteSpace((string?)id))) ||
             response["steps"] is not JArray steps || steps.Any(s => s is not JObject || s["type"]?.Type != JTokenType.String))
             throw new AdvisorConnectionException("invalid_response");
         var calls = steps.OfType<JObject>().Where(s => (string?)s["type"] == "function_call").ToArray();
@@ -75,6 +78,6 @@ internal sealed class GeminiInteraction
         if (calls.Length == 0 && string.IsNullOrWhiteSpace(text)) throw new AdvisorConnectionException("empty_response");
         var usage = response["usage"]?["total_tokens"];
         long? total = usage?.Type == JTokenType.Integer && long.TryParse(usage.ToString(), out var count) && count >= 0 ? count : (long?)null;
-        return new GeminiInteraction((string)response["id"]!, calls, text, total);
+        return new GeminiInteraction((string?)id, calls, text, total);
     }
 }

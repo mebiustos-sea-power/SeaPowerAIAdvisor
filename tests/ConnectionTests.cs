@@ -35,6 +35,20 @@ internal static class ConnectionTests
             Require(result.ApiRequests == 1 && result.QueryRounds == 0 && handler.Calls == 1 && result.Text == "OK" && !Directory.Exists(path),
                 "The check made extra requests, created files while logging is disabled, or failed to verify generation");
         }));
+        check("Stateless connection tests accept replies without an interaction ID while stored consultations still require it", () => Async(async () =>
+        {
+            var response = Reply(); response.Remove("id");
+            var handler = new Handler((_, _) => Task.FromResult(Response(response)));
+            var result = await Run(handler);
+            Require(result.Text == "OK" && result.ApiRequests == 1 && handler.Calls == 1 && result.TotalTokens == 10,
+                "An unstored successful reply without an ID was rejected or retried");
+            Throws("invalid_response", () => GeminiInteraction.Read(response));
+            foreach (var invalidId in new JToken[] { JValue.CreateNull(), new JValue(""), new JValue(42) })
+            {
+                var malformed = Reply(); malformed["id"] = invalidId;
+                await Fails("invalid_response", () => Run(new Handler((_, _) => Task.FromResult(Response(malformed)))));
+            }
+        }));
         check("Connection checks reject missing settings and provider failures instead of reporting false success", () => Async(async () =>
         {
             Throws("api_main_missing", () => new AdvisorSettingsDraft(new JObject()).TestSettings());
