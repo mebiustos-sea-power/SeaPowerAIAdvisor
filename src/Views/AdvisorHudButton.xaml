@@ -5,9 +5,9 @@
   <ToggleButton.Template>
     <ControlTemplate TargetType="{x:Type ToggleButton}">
       <Grid Background="Transparent">
-        <Border x:Name="Tile" Width="30" Height="31" Background="{TemplateBinding Background}"
+        <Border x:Name="Tile" MaxWidth="30" MaxHeight="31" Background="{TemplateBinding Background}"
                 BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1"
-                HorizontalAlignment="Center" VerticalAlignment="Center"
+                HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                 SnapsToDevicePixels="True">
           <TextBlock Text="AI" FontFamily="{TemplateBinding FontFamily}"
                      FontSize="{TemplateBinding FontSize}" FontWeight="Bold"

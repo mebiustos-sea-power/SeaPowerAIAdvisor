@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Reflection;
 using Noesis;
 using SeapowerUI;
@@ -11,7 +10,6 @@ internal sealed class CampaignIntegration
 {
     private readonly MethodInfo active;
     private readonly MethodInfo simulation;
-    private readonly FieldInfo strategyView;
     private readonly int campaignScene;
     private readonly Action<Action> guard;
     private readonly Action<string> warn;
@@ -19,8 +17,7 @@ internal sealed class CampaignIntegration
     private readonly CampaignSituationReader reader = new();
     private object? session;
     private object? campaignUi;
-    private StackPanel? toolbar;
-    private ToggleButton? launcher;
+    private AdvisorHudButton? launcher;
     private AdvisorWindow? advisor;
 
     internal CampaignIntegration(Assembly campaign, Action<Action> guard, Action<string> warn, AdvisorOptionsStore options)
@@ -34,9 +31,6 @@ internal sealed class CampaignIntegration
         simulation = type.GetProperty("Sim", flags)?.GetGetMethod(true) ?? throw new MissingMemberException(type.FullName, "Sim");
         campaignScene = (int)(type.GetField("CampaignSceneIndex", flags)?.GetRawConstantValue()
             ?? throw new MissingMemberException(type.FullName, "CampaignSceneIndex"));
-        var ui = campaign.GetType("DynamicCampaignMod.UI.CampaignUI", true)!;
-        strategyView = ui.GetField("_strategyView", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingFieldException(ui.FullName, "_strategyView");
     }
 
     internal void Tick(object campaignUi)
@@ -57,35 +51,26 @@ internal sealed class CampaignIntegration
         this.campaignUi = campaignUi;
         if (launcher == null)
         {
-            // The original toolbar can still be awaiting attachment during initialization.
-            var strategy = strategyView.GetValue(campaignUi);
-            if (strategy == null) return;
-            var root = strategy as Grid ?? throw new InvalidOperationException("The campaign strategy view is no longer a Grid.");
-            toolbar = root.Children.Cast<UIElement>().OfType<Border>()
-                .Where(b => Grid.GetColumn(b) == 0).Select(b => b.Child).OfType<StackPanel>().SingleOrDefault()
-                ?? throw new InvalidOperationException("The campaign's strategy toolbar is unavailable.");
-            launcher = new ToggleButton
-            {
-                Content = "AI",
-                ToolTip = AdvisorText.Load(GameLanguage.Read())["launcher.tooltip"],
-                FontSize = 15,
-                Style = root.TryFindResource("StrategyButton") as Style
-                    ?? throw new InvalidOperationException("The campaign's StrategyButton style is unavailable.")
-            };
-            launcher.Click += (_, _) => guard(() =>
+            var grid = view.Content as Grid
+                ?? throw new InvalidOperationException("The campaign HUD grid is unavailable.");
+            var reference = view.FindName("EventLogWindow") as ToggleButton
+                ?? throw new InvalidOperationException("The campaign HUD toggle button is unavailable.");
+            // Wait until the campaign's size-to-cell toggle has been arranged.
+            if (reference.ActualWidth <= 0 || reference.ActualHeight <= 0) return;
+            var button = new AdvisorHudButton(grid, reference, AdvisorText.Load(GameLanguage.Read())["launcher.tooltip"]);
+            launcher = button;
+            button.Control.Click += (_, _) => guard(() =>
             {
                 if (!options.Current.CampaignEnabled) return;
                 var host = view.FindName("WindowHost") as WindowHost
                     ?? throw new InvalidOperationException("The campaign's own WindowHost is unavailable.");
                 advisor ??= new AdvisorWindow(view, host, guard, new CampaignAdvisorSource(Capture), GameLanguage.Read, warn, options);
                 advisor.Toggle();
-                launcher.IsChecked = advisor.IsOpen;
+                button.Control.IsChecked = advisor.IsOpen;
             });
-            // Participate in the existing layout instead of covering the clock controls.
-            toolbar.Children.Insert(Math.Min(1, toolbar.Children.Count), launcher);
         }
         advisor?.Tick();
-        launcher.IsChecked = advisor?.IsOpen == true;
+        launcher.Control.IsChecked = advisor?.IsOpen == true;
     }
 
     private bool InCampaign() => (bool)active.Invoke(null, null)! && SceneManager.GetActiveScene().buildIndex == campaignScene;
@@ -109,18 +94,12 @@ internal sealed class CampaignIntegration
         try { advisor?.Close(); }
         finally
         {
-            try
-            {
-                if (toolbar != null && launcher != null) toolbar.Children.Remove(launcher);
-            }
-            finally
-            {
-                advisor = null;
-                launcher = null;
-                toolbar = null;
-                session = null;
-                campaignUi = null;
-            }
+            var previous = launcher;
+            advisor = null;
+            launcher = null;
+            session = null;
+            campaignUi = null;
+            previous?.Dispose();
         }
     }
 }

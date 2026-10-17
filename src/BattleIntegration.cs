@@ -17,7 +17,7 @@ internal sealed class BattleIntegration
     private FrameworkElement? uiRoot;
     private object? mission;
     private object? player;
-    private BattleHudButton? launcher;
+    private AdvisorHudButton? launcher;
     private AdvisorWindow? advisor;
 
     internal BattleIntegration(Action<Action> guard, Action<string> warn, AdvisorOptionsStore options) { this.guard = guard; this.warn = warn; this.options = options; }
@@ -36,7 +36,11 @@ internal sealed class BattleIntegration
         }
         if (launcher == null)
         {
-            var button = new BattleHudButton(root, AdvisorText.Load(GameLanguage.Read())["battle.launcher"]);
+            var grid = root.FindName("DisplayAreaGrid") as Grid
+                ?? throw new InvalidOperationException("The battle HUD grid is unavailable.");
+            var reference = root.FindName("UnitStatusWindow") as ToggleButton
+                ?? throw new InvalidOperationException("The battle HUD toggle button is unavailable.");
+            var button = new AdvisorHudButton(grid, reference, AdvisorText.Load(GameLanguage.Read())["battle.launcher"]);
             launcher = button;
             button.Control.Click += (_, _) => guard(() =>
             {
