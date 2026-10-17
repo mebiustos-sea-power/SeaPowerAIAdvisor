@@ -60,6 +60,7 @@ internal static class FallbackModelTests
                 {
                     case 1:
                         initial = InteractionFixture.Initial(body);
+                        Require((string?)initial["user_name"] == "Commander", "The user name did not reach the battle request");
                         var first = JObject.Parse(Reply(Tool("get_contact_threats","PRIMARY_SIGNATURE","observed_contact_1")));
                         primaryId = (string)first["id"]!;
                         return Response(200, first.ToString(Formatting.None));
@@ -94,7 +95,7 @@ internal static class FallbackModelTests
             });
             var result = await AdvisorConsultation.RunAsync(directory,session,settings,new AdvisorQuestion("Question"),new[] { new ChatExchange("Earlier","Earlier answer") },
                 CancellationToken.None,trace => new GeminiTransport(handler,trace),profile:new AdvisorProfile("Officer","portrait.png",customPersonality:"Style"),
-                commonPrompt:"Shared preference",progress:progress.Add);
+                commonPrompt:"Shared preference",progress:progress.Add,userName:"Commander");
             Require(models.SequenceEqual(new[] { Primary,Primary,Secondary,Secondary }) &&
                 keys.SequenceEqual(new[] { MainKey,MainKey,BackupKey,BackupKey }) && result.Model == Secondary && result.QueryRounds == 2 && result.ApiRequests == 4 &&
                 progress.Last().Model == Secondary && progress.First().Model == Primary, "The selected key/model pair or final model report was incorrect");

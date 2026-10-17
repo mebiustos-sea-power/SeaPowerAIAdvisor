@@ -72,6 +72,7 @@ internal static class GeminiTests
         {
             foreach (var useDefault in new[] { false, true })
             foreach (var personality in new[] { "", "親しみのある率直な口調。\n必要なら詳しく説明する。" })
+            foreach (var userName in new[] { "", "山田 <>& 𠮷" })
             {
                 const string commonPrompt = "全員共通の希望：距離は海里で説明する。";
                 const string inactivePersonality = "INACTIVE_STYLE_MUST_REMAIN_LOCAL";
@@ -89,16 +90,17 @@ internal static class GeminiTests
                         preferences.Properties().Count() == 2 &&
                         !body.ToString().Contains(inactivePersonality, StringComparison.Ordinal),
                         "Wrong active personality or inactive/private profile settings were sent");
-                    Require((string?)initial["reply_language"] == "fr" && (string?)initial["common_prompt"] == commonPrompt, "Style changed the reply language or omitted shared preferences");
+                    Require((string?)initial["reply_language"] == "fr" && (string?)initial["common_prompt"] == commonPrompt &&
+                        (string?)initial["user_name"] == userName, "Style changed the reply language or omitted shared preferences or user name");
                     var system = (string)body["system_instruction"]!;
                     Require(system.Contains(expectedRules, StringComparison.Ordinal) &&
                         system.Contains(session.Prompts.PreferencesPolicy, StringComparison.Ordinal) &&
                         (personality.Length == 0 || !system.Contains(personality, StringComparison.Ordinal)) &&
-                        !system.Contains(commonPrompt, StringComparison.Ordinal),
+                        !system.Contains(commonPrompt, StringComparison.Ordinal) && (userName.Length == 0 || !system.Contains(userName, StringComparison.Ordinal)),
                         "User style replaced core rules or was elevated into the system instruction");
                     return Reply(new JObject { ["text"] = "Réponse." });
                 });
-                var result = await new GeminiAdvisor(fake).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None, profile, commonPrompt);
+                var result = await new GeminiAdvisor(fake).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None, profile, commonPrompt, userName: userName);
                 Require(result.Text == "Réponse." && fake.Calls == 1 &&
                     session.InitialInput()["advisor_preferences"] == null, "Preferences changed the knowledge session or caused extra API calls");
             }

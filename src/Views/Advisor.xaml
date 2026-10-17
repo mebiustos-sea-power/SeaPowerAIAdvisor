@@ -97,7 +97,9 @@
         <Grid x:Name="GeneralCategory" Visibility="Collapsed">
           <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="0,8,8,0">
-              <TextBlock Text="{DynamicResource Advisor.general.text_size}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,6" />
+              <TextBlock Text="{DynamicResource Advisor.general.user_name}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,6" />
+              <TextBox x:Name="UserName" FontSize="14" Padding="7" />
+              <TextBlock Text="{DynamicResource Advisor.general.text_size}" FontSize="12" TextWrapping="Wrap" Margin="0,18,0,6" />
               <ComboBox x:Name="ConversationTextSize" Width="160" HorizontalAlignment="Left">
                 <ComboBoxItem Content="{DynamicResource Advisor.general.text_size_small}" />
                 <ComboBoxItem Content="{DynamicResource Advisor.general.text_size_standard}" />
@@ -229,12 +231,14 @@
         <Grid x:Name="ConsultationCategory" Visibility="Collapsed">
           <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="0,8,8,0">
-              <TextBlock Text="{DynamicResource Advisor.ai.max_query_rounds}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,4" />
-              <TextBox x:Name="MaxQueryRounds" Width="80" HorizontalAlignment="Left" FontSize="14" Padding="7" MaxLength="2" />
-              <TextBlock Text="{DynamicResource Advisor.ai.history_exchanges}" FontSize="12" TextWrapping="Wrap" Margin="0,18,0,4" />
-              <TextBox x:Name="HistoryExchanges" Width="80" HorizontalAlignment="Left" FontSize="14" Padding="7" MaxLength="2" />
-              <TextBlock Text="{DynamicResource Advisor.ai.common_prompt}" FontSize="12" TextWrapping="Wrap" Margin="0,18,0,4" />
+              <TextBlock Text="{DynamicResource Advisor.ai.answer_policy}" FontSize="14" FontWeight="Bold" Margin="0,0,0,10" />
+              <TextBlock Text="{DynamicResource Advisor.ai.common_prompt}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,4" />
               <TextBox x:Name="CommonPrompt" Height="150" AcceptsReturn="True" AcceptsTab="False" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontSize="14" Padding="7" />
+              <TextBlock Text="{DynamicResource Advisor.ai.history_retrieval}" FontSize="14" FontWeight="Bold" Margin="0,24,0,10" />
+              <TextBlock Text="{DynamicResource Advisor.ai.history_exchanges}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,4" />
+              <TextBox x:Name="HistoryExchanges" Width="80" HorizontalAlignment="Left" FontSize="14" Padding="7" MaxLength="2" />
+              <TextBlock Text="{DynamicResource Advisor.ai.max_query_rounds}" FontSize="12" TextWrapping="Wrap" Margin="0,18,0,4" />
+              <TextBox x:Name="MaxQueryRounds" Width="80" HorizontalAlignment="Left" FontSize="14" Padding="7" MaxLength="2" />
               <WrapPanel HorizontalAlignment="Right" Margin="0,8,0,0">
                 <Button x:Name="SaveConsultation" Content="{DynamicResource Advisor.settings.save_form}" Height="30" Padding="12,0" Margin="8,0,0,0" />
               </WrapPanel>

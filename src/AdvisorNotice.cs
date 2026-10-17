@@ -37,6 +37,7 @@ internal sealed class AdvisorNotice
         return new AdvisorNotice("connection." + key, error.Code, error.HttpStatus, error.UsingFallback);
     }
 
+    internal static AdvisorNotice Options(AdvisorOptionsException error) => new("settings.error." + error.Code, error.Code);
     internal static AdvisorNotice Situation(string code) => new("situation.error." + code, code);
     internal static AdvisorNotice Prompts(AdvisorPromptException error) => new("prompts.error." + error.Code, error.Code);
     internal static AdvisorNotice Unexpected() => new("connection.unknown", "unexpected_error");

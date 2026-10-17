@@ -233,6 +233,7 @@ internal sealed class AdvisorWindow
         scrollPending = true;
         try
         {
+            options.EnsureUserName(text["general.default_user_name"]);
             var settings = AdvisorSettings.Load(settingsPath);
             var session = source.CreateSession(replyLanguage(), request.Text, options.Current.MaxQueryRounds, options.Current.Information);
             var historyLimit = options.Current.HistoryExchanges;
@@ -241,10 +242,16 @@ internal sealed class AdvisorWindow
             var logDirectory = AdvisorTrace.DirectoryIn(UnityEngine.Application.persistentDataPath);
             var advisorProfile = appliedProfile;
             var sharedPrompt = options.Current.CommonPrompt;
+            var userName = options.Current.UserName ?? throw new InvalidOperationException("The user name has not been initialized.");
             active = new AdvisorJob((cancellation, progress) =>
-                AdvisorConsultation.RunAsync(logDirectory, session, settings, request, history, cancellation, profile: advisorProfile, commonPrompt: sharedPrompt, progress: progress, historyExchanges: historyLimit), warn);
+                AdvisorConsultation.RunAsync(logDirectory, session, settings, request, history, cancellation, profile: advisorProfile, commonPrompt: sharedPrompt, progress: progress, historyExchanges: historyLimit, userName: userName), warn);
             SetBusy(true);
             status.Text = text["status.consulting"];
+        }
+        catch (AdvisorOptionsException failure)
+        {
+            FailTurn(turn, AdvisorNotice.Options(failure));
+            warn("Advisor options unavailable: " + failure.Code);
         }
         catch (AdvisorConnectionException failure)
         {
@@ -352,7 +359,12 @@ internal sealed class AdvisorWindow
 
     private void RefreshConfigurationNotice()
     {
-        try { _ = AdvisorSettings.Load(settingsPath); _ = AdvisorPrompts.Current; configurationNotice = null; }
+        try
+        {
+            options.EnsureUserName(text["general.default_user_name"]);
+            _ = AdvisorSettings.Load(settingsPath); _ = AdvisorPrompts.Current; configurationNotice = null;
+        }
+        catch (AdvisorOptionsException error) { configurationNotice = AdvisorNotice.Options(error); }
         catch (AdvisorConnectionException error) { configurationNotice = AdvisorNotice.Connection(error); }
         catch (AdvisorPromptException error) { configurationNotice = AdvisorNotice.Prompts(error); }
     }
@@ -377,10 +389,12 @@ internal sealed class AdvisorWindow
         {
             if (structured)
             {
+                options.EnsureUserName(text["general.default_user_name"]);
                 var language = replyLanguage();
                 var input = source.CreateSession(language, question.Text, options.Current.MaxQueryRounds, options.Current.Information).InitialInput();
                 appliedProfile?.AddAnswerPreferences(input);
                 input["common_prompt"] = options.Current.CommonPrompt;
+                input["user_name"] = options.Current.UserName;
                 diagnosticOutput.Text = input.ToString(Newtonsoft.Json.Formatting.Indented);
                 diagnosticStatus.Text = text.Format("diagnostics.input_generated", language);
             }
@@ -390,6 +404,12 @@ internal sealed class AdvisorWindow
                 diagnosticStatus.Text = text["diagnostics.situation_ready"];
             }
             diagnosticScrollPending = true;
+        }
+        catch (AdvisorOptionsException error)
+        {
+            diagnosticOutput.Text = AdvisorNotice.Options(error).Message(text);
+            diagnosticStatus.Text = text["status.failed"];
+            warn("Advisor options unavailable: " + error.Code);
         }
         catch (AdvisorPromptException error)
         {

@@ -22,7 +22,7 @@ internal sealed class AdvisorSettingsController
     private readonly Action releaseInput, changed, back;
     private readonly Func<bool> consultationBusy;
     private readonly Action<string> warn;
-    private readonly TextBox rounds, history, prompt;
+    private readonly TextBox rounds, history, prompt, userName;
     private readonly ComboBox size;
     private readonly CheckBox campaign, log;
     private readonly TextBlock status, title, testStatus, testError, confirmationText;
@@ -47,6 +47,7 @@ internal sealed class AdvisorSettingsController
         status = Named<TextBlock>("SettingsStatus"); title = Named<TextBlock>("SettingsCategoryTitle");
         rounds = Named<TextBox>("MaxQueryRounds"); history = Named<TextBox>("HistoryExchanges"); prompt = Named<TextBox>("CommonPrompt");
         prompt.MaxLength = AdvisorOptions.MaxCommonPromptLength;
+        userName = Named<TextBox>("UserName"); userName.MaxLength = AdvisorOptions.MaxUserNameLength;
         size = Named<ComboBox>("ConversationTextSize"); campaign = Named<CheckBox>("EnableCampaignAdvisor"); log = Named<CheckBox>("LogAiJson");
         information = new AdvisorInformationView(Named<StackPanel>("InformationChoices"), guard);
         test = Named<Button>("TestConnection"); testStatus = Named<TextBlock>("ConnectionTestStatus"); testError = Named<TextBlock>("ConnectionTestError");
@@ -60,14 +61,14 @@ internal sealed class AdvisorSettingsController
         var buttons = new[] { "OpenGeneralCategory", "OpenProfileCategory", "OpenApiCategory", "OpenConsultationCategory", "OpenInformationCategory", "OpenDeveloperCategory" };
         for (var i = 0; i < buttons.Length; i++) { var category = (Category)i; Bind(buttons[i], () => OpenCategory(category)); }
         Bind("BackToSettings", BackToHome); Bind("BackToConversation", () => { Close(); back(); });
-        Bind("SaveGeneral", () => Save(() => options.SaveGeneral((AdvisorTextSize)size.SelectedIndex, campaign.IsChecked == true)));
+        Bind("SaveGeneral", () => Save(() => options.SaveGeneral((AdvisorTextSize)size.SelectedIndex, campaign.IsChecked == true, userName.Text ?? "")));
         Bind("SaveConsultation", () => Save(() => options.SaveConsultation(Number(rounds, "query_rounds_invalid"), Number(history, "history_exchanges_invalid"), prompt.Text ?? "")));
         Bind("SaveInformation", () => Save(() => options.SaveInformation(information.Value)));
         Bind("SaveDeveloper", () => Save(() => apiStore.SaveLogging(log.IsChecked == true)));
         Bind("TestConnection", TestConnection);
         Bind("CancelConfirmation", HideConfirmation);
         Bind("AcceptConfirmation", () => { var action = confirmed; HideConfirmation(); action?.Invoke(); });
-        foreach (var input in new[] { rounds, history, prompt, Named<TextBox>("ProfilePath") })
+        foreach (var input in new[] { rounds, history, prompt, userName, Named<TextBox>("ProfilePath") })
         { input.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(input)); input.LostKeyboardFocus += (_, _) => guard(() => typing.Release(input)); }
         Named<TextBox>("ProfilePath").Text = AdvisorProfile.SettingsPath(profileDirectory);
     }
@@ -101,8 +102,8 @@ internal sealed class AdvisorSettingsController
             else
             {
                 var saved = options.Read();
-                if (category == Category.General) { size.SelectedIndex = (int)saved.TextSize; campaign.IsChecked = saved.CampaignEnabled; size.Focus(); }
-                if (category == Category.Consultation) { rounds.Text = saved.MaxQueryRounds.ToString(CultureInfo.InvariantCulture); history.Text = saved.HistoryExchanges.ToString(CultureInfo.InvariantCulture); prompt.Text = saved.CommonPrompt; rounds.Focus(); }
+                if (category == Category.General) { userName.Text = saved.UserName ?? text()["general.default_user_name"]; size.SelectedIndex = (int)saved.TextSize; campaign.IsChecked = saved.CampaignEnabled; userName.Focus(); }
+                if (category == Category.Consultation) { rounds.Text = saved.MaxQueryRounds.ToString(CultureInfo.InvariantCulture); history.Text = saved.HistoryExchanges.ToString(CultureInfo.InvariantCulture); prompt.Text = saved.CommonPrompt; prompt.Focus(); }
                 if (category == Category.Information) { information.Reset(saved.Information); information.Focus(); }
             }
             available = true; baseline = Snapshot(); UpdateBusy();
@@ -114,7 +115,7 @@ internal sealed class AdvisorSettingsController
     private void DisablePage() { if (current.HasValue) pages[(int)current.Value].IsEnabled = false; Named<Button>("BackToSettings").Focus(); }
     private string Snapshot() => current switch
     {
-        Category.General => size.SelectedIndex + ":" + campaign.IsChecked,
+        Category.General => userName.Text + "\0" + size.SelectedIndex + ":" + campaign.IsChecked,
         Category.Consultation => rounds.Text + "\0" + history.Text + "\0" + prompt.Text,
         Category.Information => information.Value.Key,
         Category.Developer => log.IsChecked.ToString(),

@@ -29,23 +29,24 @@ internal sealed class GeminiAdvisor
     { this.transport = transport; this.switched = switched; }
 
     internal async Task<AdviceResult> ConsultAsync(IAdvisorQuerySession session, AdvisorSettings settings,
-        IReadOnlyList<ChatExchange> history, CancellationToken cancellation, AdvisorProfile? profile = null, string commonPrompt = "", Action<AdvisorProgress>? progress = null, int historyExchanges = AdvisorOptions.DefaultHistoryExchanges)
+        IReadOnlyList<ChatExchange> history, CancellationToken cancellation, AdvisorProfile? profile = null, string commonPrompt = "", Action<AdvisorProgress>? progress = null, int historyExchanges = AdvisorOptions.DefaultHistoryExchanges, string userName = "")
     {
         historyExchanges = AdvisorOptions.ValidateHistoryExchanges(historyExchanges);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
         deadline.CancelAfter(TimeSpan.FromSeconds(settings.ConsultationTimeoutSeconds));
-        try { return await RunAsync(session, settings, history, deadline.Token, profile, commonPrompt, progress, historyExchanges).ConfigureAwait(false); }
+        try { return await RunAsync(session, settings, history, deadline.Token, profile, commonPrompt, progress, historyExchanges, userName).ConfigureAwait(false); }
         catch (OperationCanceledException) when (!cancellation.IsCancellationRequested)
         { throw new AdvisorConnectionException("consultation_timeout"); }
     }
 
     private async Task<AdviceResult> RunAsync(IAdvisorQuerySession session, AdvisorSettings settings,
-        IReadOnlyList<ChatExchange> history, CancellationToken cancellation, AdvisorProfile? profile, string commonPrompt, Action<AdvisorProgress>? progress, int historyExchanges)
+        IReadOnlyList<ChatExchange> history, CancellationToken cancellation, AdvisorProfile? profile, string commonPrompt, Action<AdvisorProgress>? progress, int historyExchanges, string userName)
     {
         var maxApiRequests = session.MaxRounds + 1;
         var initial = session.InitialInput();
         profile?.AddAnswerPreferences(initial);
         initial["common_prompt"] = AdvisorOptions.ValidateCommonPrompt(commonPrompt);
+        initial["user_name"] = AdvisorOptions.ValidateUserName(userName);
         var tool = (JObject)initial["query_tool"]!;
         var instructions = initial["instructions"]!.DeepClone();
         initial.Remove("instructions"); initial.Remove("query_tool");

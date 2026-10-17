@@ -41,14 +41,54 @@ internal static class OptionsTests
             catch (AdvisorOptionsException error) when (error.Code == "options_unreadable") { return; }
             throw new InvalidOperationException("A directory at the settings path was treated as missing settings");
         }));
+        check("User names initialize once in the initial UI language and retain edits and explicit blanks across categories and restarts", () => InTemp(directory =>
+        {
+            foreach (var language in new[] { "ja", "en" })
+            foreach (var legacy in new[] { false, true })
+            {
+                var path = Path.Combine(directory, language + "-" + legacy + ".json");
+                var store = new AdvisorOptionsStore(path);
+                if (legacy) store.Write(new AdvisorOptions(7, true, commonPrompt: "Keep this", textSize: AdvisorTextSize.Large, historyExchanges: 0));
+                var defaults = AdvisorText.Load(language)["general.default_user_name"];
+                store.EnsureUserName(defaults);
+                Require(store.Current.UserName == (language == "ja" ? "司令官" : "Commander") &&
+                    (string?)JObject.Parse(File.ReadAllText(path))["user_name"] == defaults,
+                    "The initial localized name was not stored as an actual setting");
+                if (legacy) Require(store.Current.MaxQueryRounds == 7 && store.Current.CampaignEnabled && store.Current.CommonPrompt == "Keep this" &&
+                    store.Current.TextSize == AdvisorTextSize.Large && store.Current.HistoryExchanges == 0, "Name initialization reset existing settings");
+                var before = File.ReadAllBytes(path);
+                var reopened = new AdvisorOptionsStore(path);
+                reopened.EnsureUserName(language == "ja" ? "Commander" : "司令官");
+                Require(reopened.Current.UserName == defaults && File.ReadAllBytes(path).SequenceEqual(before), "Changing language rewrote an initialized name");
+                const string edited = "山田 <>& 𠮷";
+                reopened.SaveGeneral(AdvisorTextSize.Standard, false, edited);
+                reopened.SaveConsultation(8, 2, "Another prompt");
+                reopened.SaveInformation(AdvisorInformation.Default.With(InformationKind.BattleWeapons, false));
+                var saved = new AdvisorOptionsStore(path);
+                saved.EnsureUserName(defaults);
+                Require(saved.Current.UserName == edited && saved.Current.CommonPrompt == "Another prompt" && saved.Current.MaxQueryRounds == 8 &&
+                    !saved.Current.Information.Allows(InformationKind.BattleWeapons), "Another category or restart replaced the edited user name");
+                saved.SaveGeneral(saved.Current.TextSize, saved.Current.CampaignEnabled, "");
+                before = File.ReadAllBytes(path);
+                var blank = new AdvisorOptionsStore(path); blank.EnsureUserName(defaults);
+                Require(blank.Current.UserName == "" && File.ReadAllBytes(path).SequenceEqual(before), "An explicit blank name was refilled with the default");
+            }
+            foreach (var invalid in new JToken[] { JValue.CreateNull(), new JValue(3), new JValue("bad\nname"),
+                new JValue(new string('x', AdvisorOptions.MaxUserNameLength + 1)), new JValue(new string((char)0xd800, 1)) })
+            {
+                try { _ = AdvisorOptions.Parse(new JObject { ["user_name"] = invalid }.ToString()); }
+                catch (AdvisorOptionsException error) when (error.Code == "user_name_invalid") { continue; }
+                throw new InvalidOperationException("An invalid user name was silently accepted");
+            }
+        }));
         check("Category saves preserve current values in other categories and discarded candidates do not apply", () => InTemp(directory =>
         {
             var store = new AdvisorOptionsStore(Path.Combine(directory, "options.json"));
-            store.SaveGeneral(AdvisorTextSize.Large, true);
+            store.SaveGeneral(AdvisorTextSize.Large, true, "Commander");
             // A second window or file edit saves consultation options after this page was opened.
             var other = new AdvisorOptionsStore(store.Path); other.SaveConsultation(7, 0, "共通の希望");
             store.SaveInformation(AdvisorInformation.All.With(InformationKind.BattleWeapons, false));
-            store.SaveGeneral(AdvisorTextSize.Standard, false);
+            store.SaveGeneral(AdvisorTextSize.Standard, false, "Commander");
             var saved = new AdvisorOptionsStore(store.Path).Current;
             Require(!saved.CampaignEnabled && saved.TextSize == AdvisorTextSize.Standard && saved.MaxQueryRounds == 7 && saved.HistoryExchanges == 0 &&
                 saved.CommonPrompt == "共通の希望" && !saved.Information.Allows(InformationKind.BattleWeapons), "Saving stale category values lost another completed change");
@@ -63,11 +103,11 @@ internal static class OptionsTests
             var store = new AdvisorOptionsStore(Path.Combine(parent, "options.json"));
             Directory.Delete(parent); File.WriteAllText(parent, "blocked parent");
             var apiPath = Path.Combine(directory, "gemini.json"); File.WriteAllText(apiPath, "untouched");
-            try { store.SaveGeneral(AdvisorTextSize.Large, true); }
+            try { store.SaveGeneral(AdvisorTextSize.Large, true, "Commander"); }
             catch (AdvisorOptionsException error) when (error.Code == "options_write_failed")
             {
                 Require(store.Current.TextSize == AdvisorTextSize.Small && !store.Current.CampaignEnabled && File.ReadAllText(apiPath) == "untouched" &&
-                    !File.Exists(AdvisorProfile.SettingsPath(directory)), "A failed options write published changes or modified another category");
+                    store.Current.UserName == null && !File.Exists(AdvisorProfile.SettingsPath(directory)), "A failed options write published changes or modified another category");
                 return;
             }
             throw new InvalidOperationException("Expected options write failure");
