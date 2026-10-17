@@ -103,7 +103,7 @@ internal sealed class AdvisorWindow
         if (width < 360 || height < 360) throw new InvalidOperationException("The game view is too small for the advisor prototype.");
         window = new Window
         {
-            Header = text["window.title"], Content = content,
+            Header = WindowTitle, Content = content,
             Width = width, Height = height, MinWidth = Math.Min(560, width), MinHeight = Math.Min(540, height),
             MaxWidth = view.ActualWidth - 20, MaxHeight = view.ActualHeight - 40,
             X = (float)Math.Max(10, view.ActualWidth - width - 30), Y = 90,
@@ -474,6 +474,10 @@ internal sealed class AdvisorWindow
             item.Button.IsEnabled = item.Shortcut.IsAvailable(active != null, conversation.Exchanges.Count, options.Current.HistoryExchanges);
     }
 
+    private string WindowTitle => text["window.title"] + " v" +
+        (typeof(AdvisorWindow).Assembly.GetName().Version
+            ?? throw new InvalidOperationException("The advisor assembly version is missing.")).ToString(3);
+
     private void ApplyTextResources()
     {
         foreach (var entry in text.Entries) content.Resources["Advisor." + entry.Key] = entry.Value;
@@ -486,7 +490,7 @@ internal sealed class AdvisorWindow
         text = AdvisorText.Load(language);
         uiLanguage = language;
         ApplyTextResources();
-        window.Header = text["window.title"];
+        window.Header = WindowTitle;
         if (!profileLoaded) speakerName = text["speaker.advisor"];
         SetBusy(active != null);
         ShowConversation();
