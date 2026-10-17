@@ -15,17 +15,16 @@ internal static class AdvisorTranscript
         for (var i = 0; i < conversation.Turns.Count; i++)
         {
             var turn = conversation.Turns[i];
-            var row = Element("StackPanel", new XAttribute("Margin", "0,0,0,20"), Label(text["speaker.you"], "AdvisorPlayerNameBrush"),
+            var copyCaption = turn.Request.IsShortcut ? "action.copy_prompt" : "action.copy";
+            var copyTip = turn.Request.IsShortcut ? "transcript.copy_prompt_tip" : "transcript.copy_question_tip";
+            var row = Element("StackPanel", new XAttribute("Margin", "0,0,0,20"),
+                Header(text["speaker.you"], "AdvisorPlayerNameBrush", "CopyQuestion" + i, text, copyTip, "0,0,0,6", copyCaption),
                 Plain(turn.Request.DisplayText));
             if (turn.State == AdvisorTurnState.Answered)
             {
                 var exchange = turn.Exchange ?? throw new InvalidOperationException("The completed answer is missing.");
-                row.Add(Element("Grid", new XAttribute("Margin", "0,6,0,6"),
-                    Element("Grid.ColumnDefinitions", Element("ColumnDefinition", new XAttribute("Width", "*")),
-                        Element("ColumnDefinition", new XAttribute("Width", "Auto"))),
-                    Label(turn.AdvisorName.Length == 0 ? advisor : turn.AdvisorName, "AdvisorNameBrush"),
-                    Action("CopyAnswer" + i, text["action.copy"], text["transcript.copy_tip"], 1)),
-                    AdvisorMarkdown.Render(exchange.Answer));
+                row.Add(Header(turn.AdvisorName.Length == 0 ? advisor : turn.AdvisorName, "AdvisorNameBrush",
+                    "CopyAnswer" + i, text, "transcript.copy_tip", "0,6,0,6"), AdvisorMarkdown.Render(exchange.Answer));
             }
             else if (turn.State == AdvisorTurnState.Failed)
                 row.Add(Error((turn.Error ?? throw new InvalidOperationException("The failed turn has no error.")).Message(text)));
@@ -42,6 +41,12 @@ internal static class AdvisorTranscript
         AdvisorTypography.Apply(root, textSize);
         return root.ToString(SaveOptions.DisableFormatting);
     }
+
+    private static XElement Header(string speaker, string brush, string copyName, AdvisorText text, string tipKey, string margin, string captionKey = "action.copy") =>
+        Element("Grid", new XAttribute("Margin", margin),
+            Element("Grid.ColumnDefinitions", Element("ColumnDefinition", new XAttribute("Width", "*")),
+                Element("ColumnDefinition", new XAttribute("Width", "Auto"))),
+            Label(speaker, brush), Action(copyName, text[captionKey], text[tipKey], 1));
 
     private static XElement Action(string name, string caption, string tip, int column = 0) => Element("Button",
         new XAttribute(XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml") + "Name", name),

@@ -329,5 +329,8 @@
   "developer.prompts.pending": "There are unapplied edits.",
   "developer.prompts.applied": "Applied to new consultations.",
   "developer.prompts.restored": "Startup content restored for new consultations.",
-  "developer.prompts.invalid": "Cannot apply edits for {0}. Check the text; each document must remain within 64 KiB in UTF-8."
+  "developer.prompts.invalid": "Cannot apply edits for {0}. Check the text; each document must remain within 64 KiB in UTF-8.",
+  "transcript.copy_question_tip": "Copy this message.",
+  "action.copy_prompt": "Copy prompt",
+  "transcript.copy_prompt_tip": "Copy the English prompt used for this quick action."
 }

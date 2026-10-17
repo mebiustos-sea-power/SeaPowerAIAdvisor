@@ -329,5 +329,8 @@
   "developer.prompts.pending": "未適用の編集があります。",
   "developer.prompts.applied": "次の相談から使用する内容を一時適用しました。",
   "developer.prompts.restored": "次の相談から起動時の内容を使用します。",
-  "developer.prompts.invalid": "「{0}」の編集を適用できません。文字列を確認し、各ファイルの内容をUTF-8で64 KiB以内にしてください。"
+  "developer.prompts.invalid": "「{0}」の編集を適用できません。文字列を確認し、各ファイルの内容をUTF-8で64 KiB以内にしてください。",
+  "transcript.copy_question_tip": "このメッセージをコピーします。",
+  "action.copy_prompt": "質問文をコピー",
+  "transcript.copy_prompt_tip": "AIに送る英語の質問文をコピーします。"
 }

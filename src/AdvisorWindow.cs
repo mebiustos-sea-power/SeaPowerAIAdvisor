@@ -148,6 +148,7 @@ internal sealed class AdvisorWindow
         questionInput.Tick();
         CompleteActive();
         UpdateActiveProgress();
+        transcript.Tick();
         if (diagnosticScrollPending)
         {
             diagnosticOutput.ScrollToHome();
