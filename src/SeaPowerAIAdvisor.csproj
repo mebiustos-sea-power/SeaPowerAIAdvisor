@@ -17,6 +17,7 @@
     <Reference Include="UniRx" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\UniRx.dll" Private="false" ExternallyResolved="true" />
     <Reference Include="Noesis.NoesisGUI" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\Noesis.NoesisGUI.dll" Private="false" ExternallyResolved="true" />
     <Reference Include="UnityEngine.IMGUIModule" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\UnityEngine.IMGUIModule.dll" Private="false" ExternallyResolved="true" />
+    <Reference Include="UnityEngine.ParticleSystemModule" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\UnityEngine.ParticleSystemModule.dll" Private="false" ExternallyResolved="true" />
     <Reference Include="UnityEngine.CoreModule" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\UnityEngine.CoreModule.dll" Private="false" ExternallyResolved="true" />
     <Reference Include="UnityEngine.ImageConversionModule" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\UnityEngine.ImageConversionModule.dll" Private="false" ExternallyResolved="true" />
     <Reference Include="UnityEngine.InputLegacyModule" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\UnityEngine.InputLegacyModule.dll" Private="false" ExternallyResolved="true" />

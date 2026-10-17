@@ -175,12 +175,14 @@ internal sealed class AdvisorSettingsController
         if (QuestionInputController.IsComposing) { TestError(text()["profile.ime"]); return; }
         try
         {
-            var settings = api.TestSettings(); ClearTest();
+            var settings = api.TestSettings();
+            var requestText = AdvisorPrompts.ConnectionTestRequest(); ClearTest();
             var directory = AdvisorTrace.DirectoryIn(UnityEngine.Application.persistentDataPath);
-            testing = new AdvisorJob(cancellation => GeminiConnectionTest.RunAsync(directory, settings, cancellation), warn);
+            testing = new AdvisorJob(cancellation => GeminiConnectionTest.RunAsync(directory, settings, cancellation, requestText: requestText), warn);
             testStatus.Text = TestMessage(text()["connection.test_running"]); UpdateBusy();
         }
         catch (AdvisorConnectionException error) { TestError(AdvisorNotice.Connection(error).Message(text())); }
+        catch (AdvisorPromptException error) { TestError(AdvisorNotice.Prompts(error).Message(text())); warn("Connection test prompt unavailable: " + error.Message); }
     }
     private string TestMessage(string message) => text().Format("connection.test_result", testingName, message);
     private void ClearTest() { if (testing != null) return; testStatus.Text = testError.Text = ""; testError.Visibility = Visibility.Collapsed; }

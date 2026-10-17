@@ -17,19 +17,20 @@ internal sealed class AdvisorQuestion
 internal sealed class AdvisorShortcut
 {
     internal static readonly AdvisorShortcut NextSteps = new("preset.next_steps",
-        "What should I do next? Give concrete actions in priority order, tied to the victory objectives.");
+        "next_steps");
     internal static readonly AdvisorShortcut MoreDetail = new("preset.more_detail",
-        "Make your previous advice more specific: identify relevant units, locations and actions using current evidence. Recheck unsupported earlier claims.", true);
+        "more_detail", true);
     internal static readonly AdvisorShortcut KeyRisks = new("preset.key_risks",
-        "What are the main current risks to achieving victory, and what concrete actions could address them? Distinguish observed threats from uncertainty.");
+        "key_risks");
 
     internal string LabelKey { get; }
-    private string Prompt { get; }
+    private string PromptKey { get; }
     private bool RequiresHistory { get; }
     private AdvisorShortcut(string key, string prompt, bool history = false)
-    { LabelKey = key; Prompt = prompt; RequiresHistory = history; }
+    { LabelKey = key; PromptKey = prompt; RequiresHistory = history; }
 
     internal bool IsAvailable(bool busy, int exchangeCount, int historyExchanges = AdvisorOptions.DefaultHistoryExchanges) =>
         !busy && (!RequiresHistory || (exchangeCount > 0 && historyExchanges > 0));
-    internal AdvisorQuestion Prepare(string caption) => new(Prompt, caption, true);
+    internal AdvisorQuestion Prepare(string caption, AdvisorPrompts? prompts = null) =>
+        new((prompts ?? AdvisorPrompts.Current).Text("requests.json", PromptKey), caption, true);
 }

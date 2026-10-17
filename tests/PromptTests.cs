@@ -17,7 +17,13 @@ internal static class PromptTests
         {
             Prepare(directory);
             Rewrite(directory, "common", value => { value["system"] = "EXTERNAL_COMMON_V1"; value["instructions"]!["task"] = "EXTERNAL_TASK_V1"; });
-            Rewrite(directory, "battle", value => value["evidence_policy"] = "EXTERNAL_BATTLE_V1");
+            Rewrite(directory, "battle", value =>
+            {
+                value["evidence_policy"] = "EXTERNAL_BATTLE_V1";
+                value["tool_description"] = "EXTERNAL_BATTLE_TOOL";
+                value["catalog_observed_contacts"] = "EXTERNAL_CONTACT_DESCRIPTION";
+                value["error_wrong_consultation"] = "EXTERNAL_SESSION_ERROR";
+            });
             var prompts = AdvisorPrompts.Load(directory);
             Rewrite(directory, "common", value => value["system"] = "EXTERNAL_COMMON_V2");
             foreach (var file in Directory.GetFiles(directory)) File.Delete(file);
@@ -30,13 +36,19 @@ internal static class PromptTests
                 Require(system.Contains("EXTERNAL_COMMON_V1", StringComparison.Ordinal) && system.Contains("EXTERNAL_TASK_V1", StringComparison.Ordinal) &&
                     system.Contains("EXTERNAL_BATTLE_V1", StringComparison.Ordinal) && !system.Contains("CONSUMER_MUTATION", StringComparison.Ordinal) &&
                     !system.Contains("EXTERNAL_COMMON_V2", StringComparison.Ordinal), "A reread, hardcoded policy or mutable consumer copy replaced the loaded instructions");
+                Require((string?)body["tools"]![0]!["description"] == "EXTERNAL_BATTLE_TOOL", "The tool description ignored its external resource");
                 var sent = InteractionFixture.Initial(body);
+                Require((string?)sent["knowledge_catalog"]!["observed_contacts"]!["description"] == "EXTERNAL_CONTACT_DESCRIPTION",
+                    "The knowledge catalogue ignored its external resource");
                 Require((string?)sent["common_prompt"] == "Shared preference" && (string?)sent["reply_language"] == "ja",
                     "The common preference or game reply language did not reach the request");
             });
             var result = new GeminiAdvisor(fake).ConsultAsync(session, AdvisorSettings.Parse("{\"api_key\":\"mock-prompts-key\"}"),
                 Array.Empty<ChatExchange>(), CancellationToken.None, commonPrompt: "Shared preference").GetAwaiter().GetResult();
             Require(result.ApiRequests == 1 && fake.Calls == 1, "Loading external instructions caused extra requests");
+            var rejected = session.Execute(new JObject { ["consultation_id"] = "another-session", ["requests"] = new JArray() });
+            Require((string?)rejected["error"]!["code"] == "wrong_consultation" &&
+                (string?)rejected["error"]!["message"] == "EXTERNAL_SESSION_ERROR", "Validation bypassed the external error text or changed the rejection");
             Require((string?)new BattleQuerySession(Battle(), "en", "Again", prompts: prompts).InitialInput()["instructions"]!["task"] == "EXTERNAL_TASK_V1",
                 "A later consultation required the files again");
         }));
@@ -50,6 +62,10 @@ internal static class PromptTests
             Fails(directory, "prompts_invalid", "common.json");
             Prepare(directory); Rewrite(directory, "campaign", value => value["evidence_policy"] = " ");
             Fails(directory, "prompts_invalid", "campaign.json");
+            Prepare(directory); File.Delete(Path.Combine(directory, "requests.json"));
+            Fails(directory, "prompts_missing", "requests.json");
+            Prepare(directory); Rewrite(directory, "requests", value => value.Remove("key_risks"));
+            Fails(directory, "prompts_invalid", "requests.json");
         }));
         check("Temporary edits affect new consultations while an active multi-request consultation retains its startup snapshot", () => InTemp(directory =>
         {
@@ -123,6 +139,34 @@ internal static class PromptTests
             runtime.Apply(edits);
             Require(!runtime.HasOverrides && ReferenceEquals(runtime.Current, original), "Applying startup text left an artificial override active");
         }));
+        check("External shortcut requests reach Gemini and history unchanged, and resetting restores the startup questions", () => InTemp(directory =>
+        {
+            Prepare(directory); var original = AdvisorPrompts.Load(directory); var runtime = new AdvisorPromptOverrides(original);
+            var edits = original.Fields.ToDictionary(f => f.Id, f => f.Value);
+            foreach (var key in new[] { "next_steps", "key_risks", "more_detail" }) edits["requests.json:" + key] = "EDITED_REQUEST_" + key;
+            edits["requests.json:connection_test"] = "EDITED_CONNECTION_CHECK";
+            var oldQuestion = AdvisorShortcut.KeyRisks.Prepare("主なリスク", original);
+            runtime.Apply(edits);
+            var chat = new AdvisorConversation();
+            foreach (var pair in new[] { (AdvisorShortcut.NextSteps, "next_steps"), (AdvisorShortcut.KeyRisks, "key_risks"), (AdvisorShortcut.MoreDetail, "more_detail") })
+            {
+                var question = pair.Item1.Prepare("Visible caption", runtime.Current);
+                var transport = new CaptureTransport(body => Require((string?)InteractionFixture.Initial(body)["question"] == "EDITED_REQUEST_" + pair.Item2,
+                    "An edited shortcut did not reach the real request input"));
+                var session = new BattleQuerySession(Battle(), "ja", question.Text, prompts: runtime.Current);
+                _ = new GeminiAdvisor(transport).ConsultAsync(session, AdvisorSettings.Parse("{\"api_key\":\"mock-prompts-key\"}"),
+                    Array.Empty<ChatExchange>(), CancellationToken.None).GetAwaiter().GetResult();
+                Require(question.DisplayText == "Visible caption" && transport.Calls == 1, "The hidden question changed its visible caption or added API calls");
+                Require(chat.TryAdd(question, "Answer", out _), "An edited shortcut could not be stored in conversation history");
+            }
+            Require(AdvisorPrompts.ConnectionTestRequest(runtime.Current) == "EDITED_CONNECTION_CHECK", "Connection checks ignored applied request edits");
+            runtime.Reset();
+            Require(AdvisorShortcut.KeyRisks.Prepare("主なリスク", runtime.Current).Text == oldQuestion.Text &&
+                chat.Exchanges[1].Question == "EDITED_REQUEST_key_risks", "Reset failed to restore future questions or rewrote an existing conversation");
+            File.WriteAllText(Path.Combine(directory, "common.json"), "{");
+            Require((string?)AdvisorPrompts.ReadRequests(directory)["connection_test"] == original.Text("requests.json", "connection_test"),
+                "A connection request depended on malformed advisory policies");
+        }));
         check("Common preferences default to blank, round-trip multiline text and reject invalid persisted values", () =>
         {
             Require(AdvisorOptions.Parse("{}").CommonPrompt == "", "An existing installation received an unsolicited common preference");
@@ -146,12 +190,24 @@ internal static class PromptTests
         check("Campaign sessions use their own external policy and aviation semantics", () => InTemp(directory =>
         {
             Prepare(directory);
-            Rewrite(directory, "campaign", value => { value["evidence_policy"] = "EXTERNAL_CAMPAIGN"; value["aviation_semantics"] = "EXTERNAL_AVIATION"; });
+            Rewrite(directory, "campaign", value =>
+            {
+                value["evidence_policy"] = "EXTERNAL_CAMPAIGN"; value["aviation_semantics"] = "EXTERNAL_AVIATION";
+                value["tool_description"] = "EXTERNAL_CAMPAIGN_TOOL"; value["victory_description"] = "EXTERNAL_VICTORY_RULE";
+                value["catalog_observed_contacts"] = "EXTERNAL_CAMPAIGN_CONTACTS"; value["error_integer_type"] = "{0}: external integer requirement";
+            });
             Rewrite(directory, "battle", value => value["evidence_policy"] = "OTHER_MODE_ONLY");
             var prompts = AdvisorPrompts.Load(directory);
             var snapshot = QueryTests.Capture(new SituationTests.Fixture(Assembly.LoadFrom(campaignPath)));
             var session = new AdvisorQuerySession(snapshot, "fr", "Question", prompts: prompts);
             var input = session.InitialInput();
+            Require((string?)input["query_tool"]!["description"] == "EXTERNAL_CAMPAIGN_TOOL" &&
+                (string?)input["situation"]!["victory_conditions"]!["rules"]!["description"] == "EXTERNAL_VICTORY_RULE" &&
+                ((JArray)input["knowledge_catalog"]!).Any(x => (string?)x["category"] == "observed_contacts" && (string?)x["description"] == "EXTERNAL_CAMPAIGN_CONTACTS"),
+                "The campaign retained hardcoded descriptions");
+            var invalid = session.Execute(new JObject { ["consultation_id"] = session.Id,
+                ["requests"] = new JArray(new JObject { ["query"] = "list_contacts", ["offset"] = "invalid" }) });
+            Require((string?)invalid["error"]!["message"] == "offset: external integer requirement", "External error arguments were not formatted for the rejected query");
             Require((string?)input["instructions"]!["evidence_policy"] == "EXTERNAL_CAMPAIGN" && (string?)input["aviation_semantics"] == "EXTERNAL_AVIATION" &&
                 !input.ToString().Contains("OTHER_MODE_ONLY", StringComparison.Ordinal), "Campaign policy was hardcoded or mixed with battle instructions");
             var runtime = new AdvisorPromptOverrides(prompts);

@@ -13,29 +13,31 @@ internal static class AdvisorQueryCatalog
         "list_air_units", "get_air_units", "list_air_flights"
     };
 
-    internal static JArray Describe(SituationSnapshot snapshot, AdvisorInformation? selection = null)
+    internal static JArray Describe(SituationSnapshot snapshot, AdvisorInformation? selection = null, AdvisorPrompts? prompts = null)
     {
         var information = selection ?? AdvisorInformation.Default;
+        prompts ??= AdvisorPrompts.Current;
         var rows = new JArray(
-        Category("friendly_task_forces", snapshot.Forces.Count, "Own force identities, positions and ship counts.", "list_forces", "get_forces"),
-        Category("friendly_ships", CountShips(snapshot), "Own ship identities, types and enabled status sections.", "list_ships", "get_ships"),
-        Category("friendly_air_units", snapshot.Aviation.Units.Count, "Own land squadrons/carrier wings: host, types, counts, readiness and displayed launch constraints.", "list_air_units", "get_air_units"),
-        Category("friendly_air_flights", snapshot.Aviation.Flights.Count, "Own airborne flight identities, positions, counts, selected loadout and return state.", "list_air_flights", null),
-        Category("observed_contacts", snapshot.Contacts.Count, "Observed contacts, observation time and uncertainty.", "list_contacts", null),
-        Category("public_bases", snapshot.Victory.Bases.Count, "Public base identities/ownership; IDs match victory objectives.", "list_bases", null),
-        Category("friendly_bases", snapshot.Ground.Bases().Count, "Own base capacity, shipyard, recorded stocks and enabled garrison strength. IDs from list_bases.", null, "get_bases"),
-        Category("friendly_ground_units", snapshot.Ground.Units().Count, "Own ground identities, campaign strength and disclosed base/transport.", "list_ground_units", "get_ground_units"),
-        Category("base_observations", snapshot.Bases.Count, "Recorded non-player base sightings.", null, "get_base_observations"),
-        Category("published_orders", snapshot.Orders.Count, "Published own orders and briefing text.", "list_orders", "get_orders"),
-        Category("recent_player_reports", snapshot.Reports.Count, "Retained player-report metadata; body by ID.", "list_reports", "get_reports")
+        Category("friendly_task_forces", snapshot.Forces.Count, prompts.Text("campaign.json", "catalog_friendly_task_forces"), "list_forces", "get_forces"),
+        Category("friendly_ships", CountShips(snapshot), prompts.Text("campaign.json", "catalog_friendly_ships"), "list_ships", "get_ships"),
+        Category("friendly_air_units", snapshot.Aviation.Units.Count, prompts.Text("campaign.json", "catalog_friendly_air_units"), "list_air_units", "get_air_units"),
+        Category("friendly_air_flights", snapshot.Aviation.Flights.Count, prompts.Text("campaign.json", "catalog_friendly_air_flights"), "list_air_flights", null),
+        Category("observed_contacts", snapshot.Contacts.Count, prompts.Text("campaign.json", "catalog_observed_contacts"), "list_contacts", null),
+        Category("public_bases", snapshot.Victory.Bases.Count, prompts.Text("campaign.json", "catalog_public_bases"), "list_bases", null),
+        Category("friendly_bases", snapshot.Ground.Bases().Count, prompts.Text("campaign.json", "catalog_friendly_bases"), null, "get_bases"),
+        Category("friendly_ground_units", snapshot.Ground.Units().Count, prompts.Text("campaign.json", "catalog_friendly_ground_units"), "list_ground_units", "get_ground_units"),
+        Category("base_observations", snapshot.Bases.Count, prompts.Text("campaign.json", "catalog_base_observations"), null, "get_base_observations"),
+        Category("published_orders", snapshot.Orders.Count, prompts.Text("campaign.json", "catalog_published_orders"), "list_orders", "get_orders"),
+        Category("recent_player_reports", snapshot.Reports.Count, prompts.Text("campaign.json", "catalog_recent_player_reports"), "list_reports", "get_reports")
         );
         return new JArray(rows.OfType<JObject>().Where(r => information.CampaignCategory((string)r["category"]!)));
     }
 
-    internal static JObject Tool(AdvisorInformation? selection = null)
+    internal static JObject Tool(AdvisorInformation? selection = null, AdvisorPrompts? prompts = null)
     {
         var information = selection ?? AdvisorInformation.Default;
-        var tool = RawTool();
+        prompts ??= AdvisorPrompts.Current;
+        var tool = RawTool(prompts);
         var properties = (JObject)tool["parameters"]!["properties"]!["requests"]!["items"]!["properties"]!;
         properties["query"]!["enum"] = new JArray(Queries.Where(information.CampaignQuery));
         if (!information.Allows(InformationKind.CampaignShips)) properties.Remove("include_ships");
@@ -43,10 +45,10 @@ internal static class AdvisorQueryCatalog
         return tool;
     }
 
-    private static JObject RawTool() => new()
+    private static JObject RawTool(AdvisorPrompts prompts) => new()
     {
         ["name"] = "query_situation",
-        ["description"] = "Query the current player-known campaign snapshot. Supply a requests batch; the host binds the consultation.",
+        ["description"] = prompts.Text("campaign.json", "tool_description"),
         ["parameters"] = new JObject
         {
             ["type"] = "object", ["additionalProperties"] = false,
@@ -62,13 +64,13 @@ internal static class AdvisorQueryCatalog
                         ["properties"] = new JObject
                         {
                             ["query"] = new JObject { ["type"] = "string", ["enum"] = new JArray(Queries) },
-                            ["ids"] = Ids("get_* only: current IDs of the requested entity type."),
-                            ["force_ids"] = Ids("list_ships/list_air_units: optional force filter; air units selects hosted wings."),
-                            ["base_ids"] = Ids("list_air_units: land squadrons at these public bases; incompatible with force_ids."),
-                            ["offset"] = Integer("Zero-based list offset. List queries only.", 0, int.MaxValue),
-                            ["limit"] = Integer("List page size. Omit for the default page size.", 1, AdvisorQueryLimits.MaxPageSize),
-                            ["include_ships"] = new JObject { ["type"] = "boolean", ["description"] = "get_forces: true includes individual ships; omitted/false returns force details only." },
-                            ["kind"] = new JObject { ["type"] = "string", ["description"] = "list_reports only: a report kind code.",
+                            ["ids"] = Ids(prompts.Text("campaign.json", "tool_ids")),
+                            ["force_ids"] = Ids(prompts.Text("campaign.json", "tool_force_ids")),
+                            ["base_ids"] = Ids(prompts.Text("campaign.json", "tool_base_ids")),
+                            ["offset"] = Integer(prompts.Text("campaign.json", "tool_offset"), 0, int.MaxValue),
+                            ["limit"] = Integer(prompts.Text("campaign.json", "tool_limit"), 1, AdvisorQueryLimits.MaxPageSize),
+                            ["include_ships"] = new JObject { ["type"] = "boolean", ["description"] = prompts.Text("campaign.json", "tool_include_ships") },
+                            ["kind"] = new JObject { ["type"] = "string", ["description"] = prompts.Text("campaign.json", "tool_kind"),
                                 ["enum"] = new JArray("contact", "battle", "landing", "fleet", "air", "supply", "production", "admiralty", "economy", "other") }
                         }
                     }

@@ -1,4 +1,6 @@
 using System;
+using System.IO;
+using System.Xml;
 using Noesis;
 using SeaPower;
 using SeapowerUI;
@@ -66,10 +68,45 @@ internal sealed class BattleIntegration
         var map = model.Map ?? throw new InvalidOperationException("The player's battle map is unavailable.");
         var now = SeaPower.Environment.Instance.DateTime;
         var references = ReadReferenceCatalog(now.Year);
+        var xmlBriefing = "";
+        var briefingUnavailable = false;
+        var briefingFromBase = false;
+        try
+        {
+            var files = FileManager.Instance;
+            // Read only public pane-selection keys and source-file metadata, never unit definitions or triggers.
+            var ini = SceneCreator.Instance.MissionIni;
+            string? ResolveFile(string path)
+            {
+                var resolved = System.IO.Path.IsPathRooted(path) ? path : files.GetFile(path, null);
+                return !string.IsNullOrEmpty(resolved) && File.Exists(resolved) ? resolved : null;
+            }
+            var briefing = BattleBriefingReader.Read(files.GetRelativePath(Globals.currentMissionFilePath) ?? "", GameLanguage.Read(),
+                (section, key, fallback) => ini.readValue(section, key, fallback, true), ResolveFile, File.ReadAllText,
+                () =>
+                {
+                    var baseFile = ini.readValue("File", "BaseFile", "", false);
+                    if (string.IsNullOrWhiteSpace(baseFile)) return null;
+                    var basePath = ResolveFile(baseFile)
+                        ?? throw new FileNotFoundException("The saved mission's BaseFile is unavailable.", baseFile);
+                    var original = Utils.openIniFile(basePath, true, true)
+                        ?? throw new InvalidDataException("The original mission's briefing settings could not be opened.");
+                    return new BattleBriefingTemplate(files.GetRelativePath(basePath) ?? "",
+                        (section, key, fallback) => original.readValue(section, key, fallback, true));
+                });
+            xmlBriefing = briefing.Text;
+            briefingFromBase = briefing.FromBase;
+        }
+        catch (Exception error) when (error is IOException || error is UnauthorizedAccessException ||
+            error is XmlException || error is NotSupportedException || error is InvalidDataException)
+        {
+            briefingUnavailable = true;
+            warn("Public mission briefing unavailable: " + error);
+        }
         return reader.Capture(map.MapKnownUnits.AllUnits, player!, MissionManager.Instance.Objectives, EventLog.Instance,
             now, SceneCreator.Instance.CurrentMissionName,
             (bool)BattleValue.Member(typeof(Globals).GetProperty("AllowControlOfEnemyUnits")!.GetValue(null)!, "Value")!,
-            new BattleCapabilityReader(references));
+            new BattleCapabilityReader(references), xmlBriefing, briefingUnavailable, briefingFromBase);
     }
 
     private static BattleReferenceCatalog ReadReferenceCatalog(int year)

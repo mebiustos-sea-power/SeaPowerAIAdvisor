@@ -92,7 +92,6 @@ internal sealed class BattleAviationReader
             ["deck_parking_slots"] = Count(Required(deck, "DeckParkSlots")),
             ["assigned_deck_parking_slots"] = Count(Required(deck, "AssignedDeckParkSlots")),
             ["tasks"] = tasks,
-            ["count_semantics"] = "Host occupancy, unassigned inventory, squadrons, tasks and airborne units overlap or describe different states. Do not add them into a fleet total.",
             ["current_sortie_feasibility_known"] = false
         });
     }

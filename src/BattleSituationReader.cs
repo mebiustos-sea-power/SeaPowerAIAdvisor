@@ -11,7 +11,8 @@ namespace SeaPowerAIAdvisor;
 internal sealed class BattleSituationReader
 {
     internal BattleSnapshot Capture(object knownUnits, object player, object objectives, object eventLog,
-        DateTime now, string missionName, bool enemyControl, BattleCapabilityReader knowledge)
+        DateTime now, string missionName, bool enemyControl, BattleCapabilityReader knowledge,
+        string xmlBriefing = "", bool briefingUnavailable = false, bool briefingFromBase = false)
     {
         if (enemyControl) throw new SituationUnavailableException("battle_disclosure");
         var ownObjects = Sequence(Member(player, "TaskforceObjects")).ToArray();
@@ -115,7 +116,10 @@ internal sealed class BattleSituationReader
             ["mission_display_name"] = missionName,
             ["player_side"] = "player",
             ["public_objectives"] = visibleObjectives,
-            ["mission_briefing"] = Reactive<string>(eventLog, "MissionBriefing"),
+            ["mission_briefing"] = BattleBriefingReader.Combine(Reactive<string>(eventLog, "MissionBriefing"), xmlBriefing),
+            ["mission_briefing_unavailable"] = briefingUnavailable,
+            ["mission_briefing_source"] = string.IsNullOrWhiteSpace(xmlBriefing) ? "event_log" :
+                briefingFromBase ? "base_mission_xml" : "mission_xml",
             ["friendly_units"] = units,
             ["unit_capabilities"] = capabilities,
             ["contact_threat_references"] = threats,

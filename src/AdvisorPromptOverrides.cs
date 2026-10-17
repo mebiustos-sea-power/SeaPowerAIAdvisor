@@ -9,6 +9,7 @@ internal sealed class AdvisorPromptOverrides
 {
     private static readonly Lazy<AdvisorPromptOverrides> session = new(() => new(AdvisorPrompts.Load(AdvisorPrompts.DefaultDirectory)));
     internal static AdvisorPromptOverrides Session => session.Value;
+    internal static AdvisorPrompts? LoadedCurrent => session.IsValueCreated ? session.Value.Current : null;
     private readonly AdvisorPrompts original;
     private AdvisorPrompts current;
     internal AdvisorPrompts Current => Volatile.Read(ref current);

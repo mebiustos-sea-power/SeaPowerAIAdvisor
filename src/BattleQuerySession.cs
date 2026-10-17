@@ -83,7 +83,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
         information.AddCoverage(initial, true);
         if (information.Allows(InformationKind.BattleWeapons) || information.Allows(InformationKind.BattleThreats))
             initial["situation"]!["coverage"]!["weapon_reference_delivery"] =
-                "weapon_references adds definitions once per consultation. Reuse IDs in earlier results; an empty array means no new definitions.";
+                Prompts.Text("battle.json", "weapon_reference_delivery");
         returnedBytes = Bytes(initial);
         if (returnedBytes > MaxTotalBytes) throw new InvalidOperationException("Mandatory battle input exceeds the consultation payload limit.");
     }
@@ -94,26 +94,26 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
     {
         try
         {
-            if (RoundsUsed >= MaxRounds) throw Error("round_limit", "No query rounds remain.");
+            if (RoundsUsed >= MaxRounds) throw Error("round_limit", "round_limit");
             RoundsUsed++;
             Allowed(request, "consultation_id", "requests");
-            if ((string?)request["consultation_id"] != Id) throw Error("wrong_consultation", "Use the current consultation.");
-            if (Bytes(request) > MaxRequestBytes) throw Error("request_too_large", "Reduce query arguments.");
+            if ((string?)request["consultation_id"] != Id) throw Error("wrong_consultation", "wrong_consultation");
+            if (Bytes(request) > MaxRequestBytes) throw Error("request_too_large", "request_too_large");
             if (!(request["requests"] is JArray batch) || batch.Count < 1 || batch.Count > MaxQueriesPerRound)
-                throw Error("invalid_arguments", "Supply a bounded, nonempty requests array.");
+                throw Error("invalid_arguments", "requests_invalid");
             var results = new JArray();
             foreach (var item in batch)
             {
                 if (!(item is JObject query) || query["query"]?.Type != JTokenType.String)
-                    throw Error("invalid_arguments", "Each query needs a query name.");
+                    throw Error("invalid_arguments", "query_name_invalid");
                 results.Add(new JObject { ["query"] = query["query"]!.DeepClone(), ["data"] = Dispatch(query) });
             }
             var delivered = DeduplicateWeaponReferences(results);
             var response = Envelope("ok");
             response["results"] = results;
             var bytes = Bytes(response);
-            if (bytes > MaxResponseBytes) throw Error("response_too_large", "Request smaller pages or fewer IDs.");
-            if (returnedBytes + bytes > MaxTotalBytes) throw Error("payload_limit", "The consultation payload budget is exhausted.");
+            if (bytes > MaxResponseBytes) throw Error("response_too_large", "response_too_large");
+            if (returnedBytes + bytes > MaxTotalBytes) throw Error("payload_limit", "payload_limit");
             returnedBytes += bytes;
             deliveredWeaponReferences.UnionWith(delivered);
             return response;
@@ -129,13 +129,22 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
     private JToken Dispatch(JObject query)
     {
         var name = (string)query["query"]!;
-        if (!information.BattleQuery(name)) throw Error("information_disabled", "This data category is disabled by the user. Do not request it through another query.");
+        if (!information.BattleQuery(name)) throw Error("information_disabled", "information_disabled");
         switch (name)
         {
             case "catalog":
                 Allowed(query, "query"); return Catalogue();
             case "get_briefing":
-                Allowed(query, "query"); return new JObject { ["text"] = snapshot["mission_briefing"]!.DeepClone() };
+                Allowed(query, "query");
+                if ((bool?)snapshot["mission_briefing_unavailable"] == true)
+                    throw Error("briefing_unavailable", "briefing_unavailable");
+                var briefing = new JObject { ["text"] = snapshot["mission_briefing"]!.DeepClone() };
+                if (snapshot["mission_briefing_source"] is JValue source)
+                {
+                    briefing["source"] = source.DeepClone();
+                    if ((string?)source == "base_mission_xml") briefing["note"] = Prompts.Text("battle.json", "base_briefing_note");
+                }
+                return briefing;
             case "list_units":
                 Allowed(query, "query", "offset", "limit");
                 return Page(query, new JArray(Rows("friendly_units").OfType<JObject>()
@@ -175,7 +184,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
                 if (query["kind"] != null)
                 {
                     if (query["kind"]!.Type != JTokenType.String || !contactKinds.Contains((string)query["kind"]!))
-                        throw Error("invalid_arguments", "Use a displayed contact-kind code from the tool schema.");
+                        throw Error("invalid_arguments", "contact_kind_invalid");
                     contacts = new JArray(contacts.OfType<JObject>().Where(c => (string?)c["kind"] == (string)query["kind"]!).Select(c => c.DeepClone()));
                 }
                 return Page(query, contacts);
@@ -195,29 +204,29 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
                 Allowed(query, "query", "ids");
                 if (!(query["ids"] is JArray ids) || ids.Count < 1 || ids.Count > MaxIdsPerQuery ||
                     ids.Any(i => i.Type != JTokenType.String) || ids.Values<string>().Distinct(StringComparer.Ordinal).Count() != ids.Count)
-                    throw Error("invalid_arguments", "Supply a bounded list of unique IDs.");
+                    throw Error("invalid_arguments", "ids_invalid");
                 var rows = Rows(name == "get_units" ? "friendly_units" : "published_reports");
                 var found = new JArray();
                 foreach (var id in ids)
                 {
                     var row = rows.OfType<JObject>().SingleOrDefault(r => (string?)r["id"] == (string?)id)
-                        ?? throw Error("unknown_id", "An ID is unavailable for this query in this consultation.");
+                        ?? throw Error("unknown_id", "unknown_id");
                     found.Add(row.DeepClone());
                 }
                 return found;
-            default: throw Error("unknown_query", "Use a query from the current catalogue.");
+            default: throw Error("unknown_query", "unknown_query");
         }
     }
 
     private JArray GroundUnits() => new(Rows("friendly_units").OfType<JObject>().Where(u => (string?)u["unit_category"] == "ground_unit").Select(u => u.DeepClone()));
     private JArray SelectRows(JObject query, string collection) => SelectRows(query, Rows(collection));
-    private static JArray SelectRows(JObject query, JArray rows)
+    private JArray SelectRows(JObject query, JArray rows)
     {
         if (!(query["ids"] is JArray ids) || ids.Count < 1 || ids.Count > MaxIdsPerQuery ||
             ids.Any(i => i.Type != JTokenType.String) || ids.Values<string>().Distinct(StringComparer.Ordinal).Count() != ids.Count)
-            throw Error("invalid_arguments", "Supply a bounded list of unique IDs.");
+            throw Error("invalid_arguments", "ids_invalid");
         return new JArray(ids.Select(id => rows.OfType<JObject>().SingleOrDefault(r => (string?)r["id"] == (string?)id)?.DeepClone()
-            ?? throw Error("unknown_id", "An ID is unavailable for this query in this consultation.")));
+            ?? throw Error("unknown_id", "unknown_id")));
     }
 
     private JObject AirUnits(JObject query)
@@ -232,6 +241,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
             var host = (JObject)h.DeepClone();
             host["displayed_task_count"] = ((JArray)host["tasks"]!).Count;
             host.Remove("tasks");
+            host["count_semantics"] = Prompts.Text("battle.json", "host_count_semantics");
             return host;
         }));
         return result;
@@ -262,9 +272,9 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
             if (!(query["sections"] is JArray selected) || selected.Count < 1 || selected.Count > 3 ||
                 selected.Any(s => s.Type != JTokenType.String || !supported.Contains((string)s!)) ||
                 selected.Values<string>().Distinct(StringComparer.Ordinal).Count() != selected.Count)
-                throw Error("invalid_arguments", "Sections must be unique fuel, damage or weapons values.");
+                throw Error("invalid_arguments", "sections_invalid");
             if (selected.Values<string>().Any(s => !sections.Contains(s)))
-                throw Error("information_disabled", "One or more capability sections are disabled by the user.");
+                throw Error("information_disabled", "sections_disabled");
             sections = selected.Values<string>().ToArray()!;
         }
         var rows = new JArray();
@@ -317,23 +327,23 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
     }
     private JObject RawCatalogue() => new()
     {
-        ["friendly_units"] = new JObject { ["item_count"] = Rows("friendly_units").Count, ["list_query"] = "list_units", ["detail_query"] = "get_units", ["description"] = "Own on-map identities, positions, heading and speed." },
-        ["friendly_ground_units"] = new JObject { ["item_count"] = GroundUnits().Count, ["list_query"] = "list_ground_units", ["detail_query"] = "get_ground_units", ["description"] = "Own ground combat units, SAM/AAA, radar and missile sites; IDs support capability queries." },
-        ["friendly_bases"] = new JObject { ["item_count"] = Rows("friendly_bases").Count, ["list_query"] = "list_bases", ["detail_query"] = "get_bases", ["description"] = "Own airbases, ports and installations. Observed opposing/neutral facilities are contacts." },
-        ["hosted_air_units"] = new JObject { ["item_count"] = Rows("hosted_air_units").Count, ["list_query"] = "list_air_units", ["detail_query"] = "get_air_units", ["description"] = "Own hosted inventory, squadrons, loadouts and host status. Filter by host_ids; tasks use list_air_tasks." },
-        ["aviation_tasks"] = new JObject { ["item_count"] = Rows("aviation_hosts").Sum(h => ((JArray)h["tasks"]!).Count), ["list_query"] = "list_air_tasks", ["description"] = "Displayed preparation, launch, recovery and cooldown tasks. Filter by host_ids or air_unit_ids." },
-        ["unit_capabilities"] = new JObject { ["item_count"] = Rows("unit_capabilities").Count, ["query"] = "get_unit_capabilities", ["description"] = "Own fuel/damage/weapons by available_sections; omit sections for all enabled." },
-        ["public_class_threat_references"] = new JObject { ["query"] = "get_contact_threats", ["description"] = "Identified-class public encyclopedia armament alternatives and ranges." },
-        ["observed_contacts"] = new JObject { ["item_count"] = Rows("observed_contacts").Count, ["list_query"] = "list_contacts", ["description"] = "Displayed contact classifications and estimated positions. Neutral only when enabled; optional kind filter." },
-        ["mission_briefing"] = new JObject { ["query"] = "get_briefing", ["description"] = "Displayed mission briefing." },
-        ["published_reports"] = new JObject { ["item_count"] = Rows("published_reports").Count, ["list_query"] = "list_reports", ["detail_query"] = "get_reports", ["description"] = "Retained published reports, oldest first; body by ID." }
+        ["friendly_units"] = new JObject { ["item_count"] = Rows("friendly_units").Count, ["list_query"] = "list_units", ["detail_query"] = "get_units", ["description"] = Prompts.Text("battle.json", "catalog_friendly_units") },
+        ["friendly_ground_units"] = new JObject { ["item_count"] = GroundUnits().Count, ["list_query"] = "list_ground_units", ["detail_query"] = "get_ground_units", ["description"] = Prompts.Text("battle.json", "catalog_friendly_ground_units") },
+        ["friendly_bases"] = new JObject { ["item_count"] = Rows("friendly_bases").Count, ["list_query"] = "list_bases", ["detail_query"] = "get_bases", ["description"] = Prompts.Text("battle.json", "catalog_friendly_bases") },
+        ["hosted_air_units"] = new JObject { ["item_count"] = Rows("hosted_air_units").Count, ["list_query"] = "list_air_units", ["detail_query"] = "get_air_units", ["description"] = Prompts.Text("battle.json", "catalog_hosted_air_units") },
+        ["aviation_tasks"] = new JObject { ["item_count"] = Rows("aviation_hosts").Sum(h => ((JArray)h["tasks"]!).Count), ["list_query"] = "list_air_tasks", ["description"] = Prompts.Text("battle.json", "catalog_aviation_tasks") },
+        ["unit_capabilities"] = new JObject { ["item_count"] = Rows("unit_capabilities").Count, ["query"] = "get_unit_capabilities", ["description"] = Prompts.Text("battle.json", "catalog_unit_capabilities") },
+        ["public_class_threat_references"] = new JObject { ["query"] = "get_contact_threats", ["description"] = Prompts.Text("battle.json", "catalog_public_class_threat_references") },
+        ["observed_contacts"] = new JObject { ["item_count"] = Rows("observed_contacts").Count, ["list_query"] = "list_contacts", ["description"] = Prompts.Text("battle.json", "catalog_observed_contacts") },
+        ["mission_briefing"] = new JObject { ["query"] = "get_briefing", ["description"] = Prompts.Text("battle.json", "catalog_mission_briefing") },
+        ["published_reports"] = new JObject { ["item_count"] = Rows("published_reports").Count, ["list_query"] = "list_reports", ["detail_query"] = "get_reports", ["description"] = Prompts.Text("battle.json", "catalog_published_reports") }
     };
 
     private JObject Envelope(string status) => new()
     {
         ["consultation_id"] = Id, ["status"] = status, ["round"] = RoundsUsed, ["remaining_rounds"] = Math.Max(0, MaxRounds - RoundsUsed)
     };
-    private static JObject Page(JObject query, JArray rows)
+    private JObject Page(JObject query, JArray rows)
     {
         var offset = Integer(query, "offset", 0, 0, int.MaxValue);
         var limit = Integer(query, "limit", DefaultPageSize, 1, MaxPageSize);
@@ -342,18 +352,19 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
         return new JObject { ["items"] = new JArray(items), ["total_count"] = rows.Count, ["offset"] = offset,
             ["has_more"] = more, ["next_offset"] = more ? new JValue(offset + items.Length) : JValue.CreateNull() };
     }
-    private static int Integer(JObject query, string key, int fallback, int min, int max)
+    private int Integer(JObject query, string key, int fallback, int min, int max)
     {
         if (query[key] == null) return fallback;
         if (query[key]!.Type != JTokenType.Integer || !int.TryParse(query[key]!.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) || value < min || value > max)
-            throw Error("invalid_arguments", "An offset or limit is outside its allowed range.");
+            throw Error("invalid_arguments", "pagination_invalid");
         return value;
     }
-    private static void Allowed(JObject query, params string[] keys)
+    private void Allowed(JObject query, params string[] keys)
     {
-        if (query.Properties().Any(p => !keys.Contains(p.Name))) throw Error("invalid_arguments", "Unsupported argument.");
+        if (query.Properties().Any(p => !keys.Contains(p.Name))) throw Error("invalid_arguments", "unsupported_argument");
     }
-    private static AdvisorQueryException Error(string code, string message) => new(code, message);
+    private AdvisorQueryException Error(string code, string key, params object[] arguments) =>
+        new(code, Prompts.Format("battle.json", "error_" + key, arguments));
     private JObject Tool()
     {
         var tool = RawTool();
@@ -363,17 +374,17 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
         else
         {
             properties["sections"]!["items"]!["enum"] = new JArray(information.BattleSections);
-            properties["sections"]!["description"] = "get_unit_capabilities only; omit for all enabled sections.";
+            properties["sections"]!["description"] = Prompts.Text("battle.json", "tool_enabled_sections");
         }
         if (!information.Allows(InformationKind.BattleAviation)) { properties.Remove("host_ids"); properties.Remove("air_unit_ids"); }
         if (!information.Allows(InformationKind.BattleContacts)) properties.Remove("kind");
         return tool;
     }
     private static readonly string[] contactKinds = { "air", "helicopter", "surface", "submarine", "airbase", "installation", "mobileunit", "aaa", "mobileaaa", "sam", "radar", "port", "bridge", "missile", "torpedo", "biologic", "invisible", "airdecoy", "subdecoy", "activesonobouy", "passivesonobouy" };
-    private static JObject RawTool() => new()
+    private JObject RawTool() => new()
     {
         ["name"] = "query_situation",
-        ["description"] = "Query the current player-known battle snapshot. Supply a requests batch; the host binds the consultation.",
+        ["description"] = Prompts.Text("battle.json", "tool_description"),
         ["parameters"] = new JObject
         {
             ["type"] = "object", ["additionalProperties"] = false, ["required"] = new JArray("requests"),
@@ -388,13 +399,13 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
                         ["properties"] = new JObject
                         {
                             ["query"] = new JObject { ["type"] = "string", ["enum"] = new JArray(names) },
-                            ["ids"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = MaxIdsPerQuery, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string" }, ["description"] = "get_* only: IDs already supplied in this consultation." },
-                            ["host_ids"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = MaxIdsPerQuery, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string" }, ["description"] = "list_air_units/list_air_tasks: optional own host-unit filter." },
-                            ["air_unit_ids"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = MaxIdsPerQuery, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string" }, ["description"] = "list_air_tasks: optional hosted-air-unit filter." },
-                            ["kind"] = new JObject { ["type"] = "string", ["enum"] = new JArray(contactKinds), ["description"] = "list_contacts: displayed map-symbol kind." },
-                            ["sections"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = 3, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string", ["enum"] = new JArray("fuel", "damage", "weapons") }, ["description"] = "get_unit_capabilities: selected sections; omit for all enabled." },
-                            ["offset"] = new JObject { ["type"] = "integer", ["minimum"] = 0, ["description"] = "Zero-based offset for list queries only." },
-                            ["limit"] = new JObject { ["type"] = "integer", ["minimum"] = 1, ["maximum"] = MaxPageSize, ["description"] = "Page size for list queries only." }
+                            ["ids"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = MaxIdsPerQuery, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string" }, ["description"] = Prompts.Text("battle.json", "tool_ids") },
+                            ["host_ids"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = MaxIdsPerQuery, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string" }, ["description"] = Prompts.Text("battle.json", "tool_host_ids") },
+                            ["air_unit_ids"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = MaxIdsPerQuery, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string" }, ["description"] = Prompts.Text("battle.json", "tool_air_unit_ids") },
+                            ["kind"] = new JObject { ["type"] = "string", ["enum"] = new JArray(contactKinds), ["description"] = Prompts.Text("battle.json", "tool_kind") },
+                            ["sections"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = 3, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string", ["enum"] = new JArray("fuel", "damage", "weapons") }, ["description"] = Prompts.Text("battle.json", "tool_sections") },
+                            ["offset"] = new JObject { ["type"] = "integer", ["minimum"] = 0, ["description"] = Prompts.Text("battle.json", "tool_offset") },
+                            ["limit"] = new JObject { ["type"] = "integer", ["minimum"] = 1, ["maximum"] = MaxPageSize, ["description"] = Prompts.Text("battle.json", "tool_limit") }
                         }
                     }
                 }

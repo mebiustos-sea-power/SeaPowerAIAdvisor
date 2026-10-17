@@ -18,6 +18,10 @@ internal static class ConnectionTests
             var path = Path.Combine(Path.GetTempPath(), "SeaPowerAIAdvisor-connection-" + Guid.NewGuid().ToString("N"));
             var draft = new AdvisorSettingsDraft(new JObject { ["api_key"] = Key, ["model"] = "gemini-user-model" });
             draft.Main.ApiKey = "changed_mock_key"; draft.Main.Model = "gemini-another-model"; draft.LogAiJson = true;
+            var prompts = AdvisorPrompts.Load(AdvisorPrompts.DefaultDirectory);
+            var edits = prompts.Fields.ToDictionary(f => f.Id, f => f.Value);
+            edits["requests.json:connection_test"] = "EXTERNAL_ISOLATED_CONNECTION_REQUEST";
+            var requestText = AdvisorPrompts.ConnectionTestRequest(prompts.WithText(edits));
             var handler = new Handler(async (request, token) =>
             {
                 var body = JObject.Parse(await request.Content!.ReadAsStringAsync(token));
@@ -25,13 +29,13 @@ internal static class ConnectionTests
                     request.Headers.GetValues("x-goog-api-key").Single() == "changed_mock_key", "Saved credentials were used instead of the pending edits");
                 Require(body["tools"] == null && body["system_instruction"] == null && body["previous_interaction_id"] == null && (bool?)body["store"] == false &&
                     body["input"] is JArray input && input.Count == 1 && input[0]!["content"] is JArray parts && parts.Count == 1 &&
-                    (string?)parts[0]!["text"] == "Connection test. Reply only with OK.",
+                    (string?)parts[0]!["text"] == "EXTERNAL_ISOLATED_CONNECTION_REQUEST",
                     "A connection check included game data, tools, personality or conversation history");
                 return Response(Reply());
             });
             var settings = draft.TestSettings();
             Require(!settings.LogAiJson, "The test applied an unsaved logging preference");
-            var result = await GeminiConnectionTest.RunAsync(path, settings, CancellationToken.None, trace => new GeminiTransport(handler, trace));
+            var result = await GeminiConnectionTest.RunAsync(path, settings, CancellationToken.None, trace => new GeminiTransport(handler, trace), requestText: requestText);
             Require(result.ApiRequests == 1 && result.QueryRounds == 0 && handler.Calls == 1 && result.Text == "OK" && !Directory.Exists(path),
                 "The check made extra requests, created files while logging is disabled, or failed to verify generation");
         }));

@@ -11,7 +11,8 @@ internal static class AdvisorInputBuilder
 {
     internal static string Build(SituationSnapshot snapshot, string replyLanguage, string? question)
     {
-        var input = Header(replyLanguage, question);
+        var prompts = AdvisorPrompts.Current;
+        var input = Header(replyLanguage, question, prompts);
         input["situation"] = new JObject
             {
                 ["captured_at_utc"] = Time(snapshot.At),
@@ -23,7 +24,7 @@ internal static class AdvisorInputBuilder
                     ["report_limit"] = CampaignSituationReader.ReportLimit,
                     ["reference_scope"] = "current_snapshot"
                 },
-                ["victory_conditions"] = Victory(snapshot.Victory, snapshot.Side),
+                ["victory_conditions"] = Victory(snapshot.Victory, snapshot.Side, prompts),
                 ["friendly_task_forces"] = new JArray(snapshot.Forces.Select((f, i) => Force(f, i))),
                 ["friendly_bases"] = snapshot.Ground.Bases(), ["friendly_ground_units"] = snapshot.Ground.Units(),
                 ["friendly_air_units"] = new JArray(snapshot.Aviation.Units.Select(AirUnit)),
@@ -93,12 +94,12 @@ internal static class AdvisorInputBuilder
         ["source_air_unit_id"] = flight.SourceUnitIndex.HasValue ? new JValue(SnapshotIds.AirUnit(flight.SourceUnitIndex.Value)) : JValue.CreateNull()
     };
 
-    internal static JObject Victory(VictorySnapshot victory, string playerSide) => new()
+    internal static JObject Victory(VictorySnapshot victory, string playerSide, AdvisorPrompts? prompts = null) => new()
     {
         ["rules"] = new JObject
         {
             ["type"] = "first_side_to_hold_all_objective_bases",
-            ["description"] = "The first side to hold all of its objective bases wins. Its own bases must also be held. Each side's objective list already applies opposing-homeland and side-specific exemptions.",
+            ["description"] = (prompts ?? AdvisorPrompts.Current).Text("campaign.json", "victory_description"),
             ["requires_at_least_one_objective"] = true,
             ["victory_is_final"] = true,
             ["campaign_can_continue_after_victory"] = true

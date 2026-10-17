@@ -23,6 +23,26 @@ internal static partial class BattleTests
             Require((string?)data["friendly_units"]![0]!["display_name"] == "ミッドウェイ" &&
                 (string?)data["observed_contacts"]![0]!["display_name"] == "画面で識別した艦", "Displayed names were lost");
         });
+        check("XML and legacy briefings share the existing bounded, optional retrieval route", () =>
+        {
+            var fixture = new Fixture();
+            var session = new BattleQuerySession(fixture.Capture(xmlBriefing: "XMLの公開説明"), "ja", "任務を確認して");
+            Require(!session.InitialInput().ToString().Contains("XMLの公開説明", StringComparison.Ordinal), "XML briefing bypassed on-demand retrieval");
+            var briefing = session.Execute(Request(session, new JObject { ["query"] = "get_briefing" }));
+            Require((string?)briefing["results"]![0]!["data"]!["text"] == "公開済みの任務説明\n\nXMLの公開説明", "A briefing source was lost");
+            var restored = new BattleQuerySession(fixture.Capture(xmlBriefing: "復元した公開説明", briefingFromBase: true), "ja", "任務を確認して");
+            var restoredData = restored.Execute(Request(restored, new JObject { ["query"] = "get_briefing" }))["results"]![0]!["data"]!;
+            Require((string?)restoredData["source"] == "base_mission_xml" && !string.IsNullOrEmpty((string?)restoredData["note"]),
+                "The AI could not distinguish recovered mission-start briefing from current data");
+            var off = new BattleQuerySession(fixture.Capture(xmlBriefing: "XMLの公開説明", briefingUnavailable: true), "ja", "任務を確認して",
+                information: AdvisorInformation.Default.With(InformationKind.BattleBriefing, false));
+            Require((string?)off.Execute(Request(off, new JObject { ["query"] = "get_briefing" }))["error"]!["code"] == "information_disabled",
+                "XML briefing bypassed the user's exclusion");
+            var failed = new BattleQuerySession(fixture.Capture(briefingUnavailable: true), "ja", "任務を確認して");
+            Require((string?)failed.Execute(Request(failed, new JObject { ["query"] = "get_briefing" }))["error"]!["code"] == "briefing_unavailable" &&
+                (string?)failed.Execute(Request(failed, new JObject { ["query"] = "list_units" }))["status"] == "ok",
+                "A briefing failure was hidden or disabled unrelated situation queries");
+        });
         check("Unknown contact position stays unknown and a captured battle snapshot remains detached", () =>
         {
             var f = new Fixture();
@@ -411,7 +431,7 @@ internal static partial class BattleTests
             OwnUnits.Add(Own);
             PublicClasses.Add(new PublicClass { WeaponEntries = new List<PublicWeapon>(PublicWeapons) });
         }
-        internal BattleSnapshot Capture(bool disclosure = false) => new BattleSituationReader().Capture(
+        internal BattleSnapshot Capture(bool disclosure = false, string xmlBriefing = "", bool briefingUnavailable = false, bool briefingFromBase = false) => new BattleSituationReader().Capture(
             OwnUnits.Select(u => (object)new { Unit = new { Object = u } }).Concat(new object[] {
                 new { Unit = Track, ObjectViewModel = new { ObjectName = new Reactive<string>("画面で識別した艦") }, VisualType = ContactKind, VisualPosture = ContactPosture }
             }).ToArray(), new { TaskforceObjects = OwnUnits.ToArray() },
@@ -422,7 +442,7 @@ internal static partial class BattleTests
                 Intelligence = new object[] { new { Time = now.AddMinutes(-1), IntelligenceText = "接触の報告" }, Future },
                 AllIntelligence = new Forbidden()
             }, now, "Test scenario", disclosure, new BattleCapabilityReader(
-                new BattleReferenceCatalog(PublicClasses, PublicWeapons, now.Year, Ready)));
+                new BattleReferenceCatalog(PublicClasses, PublicWeapons, now.Year, Ready)), xmlBriefing, briefingUnavailable, briefingFromBase);
     }
     private sealed class Reactive<T>
     {

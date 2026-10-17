@@ -193,8 +193,16 @@ internal sealed class AdvisorWindow
     {
         if (conversationPane.Visibility != Visibility.Visible || !shortcut.IsAvailable(active != null, conversation.Exchanges.Count, options.Current.HistoryExchanges)) return;
         questionInput.Reset();
-        StartConsultation(shortcut.Prepare(button.Content as string
-            ?? throw new InvalidOperationException("The shortcut caption is unavailable.")));
+        try
+        {
+            StartConsultation(shortcut.Prepare(button.Content as string
+                ?? throw new InvalidOperationException("The shortcut caption is unavailable.")));
+        }
+        catch (AdvisorPromptException error)
+        {
+            configurationNotice = AdvisorNotice.Prompts(error); ShowConversation(false);
+            warn("Shortcut prompt unavailable: " + error.Message);
+        }
     }
 
     private void StartConsultation() => StartConsultation(new AdvisorQuestion(question.Text ?? string.Empty));

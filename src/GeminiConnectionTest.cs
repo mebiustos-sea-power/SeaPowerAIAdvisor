@@ -9,7 +9,7 @@ namespace SeaPowerAIAdvisor;
 internal static class GeminiConnectionTest
 {
     internal static async Task<AdviceResult> RunAsync(string logDirectory, AdvisorSettings settings, CancellationToken cancellation,
-        Func<AdvisorTrace?, GeminiTransport>? transportFactory = null)
+        Func<AdvisorTrace?, GeminiTransport>? transportFactory = null, string? requestText = null)
     {
         using var trace = AdvisorTrace.Start(logDirectory, "connection-test-" + Guid.NewGuid().ToString("N"), settings,
             new AdvisorQuestion("Connection test"));
@@ -19,7 +19,7 @@ internal static class GeminiConnectionTest
             var body = GeminiInteraction.Request(settings, new JArray(new JObject
             {
                 ["type"] = "user_input", ["content"] = new JArray(new JObject
-                { ["type"] = "text", ["text"] = "Connection test. Reply only with OK." })
+                { ["type"] = "text", ["text"] = requestText ?? AdvisorPrompts.ConnectionTestRequest() })
             }), store: false);
             var response = await transport.GenerateAsync(settings, body, cancellation).ConfigureAwait(false);
             cancellation.ThrowIfCancellationRequested();
