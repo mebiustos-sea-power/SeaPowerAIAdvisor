@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -7,12 +8,11 @@ using Newtonsoft.Json.Linq;
 
 namespace SeaPowerAIAdvisor;
 
-// One immutable bundle is shared by all consultations. Files are never reread during a consultation.
+// A consultation retains one immutable snapshot; temporary edits never mutate an existing bundle.
 internal sealed class AdvisorPrompts
 {
-    private static readonly Lazy<AdvisorPrompts> current = new(() => Load(DefaultDirectory));
     internal static string DefaultDirectory => Path.Combine(Path.GetDirectoryName(typeof(AdvisorPrompts).Assembly.Location)!, "Prompts");
-    internal static AdvisorPrompts Current => current.Value;
+    internal static AdvisorPrompts Current => AdvisorPromptOverrides.Session.Current;
     private readonly JObject common, campaign, battle;
     private AdvisorPrompts(JObject common, JObject campaign, JObject battle)
     { this.common = common; this.campaign = campaign; this.battle = battle; }
@@ -28,6 +28,43 @@ internal sealed class AdvisorPrompts
     }
     internal string SystemInstruction(JToken instructions) => (string)common["system"]! + "\n" +
         instructions.ToString(Formatting.None) + "\n" + PreferencesPolicy;
+
+    private (string Name, JObject Value)[] Documents => new[]
+    { ("common.json", common), ("battle.json", battle), ("campaign.json", campaign) };
+    internal IReadOnlyList<AdvisorPromptField> Fields
+    {
+        get
+        {
+            var result = new List<AdvisorPromptField>();
+            foreach (var document in Documents)
+                foreach (var property in document.Value.Properties().Where(p => p.Name != "schema_version"))
+                    if (property.Value is JObject children)
+                        result.AddRange(children.Properties().Select(child => new AdvisorPromptField(document.Name, property.Name + "." + child.Name, (string)child.Value!)));
+                    else result.Add(new AdvisorPromptField(document.Name, property.Name, (string)property.Value!));
+            return result.AsReadOnly();
+        }
+    }
+    internal AdvisorPrompts WithText(IReadOnlyDictionary<string, string> values)
+    {
+        var fields = Fields;
+        if (values.Count != fields.Count) throw Invalid("editor");
+        var encoding = new UTF8Encoding(false, true);
+        foreach (var field in fields)
+        {
+            if (!values.TryGetValue(field.Id, out var value) || value == null) throw Invalid(field.FileName);
+            try { _ = encoding.GetByteCount(value); }
+            catch (EncoderFallbackException) { throw Invalid(field.FileName); }
+        }
+        if (fields.All(f => values[f.Id] == f.Value)) return this;
+        var documents = Documents.ToDictionary(d => d.Name, d => (JObject)d.Value.DeepClone());
+        // Empty strings intentionally allow developers to try removing an individual instruction.
+        // Keys, JSON structure and the startup files remain intact.
+        foreach (var field in fields)
+            documents[field.FileName].SelectToken(field.Key)!.Replace(new JValue(values[field.Id]));
+        foreach (var document in documents)
+            if (encoding.GetByteCount(document.Value.ToString(Formatting.None)) > 65_536) throw Invalid(document.Key);
+        return new AdvisorPrompts(documents["common.json"], documents["campaign.json"], documents["battle.json"]);
+    }
 
     internal static AdvisorPrompts Load(string directory)
     {
@@ -68,6 +105,16 @@ internal sealed class AdvisorPrompts
             string.IsNullOrWhiteSpace((string?)value[f]))) throw Invalid(name);
     }
     private static AdvisorPromptException Invalid(string name) => new("prompts_invalid", name);
+}
+
+internal sealed class AdvisorPromptField
+{
+    internal string FileName { get; }
+    internal string Key { get; }
+    internal string Value { get; }
+    internal string Id => FileName + ":" + Key;
+    internal AdvisorPromptField(string fileName, string key, string value)
+    { FileName = fileName; Key = key; Value = value; }
 }
 
 internal sealed class AdvisorPromptException : Exception

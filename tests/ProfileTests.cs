@@ -361,7 +361,11 @@ internal static class ProfileTests
             Require(Named("ApiKey").Name.LocalName == "PasswordBox" && (string?)Named("ApiKey").Attribute("ShowLastCharacterDuration") == "0", "API input can expose the entered key");
             Require(Named("SettingsConfirmation").Parent == root && (string?)Named("SettingsConfirmation").Attribute("Visibility") == "Collapsed" &&
                 Named("AcceptConfirmation").Ancestors().Contains(Named("SettingsConfirmation")), "Delete and discard confirmations are not available outside the disabled page");
-            var output = Named("DiagnosticOutput"); var diagnostics = Named("DeveloperCategory");
+            Require(Named("DeveloperCategory").Name.LocalName == "TabControl" &&
+                Named("PromptFields").Ancestors().Contains(Named("DeveloperCategory")) &&
+                Named("ApplyPrompts").Ancestors().Contains(Named("DeveloperCategory")) &&
+                !Named("PromptFields").Ancestors().Contains(Named("DeveloperDiagnosticsPane")), "Prompt editing displaces the diagnostic output area");
+            var output = Named("DiagnosticOutput"); var diagnostics = Named("DeveloperDiagnosticsPane");
             var rows = diagnostics.Element(diagnostics.Name.Namespace + "Grid.RowDefinitions")!.Elements().ToArray();
             Require(output.Parent == diagnostics && output.Attribute("Height") == null && (string?)rows[int.Parse((string)output.Attribute("Grid.Row")!)].Attribute("Height") == "*", "Diagnostics cannot use the remaining page height");
         });

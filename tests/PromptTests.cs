@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -50,6 +51,78 @@ internal static class PromptTests
             Prepare(directory); Rewrite(directory, "campaign", value => value["evidence_policy"] = " ");
             Fails(directory, "prompts_invalid", "campaign.json");
         }));
+        check("Temporary edits affect new consultations while an active multi-request consultation retains its startup snapshot", () => InTemp(directory =>
+        {
+            Prepare(directory);
+            var before = Directory.GetFiles(directory).ToDictionary(file => Path.GetFileName(file)!, File.ReadAllBytes);
+            var original = AdvisorPrompts.Load(directory); var runtime = new AdvisorPromptOverrides(original);
+            var edits = original.Fields.ToDictionary(f => f.Id, f => "TEMPORARY_" + f.Id);
+            var active = new BattleQuerySession(Battle(), "ja", "Advice", prompts: runtime.Current);
+            var expected = original.SystemInstruction(active.InitialInput()["instructions"]!);
+            var transport = new RoundTransport((body, call) =>
+            {
+                Require((string?)body["system_instruction"] == expected, "An active request switched prompts during retrieval");
+                if (call == 1)
+                {
+                    runtime.Apply(edits);
+                    return InteractionFixture.Reply(new JObject { ["functionCall"] = new JObject
+                    {
+                        ["id"] = "prompt-round", ["name"] = "query_situation",
+                        ["args"] = new JObject { ["requests"] = new JArray(new JObject { ["query"] = "catalog" }) }
+                    } });
+                }
+                Require((string?)InteractionFixture.Result(body)["status"] == "ok", "The prompt update interrupted information retrieval");
+                return InteractionFixture.Reply(new JObject { ["text"] = "Answer" });
+            });
+            var result = new GeminiAdvisor(transport).ConsultAsync(active, AdvisorSettings.Parse("{\"api_key\":\"mock-prompts-key\"}"),
+                Array.Empty<ChatExchange>(), CancellationToken.None).GetAwaiter().GetResult();
+            Require(result.ApiRequests == 2 && result.QueryRounds == 1 && runtime.HasOverrides &&
+                runtime.Current.Fields.All(f => f.Value == edits[f.Id]), "Temporary edits were lost or changed the consultation rounds");
+            var next = new BattleQuerySession(Battle(), "ja", "Again", prompts: runtime.Current);
+            var nextSystem = runtime.Current.SystemInstruction(next.InitialInput()["instructions"]!);
+            var nextTransport = new CaptureTransport(body => Require((string?)body["system_instruction"] == nextSystem &&
+                nextSystem.Contains(edits["common.json:system"], StringComparison.Ordinal) &&
+                nextSystem.Contains(edits["common.json:preferences_policy"], StringComparison.Ordinal) &&
+                nextSystem.Contains(edits["battle.json:evidence_policy"], StringComparison.Ordinal), "The next actual request ignored the applied draft"));
+            _ = new GeminiAdvisor(nextTransport).ConsultAsync(next, AdvisorSettings.Parse("{\"api_key\":\"mock-prompts-key\"}"),
+                Array.Empty<ChatExchange>(), CancellationToken.None).GetAwaiter().GetResult();
+            Require(before.All(file => File.ReadAllBytes(Path.Combine(directory, file.Key!)).SequenceEqual(file.Value)), "Applying edits wrote a prompt file");
+            var restarted = new AdvisorPromptOverrides(AdvisorPrompts.Load(directory));
+            Require(!restarted.HasOverrides && restarted.Current.SystemInstruction(active.InitialInput()["instructions"]!) == expected,
+                "A new runtime inherited temporary edits from a previous runtime");
+            foreach (var file in Directory.GetFiles(directory)) File.Delete(file);
+            runtime.Reset();
+            Require(!runtime.HasOverrides && ReferenceEquals(runtime.Current, original) &&
+                next.Prompts.SystemInstruction(next.InitialInput()["instructions"]!) == nextSystem,
+                "Reset reread files or mutated a consultation already holding temporary instructions");
+        }));
+        check("Unapplied and invalid drafts leave active instructions intact and blank temporary instructions can be tested", () => InTemp(directory =>
+        {
+            Prepare(directory); var original = AdvisorPrompts.Load(directory); var runtime = new AdvisorPromptOverrides(original);
+            var edits = original.Fields.ToDictionary(f => f.Id, f => f.Value);
+            edits["common.json:instructions.knowledge"] = "";
+            Require(!runtime.HasOverrides && ReferenceEquals(runtime.Current, original), "Typing in a draft immediately changed active instructions");
+            runtime.Apply(edits); var applied = runtime.Current;
+            Require((string?)applied.Instructions(true)["knowledge"] == "" &&
+                !string.IsNullOrEmpty((string?)original.Instructions(true)["knowledge"]), "Blanking a temporary instruction was rejected or changed the original");
+            foreach (var change in new Action<Dictionary<string, string>>[]
+            {
+                value => value.Remove("common.json:system"),
+                value => { value.Remove("common.json:system"); value["common.json:unexpected"] = "New structure"; },
+                value => value["common.json:system"] = null!,
+                value => value["common.json:system"] = new string('a', 65_537),
+                value => value["common.json:system"] = new string((char)0xd800, 1)
+            })
+            {
+                var invalid = new Dictionary<string, string>(edits); change(invalid);
+                try { runtime.Apply(invalid); throw new InvalidOperationException("An invalid edit was accepted"); }
+                catch (AdvisorPromptException error) when (error.Code == "prompts_invalid") { }
+                Require(ReferenceEquals(runtime.Current, applied), "A rejected draft partially changed active instructions");
+            }
+            edits["common.json:instructions.knowledge"] = original.Fields.Single(f => f.Id == "common.json:instructions.knowledge").Value;
+            runtime.Apply(edits);
+            Require(!runtime.HasOverrides && ReferenceEquals(runtime.Current, original), "Applying startup text left an artificial override active");
+        }));
         check("Common preferences default to blank, round-trip multiline text and reject invalid persisted values", () =>
         {
             Require(AdvisorOptions.Parse("{}").CommonPrompt == "", "An existing installation received an unsolicited common preference");
@@ -81,6 +154,18 @@ internal static class PromptTests
             var input = session.InitialInput();
             Require((string?)input["instructions"]!["evidence_policy"] == "EXTERNAL_CAMPAIGN" && (string?)input["aviation_semantics"] == "EXTERNAL_AVIATION" &&
                 !input.ToString().Contains("OTHER_MODE_ONLY", StringComparison.Ordinal), "Campaign policy was hardcoded or mixed with battle instructions");
+            var runtime = new AdvisorPromptOverrides(prompts);
+            var edits = prompts.Fields.ToDictionary(f => f.Id, f => f.Value);
+            edits["campaign.json:evidence_policy"] = "TEMP_CAMPAIGN";
+            edits["campaign.json:retrieval"] = "TEMP_RETRIEVAL";
+            edits["campaign.json:aviation_semantics"] = "TEMP_AVIATION";
+            runtime.Apply(edits);
+            var next = new AdvisorQuerySession(snapshot, "fr", "Again", prompts: runtime.Current).InitialInput();
+            Require((string?)next["instructions"]!["evidence_policy"] == "TEMP_CAMPAIGN" &&
+                (string?)next["instructions"]!["retrieval"] == "TEMP_RETRIEVAL" && (string?)next["aviation_semantics"] == "TEMP_AVIATION" &&
+                (string?)session.InitialInput()["aviation_semantics"] == "EXTERNAL_AVIATION" &&
+                (string?)runtime.Current.Instructions(true)["evidence_policy"] == "OTHER_MODE_ONLY", "Campaign edits leaked into battle rules or an older campaign consultation");
+
         }));
     }
     private static void Fails(string directory, string code, string file)
@@ -117,6 +202,13 @@ internal static class PromptTests
         var directory = Path.Combine(Path.GetTempPath(), "SeaPowerAIAdvisor-prompts-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         try { action(directory); } finally { Directory.Delete(directory, true); }
+    }
+    private sealed class RoundTransport : IGeminiTransport
+    {
+        private readonly Func<JObject, int, JObject> reply;
+        private int calls;
+        internal RoundTransport(Func<JObject, int, JObject> reply) { this.reply = reply; }
+        public Task<JObject> GenerateAsync(AdvisorSettings settings, JObject body, CancellationToken cancellation) => Task.FromResult(reply(body, ++calls));
     }
     private sealed class CaptureTransport : IGeminiTransport
     {
