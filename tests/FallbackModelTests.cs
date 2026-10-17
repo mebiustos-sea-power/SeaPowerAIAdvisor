@@ -56,9 +56,9 @@ internal static class FallbackModelTests
                 {
                     case 1:
                         initial = JObject.Parse((string)body["contents"]![0]!["parts"]![0]!["text"]!);
-                        return Response(200,Reply(Tool("get_briefing","PRIMARY_SIGNATURE")));
+                        return Response(200,Reply(Tool("get_contact_threats","PRIMARY_SIGNATURE","observed_contact_1")));
                     case 2:
-                        Require(json.Contains("PRIMARY_SIGNATURE",StringComparison.Ordinal) && json.Contains("Frozen briefing",StringComparison.Ordinal), "The original tool exchange was lost before fallback");
+                        Require(json.Contains("PRIMARY_SIGNATURE",StringComparison.Ordinal) && json.Contains("Frozen weapon",StringComparison.Ordinal), "The original tool exchange was lost before fallback");
                         return Response(429,"{}");
                     case 3:
                         var contents = (JArray)body["contents"]!;
@@ -66,14 +66,19 @@ internal static class FallbackModelTests
                         var continuation = (JObject)input["continuation"]!;
                         Require(contents.Count == 1 && (string?)contents[0]!["role"] == "user" && !json.Contains("PRIMARY_SIGNATURE",StringComparison.Ordinal) &&
                             (int)continuation["query_rounds_used"]! == 1 && (int)continuation["remaining_query_rounds"]! == 1 &&
-                            continuation["completed_retrievals"]!.Count() == 1 && continuation.ToString().Contains("Frozen briefing",StringComparison.Ordinal) && session.RoundsUsed == 1,
+                            continuation["completed_retrievals"]!.Count() == 1 && continuation.ToString().Contains("Frozen weapon",StringComparison.Ordinal) && session.RoundsUsed == 1,
                             "A different model received foreign signed context, lost evidence or reset retrieval limits");
                         input.Remove("continuation");
                         Require(JToken.DeepEquals(input,initial), "Model switching changed the question, language, objectives, history or preferences");
-                        return Response(200,Reply(Tool("catalog","BACKUP_SIGNATURE")));
+                        return Response(200,Reply(Tool("get_contact_threats","BACKUP_SIGNATURE","observed_contact_1")));
                     default:
                         Require(!json.Contains("PRIMARY_SIGNATURE",StringComparison.Ordinal) && json.Contains("BACKUP_SIGNATURE",StringComparison.Ordinal) &&
                             (string?)body["toolConfig"]!["functionCallingConfig"]!["mode"] == "NONE", "Later backup calls lost their own signatures or exceeded the retrieval limit");
+                        var carried = JObject.Parse((string)body["contents"]![0]!["parts"]![0]!["text"]!)["continuation"]!["completed_retrievals"]![0]!["response"]!["results"]![0]!["data"]!;
+                        var latest = body["contents"]![2]!["parts"]![0]!["functionResponse"]!["response"]!["results"]![0]!["data"]!;
+                        Require(carried["weapon_references"]!.Count() == 1 && !latest["weapon_references"]!.HasValues &&
+                            (string?)latest["contacts"]![0]!["possible_weapon_reference_ids"]![0] == (string?)carried["weapon_references"]![0]!["id"],
+                            "Fallback lost the original definition or resent it instead of resolving the current reference");
                         return Response(200,Reply(new JObject { ["text"] = "Backup answer" }));
                 }
             });
@@ -91,11 +96,18 @@ internal static class FallbackModelTests
     private static BattleQuerySession Session() => new(new BattleSnapshot(new JObject {
         ["captured_at_utc"]="1985-06-01T00:00:00Z",["mission_display_name"]="Mission",["friendly_bases"] = new JArray(), ["hosted_air_units"] = new JArray(), ["aviation_hosts"] = new JArray(),
         ["public_objectives"]=new JArray(),
-        ["friendly_units"]=new JArray(),["observed_contacts"]=new JArray(),["unit_capabilities"]=new JArray(),["contact_threat_references"]=new JArray(),
-        ["weapon_references"]=new JArray(),["published_reports"]=new JArray(),["mission_briefing"]="Frozen briefing"
+        ["friendly_units"]=new JArray(),["unit_capabilities"]=new JArray(),
+        ["observed_contacts"]=new JArray(new JObject { ["id"]="observed_contact_1",["posture"]="enemy",["kind"]="surface" }),
+        ["contact_threat_references"]=new JArray(new JObject { ["id"]="observed_contact_1",["possible_weapon_reference_ids"]=new JArray("weapon_reference_1") }),
+        ["weapon_references"]=new JArray(new JObject { ["id"]="weapon_reference_1",["source"]="game_encyclopedia",["display_name"]="Frozen weapon",["maximum_launch_range_nm"]=70 }),["published_reports"]=new JArray(),["mission_briefing"]="Frozen briefing"
     }),"ja","Question",maxRounds:2);
-    private static JObject Tool(string name,string signature) => new() { ["thoughtSignature"]=signature,["functionCall"]=new JObject {
-        ["name"]="query_situation",["args"]=new JObject { ["requests"]=new JArray(new JObject { ["query"]=name }) } } };
+    private static JObject Tool(string name,string signature,string? contactId=null)
+    {
+        var query=new JObject { ["query"]=name };
+        if (contactId!=null) query["ids"]=new JArray(contactId);
+        return new JObject { ["thoughtSignature"]=signature,["functionCall"]=new JObject {
+            ["name"]="query_situation",["args"]=new JObject { ["requests"]=new JArray(query) } } };
+    }
     private static string Reply(params JObject[] parts) => new JObject { ["candidates"]=new JArray(new JObject {
         ["finishReason"]="STOP",["content"]=new JObject { ["role"]="model",["parts"]=new JArray(parts) } }) }.ToString(Formatting.None);
     private static HttpResponseMessage Response(int status,string body) => new((HttpStatusCode)status) { Content=new StringContent(body) };
