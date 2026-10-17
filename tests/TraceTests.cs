@@ -111,7 +111,7 @@ internal static class TraceTests
                 var session = Session(question);
                 await Throws(code, () => AdvisorConsultation.RunAsync(directory, session, Settings(), question, Array.Empty<ChatExchange>(),
                     CancellationToken.None, trace => new GeminiTransport(new Handler((r, c) => Task.FromResult(Response(status, body))), trace)));
-                var records = Directory.GetFiles(directory, "*.jsonl").Select(Read).Single(r => (string?)r[0]["consultation_id"] == session.Id);
+                var records = ReadConsultation(directory, session.Id);
                 var received = records.Single(r => (string?)r["event"] == "response");
                 Require((int)received["http_status"]! == status && (bool)received["body_complete"]! &&
                     ((string)received["body_json"]!).Contains(status == 429 ? "limit" : "invalid JSON", StringComparison.Ordinal), "An error response body was lost");
@@ -129,13 +129,13 @@ internal static class TraceTests
                     code == "network_error" ? new HttpRequestException("simulated") : new OperationCanceledException()));
                 await Throws(code, () => AdvisorConsultation.RunAsync(directory, session, Settings(), question, Array.Empty<ChatExchange>(),
                     CancellationToken.None, trace => new GeminiTransport(handler, trace)));
-                var records = Directory.GetFiles(directory, "*.jsonl").Select(Read).Single(r => (string?)r[0]["consultation_id"] == session.Id);
+                var records = ReadConsultation(directory, session.Id);
                 Require(records.Count(r => (string?)r["event"] == "request") == 1 && !records.Any(r => (string?)r["event"] == "response"),
                     "A missing network response was fabricated or the attempt disappeared");
                 Require((string?)records.Last()["error_code"] == code, "The failure kind changed in the log");
             }
         }));
-        check("Cancellation during a response records its received prefix and closes the consultation log", () => InTemp(async directory =>
+        check("Cancellation records its received prefix and leaves the shared log unlocked", () => InTemp(async directory =>
         {
             using var cancellation = new CancellationTokenSource();
             var question = new AdvisorQuestion("Question");
@@ -194,30 +194,78 @@ internal static class TraceTests
                 Array.Empty<ChatExchange>(), CancellationToken.None, trace => { calls++; throw new InvalidOperationException("HTTP should not start"); }));
             Require(calls == 2, "An unlogged consultation was sent despite a failed log");
         }));
-        check("Simultaneous consultations keep independent files, identities and sequences", () => InTemp(async directory =>
+        check("Simultaneous consultations share one file while keeping identities and sequences", () => InTemp(async directory =>
         {
-            await Task.WhenAll(Enumerable.Range(0, 2).Select(async i =>
+            await Task.WhenAll(Enumerable.Range(0, 2).Select(i => Task.Run(async () =>
             {
                 var question = new AdvisorQuestion("Question " + i);
                 await AdvisorConsultation.RunAsync(directory, Session(question), Settings(), question, Array.Empty<ChatExchange>(),
                     CancellationToken.None, trace => new GeminiTransport(new Handler((r, c) =>
                         Task.FromResult(Response(200, Reply(new JObject { ["text"] = "Answer " + i })))), trace));
-            }));
-            var files = Directory.GetFiles(directory, "*.jsonl");
-            Require(files.Length == 2 && files.Select(f => (string)Read(f)[0]["consultation_id"]!).Distinct().Count() == 2, "Consultations shared one log or identity");
-            foreach (var file in files)
-            {
-                var records = Read(file);
-                Require(records.Length == 4 && records.Select(r => (int)r["sequence"]!).SequenceEqual(new[] { 1, 2, 3, 4 }), "A trace contains another consultation's events");
-            }
+            })));
+            var records = Read(Directory.GetFiles(directory, "*.jsonl").Single());
+            var consultations = records.GroupBy(r => (string)r["consultation_id"]!).ToArray();
+            Require(records.Length == 8 && consultations.Length == 2, "Shared logging lost a consultation or its identity");
+            foreach (var consultation in consultations)
+                Require(consultation.Count() == 4 && consultation.Select(r => (int)r["sequence"]!).SequenceEqual(new[] { 1, 2, 3, 4 }),
+                    "Concurrent writes corrupted consultation sequences");
+        }));
+        check("The first enabled consultation replaces old logs once and later consultations and connection tests append", () => InTemp(async directory =>
+        {
+            var path = Path.Combine(directory, "ai-communication.jsonl");
+            File.WriteAllText(path, "previous game run");
+            var question = new AdvisorQuestion("First consultation");
+            Require(AdvisorTrace.Start(directory, "disabled", Settings(false), question) == null &&
+                File.ReadAllText(path) == "previous game run", "Disabled logging erased the previous game run");
+            var session = Session(question);
+            GeminiTransport Transport(AdvisorTrace? trace) => new(new Handler((r, c) =>
+                Task.FromResult(Response(200, Reply(new JObject { ["text"] = "OK" })))), trace);
+            await AdvisorConsultation.RunAsync(directory, session, Settings(), question, Array.Empty<ChatExchange>(),
+                CancellationToken.None, Transport);
+            var first = File.ReadAllText(path);
+            Require(Directory.GetFiles(directory, "*.jsonl").Single() == path && Read(path).Length == 4 &&
+                !first.Contains("previous game run", StringComparison.Ordinal), "The first logged consultation did not replace the fixed file");
+            await AdvisorConsultation.RunAsync(directory, Session(question), Settings(false), question, Array.Empty<ChatExchange>(),
+                CancellationToken.None, Transport);
+            Require(File.ReadAllText(path) == first, "Turning logging off modified the current log");
+            await GeminiConnectionTest.RunAsync(directory, Settings(), CancellationToken.None, Transport);
+            var afterTest = File.ReadAllText(path);
+            Require(afterTest.StartsWith(first, StringComparison.Ordinal) && Read(path).Length == 8 &&
+                Read(path).Any(r => ((string)r["consultation_id"]!).StartsWith("connection-test-", StringComparison.Ordinal)),
+                "Re-enabling logging or running a connection test erased earlier records");
+            await AdvisorConsultation.RunAsync(directory, Session(question), Settings(), question, Array.Empty<ChatExchange>(),
+                CancellationToken.None, Transport);
+            Require(File.ReadAllText(path).StartsWith(afterTest, StringComparison.Ordinal) && Read(path).Length == 12 &&
+                ReadConsultation(directory, session.Id).Length == 4, "A later consultation truncated earlier records");
+        }));
+        check("A new game-run log owner preserves old files until its first write and replaces only the shared file", () => InTemp(directory =>
+        {
+            var path = Path.Combine(directory, "ai-communication.jsonl");
+            var legacy = Path.Combine(directory, "consultation-older.jsonl");
+            File.WriteAllText(path, "previous game run");
+            File.WriteAllText(legacy, "legacy log");
+            var run = new AdvisorLogRun();
+            Require(File.ReadAllText(path) == "previous game run", "Creating a run erased an inactive log");
+            run.Write(path, "{\"message\":\"first\"}");
+            run.Write(path, "{\"message\":\"second\"}");
+            Require(Read(path).Select(r => (string)r["message"]!).SequenceEqual(new[] { "first", "second" }),
+                "A run failed to replace old contents once and append subsequent records");
+            var nextRun = new AdvisorLogRun();
+            Require(Read(path).Length == 2, "Starting the next run erased logs before enabled output");
+            nextRun.Write(path, "{\"message\":\"next run\"}");
+            Require((string?)Read(path).Single()["message"] == "next run" && File.ReadAllText(legacy) == "legacy log",
+                "The next run failed to replace its log or deleted a legacy file");
+            return Task.CompletedTask;
         }));
     }
 
     private static AdvisorSettings Settings(bool logging = true, string? key = null) => AdvisorSettings.Parse(
         new JObject { ["api_key"] = key ?? Key, ["log_ai_json"] = logging }.ToString());
+    private static JObject[] ReadConsultation(string directory, string id) =>
+        Read(Path.Combine(directory, "ai-communication.jsonl")).Where(r => (string?)r["consultation_id"] == id).ToArray();
     private static JObject[] Read(string file)
     {
-        // Windows readers of an active log must allow its existing writer.
+        // Allow a record to be appended while inspecting a live log.
         using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         using var text = new StreamReader(stream, Encoding.UTF8);
         var records = new List<JObject>();
