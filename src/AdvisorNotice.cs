@@ -20,6 +20,7 @@ internal sealed class AdvisorNotice
             "model_invalid" => "model_invalid",
             "fallback_model_invalid" => "fallback_model_invalid",
             "settings_invalid" => "settings_invalid",
+            "api_configuration_name_invalid" or "api_main_missing" or "api_selection_invalid" or "api_selection_same" => error.Code,
             "api_access_denied" => "api_access_denied",
             "api_bad_request" => "api_bad_request",
             "api_error" => "api_error",

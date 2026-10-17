@@ -18,20 +18,20 @@ internal static class PreferencesTests
             var before = File.ReadAllBytes(path);
             var profileBefore = File.ReadAllBytes(AdvisorProfile.SettingsPath(directory));
             var draft = AdvisorSettings.Edit(path);
-            draft.ApiKey = "different_mock_key"; draft.Model = "gemini-user-selected-model"; draft.LogAiJson = true;
+            draft.Main.ApiKey = "different_mock_key"; draft.Main.Model = "gemini-user-selected-model"; draft.LogAiJson = true;
             _ = draft.Data();
             var profileDraft = new AdvisorProfileDraft(profile) { CustomName = "Unsaved name", Personality = "Unsaved style" };
             Require(File.ReadAllBytes(path).SequenceEqual(before) && File.ReadAllBytes(AdvisorProfile.SettingsPath(directory)).SequenceEqual(profileBefore),
                 "Editing or validating saved a pending change");
             var reopened = AdvisorSettings.Edit(path);
-            Require(reopened.ApiKey == Key && reopened.Model == "gemini-original-model" && !reopened.LogAiJson &&
+            Require(reopened.Main.ApiKey == Key && reopened.Main.Model == "gemini-original-model" && !reopened.LogAiJson &&
                 AdvisorProfile.Load(directory).DisplayName == "Original", "Discarded edits survived reopening settings");
         }));
         check("Shared save applies advisor, credentials, Gemini model and logging while preserving advanced values", () => InTemp(directory =>
         {
             var path = Path.Combine(directory, "gemini.json"); File.WriteAllText(path, Original().ToString());
             var draft = AdvisorSettings.Edit(path);
-            draft.ApiKey = "  changed_mock_key  "; draft.Model = " gemini-2.5-pro "; draft.LogAiJson = true;
+            draft.Main.ApiKey = "  changed_mock_key  "; draft.Main.Model = " gemini-2.5-pro "; draft.LogAiJson = true;
             var profile = new AdvisorProfileDraft(new AdvisorProfile("Before", "portrait.png", false, "Default style", "Before style"))
                 { CustomName = "After", Personality = "After style" };
             Save(profile, draft, directory, path);
@@ -46,9 +46,9 @@ internal static class PreferencesTests
         {
             var path = Path.Combine(directory, "gemini.json");
             var draft = AdvisorSettings.Edit(path);
-            Require(draft.ApiKey == "" && draft.Model == AdvisorSettings.DefaultModel && !draft.LogAiJson, "Missing settings did not start unconfigured");
+            Require(draft.Main.ApiKey == "" && draft.Main.Model == AdvisorSettings.DefaultModel && !draft.LogAiJson, "Missing settings did not start unconfigured");
             Save(new AdvisorProfileDraft(new AdvisorProfile("First advisor", "portrait.png")), draft, directory, path);
-            Require(AdvisorProfile.Load(directory).DisplayName == "First advisor" && AdvisorSettings.Edit(path).ApiKey == "", "First profile setup required credentials");
+            Require(AdvisorProfile.Load(directory).DisplayName == "First advisor" && AdvisorSettings.Edit(path).Main.ApiKey == "", "First profile setup required credentials");
             Throws("api_key_missing", () => AdvisorSettings.Load(path));
         }));
         check("Gemini model IDs are editable beyond Lite while other providers and URL paths are rejected before saving", () => InTemp(directory =>
@@ -56,7 +56,7 @@ internal static class PreferencesTests
             var path = Path.Combine(directory, "gemini.json"); File.WriteAllText(path, Original().ToString());
             foreach (var id in new[] { "gemini-pro", "gemini-2.5-flash", "gemini-flash-latest", "gemini-custom_future.v2" })
             {
-                var draft = AdvisorSettings.Edit(path); draft.Model = id;
+                var draft = AdvisorSettings.Edit(path); draft.Main.Model = id;
                 Require(AdvisorSettings.Parse(Encoding.UTF8.GetString(draft.Data())).Model == id, "A Gemini model was restricted by a fixed catalogue or Lite-only filter");
             }
             var before = File.ReadAllBytes(path);
@@ -64,7 +64,7 @@ internal static class PreferencesTests
             var profileBefore = File.ReadAllBytes(AdvisorProfile.SettingsPath(directory));
             foreach (var id in new[] { "other-provider", "https://example.invalid/gemini-pro", "gemini-pro/../other", "gemini-pro?key=value", "" })
             {
-                var draft = AdvisorSettings.Edit(path); draft.Model = id;
+                var draft = AdvisorSettings.Edit(path); draft.Main.Model = id;
                 Throws("model_invalid", () => Save(new AdvisorProfileDraft(profile) { CustomName = "Unsaved" }, draft, directory, path));
                 Require(File.ReadAllBytes(path).SequenceEqual(before) && File.ReadAllBytes(AdvisorProfile.SettingsPath(directory)).SequenceEqual(profileBefore),
                     "A rejected model saved part of the settings");
@@ -79,7 +79,7 @@ internal static class PreferencesTests
                 if (existing) File.WriteAllText(path, Original().ToString());
                 var before = File.Exists(path) ? File.ReadAllBytes(path) : null;
                 Directory.CreateDirectory(AdvisorProfile.SettingsPath(folder));
-                var draft = AdvisorSettings.Edit(path); draft.ApiKey = "changed_mock_key"; draft.LogAiJson = true;
+                var draft = AdvisorSettings.Edit(path); draft.Main.ApiKey = "changed_mock_key"; draft.LogAiJson = true;
                 try { Save(new AdvisorProfileDraft(new AdvisorProfile("New", "portrait.png")), draft, folder, path); }
                 catch (AdvisorProfileException error) when (error.Code == "profile_write_failed")
                 {

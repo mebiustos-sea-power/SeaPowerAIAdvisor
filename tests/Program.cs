@@ -132,6 +132,7 @@ internal static class Program
         ConversationTests.Run(Check);
         ProgressTests.Run(Check);
         ConnectionTests.Run(Check);
+        ApiLibraryTests.Run(Check);
         FallbackTests.Run(Check);
         FallbackModelTests.Run(Check);
         QuestionInputTests.Run(args[2], Check);

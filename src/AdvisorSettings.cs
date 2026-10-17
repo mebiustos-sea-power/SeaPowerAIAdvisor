@@ -10,6 +10,7 @@ namespace SeaPowerAIAdvisor;
 
 internal sealed class AdvisorSettings
 {
+    internal const int MaxDocumentBytes = 65_536;
     internal const string DefaultModel = "gemini-3.5-flash-lite";
     internal string ApiKey { get; }
     internal string FallbackApiKey { get; }
@@ -38,7 +39,8 @@ internal sealed class AdvisorSettings
     internal static AdvisorSettings Load(string path) => Parse(ReadDocument(path));
     internal static bool LoadLogging(string path) => File.Exists(path) && Logging(ReadDocument(path));
 
-    internal static AdvisorSettingsDraft Edit(string path) => new(File.Exists(path) ? ReadDocument(path) : new JObject());
+    internal static AdvisorSettingsDraft Edit(string path, string namePattern = "API setting {0}") =>
+        new(File.Exists(path) ? ReadDocument(path) : new JObject(), namePattern);
 
     internal static void SaveLogging(string path, bool enabled)
     {
@@ -75,7 +77,7 @@ internal sealed class AdvisorSettings
         string text;
         try
         {
-            if (new FileInfo(path).Length > 16_384) throw new AdvisorConnectionException("settings_invalid");
+            if (new FileInfo(path).Length > MaxDocumentBytes) throw new AdvisorConnectionException("settings_invalid");
             text = File.ReadAllText(path);
         }
         catch (IOException) { throw new AdvisorConnectionException("settings_unreadable"); }
@@ -91,12 +93,12 @@ internal sealed class AdvisorSettings
         try
         {
             using var source = new StringReader(json);
-            using var reader = new JsonTextReader(source) { MaxDepth = 4, DateParseHandling = DateParseHandling.None };
+            using var reader = new JsonTextReader(source) { MaxDepth = 6, DateParseHandling = DateParseHandling.None };
             value = JObject.Load(reader, new JsonLoadSettings { DuplicatePropertyNameHandling = DuplicatePropertyNameHandling.Error });
             if (reader.Read()) throw new JsonReaderException();
         }
         catch (JsonException) { throw new AdvisorConnectionException("settings_invalid"); }
-        if (value.Properties().Any(p => !new[] { "api_key", "fallback_api_key", "model", "fallback_model", "request_timeout_seconds", "consultation_timeout_seconds", "max_output_tokens", "log_ai_json" }.Contains(p.Name)))
+        if (value.Properties().Any(p => !new[] { "api_key", "fallback_api_key", "model", "fallback_model", "request_timeout_seconds", "consultation_timeout_seconds", "max_output_tokens", "log_ai_json", "schema_version", "api_configurations", "main_api_id", "sub_api_id" }.Contains(p.Name)))
             throw new AdvisorConnectionException("settings_invalid");
         _ = Logging(value);
         return value;
@@ -110,6 +112,24 @@ internal sealed class AdvisorSettings
     }
 
     private static AdvisorSettings Parse(JObject value, bool requireKey = true)
+    {
+        if (value["schema_version"] == null)
+        {
+            if (new[] { "api_configurations", "main_api_id", "sub_api_id" }.Any(k => value[k] != null))
+                throw new AdvisorConnectionException("settings_invalid");
+            return ParseLegacy(value, requireKey);
+        }
+        var library = AdvisorApiLibrary.Read(value);
+        var main = library.Find(library.MainId)!;
+        var sub = library.Find(library.SubId);
+        if (sub != null && sub.ApiKey.Length == 0) throw new AdvisorConnectionException("fallback_key_missing");
+        var resolved = ParseLegacy(AdvisorApiLibrary.Connection(value, main, sub), requireKey);
+        foreach (var configuration in library.Configurations.Where(c => c.Id != library.MainId && c.Id != library.SubId))
+            _ = ParseLegacy(AdvisorApiLibrary.Connection(value, configuration), false);
+        return resolved;
+    }
+
+    private static AdvisorSettings ParseLegacy(JObject value, bool requireKey)
     {
         if (value["api_key"]?.Type != JTokenType.String) throw new AdvisorConnectionException("api_key_missing");
         var key = ((string)value["api_key"]!).Trim();

@@ -17,7 +17,7 @@ internal static class ConnectionTests
         {
             var path = Path.Combine(Path.GetTempPath(), "SeaPowerAIAdvisor-connection-" + Guid.NewGuid().ToString("N"));
             var draft = new AdvisorSettingsDraft(new JObject { ["api_key"] = Key, ["model"] = "gemini-user-model" });
-            draft.ApiKey = "changed_mock_key"; draft.Model = "gemini-another-model"; draft.LogAiJson = true;
+            draft.Main.ApiKey = "changed_mock_key"; draft.Main.Model = "gemini-another-model"; draft.LogAiJson = true;
             var handler = new Handler(async (request, token) =>
             {
                 var body = JObject.Parse(await request.Content!.ReadAsStringAsync(token));

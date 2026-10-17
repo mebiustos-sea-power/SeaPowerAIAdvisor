@@ -24,13 +24,13 @@ internal static class FallbackTests
                 ["request_timeout_seconds"] = 45, ["consultation_timeout_seconds"] = 90 };
             File.WriteAllText(path, original.ToString()); var before = File.ReadAllBytes(path);
             Require(AdvisorSettings.Load(path).FallbackApiKey == "", "A legacy configuration enabled fallback");
-            var draft = AdvisorSettings.Edit(path); draft.FallbackApiKey = Backup; _ = draft.Data();
-            Require(File.ReadAllBytes(path).SequenceEqual(before) && AdvisorSettings.Edit(path).FallbackApiKey == "", "Editing enabled fallback before Save");
+            var draft = AdvisorSettings.Edit(path); var added = draft.Add(); added.ApiKey = Backup; draft.SubId = added.Id; _ = draft.Data();
+            Require(File.ReadAllBytes(path).SequenceEqual(before) && AdvisorSettings.Edit(path).SubId == null, "Editing enabled fallback before Save");
             AdvisorSettings.WriteBytes(path, draft.Data()); var saved = AdvisorSettings.Load(path);
             Require(saved.ApiKey == Main && saved.FallbackApiKey == Backup && saved.ForFallback().RequestApiKey == Backup &&
                 saved.ForFallback().ApiKey == Main && saved.MaxOutputTokens == 2048 && saved.RequestTimeoutSeconds == 45 && saved.ConsultationTimeoutSeconds == 90,
                 "Saving fallback changed the primary or advanced settings");
-            draft = AdvisorSettings.Edit(path); draft.FallbackApiKey = "   "; AdvisorSettings.WriteBytes(path, draft.Data());
+            draft = AdvisorSettings.Edit(path); draft.SubId = null; AdvisorSettings.WriteBytes(path, draft.Data());
             Require(AdvisorSettings.Load(path).FallbackApiKey == "", "Clearing the optional key did not disable fallback");
             Throws("api_key_missing", () => AdvisorSettings.Parse(new JObject { ["api_key"] = "", ["fallback_api_key"] = Backup }.ToString()));
             foreach (var invalid in new JToken[] { JValue.CreateNull(), new JValue(42), new JValue("has\ncontrol"), new JValue(new string('x', 513)) })
@@ -166,7 +166,7 @@ internal static class FallbackTests
             await Fails("api_error", () => GeminiConnectionTest.RunAsync("unused-fallback-tests", draft.TestSettings(), CancellationToken.None, trace => new GeminiTransport(handler, trace)));
             var result = await GeminiConnectionTest.RunAsync("unused-fallback-tests", draft.TestSettings(true), CancellationToken.None, trace => new GeminiTransport(handler, trace));
             Require(keys.SequenceEqual(new[] { Main, Backup }) && result.ApiRequests == 1, "A key test switched credentials or tested both keys");
-            draft.FallbackApiKey = "";
+            draft.SubId = null;
             Throws("fallback_key_missing", () => draft.TestSettings(true));
         }));
         check("Fallback logs keep both attempts and the switch in order while removing both credentials from echoed content", () => InTemp(directory => Async(async () =>
