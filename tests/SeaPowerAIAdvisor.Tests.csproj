@@ -2,6 +2,14 @@
   <PropertyGroup><TargetFramework>net10.0</TargetFramework><OutputType>Exe</OutputType><AssemblyName>SeaPowerAIAdvisor.Tests</AssemblyName></PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Markdig" Version="1.4.0" />
+    <ProjectReference Include="..\api\SeaPowerAIAdvisor.Api.csproj" />
+    <ProjectReference Include="ExtensionFixture\SeaPowerAIAdvisor.ExtensionFixture.csproj" />
+    <ProjectReference Include="..\examples\ExternalAdvisor\SeaPowerAIAdvisor.Example.csproj" />
+    <Compile Remove="ExtensionFixture\**\*.cs" />
+    <Compile Remove="ExtensionLoading\**\*.cs" />
+    <Compile Include="..\src\Providers\Extensions\AdvisorExtensionBridge.cs" Link="AdvisorExtensionBridge.cs" />
+    <Compile Include="..\src\Providers\Extensions\BuiltInAdvisorExtension.cs" Link="BuiltInAdvisorExtension.cs" />
+    <Compile Include="..\src\Providers\Extensions\AdvisorExtensionBackend.cs" Link="AdvisorExtensionBackend.cs" />
     <Compile Include="..\src\UI\AdvisorMarkup.cs" Link="AdvisorMarkup.cs" />
     <Compile Include="..\src\UI\AdvisorMarkdown.cs" Link="AdvisorMarkdown.cs" />
     <Compile Include="..\src\Advisor\IAdvisorQuerySession.cs" Link="IAdvisorQuerySession.cs" />
@@ -76,6 +84,7 @@
     <Compile Include="..\src\Game\Campaign\CampaignDisplayNames.cs" Link="CampaignDisplayNames.cs" />
     <Reference Include="Newtonsoft.Json" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\Newtonsoft.Json.dll" Private="true" />
     <Reference Include="Mono.Cecil" HintPath="$(SeaPowerDir)\BepInEx\core\Mono.Cecil.dll" Private="true" />
+    <Reference Include="AnchorChain" HintPath="$(AnchorChainDir)\AnchorChain.dll" Private="true" ExternallyResolved="true" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="..\package\Prompts\*.json" Link="Prompts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

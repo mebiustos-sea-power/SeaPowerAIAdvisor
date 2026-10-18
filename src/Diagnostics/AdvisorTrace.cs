@@ -16,6 +16,7 @@ internal sealed class AdvisorTrace : IDisposable
 {
     private static readonly AdvisorLogRun Log = new();
     private bool disposed;
+    private readonly object sync = new();
     private readonly string[] secrets;
     private readonly string id;
     private readonly Stopwatch clock = Stopwatch.StartNew();
@@ -73,20 +74,23 @@ internal sealed class AdvisorTrace : IDisposable
 
     private void Write(string kind, JObject record)
     {
-        if (disposed) throw new ObjectDisposedException(nameof(AdvisorTrace));
-        record["schema_version"] = 1;
-        record["consultation_id"] = id;
-        record["sequence"] = ++sequence;
-        record["timestamp_utc"] = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
-        record["elapsed_ms"] = clock.ElapsedMilliseconds;
-        record["event"] = kind;
-        RedactToken(record);
-        try
+        lock (sync)
         {
-            Log.Write(FilePath, record.ToString(Formatting.None));
+            if (disposed) throw new ObjectDisposedException(nameof(AdvisorTrace));
+            record["schema_version"] = 1;
+            record["consultation_id"] = id;
+            record["sequence"] = ++sequence;
+            record["timestamp_utc"] = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
+            record["elapsed_ms"] = clock.ElapsedMilliseconds;
+            record["event"] = kind;
+            RedactToken(record);
+            try
+            {
+                Log.Write(FilePath, record.ToString(Formatting.None));
+            }
+            catch (IOException) { throw new AdvisorConnectionException("diagnostic_log_error"); }
+            catch (UnauthorizedAccessException) { throw new AdvisorConnectionException("diagnostic_log_error"); }
         }
-        catch (IOException) { throw new AdvisorConnectionException("diagnostic_log_error"); }
-        catch (UnauthorizedAccessException) { throw new AdvisorConnectionException("diagnostic_log_error"); }
     }
 
     // Preserve the original JSON text unless a secret must be removed. Parsing also
@@ -150,7 +154,7 @@ internal sealed class AdvisorTrace : IDisposable
         return value;
     }
 
-    public void Dispose() => disposed = true;
+    public void Dispose() { lock (sync) disposed = true; }
 }
 
 // One instance lives for the game run; it touches a file only when an enabled trace writes.

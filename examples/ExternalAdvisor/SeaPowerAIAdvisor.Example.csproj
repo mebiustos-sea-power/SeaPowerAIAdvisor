@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>netstandard2.1</TargetFramework><AssemblyName>SeaPowerAIAdvisor.Example</AssemblyName></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\api\SeaPowerAIAdvisor.Api.csproj" Private="false" />
+    <Reference Include="AnchorChain" HintPath="$(AnchorChainDir)\AnchorChain.dll" Private="false" ExternallyResolved="true" />
+    <Reference Include="Newtonsoft.Json" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\Newtonsoft.Json.dll" Private="false" />
+  </ItemGroup>
+</Project>

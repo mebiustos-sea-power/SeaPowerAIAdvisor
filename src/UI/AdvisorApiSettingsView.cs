@@ -14,6 +14,7 @@ internal sealed class AdvisorApiSettingsView
     private readonly StackPanel fields;
     private readonly TextBlock providerError;
     private readonly AdvisorServiceCatalog services = AdvisorServiceCatalog.BuiltIn;
+    private IReadOnlyList<AdvisorService> providerChoices = Array.Empty<AdvisorService>();
     private readonly Dictionary<string, JObject> providerDrafts = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Func<string>> fieldValues = new(StringComparer.Ordinal);
     private readonly Button add, edit, remove, saveEntry, cancelEntry, saveAssignments;
@@ -56,9 +57,9 @@ internal sealed class AdvisorApiSettingsView
         name.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(name)); name.LostKeyboardFocus += (_, _) => guard(() => typing.Release(name));
         provider.SelectionChanged += (_, _) => guard(() =>
         {
-            if (updating || editor == null || provider.SelectedIndex < 0 || provider.SelectedIndex >= services.Services.Count) return;
+            if (updating || editor == null || provider.SelectedIndex < 0 || provider.SelectedIndex >= providerChoices.Count) return;
             ReadEditor(false); providerDrafts[editor.Provider] = (JObject)editor.Settings.DeepClone();
-            var selected = services.Services[provider.SelectedIndex]; editor.Provider = selected.Id;
+            var selected = providerChoices[provider.SelectedIndex]; editor.Provider = selected.Id;
             editor.Settings = providerDrafts.TryGetValue(selected.Id, out var previous) ? (JObject)previous.DeepClone() : selected.Defaults();
             ShowFields(guard); changed();
         });
@@ -88,7 +89,7 @@ internal sealed class AdvisorApiSettingsView
         if (service == null) return;
         foreach (var field in service.Fields)
         {
-            fields.Children.Add(new TextBlock { Text = text()[field.Label], FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 4) });
+            fields.Children.Add(new TextBlock { Text = field.Caption(text()), FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 4) });
             var value = (string?)editor!.Settings[field.Key] ?? field.DefaultValue;
             if (field.Secret)
             {
@@ -142,9 +143,10 @@ internal sealed class AdvisorApiSettingsView
         try
         {
             name.Text = value.Name; timeout.Text = value.RequestTimeoutSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture); providerDrafts.Clear(); provider.Items.Clear();
-            foreach (var service in services.Services) provider.Items.Add(new ComboBoxItem { Content = service.Name });
-            var index = services.Services.ToList().FindIndex(s => s.Id == value.Provider);
-            if (index < 0) { provider.Items.Add(new ComboBoxItem { Content = value.Provider }); index = services.Services.Count; }
+            providerChoices = services.Services;
+            foreach (var service in providerChoices) provider.Items.Add(new ComboBoxItem { Content = service.Name });
+            var index = providerChoices.ToList().FindIndex(s => s.Id == value.Provider);
+            if (index < 0) { provider.Items.Add(new ComboBoxItem { Content = value.Provider }); index = providerChoices.Count; }
             provider.SelectedIndex = index; renderFields();
         }
         finally { updating = false; }

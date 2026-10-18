@@ -50,12 +50,21 @@ public sealed class Plugin : IAnchorChainMod
             battle = new BattleIntegration(BattleRuntime, message => Log.LogWarning(message), options, Backends);
             harmony.Patch(Required(typeof(MainGameViewModel), "OnLateUpdate"), postfix: new HarmonyMethod(typeof(Plugin), nameof(BattleFrame)));
             harmony.Patch(Required(typeof(MainGameViewModel), "OnDestroy"), prefix: new HarmonyMethod(typeof(Plugin), nameof(BattleDestroyed)));
+            SeaPowerAIAdvisor.Api.AdvisorApi.Attach(extension =>
+            {
+                var owner = extension.GetType().Assembly;
+                if (!ModActivation.IsEnabled(files, Path.GetDirectoryName(owner.Location)!)) return false;
+                AdvisorServiceCatalog.BuiltIn.Register(extension);
+                Log.LogInfo("Registered AI extension: " + extension.Id);
+                return true;
+            });
             installed = true;
             Log.LogInfo("Advisor 0.13.0 ready for tactical battles. DCM is optional. Open AI in the bottom-right battle toolbar.");
             TryInstallCampaign();
         }
         catch (Exception error)
         {
+            SeaPowerAIAdvisor.Api.AdvisorApi.Detach();
             BattleRuntime.Fail(error);
         }
     }

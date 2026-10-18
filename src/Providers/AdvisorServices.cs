@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
+using Api = SeaPowerAIAdvisor.Api;
 
 namespace SeaPowerAIAdvisor;
 
@@ -13,8 +14,11 @@ internal sealed class AdvisorConnectionField
     internal string Label { get; }
     internal string DefaultValue { get; }
     internal bool Secret { get; }
-    internal AdvisorConnectionField(string key, string label, string defaultValue = "", bool secret = false)
-    { Key = key; Label = label; DefaultValue = defaultValue; Secret = secret; }
+    private readonly Func<string, string>? label;
+    internal string Caption(AdvisorText text) => label == null ? text[Label] : label(text.Language);
+    internal AdvisorConnectionField(string key, string label, string defaultValue = "", bool secret = false,
+        Func<string, string>? caption = null)
+    { Key = key; Label = label; DefaultValue = defaultValue; Secret = secret; this.label = caption; }
 }
 
 // Provider definitions own fields, validation and wire adapters. The form only renders their declarations.
@@ -23,6 +27,11 @@ internal abstract class AdvisorService
     internal abstract string Id { get; }
     internal abstract string Name { get; }
     internal abstract string Protocol { get; }
+    internal virtual bool Independent => false;
+    internal virtual string Model(AdvisorApiConfiguration configuration) => configuration.Model;
+    internal virtual IAdvisorBackend OpenIndependent(AdvisorApiConfiguration configuration, AdvisorConnectionOptions options,
+        bool fallback, AdvisorHttpTransport transport, AdvisorContinuation continuation) =>
+        throw new InvalidOperationException("This provider uses the standard engine.");
     internal abstract IReadOnlyList<AdvisorConnectionField> Fields { get; }
     internal JObject Defaults() => new(Fields.Select(f => new JProperty(f.Key, f.DefaultValue)));
     internal abstract void Validate(JObject settings);
@@ -43,14 +52,32 @@ internal abstract class AdvisorService
 internal sealed class AdvisorServiceCatalog
 {
     internal static AdvisorServiceCatalog BuiltIn { get; } = new(new AdvisorService[] { new GeminiService(), new OllamaService() });
-    internal IReadOnlyList<AdvisorService> Services { get; }
+    private readonly object sync = new();
+    private readonly List<AdvisorService> services = new();
+    internal IReadOnlyList<AdvisorService> Services { get { lock (sync) return Array.AsReadOnly(services.ToArray()); } }
     internal AdvisorServiceCatalog(IEnumerable<AdvisorService> services)
+    { foreach (var service in services) Register(new BuiltInAdvisorExtension(service)); }
+    internal void Register(Api.IAdvisorExtension extension)
     {
-        Services = Array.AsReadOnly(services.ToArray());
-        if (Services.Select(s => s.Id).Distinct(StringComparer.Ordinal).Count() != Services.Count)
-            throw new InvalidOperationException("Duplicate connection provider ID.");
+        if (extension.ApiVersion != Api.AdvisorApi.ContractVersion)
+            throw new NotSupportedException("Unsupported AI Advisor contract version.");
+        if ((extension is Api.IStandardAdvisorExtension) == (extension is Api.IIndependentAdvisorExtension))
+            throw new ArgumentException("Implement exactly one advisor execution contract.", nameof(extension));
+        static bool Identifier(string value) => value != null && value.Length is > 0 and <= 80 &&
+            value.All(c => c is >= 'a' and <= 'z' or >= 'A' and <= 'Z' or >= '0' and <= '9' || c is '_' or '-' or '.');
+        if (!Identifier(extension.Id) || !Identifier(extension.Protocol) || string.IsNullOrWhiteSpace(extension.Name) ||
+            extension.Name.Length > 120 || extension.Name.Any(char.IsControl) || extension.Fields == null || extension.Fields.Count > 32 ||
+            extension.Fields.Any(f => f == null || !Identifier(f.Key) || string.IsNullOrWhiteSpace(f.Label) || f.DefaultValue == null) ||
+            extension.Fields.Select(f => f.Key).Distinct(StringComparer.Ordinal).Count() != extension.Fields.Count)
+            throw new ArgumentException("Invalid advisor extension metadata.", nameof(extension));
+        var service = extension is BuiltInAdvisorExtension builtIn ? builtIn.Service : new ExternalAdvisorService(extension);
+        lock (sync)
+        {
+            if (services.Any(s => s.Id == service.Id)) throw new InvalidOperationException("Duplicate connection provider ID: " + service.Id);
+            services.Add(service);
+        }
     }
-    internal AdvisorService? Find(string id) => Services.SingleOrDefault(s => s.Id == id);
+    internal AdvisorService? Find(string id) { lock (sync) return services.SingleOrDefault(s => s.Id == id); }
     internal AdvisorService Require(string id) => Find(id) ?? throw new AdvisorConnectionException("provider_unavailable");
 }
 
@@ -106,8 +133,10 @@ internal static class AdvisorServices
             var transport = transportFactory?.Invoke(trace) ?? new AdvisorHttpTransport(trace);
             try
             {
-                var backend = new AdvisorEngine(mainService.Open(main, options, false, transport),
-                    sub == null ? null : subService!.Open(sub, options, true, transport), error => trace?.Fallback(error));
+                IAdvisorBackend backend = mainService.Independent || subService?.Independent == true
+                    ? new AdvisorExtensionBackend(mainService, subService, main, sub, options, transport, error => trace?.Fallback(error))
+                    : new AdvisorEngine(mainService.Open(main, options, false, transport),
+                        sub == null ? null : subService!.Open(sub, options, true, transport), error => trace?.Fallback(error));
                 return new AdvisorBackendHandle(backend, transport);
             }
             catch { transport.Dispose(); throw; }
@@ -115,7 +144,8 @@ internal static class AdvisorServices
     }
     internal static AdvisorTraceOptions Diagnostics(AdvisorConnectionOptions options, AdvisorApiConfiguration main,
         AdvisorApiConfiguration? sub, AdvisorServiceCatalog catalog) => new(options.LogAiJson,
-        catalog.Require(main.Provider).Protocol, main.Model, sub?.Model ?? "",
+        catalog.Require(main.Provider).Protocol, catalog.Require(main.Provider).Model(main),
+        sub == null ? "" : catalog.Require(sub.Provider).Model(sub),
         catalog.Require(main.Provider).Secrets(main).Concat(sub == null ? Array.Empty<string>() : catalog.Require(sub.Provider).Secrets(sub)));
 
     internal static async Task<AdviceResult> TestAsync(string directory, AdvisorApiConfiguration configuration,

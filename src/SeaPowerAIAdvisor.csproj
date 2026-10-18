@@ -23,6 +23,9 @@
     <Reference Include="UnityEngine.InputLegacyModule" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\UnityEngine.InputLegacyModule.dll" Private="false" ExternallyResolved="true" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\api\SeaPowerAIAdvisor.Api.csproj" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Markdig" Version="1.4.0" GeneratePathProperty="true" ExcludeAssets="runtime" />
   </ItemGroup>
   <ItemGroup>

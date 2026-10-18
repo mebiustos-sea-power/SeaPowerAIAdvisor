@@ -80,6 +80,7 @@ def main():
              host_path(campaign), *[host_path(p.resolve()) for p in samples], host_path(artifact / 'query-demo.json')], 'query-demo.log')
     package = ROOT / 'dist/SeaPowerAIAdvisor'
     package.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(ROOT / 'src/bin/Release/netstandard2.1/SeaPowerAIAdvisor.Api.dll', package)
     shutil.copy2(ROOT / 'src/bin/Release/netstandard2.1/SeaPowerAIAdvisor.dll', package)
     shutil.copy2(ROOT / 'package/_info.ini', package)
     shutil.copy2(ROOT / 'package/THIRD-PARTY-NOTICES.txt', package)

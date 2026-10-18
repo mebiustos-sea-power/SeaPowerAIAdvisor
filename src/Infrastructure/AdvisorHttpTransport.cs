@@ -16,6 +16,14 @@ internal sealed class AdvisorHttpTransport : IDisposable
     private readonly HttpClient client;
     private readonly AdvisorTrace? trace;
     private int requests;
+    internal int RequestCount => Volatile.Read(ref requests);
+    internal int BeginRequest(string json, bool fallback, string model)
+    {
+        var index = Interlocked.Increment(ref requests); trace?.Request(index, json, fallback, model); return index;
+    }
+    internal void EndRequest(int request, int status, string body, bool complete) =>
+        trace?.Response(request, status, body, complete, Encoding.UTF8.GetByteCount(body));
+    internal void FailRequest(int request, string code, int? status) => trace?.RequestFailed(request, code, status);
     internal AdvisorHttpTransport(AdvisorTrace? trace = null) : this(new HttpClientHandler { AllowAutoRedirect = false }, trace) { }
     internal AdvisorHttpTransport(HttpMessageHandler handler, AdvisorTrace? trace = null)
     { client = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }; this.trace = trace; }
@@ -23,7 +31,7 @@ internal sealed class AdvisorHttpTransport : IDisposable
     internal async Task<JObject> SendAsync(Uri endpoint, JObject body, int timeoutSeconds, bool fallback, string model,
         CancellationToken cancellation, IReadOnlyDictionary<string, string>? headers = null)
     {
-        var index = ++requests;
+        var index = Interlocked.Increment(ref requests);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
         deadline.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
         try

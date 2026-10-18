@@ -14,8 +14,10 @@ internal sealed class AdvisorEngine : IAdvisorBackend
     private readonly IAdvisorProvider main;
     private readonly IAdvisorProvider? sub;
     private readonly Action<AdvisorConnectionException>? switched;
-    internal AdvisorEngine(IAdvisorProvider main, IAdvisorProvider? sub = null, Action<AdvisorConnectionException>? switched = null)
-    { this.main = main; this.sub = sub; this.switched = switched; }
+    private readonly AdvisorContinuation? continuation;
+    internal AdvisorEngine(IAdvisorProvider main, IAdvisorProvider? sub = null, Action<AdvisorConnectionException>? switched = null,
+        AdvisorContinuation? continuation = null)
+    { this.main = main; this.sub = sub; this.switched = switched; this.continuation = continuation; }
 
     public Task<AdviceResult> ConsultAsync(AdvisorContext context, CancellationToken cancellation) => RunAsync(context, cancellation);
 
@@ -23,7 +25,7 @@ internal sealed class AdvisorEngine : IAdvisorBackend
     {
         var session = context.Knowledge;
         var tool = context.Input.Tool;
-        var maxApiRequests = session.MaxRounds + 1;
+        var maxApiRequests = Math.Max(1, session.MaxRounds - (continuation == null ? 0 : session.RoundsUsed) + 1);
         var bytesSent = 0;
         long totalTokens = 0;
         var usageKnown = true;
@@ -31,14 +33,14 @@ internal sealed class AdvisorEngine : IAdvisorBackend
         var queriesUsed = new List<string>();
         var lastQueries = Array.Empty<string>();
         var lastApiRequest = 0;
-        var retrievals = new JArray();
+        var retrievals = continuation == null ? new JArray() : (JArray)continuation.Retrievals.DeepClone();
         using var connection = new AdvisorConnection(main, sub, context.Input, error =>
         {
             usageKnown = false; // A lost response may have consumed tokens that we cannot measure.
             switched?.Invoke(error);
             context.Progress?.Invoke(new AdvisorProgress(AdvisorStage.SwitchingKey, lastApiRequest, session.RoundsUsed,
                 session.MaxRounds, lastQueries, true, sub!.Model));
-        });
+        }, continuation);
         var knownQueries = ((JArray)tool["parameters"]!["properties"]!["requests"]!["items"]!["properties"]!["query"]!["enum"]!).Values<string>().ToHashSet(StringComparer.Ordinal);
         for (var api = 1; api <= maxApiRequests; api++)
         {

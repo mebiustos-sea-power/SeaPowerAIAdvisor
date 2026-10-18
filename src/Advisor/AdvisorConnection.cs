@@ -12,15 +12,15 @@ internal sealed class AdvisorConnection : IDisposable
     private readonly IAdvisorProvider? sub;
     private readonly AdvisorProviderInput input;
     private readonly Action<AdvisorConnectionException> switched;
-    private IAdvisorProviderSession session;
+    private IAdvisorProviderSession? session;
     internal bool UsingFallback { get; private set; }
     internal int ApiRequests { get; private set; }
     internal string Model => (UsingFallback ? sub! : main).Model;
 
-    internal AdvisorConnection(IAdvisorProvider main, IAdvisorProvider? sub, AdvisorProviderInput input, Action<AdvisorConnectionException> switched)
+    internal AdvisorConnection(IAdvisorProvider main, IAdvisorProvider? sub, AdvisorProviderInput input, Action<AdvisorConnectionException> switched, AdvisorContinuation? continuation = null)
     {
         this.main = main; this.sub = sub; this.input = input; this.switched = switched;
-        session = main.Start(input.Copy(), null);
+        session = main.Start(input.Copy(), continuation);
     }
 
     internal async Task<AdvisorReply> GenerateAsync(bool allowTools, AdvisorContinuation continuation, CancellationToken cancellation,
@@ -29,7 +29,7 @@ internal sealed class AdvisorConnection : IDisposable
         async Task<AdvisorReply> Send()
         {
             cancellation.ThrowIfCancellationRequested();
-            var request = session.Prepare(allowTools);
+            var request = (session ?? throw new InvalidOperationException("The connection session has been disposed.")).Prepare(allowTools);
             beforeSend(ApiRequests + 1, UsingFallback, Model, request.Bytes);
             ApiRequests++;
             return await request.SendAsync(cancellation).ConfigureAwait(false);
@@ -43,9 +43,8 @@ internal sealed class AdvisorConnection : IDisposable
                 UsingFallback = true;
                 switched(error);
                 await Task.Delay(1000, cancellation).ConfigureAwait(false);
-                var next = sub!.Start(input.Copy(), continuation);
-                session.Dispose();
-                session = next;
+                Dispose();
+                session = sub!.Start(input.Copy(), continuation);
                 return await Send().ConfigureAwait(false);
             }
         }
@@ -53,10 +52,11 @@ internal sealed class AdvisorConnection : IDisposable
         { throw new AdvisorConnectionException(error.Code, error.HttpStatus, true); }
     }
 
-    internal void AcceptResults(IReadOnlyList<AdvisorToolResult> results) => session.AcceptResults(results);
-    public void Dispose() => session.Dispose();
+    internal void AcceptResults(IReadOnlyList<AdvisorToolResult> results) =>
+        (session ?? throw new InvalidOperationException("The connection session has been disposed.")).AcceptResults(results);
+    public void Dispose() => Interlocked.Exchange(ref session, null)?.Dispose();
 
-    private static bool CanSwitch(AdvisorConnectionException error) =>
+    internal static bool CanSwitch(AdvisorConnectionException error) =>
         error.Code is "network_error" or "request_timeout" ||
         error.HttpStatus is 429 or 503 or 408 or 504;
 }
