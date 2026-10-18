@@ -16,7 +16,11 @@ internal static class PromptTests
         check("Loaded prompt files remain fixed and reach the actual battle request without further file access", () => InTemp(directory =>
         {
             Prepare(directory);
-            Rewrite(directory, "common", value => { value["system"] = "EXTERNAL_COMMON_V1"; value["instructions"]!["task"] = "EXTERNAL_TASK_V1"; });
+            Rewrite(directory, "common", value =>
+            {
+                value["system"] = "EXTERNAL_COMMON_V1"; value["instructions"]!["task"] = "EXTERNAL_TASK_V1";
+                value["instructions"]!["advice_policy"] = "EXTERNAL_ADVICE_POLICY";
+            });
             Rewrite(directory, "battle", value =>
             {
                 value["evidence_policy"] = "EXTERNAL_BATTLE_V1";
@@ -34,7 +38,8 @@ internal static class PromptTests
             {
                 var system = (string)body["system_instruction"]!;
                 Require(system.Contains("EXTERNAL_COMMON_V1", StringComparison.Ordinal) && system.Contains("EXTERNAL_TASK_V1", StringComparison.Ordinal) &&
-                    system.Contains("EXTERNAL_BATTLE_V1", StringComparison.Ordinal) && !system.Contains("CONSUMER_MUTATION", StringComparison.Ordinal) &&
+                    system.Contains("EXTERNAL_ADVICE_POLICY", StringComparison.Ordinal) && system.Contains("EXTERNAL_BATTLE_V1", StringComparison.Ordinal) &&
+                    !system.Contains("CONSUMER_MUTATION", StringComparison.Ordinal) &&
                     !system.Contains("EXTERNAL_COMMON_V2", StringComparison.Ordinal), "A reread, hardcoded policy or mutable consumer copy replaced the loaded instructions");
                 Require((string?)body["tools"]![0]!["description"] == "EXTERNAL_BATTLE_TOOL", "The tool description ignored its external resource");
                 var sent = InteractionFixture.Initial(body);
@@ -58,8 +63,11 @@ internal static class PromptTests
             Fails(directory, "prompts_missing", "battle.json");
             Prepare(directory); File.WriteAllText(Path.Combine(directory, "common.json"), "{");
             Fails(directory, "prompts_invalid", "common.json");
-            Prepare(directory); Rewrite(directory, "common", value => ((JObject)value["instructions"]!).Remove("task"));
-            Fails(directory, "prompts_invalid", "common.json");
+            foreach (var field in new[] { "task", "advice_policy" })
+            {
+                Prepare(directory); Rewrite(directory, "common", value => ((JObject)value["instructions"]!).Remove(field));
+                Fails(directory, "prompts_invalid", "common.json");
+            }
             Prepare(directory); Rewrite(directory, "campaign", value => value["evidence_policy"] = " ");
             Fails(directory, "prompts_invalid", "campaign.json");
             Prepare(directory); File.Delete(Path.Combine(directory, "requests.json"));
@@ -197,6 +205,7 @@ internal static class PromptTests
                 value["catalog_observed_contacts"] = "EXTERNAL_CAMPAIGN_CONTACTS"; value["error_integer_type"] = "{0}: external integer requirement";
             });
             Rewrite(directory, "battle", value => value["evidence_policy"] = "OTHER_MODE_ONLY");
+            Rewrite(directory, "common", value => value["instructions"]!["advice_policy"] = "EXTERNAL_ADVICE_POLICY");
             var prompts = AdvisorPrompts.Load(directory);
             var snapshot = QueryTests.Capture(new SituationTests.Fixture(Assembly.LoadFrom(campaignPath)));
             var session = new AdvisorQuerySession(snapshot, "fr", "Question", prompts: prompts);
@@ -208,7 +217,8 @@ internal static class PromptTests
             var invalid = session.Execute(new JObject { ["consultation_id"] = session.Id,
                 ["requests"] = new JArray(new JObject { ["query"] = "list_contacts", ["offset"] = "invalid" }) });
             Require((string?)invalid["error"]!["message"] == "offset: external integer requirement", "External error arguments were not formatted for the rejected query");
-            Require((string?)input["instructions"]!["evidence_policy"] == "EXTERNAL_CAMPAIGN" && (string?)input["aviation_semantics"] == "EXTERNAL_AVIATION" &&
+            Require((string?)input["instructions"]!["advice_policy"] == "EXTERNAL_ADVICE_POLICY" &&
+                (string?)input["instructions"]!["evidence_policy"] == "EXTERNAL_CAMPAIGN" && (string?)input["aviation_semantics"] == "EXTERNAL_AVIATION" &&
                 !input.ToString().Contains("OTHER_MODE_ONLY", StringComparison.Ordinal), "Campaign policy was hardcoded or mixed with battle instructions");
             var runtime = new AdvisorPromptOverrides(prompts);
             var edits = prompts.Fields.ToDictionary(f => f.Id, f => f.Value);

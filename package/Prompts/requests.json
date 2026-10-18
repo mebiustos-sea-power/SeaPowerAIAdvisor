@@ -2,6 +2,6 @@
   "schema_version": 1,
   "next_steps": "What should I do next? Give concrete actions in priority order, tied to the victory objectives.",
   "more_detail": "Make your previous advice more specific: identify relevant units, locations and actions using current evidence. Recheck unsupported earlier claims.",
-  "key_risks": "What are the main current risks to achieving victory, and what concrete actions could address them? Distinguish observed threats from uncertainty.",
+  "key_risks": "What should I do now to address the most urgent tactical threats? Give concrete actions in priority order, including attacks when justified. Include only essential execution conditions.",
   "connection_test": "Connection test. Reply only with OK."
 }

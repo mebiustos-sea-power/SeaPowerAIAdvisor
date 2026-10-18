@@ -71,7 +71,7 @@ internal sealed class AdvisorPrompts
     {
         var common = Read(directory, "common.json", "system", "instructions", "preferences_policy");
         if (!(common["instructions"] is JObject instructions)) throw Invalid("common.json");
-        ValidateStrings(instructions, "common.json", "task", "retrieval_policy", "language", "knowledge", "source_text", "coverage", "information_policy");
+        ValidateStrings(instructions, "common.json", "task", "advice_policy", "retrieval_policy", "language", "knowledge", "source_text", "coverage", "information_policy");
         var campaign = Read(directory, "campaign.json", CampaignFields);
         var battle = Read(directory, "battle.json", BattleFields);
         var requests = directory == DefaultDirectory ? (JObject)DefaultRequests.Value.DeepClone() : ReadRequests(directory);
