@@ -23,6 +23,31 @@ internal static partial class BattleTests
             Require((string?)data["friendly_units"]![0]!["display_name"] == "ミッドウェイ" &&
                 (string?)data["observed_contacts"]![0]!["display_name"] == "画面で識別した艦", "Displayed names were lost");
         });
+        check("Launched own weapons do not interrupt platform capture or become enemy contacts", () =>
+        {
+            var f = new Fixture();
+            var baseline = f.Capture().Copy();
+            foreach (var kind in new[] { "Missile", "Torpedo", "ASROC", "RBU", "Bomb", "AerialRocket", "Chaff", "Noisemaker", "Decoy", "Projectile" })
+                f.OwnWeapons.Add(new OwnWeapon(kind));
+            var captured = f.Capture();
+            Require(JToken.DeepEquals(baseline, captured.Copy()),
+                "Launched weapons changed friendly platforms, observed contacts or current capabilities");
+            var session = new BattleQuerySession(captured, "en", "What should I do next?");
+            var data = session.Execute(Request(session, new JObject { ["query"] = "get_unit_capabilities", ["ids"] = new JArray("own_unit_1") }));
+            Require((string?)data["status"] == "ok" &&
+                (int?)data["results"]![0]!["data"]!["units"]![0]!["weapons"]!["ammunition"]![0]!["remaining_count"] == 8,
+                "A launched weapon prevented retrieval of the platform's current ammunition");
+        });
+        check("Missing parameters on an own platform remain an error instead of silently hiding the unit", () =>
+        {
+            var f = new Fixture();
+            f.Own._obp = null!;
+            try { _ = f.Capture(); throw new Exception("A platform with missing parameters was silently skipped"); }
+            catch (InvalidOperationException e)
+            {
+                Require(e.Message == typeof(OwnUnit).FullName + "._obp is unavailable.", "The original platform error was hidden");
+            }
+        });
         check("XML and legacy briefings share the existing bounded, optional retrieval route", () =>
         {
             var fixture = new Fixture();
@@ -420,6 +445,7 @@ internal static partial class BattleTests
         internal readonly FutureReport Future = new();
         private readonly DateTime now = new(1985, 6, 1, 12, 0, 0);
         internal readonly List<OwnUnit> OwnUnits = new();
+        internal readonly List<OwnWeapon> OwnWeapons = new();
         internal readonly List<PublicWeapon> PublicWeapons = new() { new PublicWeapon() };
         internal readonly List<PublicClass> PublicClasses = new();
         internal bool Ready = true;
@@ -432,9 +458,9 @@ internal static partial class BattleTests
             PublicClasses.Add(new PublicClass { WeaponEntries = new List<PublicWeapon>(PublicWeapons) });
         }
         internal BattleSnapshot Capture(bool disclosure = false, string xmlBriefing = "", bool briefingUnavailable = false, bool briefingFromBase = false) => new BattleSituationReader().Capture(
-            OwnUnits.Select(u => (object)new { Unit = new { Object = u } }).Concat(new object[] {
+            OwnUnits.Cast<object>().Concat(OwnWeapons).Select(u => (object)new { Unit = new { Object = u } }).Concat(new object[] {
                 new { Unit = Track, ObjectViewModel = new { ObjectName = new Reactive<string>("画面で識別した艦") }, VisualType = ContactKind, VisualPosture = ContactPosture }
-            }).ToArray(), new { TaskforceObjects = OwnUnits.ToArray() },
+            }).ToArray(), new { TaskforceObjects = OwnUnits.Cast<object>().Concat(OwnWeapons).ToArray() },
             new object[] { new { IsHidden = false, Text = "輸送船を保護する", Status = 0 }, Hidden },
             new
             {
@@ -453,7 +479,8 @@ internal static partial class BattleTests
     {
         public Reactive<string> Name { get; } = new("ミッドウェイ");
         public string _type { get; set; } = "Vessel";
-        public Parameters _obp { get; } = new();
+        public Parameters _obp { get; set; } = new();
+        public bool isWeapon() => false;
         public bool _unlimitedFuel => false;
         public object? Compartments { get; set; } = new { IntegrityPercentage = 75.0, FloodingPercentage = 10.0 };
         public bool IsDestroyed => false;
@@ -467,6 +494,13 @@ internal static partial class BattleTests
         public Reactive<Geo> Position { get; } = new(new Geo(31, 131));
         public Reactive<double> Heading { get; } = new(270);
         public double _velocityInKnots { get; } = 18;
+    }
+    private sealed class OwnWeapon
+    {
+        public string _type { get; }
+        public object? _obp => null;
+        internal OwnWeapon(string kind) { _type = kind; }
+        public bool isWeapon() => true;
     }
     private sealed class Parameters
     {

@@ -20,6 +20,7 @@ internal static class Program
             InformationTests.Run(Check);
             PromptTests.Run(Check);
             ProgressTests.Run(Check);
+            ProviderTests.Run(Check);
             FallbackTests.Run(Check);
             FallbackModelTests.Run(Check);
             Require(!AppDomain.CurrentDomain.GetAssemblies().Any(a => a.GetName().Name == "DynamicCampaignMod"), "Battle-only verification loaded DCM");
@@ -136,6 +137,7 @@ internal static class Program
         PromptTests.RunCampaign(args[0], Check);
         ConversationTests.Run(Check);
         ProgressTests.Run(Check);
+        ProviderTests.Run(Check);
         ConnectionTests.Run(Check);
         ApiLibraryTests.Run(Check);
         FallbackTests.Run(Check);

@@ -5,7 +5,7 @@ using Newtonsoft.Json.Linq;
 
 namespace SeaPowerAIAdvisor;
 
-// Wire format only. Consultation lifetime, retrieval limits and credential handoff belong to GeminiAdvisor.
+// Interactions wire format only. GeminiProvider owns conversation state; AdvisorEngine owns retrieval policy.
 internal sealed class GeminiInteraction
 {
     internal string? Id { get; }

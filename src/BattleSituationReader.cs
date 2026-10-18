@@ -29,6 +29,8 @@ internal sealed class BattleSituationReader
             var identity = Member(vehicle, "Object");
             if (identity != null && ownObjects.Any(o => ReferenceEquals(o, identity)))
             {
+                // TaskforceObjects also contains launched weapons, which do not use platform capabilities.
+                if (IsWeapon(identity)) continue;
                 var kind = Code(Required(identity, "_type"));
                 var parameters = Required(identity, "_obp");
                 var subtype = kind == "landunit" ? Code(Required(parameters, "_landUnitSubType")) : null;
@@ -130,6 +132,13 @@ internal sealed class BattleSituationReader
             ["observed_contacts"] = contacts,
             ["published_reports"] = reports
         });
+    }
+
+    private static bool IsWeapon(object unit)
+    {
+        var method = unit.GetType().GetMethod("isWeapon", Type.EmptyTypes)
+            ?? throw new MissingMethodException(unit.GetType().FullName, "isWeapon");
+        return (bool)method.Invoke(unit, null)!;
     }
 
     private static JObject Position(object position) => AdvisorInputBuilder.Position(new MapPosition(

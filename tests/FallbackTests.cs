@@ -179,7 +179,7 @@ internal static class FallbackTests
                 var nested = new JObject { ["key"] = Backup }.ToString(Formatting.None);
                 return Response(200, Reply(new JObject { ["text"] = "Answer " + Main + " " + nested }));
             });
-            var result = await AdvisorConsultation.RunAsync(directory, Session(), Settings(log: true), new AdvisorQuestion("Question"),
+            var result = await GeminiAdvisor.RunAsync(directory, Session(), Settings(log: true), new AdvisorQuestion("Question"),
                 Array.Empty<ChatExchange>(), CancellationToken.None, trace => new GeminiTransport(handler, trace));
             var file = Directory.GetFiles(directory, "*.jsonl").Single(); var raw = File.ReadAllText(file);
             var records = File.ReadAllLines(file).Select(JObject.Parse).ToArray();

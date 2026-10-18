@@ -272,7 +272,7 @@ internal sealed class AdvisorWindow
             var sharedPrompt = options.Current.CommonPrompt;
             var userName = options.Current.UserName ?? throw new InvalidOperationException("The user name has not been initialized.");
             active = new AdvisorJob((cancellation, progress) =>
-                AdvisorConsultation.RunAsync(logDirectory, session, settings, request, history, cancellation, profile: advisorProfile, commonPrompt: sharedPrompt, progress: progress, historyExchanges: historyLimit, userName: userName), warn);
+                GeminiAdvisor.RunAsync(logDirectory, session, settings, request, history, cancellation, profile: advisorProfile, commonPrompt: sharedPrompt, progress: progress, historyExchanges: historyLimit, userName: userName), warn);
             SetBusy(true);
             status.Text = text["status.consulting"];
         }

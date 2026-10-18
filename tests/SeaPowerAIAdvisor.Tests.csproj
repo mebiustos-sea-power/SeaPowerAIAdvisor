@@ -42,7 +42,12 @@
     <Compile Include="..\src\AdvisorConsultation.cs" Link="AdvisorConsultation.cs" />
     <Compile Include="..\src\GeminiAdvisor.cs" Link="GeminiAdvisor.cs" />
     <Compile Include="..\src\GeminiInteraction.cs" Link="GeminiInteraction.cs" />
-    <Compile Include="..\src\GeminiFallback.cs" Link="GeminiFallback.cs" />
+    <Compile Include="..\src\AdvisorBackend.cs" Link="AdvisorBackend.cs" />
+    <Compile Include="..\src\AdvisorContext.cs" Link="AdvisorContext.cs" />
+    <Compile Include="..\src\AdvisorProvider.cs" Link="AdvisorProvider.cs" />
+    <Compile Include="..\src\AdvisorConnection.cs" Link="AdvisorConnection.cs" />
+    <Compile Include="..\src\AdvisorEngine.cs" Link="AdvisorEngine.cs" />
+    <Compile Include="..\src\GeminiProvider.cs" Link="GeminiProvider.cs" />
     <Compile Include="..\src\AdvisorJob.cs" Link="AdvisorJob.cs" />
     <Compile Include="..\src\AdvisorProgress.cs" Link="AdvisorProgress.cs" />
     <Compile Include="..\src\SituationSnapshot.cs" Link="SituationSnapshot.cs" />

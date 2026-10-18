@@ -47,7 +47,7 @@ internal static class TraceTests
                 received.Add(response);
                 return Response(200, response);
             });
-            var result = await AdvisorConsultation.RunAsync(directory, session, Settings(), question,
+            var result = await GeminiAdvisor.RunAsync(directory, session, Settings(), question,
                 Array.Empty<ChatExchange>(), CancellationToken.None, trace => new GeminiTransport(handler, trace));
             var file = Directory.GetFiles(directory, "*.jsonl").Single();
             var records = Read(file);
@@ -109,7 +109,7 @@ internal static class TraceTests
             {
                 var question = new AdvisorQuestion("Question");
                 var session = Session(question);
-                await Throws(code, () => AdvisorConsultation.RunAsync(directory, session, Settings(), question, Array.Empty<ChatExchange>(),
+                await Throws(code, () => GeminiAdvisor.RunAsync(directory, session, Settings(), question, Array.Empty<ChatExchange>(),
                     CancellationToken.None, trace => new GeminiTransport(new Handler((r, c) => Task.FromResult(Response(status, body))), trace)));
                 var records = ReadConsultation(directory, session.Id);
                 var received = records.Single(r => (string?)r["event"] == "response");
@@ -127,7 +127,7 @@ internal static class TraceTests
                 var session = Session(question);
                 var handler = new Handler((r, c) => Task.FromException<HttpResponseMessage>(
                     code == "network_error" ? new HttpRequestException("simulated") : new OperationCanceledException()));
-                await Throws(code, () => AdvisorConsultation.RunAsync(directory, session, Settings(), question, Array.Empty<ChatExchange>(),
+                await Throws(code, () => GeminiAdvisor.RunAsync(directory, session, Settings(), question, Array.Empty<ChatExchange>(),
                     CancellationToken.None, trace => new GeminiTransport(handler, trace)));
                 var records = ReadConsultation(directory, session.Id);
                 Require(records.Count(r => (string?)r["event"] == "request") == 1 && !records.Any(r => (string?)r["event"] == "response"),
@@ -143,7 +143,7 @@ internal static class TraceTests
                 { Content = new StreamContent(new InterruptedStream(cancellation)) }));
             try
             {
-                await AdvisorConsultation.RunAsync(directory, Session(question), Settings(), question, Array.Empty<ChatExchange>(),
+                await GeminiAdvisor.RunAsync(directory, Session(question), Settings(), question, Array.Empty<ChatExchange>(),
                     cancellation.Token, trace => new GeminiTransport(handler, trace));
                 throw new InvalidOperationException("Expected cancellation");
             }
@@ -158,7 +158,7 @@ internal static class TraceTests
         check("Oversized response protection remains bounded and the captured body is marked incomplete", () => InTemp(async directory =>
         {
             var question = new AdvisorQuestion("Question");
-            await Throws("response_too_large", () => AdvisorConsultation.RunAsync(directory, Session(question), Settings(), question,
+            await Throws("response_too_large", () => GeminiAdvisor.RunAsync(directory, Session(question), Settings(), question,
                 Array.Empty<ChatExchange>(), CancellationToken.None, trace => new GeminiTransport(
                     new Handler((r, c) => Task.FromResult(Response(200, new string('x', GeminiTransport.MaxResponseBytes + 20_000)))), trace)));
             var response = Read(Directory.GetFiles(directory, "*.jsonl").Single()).Single(r => (string?)r["event"] == "response");
@@ -181,7 +181,7 @@ internal static class TraceTests
             var question = new AdvisorQuestion("Question");
             var calls = 0;
             foreach (var settings in new[] { defaults, Settings(false) })
-                await AdvisorConsultation.RunAsync(disabledPath, Session(question), settings, question, Array.Empty<ChatExchange>(),
+                await GeminiAdvisor.RunAsync(disabledPath, Session(question), settings, question, Array.Empty<ChatExchange>(),
                     CancellationToken.None, trace =>
                     {
                         Require(trace == null, "Disabled logging created a writer");
@@ -190,7 +190,7 @@ internal static class TraceTests
             Require(calls == 2 && !Directory.Exists(disabledPath), "Disabling logs affected the consultation or wrote files");
             var blocked = Path.Combine(directory, "blocked");
             File.WriteAllText(blocked, "file, not directory");
-            await Throws("diagnostic_log_error", () => AdvisorConsultation.RunAsync(blocked, Session(question), Settings(), question,
+            await Throws("diagnostic_log_error", () => GeminiAdvisor.RunAsync(blocked, Session(question), Settings(), question,
                 Array.Empty<ChatExchange>(), CancellationToken.None, trace => { calls++; throw new InvalidOperationException("HTTP should not start"); }));
             Require(calls == 2, "An unlogged consultation was sent despite a failed log");
         }));
@@ -199,7 +199,7 @@ internal static class TraceTests
             await Task.WhenAll(Enumerable.Range(0, 2).Select(i => Task.Run(async () =>
             {
                 var question = new AdvisorQuestion("Question " + i);
-                await AdvisorConsultation.RunAsync(directory, Session(question), Settings(), question, Array.Empty<ChatExchange>(),
+                await GeminiAdvisor.RunAsync(directory, Session(question), Settings(), question, Array.Empty<ChatExchange>(),
                     CancellationToken.None, trace => new GeminiTransport(new Handler((r, c) =>
                         Task.FromResult(Response(200, Reply(new JObject { ["text"] = "Answer " + i })))), trace));
             })));
@@ -220,12 +220,12 @@ internal static class TraceTests
             var session = Session(question);
             GeminiTransport Transport(AdvisorTrace? trace) => new(new Handler((r, c) =>
                 Task.FromResult(Response(200, Reply(new JObject { ["text"] = "OK" })))), trace);
-            await AdvisorConsultation.RunAsync(directory, session, Settings(), question, Array.Empty<ChatExchange>(),
+            await GeminiAdvisor.RunAsync(directory, session, Settings(), question, Array.Empty<ChatExchange>(),
                 CancellationToken.None, Transport);
             var first = File.ReadAllText(path);
             Require(Directory.GetFiles(directory, "*.jsonl").Single() == path && Read(path).Length == 4 &&
                 !first.Contains("previous game run", StringComparison.Ordinal), "The first logged consultation did not replace the fixed file");
-            await AdvisorConsultation.RunAsync(directory, Session(question), Settings(false), question, Array.Empty<ChatExchange>(),
+            await GeminiAdvisor.RunAsync(directory, Session(question), Settings(false), question, Array.Empty<ChatExchange>(),
                 CancellationToken.None, Transport);
             Require(File.ReadAllText(path) == first, "Turning logging off modified the current log");
             await GeminiConnectionTest.RunAsync(directory, Settings(), CancellationToken.None, Transport);
@@ -233,7 +233,7 @@ internal static class TraceTests
             Require(afterTest.StartsWith(first, StringComparison.Ordinal) && Read(path).Length == 8 &&
                 Read(path).Any(r => ((string)r["consultation_id"]!).StartsWith("connection-test-", StringComparison.Ordinal)),
                 "Re-enabling logging or running a connection test erased earlier records");
-            await AdvisorConsultation.RunAsync(directory, Session(question), Settings(), question, Array.Empty<ChatExchange>(),
+            await GeminiAdvisor.RunAsync(directory, Session(question), Settings(), question, Array.Empty<ChatExchange>(),
                 CancellationToken.None, Transport);
             Require(File.ReadAllText(path).StartsWith(afterTest, StringComparison.Ordinal) && Read(path).Length == 12 &&
                 ReadConsultation(directory, session.Id).Length == 4, "A later consultation truncated earlier records");

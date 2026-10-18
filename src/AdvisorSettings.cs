@@ -177,13 +177,3 @@ internal sealed class AdvisorSettings
         return number;
     }
 }
-
-// Only fixed error codes and HTTP statuses cross the provider/UI boundary; never a raw response or key.
-internal sealed class AdvisorConnectionException : Exception
-{
-    internal string Code { get; }
-    internal int? HttpStatus { get; }
-    internal bool UsingFallback { get; }
-    internal AdvisorConnectionException(string code, int? httpStatus = null, bool usingFallback = false) : base(code + (httpStatus.HasValue ? " HTTP " + httpStatus : ""))
-    { Code = code; HttpStatus = httpStatus; UsingFallback = usingFallback; }
-}

@@ -93,7 +93,7 @@ internal static class FallbackModelTests
                         return Response(200,Reply(new JObject { ["text"] = "Backup answer" }));
                 }
             });
-            var result = await AdvisorConsultation.RunAsync(directory,session,settings,new AdvisorQuestion("Question"),new[] { new ChatExchange("Earlier","Earlier answer") },
+            var result = await GeminiAdvisor.RunAsync(directory,session,settings,new AdvisorQuestion("Question"),new[] { new ChatExchange("Earlier","Earlier answer") },
                 CancellationToken.None,trace => new GeminiTransport(handler,trace),profile:new AdvisorProfile("Officer","portrait.png",customPersonality:"Style"),
                 commonPrompt:"Shared preference",progress:progress.Add,userName:"Commander");
             Require(models.SequenceEqual(new[] { Primary,Primary,Secondary,Secondary }) &&
