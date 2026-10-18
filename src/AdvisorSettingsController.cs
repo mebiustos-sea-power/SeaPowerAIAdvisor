@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using Noesis;
@@ -32,6 +33,7 @@ internal sealed class AdvisorSettingsController
     private Action? confirmed;
     private AdvisorJob? testing;
     private bool available;
+    private readonly Stopwatch savedNotice = new();
 
     internal AdvisorSettingsController(FrameworkElement content, Func<AdvisorText> text, AdvisorOptionsStore options,
         string profileDirectory, string settingsPath, Func<byte[]> defaultPortrait, Action<Action> guard, TypingScope typing,
@@ -87,7 +89,7 @@ internal sealed class AdvisorSettingsController
     internal void Close()
     {
         CancelTest(); HideConfirmation(); profiles.Close(); api.Close(); promptEditor.Close(); current = null; available = false;
-        pane.Visibility = Visibility.Collapsed; chat.Visibility = Visibility.Visible;
+        Notice(""); pane.Visibility = Visibility.Collapsed; chat.Visibility = Visibility.Visible;
     }
     private void OpenCategory(Category category)
     {
@@ -148,9 +150,13 @@ internal sealed class AdvisorSettingsController
         catch (AdvisorConnectionException error) { ApiError(error); }
     }
     private static int Number(TextBox input, string code) => int.TryParse(input.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number) ? number : throw new AdvisorOptionsException(code);
-    private void Saved() { changed(); Notice(text()["settings.saved"]); }
+    private void Saved()
+    {
+        changed(); Notice(text()["settings.saved"]); status.Opacity = 0; savedNotice.Restart();
+    }
     private void Notice(string message, bool error = false)
     {
+        savedNotice.Reset(); status.Opacity = 1;
         status.Text = message; status.Visibility = message.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         status.Foreground = error ? (Brush)content.FindResource("AdvisorErrorBrush") : new SolidColorBrush(Color.FromArgb(255, 232, 211, 154));
     }
@@ -201,6 +207,12 @@ internal sealed class AdvisorSettingsController
     internal void Tick()
     {
         profiles.Tick();
+        if (savedNotice.IsRunning)
+        {
+            var elapsed = savedNotice.Elapsed.TotalSeconds;
+            if (elapsed >= 3) Notice("");
+            else status.Opacity = (float)Math.Min(1, elapsed / 0.2);
+        }
         var job = testing; if (job == null || !job.Completion.IsCompleted) return;
         testing = null; var result = job.TakeCompleted(); UpdateBusy();
         if (result.UnexpectedError != null) { TestError(AdvisorNotice.Unexpected().Message(text())); throw result.UnexpectedError; }
