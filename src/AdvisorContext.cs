@@ -10,13 +10,12 @@ internal sealed class AdvisorContext
 {
     internal IAdvisorQuerySession Knowledge { get; }
     internal AdvisorProviderInput Input { get; }
-    internal int TimeoutSeconds { get; }
     internal Action<AdvisorProgress>? Progress { get; }
 
-    internal AdvisorContext(IAdvisorQuerySession knowledge, AdvisorProviderInput input, int timeoutSeconds, Action<AdvisorProgress>? progress = null)
-    { Knowledge = knowledge; Input = input; TimeoutSeconds = timeoutSeconds; Progress = progress; }
+    internal AdvisorContext(IAdvisorQuerySession knowledge, AdvisorProviderInput input, Action<AdvisorProgress>? progress = null)
+    { Knowledge = knowledge; Input = input; Progress = progress; }
 
-    internal static AdvisorContext Create(IAdvisorQuerySession session, int timeoutSeconds, IReadOnlyList<ChatExchange> history,
+    internal static AdvisorContext Create(IAdvisorQuerySession session, IReadOnlyList<ChatExchange> history,
         AdvisorProfile? profile = null, string commonPrompt = "", Action<AdvisorProgress>? progress = null,
         int historyExchanges = AdvisorOptions.DefaultHistoryExchanges, string userName = "")
     {
@@ -31,6 +30,6 @@ internal sealed class AdvisorContext
         initial["prior_dialogue"] = new JArray(history.Skip(Math.Max(0, history.Count - historyExchanges))
             .Select(h => new JObject { ["question"] = h.Question, ["answer"] = h.Answer, ["advisor_name"] = h.AdvisorName }));
         initial["omitted_prior_exchange_count"] = Math.Max(0, history.Count - historyExchanges);
-        return new AdvisorContext(session, new AdvisorProviderInput(initial, session.Prompts.SystemInstruction(instructions), tool), timeoutSeconds, progress);
+        return new AdvisorContext(session, new AdvisorProviderInput(initial, session.Prompts.SystemInstruction(instructions), tool), progress);
     }
 }

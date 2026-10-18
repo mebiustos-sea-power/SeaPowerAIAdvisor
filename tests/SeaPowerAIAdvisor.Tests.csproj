@@ -42,6 +42,12 @@
     <Compile Include="..\src\AdvisorConsultation.cs" Link="AdvisorConsultation.cs" />
     <Compile Include="..\src\GeminiAdvisor.cs" Link="GeminiAdvisor.cs" />
     <Compile Include="..\src\GeminiInteraction.cs" Link="GeminiInteraction.cs" />
+    <Compile Include="..\src\AdvisorRequestTimeout.cs" Link="AdvisorRequestTimeout.cs" />
+    <Compile Include="..\src\AdvisorServices.cs" Link="AdvisorServices.cs" />
+    <Compile Include="..\src\AdvisorHttpTransport.cs" Link="AdvisorHttpTransport.cs" />
+    <Compile Include="..\src\GeminiService.cs" Link="GeminiService.cs" />
+    <Compile Include="..\src\OllamaService.cs" Link="OllamaService.cs" />
+    <Compile Include="..\src\OllamaProvider.cs" Link="OllamaProvider.cs" />
     <Compile Include="..\src\AdvisorBackend.cs" Link="AdvisorBackend.cs" />
     <Compile Include="..\src\AdvisorBackendRegistry.cs" Link="AdvisorBackendRegistry.cs" />
     <Compile Include="..\src\GeminiBackend.cs" Link="GeminiBackend.cs" />

@@ -24,17 +24,10 @@ internal static class AdvisorConsultation
 
     private static async Task<AdviceResult> ExecuteAsync(IAdvisorBackend backend, AdvisorContext context, CancellationToken cancellation)
     {
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
-        deadline.CancelAfter(TimeSpan.FromSeconds(context.TimeoutSeconds));
-        try
-        {
-            deadline.Token.ThrowIfCancellationRequested();
-            var result = await backend.ConsultAsync(context, deadline.Token).ConfigureAwait(false);
-            deadline.Token.ThrowIfCancellationRequested();
-            return new AdviceResult(result.Text, result.ApiRequests, context.Knowledge.RoundsUsed, result.TotalTokens, result.Queries, result.Model);
-        }
-        catch (OperationCanceledException) when (!cancellation.IsCancellationRequested && deadline.IsCancellationRequested)
-        { throw new AdvisorConnectionException("consultation_timeout"); }
+        cancellation.ThrowIfCancellationRequested();
+        var result = await backend.ConsultAsync(context, cancellation).ConfigureAwait(false);
+        cancellation.ThrowIfCancellationRequested();
+        return new AdviceResult(result.Text, result.ApiRequests, context.Knowledge.RoundsUsed, result.TotalTokens, result.Queries, result.Model);
     }
 
     internal static async Task<AdviceResult> RunAsync(Func<Task<AdviceResult>> consult, AdvisorTrace? trace, CancellationToken cancellation)

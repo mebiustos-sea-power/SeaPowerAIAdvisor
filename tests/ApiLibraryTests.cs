@@ -28,7 +28,7 @@ internal static class ApiLibraryTests
             var saved = AdvisorSettings.Load(path); var loaded = AdvisorSettings.Edit(path, "Different language {0}");
             Require(saved.ApiKey == MainKey && saved.ForFallback().RequestApiKey == SubKey && saved.Model == "gemini-main" &&
                 saved.ForFallback().RequestModel == "gemini-sub" && saved.RequestTimeoutSeconds == 45 &&
-                saved.ConsultationTimeoutSeconds == 90 && saved.MaxOutputTokens == 2048 && saved.LogAiJson &&
+                saved.MaxOutputTokens == 2048 && saved.LogAiJson &&
                 loaded.Main.Name == "API設定1" && loaded.Sub!.Name == "API設定2", "Saving migration reset credentials, labels or advanced settings");
             var json = JObject.Parse(File.ReadAllText(path));
             Require(json["api_key"] == null && json["fallback_api_key"] == null && json["model"] == null && json["fallback_model"] == null,

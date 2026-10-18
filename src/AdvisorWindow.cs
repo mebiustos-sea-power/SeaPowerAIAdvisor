@@ -275,7 +275,7 @@ internal sealed class AdvisorWindow
             var userName = options.Current.UserName ?? throw new InvalidOperationException("The user name has not been initialized.");
             active = new AdvisorJob((cancellation, progress) =>
             {
-                var context = AdvisorContext.Create(session, execution.TimeoutSeconds, history, advisorProfile, sharedPrompt, progress, historyLimit, userName);
+                var context = AdvisorContext.Create(session, history, advisorProfile, sharedPrompt, progress, historyLimit, userName);
                 return AdvisorConsultation.RunAsync(execution, context, logDirectory, request, cancellation);
             }, warn);
             SetBusy(true);

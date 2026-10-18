@@ -11,6 +11,7 @@ namespace SeaPowerAIAdvisor;
 internal sealed class AdvisorSettingsDraft
 {
     private readonly JObject source;
+    internal AdvisorConnectionOptions Options => new(source);
     private readonly List<AdvisorApiConfigurationDraft> configurations;
     internal IReadOnlyList<AdvisorApiConfigurationDraft> Configurations => configurations;
     internal string? MainId { get; set; }
@@ -35,7 +36,7 @@ internal sealed class AdvisorSettingsDraft
         string name;
         do { name = string.Format(System.Globalization.CultureInfo.InvariantCulture, namePattern, number++); }
         while (configurations.Any(c => string.Equals(c.Name.Trim(), name, StringComparison.OrdinalIgnoreCase)));
-        var added = new AdvisorApiConfigurationDraft(new AdvisorApiConfiguration("api-" + Guid.NewGuid().ToString("N"), name, "", AdvisorSettings.DefaultModel));
+        var added = new AdvisorApiConfigurationDraft(new AdvisorApiConfiguration("api-" + Guid.NewGuid().ToString("N"), name, "", AdvisorSettings.DefaultModel, Options.RequestTimeoutSeconds));
         configurations.Add(added);
         return added;
     }

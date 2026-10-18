@@ -18,7 +18,7 @@ internal static class GeminiBackend
         settings.RequestModel, settings.FallbackModel, new[] { settings.ApiKey, settings.FallbackApiKey });
 
     internal static AdvisorBackendSetup Prepare(AdvisorSettings settings, Func<AdvisorTrace?, GeminiTransport>? transportFactory = null) =>
-        new(settings.ConsultationTimeoutSeconds, Diagnostics(settings), trace =>
+        new(Diagnostics(settings), trace =>
         {
             var transport = transportFactory == null ? new GeminiTransport(trace) : transportFactory(trace);
             try

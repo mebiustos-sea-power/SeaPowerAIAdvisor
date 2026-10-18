@@ -26,6 +26,7 @@ internal sealed class AdvisorApiSettingsStore
     }
     internal AdvisorSettings Test(AdvisorApiConfigurationDraft entry)
     { var current = Read(); current.Put(entry); return current.TestConfiguration(entry.Id); }
+    internal AdvisorConnectionOptions TestOptions() => Read().Options;
     internal void SaveLogging(bool enabled)
     { var current = Read(); current.LogAiJson = enabled; Save(current); }
     private void Save(AdvisorSettingsDraft value) => AdvisorSettings.WriteBytes(path, value.Data());

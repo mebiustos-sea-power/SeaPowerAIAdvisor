@@ -17,7 +17,7 @@ internal sealed class GeminiAdvisor
         AdvisorQuestion question, IReadOnlyList<ChatExchange> history, CancellationToken cancellation,
         Func<AdvisorTrace?, GeminiTransport>? transportFactory = null, AdvisorProfile? profile = null, string commonPrompt = "", Action<AdvisorProgress>? progress = null, int historyExchanges = AdvisorOptions.DefaultHistoryExchanges, string userName = "")
     {
-        var context = AdvisorContext.Create(session, settings.ConsultationTimeoutSeconds, history, profile, commonPrompt, progress, historyExchanges, userName);
+        var context = AdvisorContext.Create(session, history, profile, commonPrompt, progress, historyExchanges, userName);
         return await AdvisorConsultation.RunAsync(GeminiBackend.Prepare(settings, transportFactory), context,
             logDirectory, question, cancellation).ConfigureAwait(false);
     }
@@ -25,7 +25,7 @@ internal sealed class GeminiAdvisor
     internal Task<AdviceResult> ConsultAsync(IAdvisorQuerySession session, AdvisorSettings settings,
         IReadOnlyList<ChatExchange> history, CancellationToken cancellation, AdvisorProfile? profile = null, string commonPrompt = "", Action<AdvisorProgress>? progress = null, int historyExchanges = AdvisorOptions.DefaultHistoryExchanges, string userName = "")
     {
-        var context = AdvisorContext.Create(session, settings.ConsultationTimeoutSeconds, history, profile, commonPrompt, progress, historyExchanges, userName);
+        var context = AdvisorContext.Create(session, history, profile, commonPrompt, progress, historyExchanges, userName);
         IAdvisorBackend backend = new AdvisorEngine(new GeminiProvider(transport, settings),
             settings.FallbackApiKey.Length == 0 ? null : new GeminiProvider(transport, settings.ForFallback()), switched);
         return AdvisorConsultation.RunAsync(backend, context, cancellation);

@@ -20,6 +20,7 @@ internal static class PromptTests
             {
                 value["system"] = "EXTERNAL_COMMON_V1"; value["instructions"]!["task"] = "EXTERNAL_TASK_V1";
                 value["instructions"]!["advice_policy"] = "EXTERNAL_ADVICE_POLICY";
+                value["instructions"]!["format"] = "EXTERNAL_REPLY_FORMAT";
             });
             Rewrite(directory, "battle", value =>
             {
@@ -37,7 +38,7 @@ internal static class PromptTests
             var fake = new CaptureTransport(body =>
             {
                 var system = (string)body["system_instruction"]!;
-                Require(system.Contains("EXTERNAL_COMMON_V1", StringComparison.Ordinal) && system.Contains("EXTERNAL_TASK_V1", StringComparison.Ordinal) &&
+                Require(system.Contains("EXTERNAL_COMMON_V1", StringComparison.Ordinal) && system.Contains("EXTERNAL_TASK_V1", StringComparison.Ordinal) && system.Contains("EXTERNAL_REPLY_FORMAT", StringComparison.Ordinal) &&
                     system.Contains("EXTERNAL_ADVICE_POLICY", StringComparison.Ordinal) && system.Contains("EXTERNAL_BATTLE_V1", StringComparison.Ordinal) &&
                     !system.Contains("CONSUMER_MUTATION", StringComparison.Ordinal) &&
                     !system.Contains("EXTERNAL_COMMON_V2", StringComparison.Ordinal), "A reread, hardcoded policy or mutable consumer copy replaced the loaded instructions");

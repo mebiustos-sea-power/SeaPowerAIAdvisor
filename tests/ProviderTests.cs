@@ -12,10 +12,12 @@ internal static partial class ProviderTests
     internal static void Run(Action<string, Action> check)
     {
         RunBackends(check);
+        RunOllama(check);
+        RunRequestTimeouts(check);
         check("A provider without Gemini wire types uses the shared engine and receives correctly mapped parallel results", () => Async(async () =>
         {
             var knowledge = new Knowledge(2);
-            var context = AdvisorContext.Create(knowledge, 30, new[] { new ChatExchange("Earlier", "Answer") }, userName: "Commander");
+            var context = AdvisorContext.Create(knowledge, new[] { new ChatExchange("Earlier", "Answer") }, userName: "Commander");
             var provider = new FakeProvider("local-model", (s, n, allowed, token) =>
             {
                 if (n == 1)
@@ -63,7 +65,7 @@ internal static partial class ProviderTests
                 Require(!allowed, "The fallback provider regained an exhausted retrieval budget");
                 return Task.FromResult(new AdvisorReply("Recovered", Array.Empty<AdvisorToolCall>(), 7));
             });
-            var result = await new AdvisorEngine(main, sub).ConsultAsync(AdvisorContext.Create(knowledge, 30,
+            var result = await new AdvisorEngine(main, sub).ConsultAsync(AdvisorContext.Create(knowledge,
                 Array.Empty<ChatExchange>(), progress: events.Add), CancellationToken.None);
             Require(result.ApiRequests == 4 && result.QueryRounds == 2 && result.Model == sub.Model && result.TotalTokens == null &&
                 events.Count(e => e.Stage == AdvisorStage.SwitchingKey) == 1 && events.Last().Stage == AdvisorStage.FinalAnswer &&
@@ -78,7 +80,7 @@ internal static partial class ProviderTests
                 if (n == 2) Require(!allowed, "Final generation still allowed knowledge queries");
                 return Task.FromResult(Reply(Call("call-" + n, "catalog")));
             });
-            try { await new AdvisorEngine(provider).ConsultAsync(AdvisorContext.Create(knowledge, 30, Array.Empty<ChatExchange>()), CancellationToken.None); }
+            try { await new AdvisorEngine(provider).ConsultAsync(AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>()), CancellationToken.None); }
             catch (AdvisorConnectionException error)
             {
                 Require(error.Code == "unexpected_function_call" && knowledge.RoundsUsed == 1 &&
@@ -91,7 +93,7 @@ internal static partial class ProviderTests
         {
             var provider = new FakeProvider("independent", (s, n, allowed, token) => throw new InvalidOperationException("Oversized request was sent"),
                 AdvisorEngine.MaxTotalRequestBytes + 1);
-            try { await new AdvisorEngine(provider).ConsultAsync(AdvisorContext.Create(new Knowledge(1), 30, Array.Empty<ChatExchange>()), CancellationToken.None); }
+            try { await new AdvisorEngine(provider).ConsultAsync(AdvisorContext.Create(new Knowledge(1), Array.Empty<ChatExchange>()), CancellationToken.None); }
             catch (AdvisorConnectionException error)
             {
                 Require(error.Code == "request_budget" && provider.Sessions.Single().Sends == 0 && provider.Sessions.Single().Disposed,

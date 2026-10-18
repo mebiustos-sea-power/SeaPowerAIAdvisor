@@ -38,7 +38,7 @@ internal static partial class ProviderTests
             registry.Register("custom", () => Setup(backend)); registry.Select("custom");
             var setup = registry.Prepare();
             var result = await AdvisorConsultation.RunAsync(setup,
-                AdvisorContext.Create(knowledge, setup.TimeoutSeconds, new[] { new ChatExchange("Earlier", "Answer") }, progress: events.Add, userName: "Commander"),
+                AdvisorContext.Create(knowledge, new[] { new ChatExchange("Earlier", "Answer") }, progress: events.Add, userName: "Commander"),
                 "unused-custom-log", new AdvisorQuestion("Question"), CancellationToken.None);
             Require(result.Text == "Custom answer" && result.ApiRequests == 4 && result.QueryRounds == 2 && result.TotalTokens == null &&
                 backend.Disposed && events.Count == 4 && events.Last().Model == "custom-model",
@@ -75,26 +75,21 @@ internal static partial class ProviderTests
             catch (InvalidOperationException e) { Require(e.Message == "backend execution failed", "Original execution failure was replaced"); }
             Require(!configured && backend.Disposed, "A failing backend triggered an unrelated implementation or leaked its scope");
         }));
-        check("The shared host distinguishes consultation deadlines from user cancellation for custom backends and releases their resources", () => Async(async () =>
+        check("User cancellation reaches independent backends and releases their resources without a global deadline", () => Async(async () =>
         {
-            foreach (var timeout in new[] { false, true })
+            using var cancellation = new CancellationTokenSource();
+            var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var backend = new CustomBackend(async (_, token) =>
             {
-                using var cancellation = new CancellationTokenSource();
-                var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-                var backend = new CustomBackend(async (_, token) =>
-                {
-                    started.SetResult(true);
-                    await Task.Delay(Timeout.Infinite, token);
-                    throw new Exception("Cancelled backend continued");
-                });
-                var task = RunPrepared(Setup(backend, timeout ? 1 : 30), cancellation.Token);
-                await started.Task;
-                if (!timeout) cancellation.Cancel();
-                try { await task; throw new Exception("Cancellation was ignored"); }
-                catch (AdvisorConnectionException e) when (timeout) { Require(e.Code == "consultation_timeout", "Deadline was mislabeled"); }
-                catch (OperationCanceledException) when (!timeout) { }
-                Require(backend.Disposed, "Cancelled backend resources remained open");
-            }
+                started.SetResult(true);
+                await Task.Delay(Timeout.Infinite, token);
+                throw new Exception("Cancelled backend continued");
+            });
+            var task = RunPrepared(Setup(backend), cancellation.Token);
+            await started.Task; cancellation.Cancel();
+            try { await task; throw new Exception("Cancellation was ignored"); }
+            catch (OperationCanceledException) { }
+            Require(backend.Disposed, "Cancelled backend resources remained open");
         }));
         check("Independent backends share outcome logging and secret redaction without Gemini settings or protocol metadata", () => Async(async () =>
         {
@@ -102,14 +97,14 @@ internal static partial class ProviderTests
             const string secret = "private_custom_backend_credential";
             try
             {
-                var setup = new AdvisorBackendSetup(30, new AdvisorTraceOptions(true, "custom-wire", "custom-model", secrets: new[] { secret }), trace =>
+                var setup = new AdvisorBackendSetup(new AdvisorTraceOptions(true, "custom-wire", "custom-model", secrets: new[] { secret }), trace =>
                     new AdvisorBackendHandle(new CustomBackend((_, _) =>
                     {
                         trace!.Request(1, new JObject { ["echo"] = secret }.ToString(), model: "custom-model");
                         trace.Response(1, 200, "{}", true, 2);
                         return Task.FromResult(Answer("Custom answer"));
                     })));
-                await AdvisorConsultation.RunAsync(setup, AdvisorContext.Create(new Knowledge(1), 30, Array.Empty<ChatExchange>()),
+                await AdvisorConsultation.RunAsync(setup, AdvisorContext.Create(new Knowledge(1), Array.Empty<ChatExchange>()),
                     directory, new AdvisorQuestion("Question"), CancellationToken.None);
                 var raw = File.ReadAllText(Path.Combine(directory, "ai-communication.jsonl"));
                 var records = raw.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Select(JObject.Parse).ToArray();
@@ -153,10 +148,10 @@ internal static partial class ProviderTests
     private static JObject Read(AdvisorContext context, string query) => context.Knowledge.Execute(new JObject
     { ["consultation_id"] = context.Knowledge.Id, ["requests"] = new JArray(new JObject { ["query"] = query }) });
     private static AdviceResult Answer(string text) => new(text, 1, 0, null, model: "custom-model");
-    private static AdvisorBackendSetup Setup(CustomBackend backend, int timeout = 30) =>
-        new(timeout, new AdvisorTraceOptions(false, "custom-wire", "custom-model"), _ => new AdvisorBackendHandle(backend));
+    private static AdvisorBackendSetup Setup(CustomBackend backend) =>
+        new(new AdvisorTraceOptions(false, "custom-wire", "custom-model"), _ => new AdvisorBackendHandle(backend));
     private static Task<AdviceResult> RunPrepared(AdvisorBackendSetup setup, CancellationToken cancellation = default) =>
-        AdvisorConsultation.RunAsync(setup, AdvisorContext.Create(new Knowledge(1), setup.TimeoutSeconds, Array.Empty<ChatExchange>()),
+        AdvisorConsultation.RunAsync(setup, AdvisorContext.Create(new Knowledge(1), Array.Empty<ChatExchange>()),
             "unused-backend-log", new AdvisorQuestion("Question"), cancellation);
     private sealed class CustomBackend : IAdvisorBackend, IDisposable
     {

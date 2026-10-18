@@ -19,21 +19,21 @@ internal sealed class AdvisorSettings
     internal string Model { get; }
     internal string FallbackModel { get; }
     internal string RequestModel => IsFallbackKey ? FallbackModel : Model;
-    internal int RequestTimeoutSeconds { get; }
-    internal int ConsultationTimeoutSeconds { get; }
+    private readonly int requestTimeoutSeconds, fallbackRequestTimeoutSeconds;
+    internal int RequestTimeoutSeconds => IsFallbackKey ? fallbackRequestTimeoutSeconds : requestTimeoutSeconds;
     internal int MaxOutputTokens { get; }
     internal bool LogAiJson { get; }
     internal static string PathIn(string gameDataPath) => Path.Combine(gameDataPath, "SeaPowerAIAdvisor", "gemini.json");
 
-    private AdvisorSettings(string key, string model, int requestTimeout, int totalTimeout, int outputTokens, bool logAiJson,
-        string fallbackKey = "", string fallbackModel = "", bool isFallbackKey = false)
-    { ApiKey = key; FallbackApiKey = fallbackKey; IsFallbackKey = isFallbackKey; Model = model; FallbackModel = fallbackModel; RequestTimeoutSeconds = requestTimeout;
-        ConsultationTimeoutSeconds = totalTimeout; MaxOutputTokens = outputTokens; LogAiJson = logAiJson; }
+    private AdvisorSettings(string key, string model, int requestTimeout, int outputTokens, bool logAiJson,
+        string fallbackKey = "", string fallbackModel = "", bool isFallbackKey = false, int? fallbackRequestTimeout = null)
+    { ApiKey = key; FallbackApiKey = fallbackKey; IsFallbackKey = isFallbackKey; Model = model; FallbackModel = fallbackModel; requestTimeoutSeconds = requestTimeout;
+        fallbackRequestTimeoutSeconds = fallbackRequestTimeout ?? requestTimeout; MaxOutputTokens = outputTokens; LogAiJson = logAiJson; }
 
     internal AdvisorSettings ForFallback()
     {
         if (FallbackApiKey.Length == 0) throw new AdvisorConnectionException("fallback_key_missing");
-        return new AdvisorSettings(ApiKey, Model, RequestTimeoutSeconds, ConsultationTimeoutSeconds, MaxOutputTokens, LogAiJson, FallbackApiKey, FallbackModel, true);
+        return new AdvisorSettings(ApiKey, Model, requestTimeoutSeconds, MaxOutputTokens, LogAiJson, FallbackApiKey, FallbackModel, true, fallbackRequestTimeoutSeconds);
     }
 
     internal static AdvisorSettings Load(string path) => Parse(ReadDocument(path));
@@ -73,17 +73,13 @@ internal sealed class AdvisorSettings
     {
         var library = AdvisorApiLibrary.Read(value);
         foreach (var entry in library.Configurations)
-            _ = ParseLegacy(AdvisorApiLibrary.Connection(value, entry), true);
+            AdvisorServiceCatalog.BuiltIn.Find(entry.Provider)?.Validate(entry.Settings);
         ValidateParameters(value);
     }
 
     private static void ValidateParameters(JObject value)
     {
-        var request = Number(value, "request_timeout_seconds", 60, 5, 120);
-        var total = Number(value, "consultation_timeout_seconds", 180, 10, 600);
-        if (total < request) throw new AdvisorConnectionException("settings_invalid");
-        _ = Number(value, "max_output_tokens", 4096, 256, 8192);
-        _ = Logging(value);
+        _ = new AdvisorConnectionOptions(value);
     }
 
     private static JObject ReadDocument(string path)
@@ -108,12 +104,12 @@ internal sealed class AdvisorSettings
         try
         {
             using var source = new StringReader(json);
-            using var reader = new JsonTextReader(source) { MaxDepth = 6, DateParseHandling = DateParseHandling.None };
+            using var reader = new JsonTextReader(source) { MaxDepth = 12, DateParseHandling = DateParseHandling.None };
             value = JObject.Load(reader, new JsonLoadSettings { DuplicatePropertyNameHandling = DuplicatePropertyNameHandling.Error });
             if (reader.Read()) throw new JsonReaderException();
         }
         catch (JsonException) { throw new AdvisorConnectionException("settings_invalid"); }
-        if (value.Properties().Any(p => !new[] { "api_key", "fallback_api_key", "model", "fallback_model", "request_timeout_seconds", "consultation_timeout_seconds", "max_output_tokens", "log_ai_json", "schema_version", "api_configurations", "main_api_id", "sub_api_id" }.Contains(p.Name)))
+        if (value.Properties().Any(p => !new[] { "api_key", "fallback_api_key", "model", "fallback_model", "request_timeout_seconds", "fallback_request_timeout_seconds", "consultation_timeout_seconds", "max_output_tokens", "log_ai_json", "schema_version", "api_configurations", "main_api_id", "sub_api_id" }.Contains(p.Name)))
             throw new AdvisorConnectionException("settings_invalid");
         _ = Logging(value);
         return value;
@@ -137,9 +133,11 @@ internal sealed class AdvisorSettings
         var library = AdvisorApiLibrary.Read(value);
         var main = library.Find(library.MainId) ?? throw new AdvisorConnectionException("api_main_missing");
         var sub = library.Find(library.SubId);
+        if (main.Provider != "gemini" || (sub != null && sub.Provider != "gemini"))
+            throw new AdvisorConnectionException("provider_unavailable");
         if (sub != null && sub.ApiKey.Length == 0) throw new AdvisorConnectionException("fallback_key_missing");
         var resolved = ParseLegacy(AdvisorApiLibrary.Connection(value, main, sub), requireKey);
-        foreach (var configuration in library.Configurations.Where(c => c.Id != library.MainId && c.Id != library.SubId))
+        foreach (var configuration in library.Configurations.Where(c => c.Id != library.MainId && c.Id != library.SubId && c.Provider == "gemini"))
             _ = ParseLegacy(AdvisorApiLibrary.Connection(value, configuration), true);
         return resolved;
     }
@@ -163,10 +161,10 @@ internal sealed class AdvisorSettings
             (!Regex.IsMatch(fallbackModel, @"\Agemini-[a-z0-9][a-z0-9._-]*\z") || fallbackModel.Length > 100)) ||
             (fallbackKey.Length > 0 && fallbackModel.Length == 0))
             throw new AdvisorConnectionException("fallback_model_invalid");
-        var request = Number(value, "request_timeout_seconds", 60, 5, 120);
-        var total = Number(value, "consultation_timeout_seconds", 180, 10, 600);
-        if (total < request) throw new AdvisorConnectionException("settings_invalid");
-        return new AdvisorSettings(key, model, request, total, Number(value, "max_output_tokens", 4096, 256, 8192), Logging(value), fallbackKey, fallbackModel);
+        var request = AdvisorRequestTimeout.Read(value);
+        var fallbackTimeout = value["fallback_request_timeout_seconds"] == null ? request :
+            AdvisorRequestTimeout.Parse(value["fallback_request_timeout_seconds"]!.Type == JTokenType.Integer ? value["fallback_request_timeout_seconds"]!.ToString() : "");
+        return new AdvisorSettings(key, model, request, Number(value, "max_output_tokens", 4096, 256, 8192), Logging(value), fallbackKey, fallbackModel, fallbackRequestTimeout: fallbackTimeout);
     }
 
     private static int Number(JObject value, string name, int fallback, int min, int max)

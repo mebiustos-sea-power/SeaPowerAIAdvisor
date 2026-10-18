@@ -29,13 +29,10 @@ internal sealed class AdviceResult
 internal sealed class AdvisorBackendSetup
 {
     internal string Model => Diagnostics.Model;
-    internal int TimeoutSeconds { get; }
     internal AdvisorTraceOptions Diagnostics { get; }
     private readonly Func<AdvisorTrace?, AdvisorBackendHandle> open;
-    internal AdvisorBackendSetup(int timeoutSeconds, AdvisorTraceOptions diagnostics, Func<AdvisorTrace?, AdvisorBackendHandle> open)
+    internal AdvisorBackendSetup(AdvisorTraceOptions diagnostics, Func<AdvisorTrace?, AdvisorBackendHandle> open)
     {
-        if (timeoutSeconds <= 0) throw new ArgumentOutOfRangeException(nameof(timeoutSeconds));
-        TimeoutSeconds = timeoutSeconds;
         Diagnostics = diagnostics ?? throw new ArgumentNullException(nameof(diagnostics));
         this.open = open ?? throw new ArgumentNullException(nameof(open));
     }

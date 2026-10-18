@@ -181,10 +181,10 @@ internal sealed class AdvisorSettingsController
         if (QuestionInputController.IsComposing) { TestError(text()["profile.ime"]); return; }
         try
         {
-            var settings = api.TestSettings();
+            var configuration = api.TestConfiguration(); var connectionOptions = api.TestOptions();
             var requestText = AdvisorPrompts.ConnectionTestRequest(); ClearTest();
             var directory = AdvisorTrace.DirectoryIn(UnityEngine.Application.persistentDataPath);
-            testing = new AdvisorJob(cancellation => GeminiConnectionTest.RunAsync(directory, settings, cancellation, requestText: requestText), warn);
+            testing = new AdvisorJob(cancellation => AdvisorServices.TestAsync(directory, configuration, connectionOptions, requestText, cancellation), warn);
             testStatus.Text = TestMessage(text()["connection.test_running"]); UpdateBusy();
         }
         catch (AdvisorConnectionException error) { TestError(AdvisorNotice.Connection(error).Message(text())); }
@@ -205,7 +205,7 @@ internal sealed class AdvisorSettingsController
         testing = null; var result = job.TakeCompleted(); UpdateBusy();
         if (result.UnexpectedError != null) { TestError(AdvisorNotice.Unexpected().Message(text())); throw result.UnexpectedError; }
         if (result.IsCancelled) testStatus.Text = TestMessage(text()["connection.test_cancelled"]);
-        else if (result.Error != null) { TestError(AdvisorNotice.Connection(result.Error).Message(text())); warn("Gemini connection test failed: " + result.Error.Code); }
+        else if (result.Error != null) { TestError(AdvisorNotice.Connection(result.Error).Message(text())); warn("Advisor connection test failed: " + result.Error.Code); }
         else { _ = result.Result ?? throw new InvalidOperationException("The connection test has no result."); testStatus.Text = TestMessage(text()["connection.test_succeeded"]); }
     }
 }
