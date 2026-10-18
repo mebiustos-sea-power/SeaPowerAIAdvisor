@@ -20,7 +20,9 @@ public sealed class Plugin : IAnchorChainMod
     private static AdvisorOptionsStore? options;
     private static Type? campaignFiles;
     private static bool campaignInstallAttempted;
-    private static bool installed, campaignFailed, battleFailed;
+    private static bool installed;
+    private static readonly AdvisorRuntime BattleRuntime = new("tactical_battle", message => Log.LogError(message), () => battle?.Stop());
+    private static readonly AdvisorRuntime CampaignRuntime = new("dynamic_campaign", message => Log.LogError(message), () => campaign?.Stop());
 
     public void TriggerEntryPoint()
     {
@@ -41,7 +43,7 @@ public sealed class Plugin : IAnchorChainMod
             campaignFiles = files;
             AdvisorDependencies.LoadMarkdown(typeof(Plugin).Assembly);
             harmony = new Harmony(ModId);
-            battle = new BattleIntegration(GuardBattle, message => Log.LogWarning(message), options);
+            battle = new BattleIntegration(BattleRuntime, message => Log.LogWarning(message), options);
             harmony.Patch(Required(typeof(MainGameViewModel), "OnLateUpdate"), postfix: new HarmonyMethod(typeof(Plugin), nameof(BattleFrame)));
             harmony.Patch(Required(typeof(MainGameViewModel), "OnDestroy"), prefix: new HarmonyMethod(typeof(Plugin), nameof(BattleDestroyed)));
             installed = true;
@@ -50,9 +52,7 @@ public sealed class Plugin : IAnchorChainMod
         }
         catch (Exception error)
         {
-            Log.LogError("Advisor initialization failed: " + error);
-            battleFailed = true;
-            try { battle?.Reset(); } catch (Exception cleanup) { Log.LogError(cleanup); }
+            BattleRuntime.Fail(error);
         }
     }
 
@@ -76,7 +76,7 @@ public sealed class Plugin : IAnchorChainMod
             Log.LogInfo("DCM is disabled; tactical advisor is available independently.");
             return;
         }
-        campaign = new CampaignIntegration(assembly, GuardCampaign, message => Log.LogWarning(message), options!);
+        campaign = new CampaignIntegration(assembly, CampaignRuntime, message => Log.LogWarning(message), options!);
         var ui = assembly.GetType("DynamicCampaignMod.UI.CampaignUI", true)!;
         harmony!.Patch(Required(ui, "Frame"), postfix: new HarmonyMethod(typeof(Plugin), nameof(CampaignFrame)));
         harmony.Patch(Required(ui, "Detach"), prefix: new HarmonyMethod(typeof(Plugin), nameof(CampaignDetach)));
@@ -87,38 +87,16 @@ public sealed class Plugin : IAnchorChainMod
 
     private static void BattleFrame(MainGameViewModel __instance)
     {
-        GuardBattle(() => battle!.Tick(__instance));
+        BattleRuntime.Tick(() => battle?.Tick(__instance));
         TryInstallCampaign();
     }
-    private static void BattleDestroyed(MainGameViewModel __instance) => GuardBattle(() => battle?.Destroy(__instance));
-    private static void CampaignFrame(object __instance) => GuardCampaign(() => campaign!.Tick(__instance));
-    private static void CampaignDetach() => GuardCampaign(() => campaign?.Reset());
-    private static void CampaignSceneUnloaded(UnityEngine.SceneManagement.Scene scene) => GuardCampaign(() => campaign?.SceneUnloaded(scene));
+    private static void BattleDestroyed(MainGameViewModel __instance) => BattleRuntime.Cleanup(() => battle?.Destroy(__instance));
+    private static void CampaignFrame(object __instance) => CampaignRuntime.Tick(() => campaign?.Tick(__instance));
+    private static void CampaignDetach() => CampaignRuntime.Cleanup(() => campaign?.Reset());
+    private static void CampaignSceneUnloaded(UnityEngine.SceneManagement.Scene scene) => CampaignRuntime.Cleanup(() => campaign?.SceneUnloaded(scene));
 
     private static MethodInfo Required(Type type, string name) =>
         AccessTools.Method(type, name) ?? throw new MissingMethodException(type.FullName, name);
 
-    private static void GuardBattle(Action action)
-    {
-        if (battleFailed) return;
-        try { action(); }
-        catch (Exception error)
-        {
-            battleFailed = true;
-            Log.LogError("Battle advisor stopped until restart: " + error);
-            try { battle?.Reset(); } catch (Exception cleanup) { Log.LogError(cleanup); }
-        }
-    }
-
-    private static void GuardCampaign(Action action)
-    {
-        if (campaignFailed) return;
-        try { action(); }
-        catch (Exception error)
-        {
-            campaignFailed = true;
-            Log.LogError("DCM advisor stopped until restart: " + error);
-            try { campaign?.Reset(); } catch (Exception cleanup) { Log.LogError(cleanup); }
-        }
-    }
+    private static void GuardCampaign(Action action) => CampaignRuntime.Guard(action);
 }

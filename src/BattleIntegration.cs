@@ -11,6 +11,7 @@ namespace SeaPowerAIAdvisor;
 internal sealed class BattleIntegration
 {
     private readonly Action<Action> guard;
+    private readonly AdvisorRuntime runtime;
     private readonly Action<string> warn;
     private readonly AdvisorOptionsStore options;
     private readonly BattleSituationReader reader = new();
@@ -21,20 +22,26 @@ internal sealed class BattleIntegration
     private object? player;
     private AdvisorHudButton? launcher;
     private AdvisorWindow? advisor;
+    private AdvisorErrorWindow? errorWindow;
+    private Action? showError;
 
-    internal BattleIntegration(Action<Action> guard, Action<string> warn, AdvisorOptionsStore options) { this.guard = guard; this.warn = warn; this.options = options; }
+    internal BattleIntegration(AdvisorRuntime runtime, Action<string> warn, AdvisorOptionsStore options)
+    { this.runtime = runtime; guard = runtime.Guard; this.warn = warn; this.options = options; }
 
     internal void Tick(MainGameViewModel current)
     {
-        if (current.RootControl == null || !SceneCreator.InstanceExists(false) ||
-            !SceneCreator.Instance.IsLoadingDone || Globals._playerTaskforce == null) return;
+        if (current.RootControl == null) return;
+        if (!runtime.Failed && (!SceneCreator.InstanceExists(false) ||
+            !SceneCreator.Instance.IsLoadingDone || Globals._playerTaskforce == null)) return;
         var root = ReferenceEquals(model, current) && ReferenceEquals(uiRoot, current.RootControl) ? view : FindView(current.RootControl);
         if (root == null || root.ActualWidth <= 0 || root.ActualHeight <= 0) return;
-        if (!ReferenceEquals(model, current) || !ReferenceEquals(uiRoot, current.RootControl) || !ReferenceEquals(mission, SceneCreator.Instance) ||
-            !ReferenceEquals(player, Globals._playerTaskforce))
+        var currentMission = runtime.Failed ? mission : SceneCreator.Instance;
+        var currentPlayer = runtime.Failed ? player : Globals._playerTaskforce;
+        if (!ReferenceEquals(model, current) || !ReferenceEquals(uiRoot, current.RootControl) || !ReferenceEquals(mission, currentMission) ||
+            !ReferenceEquals(player, currentPlayer))
         {
             Reset();
-            model = current; view = root; uiRoot = current.RootControl; mission = SceneCreator.Instance; player = Globals._playerTaskforce;
+            model = current; view = root; uiRoot = current.RootControl; mission = currentMission; player = currentPlayer;
         }
         if (launcher == null)
         {
@@ -44,17 +51,48 @@ internal sealed class BattleIntegration
                 ?? throw new InvalidOperationException("The battle HUD toggle button is unavailable.");
             var button = new AdvisorHudButton(grid, reference, AdvisorText.Load(GameLanguage.Read())["battle.launcher"]);
             launcher = button;
-            button.Control.Click += (_, _) => guard(() =>
+            void OpenAdvisor()
             {
                 var host = FindHost(current.RootControl) ?? throw new InvalidOperationException("The battle window host is unavailable.");
                 advisor ??= new AdvisorWindow(root, host, guard, new BattleAdvisorSource(Capture), GameLanguage.Read, warn, options);
                 advisor.Toggle();
                 button.Control.IsChecked = advisor.IsOpen;
-            });
+            }
+            void ShowError()
+            {
+                var host = FindHost(current.RootControl) ?? throw new InvalidOperationException("The battle window host is unavailable.");
+                errorWindow ??= new AdvisorErrorWindow(root, host, runtime, AdvisorText.Load(GameLanguage.Read()),
+                    value => button.Control.IsChecked = value, RestartAdvisor);
+                errorWindow.Show();
+            }
+            void RestartAdvisor()
+            {
+                if (!runtime.Failed) return;
+                errorWindow?.Close(); errorWindow = null;
+                runtime.Restart(OpenAdvisor);
+            }
+            void Toggle()
+            {
+                if (runtime.Failed)
+                {
+                    if (errorWindow?.IsOpen == true) errorWindow.Close();
+                    else runtime.PresentFailure(ShowError);
+                }
+                else OpenAdvisor();
+                button.Control.IsChecked = errorWindow?.IsOpen == true || advisor?.IsOpen == true;
+            }
+            showError = ShowError;
+            button.Control.Click += (_, _) =>
+            {
+                if (runtime.Failed) runtime.Present(Toggle);
+                else guard(Toggle);
+            };
         }
         launcher.Control.Visibility = current.IsHudVisible ? Visibility.Visible : Visibility.Collapsed;
-        advisor?.Tick();
-        launcher.Control.IsChecked = advisor?.IsOpen == true;
+        if (!runtime.Failed) advisor?.Tick();
+        if (showError != null) runtime.NotifyFailure(showError);
+        errorWindow?.Tick();
+        launcher.Control.IsChecked = errorWindow?.IsOpen == true || advisor?.IsOpen == true;
     }
 
     private BattleSnapshot Capture()
@@ -159,14 +197,21 @@ internal sealed class BattleIntegration
         if (ReferenceEquals(model, current)) Reset();
     }
 
+    internal void Stop()
+    {
+        var previous = advisor; advisor = null;
+        previous?.Stop();
+    }
+
     internal void Reset()
     {
-        try { advisor?.Close(); }
+        try { Stop(); }
         finally
         {
-            var previous = launcher;
-            advisor = null; launcher = null; model = null; view = null; uiRoot = null; mission = null; player = null;
-            previous?.Dispose();
+            var previous = launcher; var report = errorWindow;
+            advisor = null; errorWindow = null; showError = null; launcher = null; model = null; view = null; uiRoot = null; mission = null; player = null;
+            try { report?.Close(); }
+            finally { previous?.Dispose(); }
         }
     }
 }

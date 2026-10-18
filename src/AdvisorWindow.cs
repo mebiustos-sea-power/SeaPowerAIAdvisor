@@ -161,6 +161,26 @@ internal sealed class AdvisorWindow
         }
     }
 
+    // Fault teardown must cancel work and release input without rendering the broken conversation again.
+    internal void Stop()
+    {
+        var job = active; active = null; pendingTurn = null;
+        try { job?.Dispose(); }
+        finally
+        {
+            try { ReleaseInput(); }
+            finally
+            {
+                try { settings.Close(); }
+                finally
+                {
+                    try { ReleasePortrait(); }
+                    finally { if (IsOpen) window.CloseWindowNow(); }
+                }
+            }
+        }
+    }
+
     internal void Close()
     {
         if (IsOpen) window.CloseWindowNow();

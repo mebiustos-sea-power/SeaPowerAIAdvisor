@@ -17,6 +17,7 @@
     <Compile Include="..\src\BattleSituationReader.cs" Link="BattleSituationReader.cs" />
     <Compile Include="..\src\AdvisorConversation.cs" Link="AdvisorConversation.cs" />
     <Compile Include="..\src\AdvisorNotice.cs" Link="AdvisorNotice.cs" />
+    <Compile Include="..\src\AdvisorRuntime.cs" Link="AdvisorRuntime.cs" />
     <Compile Include="..\src\GeminiConnectionTest.cs" Link="GeminiConnectionTest.cs" />
     <Compile Include="..\src\QuestionInput.cs" Link="QuestionInput.cs" />
     <Compile Include="..\src\AdvisorText.cs" Link="AdvisorText.cs" />

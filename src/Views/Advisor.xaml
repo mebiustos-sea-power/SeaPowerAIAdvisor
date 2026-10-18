@@ -279,8 +279,10 @@
                 <TextBox x:Name="ProfilePath" IsReadOnly="True" TextWrapping="Wrap" FontSize="12" Padding="6" />
                 <WrapPanel Margin="0,12,0,6">
                   <Button x:Name="Capture" Content="{DynamicResource Advisor.action.capture}" Height="30" Padding="12,0" Margin="0,0,8,0" />
-                  <Button x:Name="Input" Content="{DynamicResource Advisor.action.input}" Height="30" Padding="12,0" Margin="0" />
+                  <Button x:Name="Input" Content="{DynamicResource Advisor.action.input}" Height="30" Padding="12,0" Margin="0,0,8,0" />
+                  <Button x:Name="ThrowTestException" Content="{DynamicResource Advisor.developer.throw_exception}" Height="30" Padding="12,0" />
                 </WrapPanel>
+                <TextBlock Text="{DynamicResource Advisor.developer.throw_exception_note}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8" />
               </StackPanel>
               <TextBox x:Name="DiagnosticOutput" Grid.Row="1" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" FontSize="12" Padding="8" />
               <TextBlock x:Name="DiagnosticStatus" Grid.Row="2" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0" />

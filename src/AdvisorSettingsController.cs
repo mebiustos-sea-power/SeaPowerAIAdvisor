@@ -26,7 +26,7 @@ internal sealed class AdvisorSettingsController
     private readonly ComboBox size;
     private readonly CheckBox campaign, log;
     private readonly TextBlock status, title, testStatus, testError, confirmationText;
-    private readonly Button test, accept, cancelConfirmation;
+    private readonly Button test, accept, cancelConfirmation, throwException;
     private Category? current;
     private string baseline = "", testingName = "";
     private Action? confirmed;
@@ -50,6 +50,7 @@ internal sealed class AdvisorSettingsController
         userName = Named<TextBox>("UserName"); userName.MaxLength = AdvisorOptions.MaxUserNameLength;
         size = Named<ComboBox>("ConversationTextSize"); campaign = Named<CheckBox>("EnableCampaignAdvisor"); log = Named<CheckBox>("LogAiJson");
         information = new AdvisorInformationView(Named<StackPanel>("InformationChoices"), guard);
+        throwException = Named<Button>("ThrowTestException");
         test = Named<Button>("TestConnection"); testStatus = Named<TextBlock>("ConnectionTestStatus"); testError = Named<TextBlock>("ConnectionTestError");
         promptEditor = new AdvisorPromptSettingsView(content, text, guard, typing, changed, warn);
         apiStore = new AdvisorApiSettingsStore(settingsPath, () => text()["connection.configuration_name_pattern"]);
@@ -66,6 +67,10 @@ internal sealed class AdvisorSettingsController
         Bind("SaveInformation", () => Save(() => options.SaveInformation(information.Value)));
         Bind("SaveDeveloper", () => Save(() => apiStore.SaveLogging(log.IsChecked == true)));
         Bind("TestConnection", TestConnection);
+        Bind("ThrowTestException", () =>
+        {
+            if (testing == null && !consultationBusy()) AdvisorRuntime.ThrowTestException();
+        });
         Bind("CancelConfirmation", HideConfirmation);
         Bind("AcceptConfirmation", () => { var action = confirmed; HideConfirmation(); action?.Invoke(); });
         foreach (var input in new[] { rounds, history, prompt, userName, Named<TextBox>("ProfilePath") })
@@ -165,6 +170,7 @@ internal sealed class AdvisorSettingsController
     internal void UpdateBusy()
     {
         api.SetBusy(testing != null); test.IsEnabled = api.Editing && !consultationBusy();
+        throwException.IsEnabled = testing == null && !consultationBusy();
         test.Content = text()[testing != null ? "action.cancel" : "connection.test"];
     }
     private void TestConnection()

@@ -12,6 +12,7 @@ internal sealed class CampaignIntegration
     private readonly MethodInfo simulation;
     private readonly int campaignScene;
     private readonly Action<Action> guard;
+    private readonly AdvisorRuntime runtime;
     private readonly Action<string> warn;
     private readonly AdvisorOptionsStore options;
     private readonly CampaignSituationReader reader = new();
@@ -19,10 +20,12 @@ internal sealed class CampaignIntegration
     private object? campaignUi;
     private AdvisorHudButton? launcher;
     private AdvisorWindow? advisor;
+    private AdvisorErrorWindow? errorWindow;
+    private Action? showError;
 
-    internal CampaignIntegration(Assembly campaign, Action<Action> guard, Action<string> warn, AdvisorOptionsStore options)
+    internal CampaignIntegration(Assembly campaign, AdvisorRuntime runtime, Action<string> warn, AdvisorOptionsStore options)
     {
-        this.guard = guard;
+        this.runtime = runtime; guard = runtime.Guard;
         this.warn = warn;
         this.options = options;
         var type = campaign.GetType("DynamicCampaignMod.Game.Session.CampaignSession", true)!;
@@ -35,12 +38,14 @@ internal sealed class CampaignIntegration
 
     internal void Tick(object campaignUi)
     {
-        if (!options.Current.CampaignEnabled || !InCampaign())
+        if (!options.Current.CampaignEnabled ||
+            (runtime.Failed ? SceneManager.GetActiveScene().buildIndex != campaignScene : !InCampaign()))
         {
             Reset();
             return;
         }
-        var current = simulation.Invoke(null, null) ?? throw new InvalidOperationException("An active campaign has no simulation.");
+        var current = runtime.Failed ? session : simulation.Invoke(null, null)
+            ?? throw new InvalidOperationException("An active campaign has no simulation.");
         var view = CampaignView.Instance;
         if (view == null || view.ActualWidth <= 0 || view.ActualHeight <= 0) return;
         if (!ReferenceEquals(session, current))
@@ -59,18 +64,50 @@ internal sealed class CampaignIntegration
             if (reference.ActualWidth <= 0 || reference.ActualHeight <= 0) return;
             var button = new AdvisorHudButton(grid, reference, AdvisorText.Load(GameLanguage.Read())["launcher.tooltip"]);
             launcher = button;
-            button.Control.Click += (_, _) => guard(() =>
+            void OpenAdvisor()
             {
-                if (!options.Current.CampaignEnabled) return;
                 var host = view.FindName("WindowHost") as WindowHost
                     ?? throw new InvalidOperationException("The campaign's own WindowHost is unavailable.");
                 advisor ??= new AdvisorWindow(view, host, guard, new CampaignAdvisorSource(Capture), GameLanguage.Read, warn, options);
                 advisor.Toggle();
                 button.Control.IsChecked = advisor.IsOpen;
-            });
+            }
+            void ShowError()
+            {
+                var host = view.FindName("WindowHost") as WindowHost
+                    ?? throw new InvalidOperationException("The campaign's own WindowHost is unavailable.");
+                errorWindow ??= new AdvisorErrorWindow(view, host, runtime, AdvisorText.Load(GameLanguage.Read()),
+                    value => button.Control.IsChecked = value, RestartAdvisor);
+                errorWindow.Show();
+            }
+            void RestartAdvisor()
+            {
+                if (!runtime.Failed) return;
+                errorWindow?.Close(); errorWindow = null;
+                runtime.Restart(OpenAdvisor);
+            }
+            void Toggle()
+            {
+                if (!options.Current.CampaignEnabled) return;
+                if (runtime.Failed)
+                {
+                    if (errorWindow?.IsOpen == true) errorWindow.Close();
+                    else runtime.PresentFailure(ShowError);
+                }
+                else OpenAdvisor();
+                button.Control.IsChecked = errorWindow?.IsOpen == true || advisor?.IsOpen == true;
+            }
+            showError = ShowError;
+            button.Control.Click += (_, _) =>
+            {
+                if (runtime.Failed) runtime.Present(Toggle);
+                else guard(Toggle);
+            };
         }
-        advisor?.Tick();
-        launcher.Control.IsChecked = advisor?.IsOpen == true;
+        if (!runtime.Failed) advisor?.Tick();
+        if (showError != null) runtime.NotifyFailure(showError);
+        errorWindow?.Tick();
+        launcher.Control.IsChecked = errorWindow?.IsOpen == true || advisor?.IsOpen == true;
     }
 
     private bool InCampaign() => (bool)active.Invoke(null, null)! && SceneManager.GetActiveScene().buildIndex == campaignScene;
@@ -89,17 +126,21 @@ internal sealed class CampaignIntegration
         if (scene.buildIndex == campaignScene) Reset();
     }
 
+    internal void Stop()
+    {
+        var previous = advisor; advisor = null;
+        previous?.Stop();
+    }
+
     internal void Reset()
     {
-        try { advisor?.Close(); }
+        try { Stop(); }
         finally
         {
-            var previous = launcher;
-            advisor = null;
-            launcher = null;
-            session = null;
-            campaignUi = null;
-            previous?.Dispose();
+            var previous = launcher; var report = errorWindow;
+            advisor = null; errorWindow = null; showError = null; launcher = null; session = null; campaignUi = null;
+            try { report?.Close(); }
+            finally { previous?.Dispose(); }
         }
     }
 }

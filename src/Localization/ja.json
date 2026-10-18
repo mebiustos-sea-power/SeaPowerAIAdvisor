@@ -1,4 +1,10 @@
 {
+  "failure.restart": "アドバイザーを再起動",
+  "developer.throw_exception": "例外を発生させる",
+  "developer.throw_exception_note": "会話履歴と編集中の設定は破棄されます。",
+  "failure.title": "AIアドバイザー：エラー",
+  "failure.message": "予期しないエラーでアドバイザーを停止しました。「アドバイザーを再起動」で新しい会話を開始できます。不具合報告には下の情報をコピーできます。",
+  "action.close": "閉じる",
   "window.title": "AIアドバイザー（試作）",
   "launcher.tooltip": "AIアドバイザー（試作）",
   "speaker.you": "あなた",

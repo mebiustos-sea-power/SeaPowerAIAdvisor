@@ -15,6 +15,7 @@ internal static class Program
         if (args.Length == 1 && args[0] == "--battle-only")
         {
             BattleBriefingTests.Run(Check);
+            RuntimeTests.Run(Check);
             BattleTests.Run(Check);
             InformationTests.Run(Check);
             PromptTests.Run(Check);
@@ -117,6 +118,7 @@ internal static class Program
                     .Any(m => (m.DeclaringType?.Namespace ?? (m as TypeReference)?.Namespace ?? "").StartsWith("System.Net", StringComparison.Ordinal)),
                     "Network access crossed the player-knowledge boundary");
         });
+        RuntimeTests.Run(Check);
         BattleBriefingTests.Run(Check);
         BattleBriefingTests.RunInstalled(args[2], Check);
         BattleTests.Run(Check);

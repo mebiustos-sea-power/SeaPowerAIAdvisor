@@ -1,4 +1,10 @@
 {
+  "failure.restart": "Restart advisor",
+  "developer.throw_exception": "Throw test exception",
+  "developer.throw_exception_note": "Clears the conversation and discards unsaved edits.",
+  "failure.title": "AI Advisor error",
+  "failure.message": "An unexpected error stopped the advisor. Use Restart advisor to start a new conversation without restarting the game. Copy the details below when reporting this issue.",
+  "action.close": "Close",
   "window.title": "AI Advisor (Prototype)",
   "launcher.tooltip": "AI Advisor (Prototype)",
   "speaker.you": "You",
