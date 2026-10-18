@@ -35,7 +35,7 @@
 
 既存の実装型は多くが`internal`であり、第三者向けのプロバイダー登録口はまだない。
 
-参照するソースは[情報取得の契約](../src/IAdvisorQuerySession.cs)、[Geminiの相談処理](../src/GeminiAdvisor.cs)、[Interactions形式](../src/GeminiInteraction.cs)、[接続設定](../src/AdvisorApiLibrary.cs)、[MODの入口](../src/Plugin.cs)。
+参照するソースは[情報取得の契約](../src/Advisor/IAdvisorQuerySession.cs)、[Geminiの相談処理](../src/Providers/Gemini/GeminiAdvisor.cs)、[Interactions形式](../src/Providers/Gemini/GeminiInteraction.cs)、[接続設定](../src/Configuration/AdvisorApiLibrary.cs)、[MODの入口](../src/Plugin.cs)。
 
 ## 第1段階の実装
 

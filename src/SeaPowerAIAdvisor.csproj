@@ -27,11 +27,11 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="$(PkgMarkdig)\lib\netstandard2.1\Markdig.dll" LogicalName="SeaPowerAIAdvisor.Markdig.dll" />
-    <EmbeddedResource Include="Views\Advisor.xaml" LogicalName="SeaPowerAIAdvisor.Advisor.xaml" />
-    <EmbeddedResource Include="Views\AdvisorHudButton.xaml" LogicalName="SeaPowerAIAdvisor.AdvisorHudButton.xaml" />
-    <EmbeddedResource Include="Views\AdvisorError.xaml" LogicalName="SeaPowerAIAdvisor.AdvisorError.xaml" />
-    <EmbeddedResource Include="Assets\advisor-default.png" LogicalName="SeaPowerAIAdvisor.DefaultPortrait.png" />
-    <EmbeddedResource Include="Localization\*.json" LogicalName="SeaPowerAIAdvisor.Localization.%(Filename).json" />
+    <EmbeddedResource Include="UI\Views\Advisor.xaml" LogicalName="SeaPowerAIAdvisor.Advisor.xaml" />
+    <EmbeddedResource Include="UI\Views\AdvisorHudButton.xaml" LogicalName="SeaPowerAIAdvisor.AdvisorHudButton.xaml" />
+    <EmbeddedResource Include="UI\Views\AdvisorError.xaml" LogicalName="SeaPowerAIAdvisor.AdvisorError.xaml" />
+    <EmbeddedResource Include="UI\Assets\advisor-default.png" LogicalName="SeaPowerAIAdvisor.DefaultPortrait.png" />
+    <EmbeddedResource Include="UI\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Localization.%(Filename).json" />
   </ItemGroup>
   <Target Name="CheckGameReferences" BeforeTargets="ResolveReferences">
     <Error Condition="!Exists('$(SeaPowerDir)\Sea Power_Data\Managed\Seapower-Scripts.dll')" Text="Set SeaPowerDir in Directory.Build.local.props." />
