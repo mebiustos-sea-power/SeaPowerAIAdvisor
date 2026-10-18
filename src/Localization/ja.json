@@ -335,6 +335,8 @@
   "developer.diagnostics": "診断",
   "developer.prompts.tab": "プロンプト",
   "developer.prompts.description": "一時適用した内容は次の相談から使われ、Sea Powerの終了で消えます。プロンプトファイルは変更しません。",
+  "developer.prompts.file": "ファイル",
+  "developer.prompts.all": "すべてのプロンプト",
   "developer.prompts.apply": "一時適用",
   "developer.prompts.reset": "起動時の内容に戻す",
   "developer.prompts.original": "起動時の内容を使用しています。",

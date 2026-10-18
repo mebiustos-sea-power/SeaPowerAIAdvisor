@@ -335,6 +335,8 @@
   "developer.diagnostics": "Diagnostics",
   "developer.prompts.tab": "Prompts",
   "developer.prompts.description": "Temporary edits apply to new consultations until Sea Power exits. Prompt files are not modified.",
+  "developer.prompts.file": "File",
+  "developer.prompts.all": "All prompts",
   "developer.prompts.apply": "Apply temporarily",
   "developer.prompts.reset": "Restore startup content",
   "developer.prompts.original": "Using startup content.",

@@ -5,11 +5,14 @@ using Noesis;
 
 namespace SeaPowerAIAdvisor;
 
-// Text boxes own a draft. Applying and resetting change memory only, independently of saved options.
+// The full list owns the draft; the selected editor mirrors one of its inputs. Applying and resetting change memory only.
 internal sealed class AdvisorPromptSettingsView
 {
     private readonly StackPanel host;
     private readonly TextBlock status;
+    private readonly ComboBox files, ids;
+    private readonly TextBox selectedText;
+    private TextBox? selectedInput;
     private readonly Button apply, reset;
     private readonly FrameworkElement content;
     private readonly Func<AdvisorText> text;
@@ -27,6 +30,17 @@ internal sealed class AdvisorPromptSettingsView
         T Named<T>(string name) where T : class => content.FindName(name) as T ?? throw new InvalidOperationException("Missing prompt control: " + name);
         host = Named<StackPanel>("PromptFields"); status = Named<TextBlock>("PromptStatus");
         apply = Named<Button>("ApplyPrompts"); reset = Named<Button>("ResetPrompts");
+        files = Named<ComboBox>("PromptFile"); ids = Named<ComboBox>("PromptId"); selectedText = Named<TextBox>("SelectedPromptText");
+        files.SelectionChanged += (_, _) => guard(() => { if (!updating) SelectFile(); });
+        ids.SelectionChanged += (_, _) => guard(() => { if (!updating) SelectPrompt(); });
+        selectedText.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(selectedText));
+        selectedText.LostKeyboardFocus += (_, _) => guard(() => typing.Release(selectedText));
+        selectedText.TextChanged += (_, _) => guard(() =>
+        {
+            if (updating || selectedInput == null) return;
+            UpdateControls(() => selectedInput.Text = selectedText.Text ?? "");
+            ShowState();
+        });
         apply.Click += (_, _) => guard(Apply); reset.Click += (_, _) => guard(Reset);
     }
     internal void Open()
@@ -41,7 +55,13 @@ internal sealed class AdvisorPromptSettingsView
     }
     internal void Close()
     {
-        fields.Clear(); host.Children.Clear(); runtime = null; apply.IsEnabled = reset.IsEnabled = false; status.Text = "";
+        UpdateControls(() =>
+        {
+            selectedInput = null; fields.Clear(); host.Children.Clear(); runtime = null;
+            files.Items.Clear(); ids.Items.Clear(); selectedText.Text = "";
+            files.IsEnabled = ids.IsEnabled = selectedText.IsEnabled = apply.IsEnabled = reset.IsEnabled = false;
+            status.Text = "";
+        });
     }
     private void Populate()
     {
@@ -70,7 +90,12 @@ internal sealed class AdvisorPromptSettingsView
                     fields.Add((field, input)); host.Children.Add(input);
                     input.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(input));
                     input.LostKeyboardFocus += (_, _) => guard(() => typing.Release(input));
-                    input.TextChanged += (_, _) => guard(() => { if (!updating) ShowState(); });
+                    input.TextChanged += (_, _) => guard(() =>
+                    {
+                        if (updating) return;
+                        if (ReferenceEquals(input, selectedInput)) UpdateControls(() => selectedText.Text = input.Text ?? "");
+                        ShowState();
+                    });
                 }
             }
             else
@@ -82,10 +107,47 @@ internal sealed class AdvisorPromptSettingsView
                     input.Text = field.Value; fields[i] = (field, input);
                 }
             }
-            apply.IsEnabled = reset.IsEnabled = true;
+            if (files.Items.Count == 0)
+            {
+                foreach (var file in fields.Select(f => f.Field.FileName).Distinct())
+                    files.Items.Add(new ComboBoxItem { Content = file });
+                files.SelectedIndex = 0; SelectFile();
+            }
+            else SelectPrompt();
+            files.IsEnabled = apply.IsEnabled = reset.IsEnabled = true;
         }
         finally { updating = false; }
         ShowState();
+    }
+    private void SelectFile()
+    {
+        UpdateControls(() =>
+        {
+            var file = (files.SelectedItem as ComboBoxItem)?.Content as string;
+            ids.Items.Clear();
+            foreach (var field in fields.Where(f => f.Field.FileName == file))
+                ids.Items.Add(new ComboBoxItem { Content = field.Field.Key });
+            ids.SelectedIndex = ids.Items.Count > 0 ? 0 : -1;
+            ids.IsEnabled = ids.Items.Count > 0;
+            SelectPrompt();
+        });
+    }
+    private void SelectPrompt()
+    {
+        UpdateControls(() =>
+        {
+            var file = (files.SelectedItem as ComboBoxItem)?.Content as string;
+            var key = (ids.SelectedItem as ComboBoxItem)?.Content as string;
+            selectedInput = fields.Find(f => f.Field.FileName == file && f.Field.Key == key).Input;
+            selectedText.Text = selectedInput?.Text ?? "";
+            selectedText.IsEnabled = selectedInput != null;
+        });
+    }
+    private void UpdateControls(Action action)
+    {
+        var wasUpdating = updating; updating = true;
+        try { action(); }
+        finally { updating = wasUpdating; }
     }
     private void ShowState() => Message(text()[HasChanges ? "developer.prompts.pending" : runtime?.HasOverrides == true ? "developer.prompts.active" : "developer.prompts.original"]);
     private void Apply()
