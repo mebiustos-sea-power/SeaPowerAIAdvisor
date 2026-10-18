@@ -14,6 +14,7 @@ internal sealed class BattleIntegration
     private readonly AdvisorRuntime runtime;
     private readonly Action<string> warn;
     private readonly AdvisorOptionsStore options;
+    private readonly AdvisorBackendRegistry backends;
     private readonly BattleSituationReader reader = new();
     private MainGameViewModel? model;
     private MainGameView? view;
@@ -25,8 +26,8 @@ internal sealed class BattleIntegration
     private AdvisorErrorWindow? errorWindow;
     private Action? showError;
 
-    internal BattleIntegration(AdvisorRuntime runtime, Action<string> warn, AdvisorOptionsStore options)
-    { this.runtime = runtime; guard = runtime.Guard; this.warn = warn; this.options = options; }
+    internal BattleIntegration(AdvisorRuntime runtime, Action<string> warn, AdvisorOptionsStore options, AdvisorBackendRegistry backends)
+    { this.runtime = runtime; guard = runtime.Guard; this.warn = warn; this.options = options; this.backends = backends; }
 
     internal void Tick(MainGameViewModel current)
     {
@@ -54,7 +55,7 @@ internal sealed class BattleIntegration
             void OpenAdvisor()
             {
                 var host = FindHost(current.RootControl) ?? throw new InvalidOperationException("The battle window host is unavailable.");
-                advisor ??= new AdvisorWindow(root, host, guard, new BattleAdvisorSource(Capture), GameLanguage.Read, warn, options);
+                advisor ??= new AdvisorWindow(root, host, guard, new BattleAdvisorSource(Capture), GameLanguage.Read, warn, options, backends);
                 advisor.Toggle();
                 button.Control.IsChecked = advisor.IsOpen;
             }

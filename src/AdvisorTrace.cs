@@ -23,23 +23,23 @@ internal sealed class AdvisorTrace : IDisposable
     internal string FilePath { get; }
     internal static string DirectoryIn(string gameDataPath) => Path.Combine(gameDataPath, "SeaPowerAIAdvisor", "logs");
 
-    private AdvisorTrace(string directory, string id, AdvisorSettings settings, AdvisorQuestion question)
+    private AdvisorTrace(string directory, string id, AdvisorTraceOptions settings, AdvisorQuestion question)
     {
         this.id = id;
-        secrets = new[] { settings.ApiKey, settings.FallbackApiKey }.Where(k => k.Length > 0)
+        secrets = settings.Secrets.Where(k => k.Length > 0)
             .SelectMany(KeyVariants).Distinct().OrderByDescending(k => k.Length).ToArray();
         FilePath = Path.GetFullPath(Path.Combine(directory, "ai-communication.jsonl"));
         Write("consultation_started", new JObject
         {
-            ["mod_version"] = typeof(AdvisorTrace).Assembly.GetName().Version!.ToString(), ["api"] = "interactions",
-            ["model"] = settings.RequestModel, ["fallback_model"] = settings.FallbackModel, ["display_question"] = question.DisplayText,
+            ["mod_version"] = typeof(AdvisorTrace).Assembly.GetName().Version!.ToString(), ["api"] = settings.Api,
+            ["model"] = settings.Model, ["fallback_model"] = settings.FallbackModel, ["display_question"] = question.DisplayText,
             ["question_source"] = question.IsShortcut ? "shortcut" : "typed"
         });
     }
 
-    internal static AdvisorTrace? Start(string directory, string id, AdvisorSettings settings, AdvisorQuestion question)
+    internal static AdvisorTrace? Start(string directory, string id, AdvisorTraceOptions settings, AdvisorQuestion question)
     {
-        if (!settings.LogAiJson) return null;
+        if (!settings.Enabled) return null;
         try { return new AdvisorTrace(directory, id, settings, question); }
         catch (IOException) { throw new AdvisorConnectionException("diagnostic_log_error"); }
         catch (UnauthorizedAccessException) { throw new AdvisorConnectionException("diagnostic_log_error"); }
@@ -170,5 +170,20 @@ internal sealed class AdvisorLogRun
                 writer.WriteLine(line);
             initialized.Add(path);
         }
+    }
+}
+
+// Backend-supplied diagnostic metadata and redaction values; no provider settings or credentials enter AI input.
+internal sealed class AdvisorTraceOptions
+{
+    internal bool Enabled { get; }
+    internal string Api { get; }
+    internal string Model { get; }
+    internal string FallbackModel { get; }
+    internal IReadOnlyList<string> Secrets { get; }
+    internal AdvisorTraceOptions(bool enabled, string api, string model, string fallbackModel = "", IEnumerable<string>? secrets = null)
+    {
+        Enabled = enabled; Api = api; Model = model; FallbackModel = fallbackModel;
+        Secrets = Array.AsReadOnly((secrets ?? Array.Empty<string>()).ToArray());
     }
 }

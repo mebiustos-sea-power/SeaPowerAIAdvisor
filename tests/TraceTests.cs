@@ -75,7 +75,7 @@ internal static class TraceTests
             var special = Key + (char)34 + (char)92 + "tail";
             var settings = Settings(true, special);
             var question = new AdvisorQuestion("Check " + special);
-            using var trace = AdvisorTrace.Start(directory, "redaction", settings, question)!;
+            using var trace = AdvisorTrace.Start(directory, "redaction", GeminiBackend.Diagnostics(settings), question)!;
             var body = new JObject { ["plain"] = special, ["nested_json"] = new JObject { ["secret"] = special }.ToString(Formatting.None) };
             var original = body.ToString(Formatting.None);
             var unicode = string.Concat(special.Select(c => "\\u" + ((int)c).ToString("x4", CultureInfo.InvariantCulture)));
@@ -215,7 +215,7 @@ internal static class TraceTests
             var path = Path.Combine(directory, "ai-communication.jsonl");
             File.WriteAllText(path, "previous game run");
             var question = new AdvisorQuestion("First consultation");
-            Require(AdvisorTrace.Start(directory, "disabled", Settings(false), question) == null &&
+            Require(AdvisorTrace.Start(directory, "disabled", GeminiBackend.Diagnostics(Settings(false)), question) == null &&
                 File.ReadAllText(path) == "previous game run", "Disabled logging erased the previous game run");
             var session = Session(question);
             GeminiTransport Transport(AdvisorTrace? trace) => new(new Handler((r, c) =>

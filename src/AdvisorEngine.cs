@@ -7,7 +7,7 @@ using Newtonsoft.Json.Linq;
 
 namespace SeaPowerAIAdvisor;
 
-// Default staged retrieval policy. API wire formats and server-side conversation state belong to providers.
+// Optional standard retrieval strategy. The host owns deadlines; providers own API formats and conversation state.
 internal sealed class AdvisorEngine : IAdvisorBackend
 {
     internal const int MaxTotalRequestBytes = 1_000_000;
@@ -17,14 +17,7 @@ internal sealed class AdvisorEngine : IAdvisorBackend
     internal AdvisorEngine(IAdvisorProvider main, IAdvisorProvider? sub = null, Action<AdvisorConnectionException>? switched = null)
     { this.main = main; this.sub = sub; this.switched = switched; }
 
-    public async Task<AdviceResult> ConsultAsync(AdvisorContext context, CancellationToken cancellation)
-    {
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
-        deadline.CancelAfter(TimeSpan.FromSeconds(context.TimeoutSeconds));
-        try { return await RunAsync(context, deadline.Token).ConfigureAwait(false); }
-        catch (OperationCanceledException) when (!cancellation.IsCancellationRequested)
-        { throw new AdvisorConnectionException("consultation_timeout"); }
-    }
+    public Task<AdviceResult> ConsultAsync(AdvisorContext context, CancellationToken cancellation) => RunAsync(context, cancellation);
 
     private async Task<AdviceResult> RunAsync(AdvisorContext context, CancellationToken cancellation)
     {

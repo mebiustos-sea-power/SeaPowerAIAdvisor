@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace SeaPowerAIAdvisor;
 
-// Gemini composition root. Consultation policy lives in AdvisorEngine; wire state lives in GeminiProvider.
+// Gemini entry points for existing integrations and tests. The game UI selects backends through the registry.
 internal sealed class GeminiAdvisor
 {
     private readonly IGeminiTransport transport;
@@ -17,13 +17,9 @@ internal sealed class GeminiAdvisor
         AdvisorQuestion question, IReadOnlyList<ChatExchange> history, CancellationToken cancellation,
         Func<AdvisorTrace?, GeminiTransport>? transportFactory = null, AdvisorProfile? profile = null, string commonPrompt = "", Action<AdvisorProgress>? progress = null, int historyExchanges = AdvisorOptions.DefaultHistoryExchanges, string userName = "")
     {
-        using var trace = AdvisorTrace.Start(logDirectory, session.Id, settings, question);
-        return await AdvisorConsultation.RunAsync(async () =>
-        {
-            using var transport = transportFactory == null ? new GeminiTransport(trace) : transportFactory(trace);
-            return await new GeminiAdvisor(transport, error => trace?.Fallback(error)).ConsultAsync(session, settings, history,
-                cancellation, profile, commonPrompt, progress, historyExchanges, userName).ConfigureAwait(false);
-        }, trace, cancellation).ConfigureAwait(false);
+        var context = AdvisorContext.Create(session, settings.ConsultationTimeoutSeconds, history, profile, commonPrompt, progress, historyExchanges, userName);
+        return await AdvisorConsultation.RunAsync(GeminiBackend.Prepare(settings, transportFactory), context,
+            logDirectory, question, cancellation).ConfigureAwait(false);
     }
 
     internal Task<AdviceResult> ConsultAsync(IAdvisorQuerySession session, AdvisorSettings settings,
@@ -32,6 +28,6 @@ internal sealed class GeminiAdvisor
         var context = AdvisorContext.Create(session, settings.ConsultationTimeoutSeconds, history, profile, commonPrompt, progress, historyExchanges, userName);
         IAdvisorBackend backend = new AdvisorEngine(new GeminiProvider(transport, settings),
             settings.FallbackApiKey.Length == 0 ? null : new GeminiProvider(transport, settings.ForFallback()), switched);
-        return backend.ConsultAsync(context, cancellation);
+        return AdvisorConsultation.RunAsync(backend, context, cancellation);
     }
 }

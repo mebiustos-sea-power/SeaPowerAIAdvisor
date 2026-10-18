@@ -15,6 +15,7 @@ internal sealed class CampaignIntegration
     private readonly AdvisorRuntime runtime;
     private readonly Action<string> warn;
     private readonly AdvisorOptionsStore options;
+    private readonly AdvisorBackendRegistry backends;
     private readonly CampaignSituationReader reader = new();
     private object? session;
     private object? campaignUi;
@@ -23,11 +24,12 @@ internal sealed class CampaignIntegration
     private AdvisorErrorWindow? errorWindow;
     private Action? showError;
 
-    internal CampaignIntegration(Assembly campaign, AdvisorRuntime runtime, Action<string> warn, AdvisorOptionsStore options)
+    internal CampaignIntegration(Assembly campaign, AdvisorRuntime runtime, Action<string> warn, AdvisorOptionsStore options, AdvisorBackendRegistry backends)
     {
         this.runtime = runtime; guard = runtime.Guard;
         this.warn = warn;
         this.options = options;
+        this.backends = backends;
         var type = campaign.GetType("DynamicCampaignMod.Game.Session.CampaignSession", true)!;
         const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
         active = type.GetProperty("Active", flags)?.GetGetMethod(true) ?? throw new MissingMemberException(type.FullName, "Active");
@@ -68,7 +70,7 @@ internal sealed class CampaignIntegration
             {
                 var host = view.FindName("WindowHost") as WindowHost
                     ?? throw new InvalidOperationException("The campaign's own WindowHost is unavailable.");
-                advisor ??= new AdvisorWindow(view, host, guard, new CampaignAdvisorSource(Capture), GameLanguage.Read, warn, options);
+                advisor ??= new AdvisorWindow(view, host, guard, new CampaignAdvisorSource(Capture), GameLanguage.Read, warn, options, backends);
                 advisor.Toggle();
                 button.Control.IsChecked = advisor.IsOpen;
             }

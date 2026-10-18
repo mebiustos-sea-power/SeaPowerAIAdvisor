@@ -6,7 +6,8 @@ using System.Threading.Tasks;
 
 namespace SeaPowerAIAdvisor;
 
-// A consultation implementation may use the standard engine or its own retrieval/communication strategy.
+// Implementations choose their own retrieval/communication strategy, honor cancellation,
+// and retrieve game information only through the context's host-controlled knowledge gateway.
 internal interface IAdvisorBackend
 {
     Task<AdviceResult> ConsultAsync(AdvisorContext context, CancellationToken cancellation);
@@ -22,4 +23,33 @@ internal sealed class AdviceResult
     internal IReadOnlyList<string> Queries { get; }
     internal AdviceResult(string text, int apiRequests, int queryRounds, long? totalTokens, IEnumerable<string>? queries = null, string model = "")
     { Text = text; ApiRequests = apiRequests; QueryRounds = queryRounds; TotalTokens = totalTokens; Model = model; Queries = Array.AsReadOnly((queries ?? Array.Empty<string>()).ToArray()); }
+}
+
+// Preparing validates configuration without opening a connection or writing a consultation log.
+internal sealed class AdvisorBackendSetup
+{
+    internal string Model => Diagnostics.Model;
+    internal int TimeoutSeconds { get; }
+    internal AdvisorTraceOptions Diagnostics { get; }
+    private readonly Func<AdvisorTrace?, AdvisorBackendHandle> open;
+    internal AdvisorBackendSetup(int timeoutSeconds, AdvisorTraceOptions diagnostics, Func<AdvisorTrace?, AdvisorBackendHandle> open)
+    {
+        if (timeoutSeconds <= 0) throw new ArgumentOutOfRangeException(nameof(timeoutSeconds));
+        TimeoutSeconds = timeoutSeconds;
+        Diagnostics = diagnostics ?? throw new ArgumentNullException(nameof(diagnostics));
+        this.open = open ?? throw new ArgumentNullException(nameof(open));
+    }
+    internal AdvisorBackendHandle Open(AdvisorTrace? trace) => open(trace)
+        ?? throw new InvalidOperationException("The adviser backend returned no execution scope.");
+}
+
+// The host owns one execution scope per consultation, including its transport or custom resources.
+internal sealed class AdvisorBackendHandle : IDisposable
+{
+    internal IAdvisorBackend Backend { get; }
+    private readonly IDisposable? resource;
+    private bool disposed;
+    internal AdvisorBackendHandle(IAdvisorBackend backend, IDisposable? resource = null)
+    { Backend = backend ?? throw new ArgumentNullException(nameof(backend)); this.resource = resource ?? backend as IDisposable; }
+    public void Dispose() { if (!disposed) { disposed = true; resource?.Dispose(); } }
 }

@@ -14,6 +14,7 @@ internal sealed class AdvisorWindow
     private readonly Action<Action> guard;
     private readonly IAdvisorSource source;
     private readonly AdvisorOptionsStore options;
+    private readonly AdvisorBackendRegistry backends;
     private readonly Func<string> replyLanguage;
     private readonly Action<string> warn;
     private readonly AdvisorConversation conversation = new();
@@ -41,13 +42,14 @@ internal sealed class AdvisorWindow
     private string? pendingModel;
     private bool scrollPending, diagnosticScrollPending;
 
-    internal AdvisorWindow(FrameworkElement view, WindowHost host, Action<Action> guard, IAdvisorSource source, Func<string> replyLanguage, Action<string> warn, AdvisorOptionsStore options)
+    internal AdvisorWindow(FrameworkElement view, WindowHost host, Action<Action> guard, IAdvisorSource source, Func<string> replyLanguage, Action<string> warn, AdvisorOptionsStore options, AdvisorBackendRegistry backends)
     {
         this.view = view;
         this.host = host;
         this.guard = guard;
         this.source = source;
         this.options = options;
+        this.backends = backends;
         this.replyLanguage = replyLanguage;
         this.warn = warn;
         uiLanguage = replyLanguage();
@@ -262,17 +264,20 @@ internal sealed class AdvisorWindow
         try
         {
             options.EnsureUserName(text["general.default_user_name"]);
-            var settings = AdvisorSettings.Load(settingsPath);
+            var execution = backends.Prepare();
             var session = source.CreateSession(replyLanguage(), request.Text, options.Current.MaxQueryRounds, options.Current.Information);
             var historyLimit = options.Current.HistoryExchanges;
             pendingTurn = turn;
-            pendingModel = settings.Model;
+            pendingModel = execution.Model;
             var logDirectory = AdvisorTrace.DirectoryIn(UnityEngine.Application.persistentDataPath);
             var advisorProfile = appliedProfile;
             var sharedPrompt = options.Current.CommonPrompt;
             var userName = options.Current.UserName ?? throw new InvalidOperationException("The user name has not been initialized.");
             active = new AdvisorJob((cancellation, progress) =>
-                GeminiAdvisor.RunAsync(logDirectory, session, settings, request, history, cancellation, profile: advisorProfile, commonPrompt: sharedPrompt, progress: progress, historyExchanges: historyLimit, userName: userName), warn);
+            {
+                var context = AdvisorContext.Create(session, execution.TimeoutSeconds, history, advisorProfile, sharedPrompt, progress, historyLimit, userName);
+                return AdvisorConsultation.RunAsync(execution, context, logDirectory, request, cancellation);
+            }, warn);
             SetBusy(true);
             status.Text = text["status.consulting"];
         }
@@ -284,7 +289,7 @@ internal sealed class AdvisorWindow
         catch (AdvisorConnectionException failure)
         {
             FailTurn(turn, AdvisorNotice.Connection(failure));
-            warn("Gemini consultation failed: " + failure.Message);
+            warn("Advisor consultation failed: " + failure.Message);
         }
         catch (AdvisorPromptException failure)
         {
@@ -338,7 +343,7 @@ internal sealed class AdvisorWindow
         else if (completion.Error != null)
         {
             FailTurn(turn, AdvisorNotice.Connection(completion.Error));
-            warn("Gemini consultation failed: " + completion.Error.Message);
+            warn("Advisor consultation failed: " + completion.Error.Message);
         }
         else
         {
@@ -390,7 +395,7 @@ internal sealed class AdvisorWindow
         try
         {
             options.EnsureUserName(text["general.default_user_name"]);
-            _ = AdvisorSettings.Load(settingsPath); _ = AdvisorPrompts.Current; configurationNotice = null;
+            _ = backends.Prepare(); _ = AdvisorPrompts.Current; configurationNotice = null;
         }
         catch (AdvisorOptionsException error) { configurationNotice = AdvisorNotice.Options(error); }
         catch (AdvisorConnectionException error) { configurationNotice = AdvisorNotice.Connection(error); }

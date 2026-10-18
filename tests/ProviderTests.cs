@@ -6,11 +6,12 @@ using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using SeaPowerAIAdvisor;
 
-internal static class ProviderTests
+internal static partial class ProviderTests
 {
     private const string ToolName = "read_known_game_state";
     internal static void Run(Action<string, Action> check)
     {
+        RunBackends(check);
         check("A provider without Gemini wire types uses the shared engine and receives correctly mapped parallel results", () => Async(async () =>
         {
             var knowledge = new Knowledge(2);
@@ -30,7 +31,7 @@ internal static class ProviderTests
                 return Task.FromResult(new AdvisorReply("Shared answer", Array.Empty<AdvisorToolCall>(), 7));
             });
             IAdvisorBackend backend = new AdvisorEngine(provider);
-            var answer = await AdvisorConsultation.RunAsync(() => backend.ConsultAsync(context, CancellationToken.None), null, CancellationToken.None);
+            var answer = await AdvisorConsultation.RunAsync(backend, context, CancellationToken.None);
             Require(answer.Text == "Shared answer" && answer.Model == "local-model" && answer.ApiRequests == 2 &&
                 answer.QueryRounds == 1 && answer.TotalTokens == 14 && answer.Queries.SequenceEqual(new[] { "get_briefing", "catalog" }),
                 "Shared execution depended on a Gemini response or changed result accounting");
@@ -146,14 +147,14 @@ internal static class ProviderTests
         public int RoundsUsed => inner.RoundsUsed;
         public int MaxRounds => inner.MaxRounds;
         public AdvisorPrompts Prompts => inner.Prompts;
-        internal Knowledge(int maxRounds) => inner = new BattleQuerySession(new BattleSnapshot(new JObject
+        internal Knowledge(int maxRounds, AdvisorInformation? information = null) => inner = new BattleQuerySession(new BattleSnapshot(new JObject
         {
             ["captured_at_utc"] = "1985-06-01T00:00:00Z", ["mission_display_name"] = "Mission", ["mission_briefing"] = "Public briefing",
             ["friendly_units"] = new JArray(), ["observed_contacts"] = new JArray(), ["public_objectives"] = new JArray(),
             ["friendly_bases"] = new JArray(), ["hosted_air_units"] = new JArray(), ["aviation_hosts"] = new JArray(),
             ["unit_capabilities"] = new JArray(), ["contact_threat_references"] = new JArray(),
             ["weapon_references"] = new JArray(), ["published_reports"] = new JArray()
-        }), "ja", "Question", maxRounds: maxRounds);
+        }), "ja", "Question", maxRounds: maxRounds, information: information);
         public JObject InitialInput()
         {
             var value = inner.InitialInput(); value["query_tool"]!["name"] = ToolName; return value;

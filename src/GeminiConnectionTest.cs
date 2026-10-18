@@ -11,7 +11,7 @@ internal static class GeminiConnectionTest
     internal static async Task<AdviceResult> RunAsync(string logDirectory, AdvisorSettings settings, CancellationToken cancellation,
         Func<AdvisorTrace?, GeminiTransport>? transportFactory = null, string? requestText = null)
     {
-        using var trace = AdvisorTrace.Start(logDirectory, "connection-test-" + Guid.NewGuid().ToString("N"), settings,
+        using var trace = AdvisorTrace.Start(logDirectory, "connection-test-" + Guid.NewGuid().ToString("N"), GeminiBackend.Diagnostics(settings),
             new AdvisorQuestion("Connection test"));
         try
         {

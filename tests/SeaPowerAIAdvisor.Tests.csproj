@@ -43,6 +43,8 @@
     <Compile Include="..\src\GeminiAdvisor.cs" Link="GeminiAdvisor.cs" />
     <Compile Include="..\src\GeminiInteraction.cs" Link="GeminiInteraction.cs" />
     <Compile Include="..\src\AdvisorBackend.cs" Link="AdvisorBackend.cs" />
+    <Compile Include="..\src\AdvisorBackendRegistry.cs" Link="AdvisorBackendRegistry.cs" />
+    <Compile Include="..\src\GeminiBackend.cs" Link="GeminiBackend.cs" />
     <Compile Include="..\src\AdvisorContext.cs" Link="AdvisorContext.cs" />
     <Compile Include="..\src\AdvisorProvider.cs" Link="AdvisorProvider.cs" />
     <Compile Include="..\src\AdvisorConnection.cs" Link="AdvisorConnection.cs" />
