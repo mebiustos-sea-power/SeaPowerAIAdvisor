@@ -28,7 +28,7 @@ internal static class ApiLibraryTests
             var saved = AdvisorSettings.Load(path); var loaded = AdvisorSettings.Edit(path, "Different language {0}");
             Require(saved.ApiKey == MainKey && saved.ForFallback().RequestApiKey == SubKey && saved.Model == "gemini-main" &&
                 saved.ForFallback().RequestModel == "gemini-sub" && saved.RequestTimeoutSeconds == 45 &&
-                saved.ConsultationTimeoutSeconds == 90 && saved.MaxOutputTokens == 2048 && saved.LogAiJson &&
+                saved.MaxOutputTokens == 2048 && saved.LogAiJson &&
                 loaded.Main.Name == "API設定1" && loaded.Sub!.Name == "API設定2", "Saving migration reset credentials, labels or advanced settings");
             var json = JObject.Parse(File.ReadAllText(path));
             Require(json["api_key"] == null && json["fallback_api_key"] == null && json["model"] == null && json["fallback_model"] == null,
@@ -51,14 +51,17 @@ internal static class ApiLibraryTests
                 first.ApiKey == MainKey && second.ApiKey == SubKey, "Reassigning roles changed the registered credentials");
             var settings = AdvisorSettings.Parse(Encoding.UTF8.GetString(draft.Data()));
             var sent = new List<string>();
-            var fallback = new GeminiFallback(new Fake((s, _, _) =>
+            var transport = new Fake((s, _, _) =>
             {
                 sent.Add(s.RequestApiKey);
                 Require(s.RequestModel == "gemini-same-model", "An assignment used the wrong model");
                 if (sent.Count == 1) throw new AdvisorConnectionException("rate_limited", 429);
-                return Task.FromResult(new JObject());
-            }), settings, _ => { });
-            _ = fallback.GenerateAsync(_ => new JObject(), CancellationToken.None, (_, _, _) => { }).GetAwaiter().GetResult();
+                return Task.FromResult(InteractionFixture.Reply(new JObject { ["text"] = "Selected" }));
+            });
+            var input = new AdvisorProviderInput(new JObject(), "Test", new JObject
+            { ["name"] = "query_situation", ["description"] = "Test", ["parameters"] = new JObject() });
+            using var fallback = new AdvisorConnection(new GeminiProvider(transport, settings), new GeminiProvider(transport, settings.ForFallback()), input, _ => { });
+            _ = fallback.GenerateAsync(false, new AdvisorContinuation(new JArray(), 0, 1), CancellationToken.None, (_, _, _, _) => { }).GetAwaiter().GetResult();
             Require(sent.SequenceEqual(new[] { SubKey, MainKey }), "Fallback used the old positional credentials");
         });
         check("Unassigned API entries can be tested independently while edits do not enable unsaved logging", () =>

@@ -268,10 +268,10 @@ internal static class GeminiTests
                 });
                 var session = Session(assembly);
                 if (count.HasValue)
-                    await AdvisorConsultation.RunAsync("unused-history-test", session, Settings(), new AdvisorQuestion("Current question"), history,
+                    await GeminiAdvisor.RunAsync("unused-history-test", session, Settings(), new AdvisorQuestion("Current question"), history,
                         CancellationToken.None, _ => new GeminiTransport(handler), historyExchanges: options.HistoryExchanges);
                 else
-                    await AdvisorConsultation.RunAsync("unused-history-test", session, Settings(), new AdvisorQuestion("Current question"), history,
+                    await GeminiAdvisor.RunAsync("unused-history-test", session, Settings(), new AdvisorQuestion("Current question"), history,
                         CancellationToken.None, _ => new GeminiTransport(handler));
                 Require(handler.Calls == 1 && chat.Turns.Count == 20 && chat.Exchanges.SequenceEqual(history),
                     "Selecting history caused extra API calls or removed visible dialogue");

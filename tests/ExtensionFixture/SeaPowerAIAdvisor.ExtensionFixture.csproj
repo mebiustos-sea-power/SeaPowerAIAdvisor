@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>netstandard2.1</TargetFramework><AssemblyName>SeaPowerAIAdvisor.ExtensionFixture</AssemblyName></PropertyGroup>
+  <ItemGroup><ProjectReference Include="..\..\api\SeaPowerAIAdvisor.Api.csproj" /></ItemGroup>
+</Project>

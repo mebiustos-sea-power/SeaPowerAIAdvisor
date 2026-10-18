@@ -1,0 +1,123 @@
+# AI Advisor extension API
+
+This is the initial experimental public contract, version 1, on the multi-provider development branch. Older published releases do not include it.
+
+## Projects and dependencies
+
+`api/SeaPowerAIAdvisor.Api.csproj` builds `SeaPowerAIAdvisor.Api.dll` for .NET Standard 2.1. Its only reference is the standard library: no Unity, Noesis, Anchor Chain, JSON library or provider SDK dependency. Inputs, schemas and results cross the boundary as JSON strings. The host bridge is in `src/Providers/Extensions/`.
+
+Keep `SeaPowerAIAdvisor.Api.dll` next to `SeaPowerAIAdvisor.dll` in the host distribution. Extensions reference the host API DLL with `Private=false` and must not ship duplicate copies. The normal host build packages both DLLs but does not install or enable example extensions.
+
+`examples/ExternalAdvisor/` is a separate Anchor Chain mod with two explicitly **offline** examples. Neither makes AI requests. `tests/ExtensionFixture/` is a separate API-only client; it does not reference or link host implementation sources.
+
+## Registration
+
+Register from an Anchor Chain entry point with both a host dependency and after ordering:
+
+```csharp
+using AnchorChain;
+using SeaPowerAIAdvisor.Api;
+
+[ACPlugin("your.mod.id", "Your AI provider", "1.0.0",
+    new string[0], new[] { AdvisorApi.HostModId })]
+[ACDependency(AdvisorApi.HostModId, null, null)]
+public sealed class Plugin : IAnchorChainMod
+{
+    public void TriggerEntryPoint() => ProviderRegistration.Register();
+}
+
+internal static class ProviderRegistration
+{
+    internal static void Register()
+    {
+        if (!AdvisorApi.IsAvailable) return;
+        AdvisorApi.Register(new YourProvider());
+    }
+}
+
+// Implement the chosen execution interface on an internal provider class.
+```
+
+Expose only the Anchor Chain entry-point class as `public` in an extension DLL. Keep provider definitions, consultation/session classes and other API-dependent implementation types `internal` or private. The entry point's base types, implemented interfaces, field types and public signatures must not depend on the advisor API. The host ID above is a compile-time constant in the attributes.
+
+Anchor Chain calls `GetExportedTypes()` as it discovers each DLL, before it applies dependency/`after` ordering. Public types implementing advisor interfaces would require the API DLL during discovery and can fail if the extension is scanned first. With this boundary, discovery needs only Anchor Chain; API-dependent registration runs after discovery has loaded the host/API DLLs and the host entry point has initialized the registry. Changing mod-manager order or copying the API DLL into each extension is unnecessary for this pattern.
+
+`IsAvailable` becomes true after the enabled advisor initializes. Registration before that throws. The host checks the directory of the implementation DLL against Sea Power's enabled mods: `Register` returns false for a disabled owner and throws for an unregistered directory. Put that DLL at the root of its registered mod package.
+
+Definitions implement `IAdvisorExtension` and exactly one execution interface below. `ApiVersion` must equal `AdvisorApi.ContractVersion`. IDs are unique and case-sensitive, with up to 80 ASCII letters, digits, dots, underscores or hyphens. Duplicate IDs/field keys and incompatible versions fail explicitly. Definitions should remain immutable after registration. Version 1 supports adding registrations, with no replacement or unregister operation; restart to reload an implementation. Register during startup before opening settings. Later registrations appear when the editor is reopened.
+
+Gemini and Ollama pass through the same catalog registration/validation path and retain their native adapters.
+
+## Settings and connection tests
+
+Declare fields with `ConnectionField`: key, English label, default string, secret flag and optional translated labels. The current form supports text and password inputs. The extension owns numeric conversion and validation. Missing translations use the English label.
+
+`ValidateSettings` receives opaque settings JSON and must perform local validation without network I/O or writes. `GetModel` supplies a display/log identifier, never a credential. Fields named `api_key` or `model` are not mandatory. The existing schema 3 stores provider IDs, settings and main/sub assignments. Loading does not write, and an unavailable provider's settings are preserved rather than replaced.
+
+`TestAsync` receives only pending connection settings, host connection services, a short test message and cancellation. It receives no game information, history or personality. It does not save/select a connection. Results stay in the settings screen; diagnostic logging follows the saved developer preference.
+
+## Standard-engine adapter
+
+Implement `IStandardAdvisorExtension.OpenSession` and return `IAdvisorSession`.
+
+1. `ConsultationInput` separates data, system instruction and tool-schema JSON. Reformat them for the API as needed.
+2. `Prepare(allowTools)` returns a `ProviderRequest` containing its UTF-8 byte count and deferred send callback. Preparing must not perform I/O. The host checks the sending budget before invoking it.
+3. Return final text or `ToolCall` objects normalized to the supplied host tool name and query schema. AI-facing names or wire formats may differ.
+4. `AcceptResults` receives matching call IDs/names and result JSON. The adapter owns API history, signatures, continuation IDs and thinking.
+5. Dispose session-owned resources; do not dispose shared connection services.
+
+The host retains its existing batching, disclosure validation, retrieval/sending limits, progress and main/sub policy. An empty final reply fails instead of producing an empty successful turn.
+
+## Independent consultation
+
+Implement `IIndependentAdvisorExtension.OpenConsultation` and return `IAdvisorConsultation`. `ConsultAsync` owns its request sequence, encoding, caching, retries and retrieval strategy. It does not use provider sessions or have to use the standard engine. The standard engine's API-request loop limit is not imposed on it.
+
+`ConsultationContext` contains immutable input strings, the knowledge gateway, executed-retrieval history and a progress callback. It contains no live game objects or another connection's credentials. Query the gateway with the supplied schema, omitting `consultation_id`:
+
+```csharp
+string result = context.Knowledge.Execute(
+    "{\"requests\":[{\"query\":\"catalog\"}]}" );
+```
+
+The host supplies the current identity and preserves information selection, target validation, page/batch limits, returned-data limits and retrieval allowance. Excluded, unknown and unavailable information remain distinct. Do not turn a failed retrieval into empty or normal data. The host serializes gateway calls, and rejects calls after the consultation ends.
+
+`ReportProgress` accepts a fixed phase, request count and query names. The host derives retrieval counts from actual usage, masks unknown topic names and labels the active connection. Do not submit model text, entity identifiers or thinking as progress.
+
+Return `AdvisorAnswer`. The host uses actual knowledge-round counts. Leave token usage null when unknown. Honor the cancellation token and dispose owned resources. Cancellation is not a request to switch connections.
+
+## HTTP, diagnostics and errors
+
+`IAdvisorConnectionServices.PostJsonAsync` is an optional JSON-object HTTP helper. It applies connection-specific timeout, cancellation, receive limits, error classification and redacted request/response logging. It returns parsed JSON serialized without whitespace. Use an independent transport if exact bytes or another protocol are needed. There is no whole-consultation timeout.
+
+For an independent transport, call `BeginRequest`, then `EndRequest` or `FailRequest` for each actual attempt. The returned ID belongs to that connection service and can be completed only once. IDs are shared with the HTTP helper, and concurrent records retain their sequence. Never submit authentication headers or settings documents to diagnostics. Both selected connections' declared secret values are redacted. Apply the configured request timeout yourself when bypassing the HTTP helper.
+
+Expected service errors use `AdvisorException` with a short lowercase code and optional HTTP status. Do not put raw responses, credentials or explanatory paragraphs in that code. Cancellation uses `OperationCanceledException`. Invariant failures and missing dependencies remain unexpected errors, not temporary-service fallbacks.
+
+## Main/sub handoff
+
+Both strategies use the existing one-way policy. An unhandled eligible temporary error starts the sub with the original common input, executed query/result pairs and actual used/remaining retrieval allowance. It does not transfer private conversation IDs, signatures or thinking, and does not re-fetch facts. A failed sub terminates the consultation; a new consultation starts with main.
+
+Independent implementations can retry internally. Only eligible errors they let escape trigger the common sub policy. Programming/configuration errors and cancellation do not. Total token usage becomes unknown after handoff because a lost response may have consumed tokens.
+
+## Build and validation
+
+With the repository's `Directory.Build.local.props` configured:
+
+```text
+dotnet build examples/ExternalAdvisor/SeaPowerAIAdvisor.Example.csproj -c Release
+```
+
+For a manual test, create a separate enabled mod directory with the example DLL and its `_info.ini`. Use a host containing the API DLL, enable Anchor Chain and AI Advisor, then restart. Register either offline example through API connection settings. The normal host package does not include the example.
+
+The load-order regression check uses the installed game's Mono runtime in isolated processes:
+
+```powershell
+dotnet build tests/ExtensionLoading/SeaPowerAIAdvisor.ExtensionLoading.csproj -c Release
+python tools/test_extension_loading.py
+```
+
+Build the host and example first. The check copies their DLLs into separate temporary directories, with a single API DLL in the host directory. It exercises all six host/API/extension discovery orders using `Assembly.LoadFile`, `GetExportedTypes`, interface/attribute inspection and extension construction, then runs the real extension entry point after host ordering. Registration uses the shipped API and the actual host catalog; the host's Unity initialization and mod-manager activation are not started. It also checks that a host which did not initialize registers no providers. No real settings, game installation or AI endpoint is touched.
+
+Automated tests use real separate client DLLs and mock HTTP. They cover both workflows, settings without Gemini field assumptions, disclosure/round limits, byte budgets, cancellation/disposal, both directions of Gemini handoff, terminal sub failure, programming errors, redaction and concurrent diagnostics. Full in-game Anchor Chain startup, mod-manager activation, UI rendering and live Gemini/Ollama communication for this public-API build remain a separate check.
+
+Keep the host and shipped API DLL together. Future compatible releases must preserve existing contract members; breaking changes require a new contract version. Removing an extension does not delete its saved connection settings.

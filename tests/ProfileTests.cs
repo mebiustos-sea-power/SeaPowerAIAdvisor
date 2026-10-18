@@ -356,9 +356,8 @@ internal static class ProfileTests
                 Require(Named(control).Ancestors().Contains(conversation), "Conversation controls leak into settings");
             foreach (var control in new[] { "ProfilePreview", "ChoosePortrait", "ProfileName", "ProfilePersonality", "SaveProfileEntry", "CancelProfileEntry" })
                 Require(Named(control).Ancestors().Contains(Named("ProfileEditor")), "An advisor edit action is not local to its form");
-            foreach (var control in new[] { "ApiKey", "ModelName", "TestConnection", "ConnectionTestStatus", "SaveApiEntry", "CancelApiEntry" })
+            foreach (var control in new[] { "ApiProvider", "ApiProviderFields", "TestConnection", "ConnectionTestStatus", "SaveApiEntry", "CancelApiEntry" })
                 Require(Named(control).Ancestors().Contains(Named("ApiEditor")), "An API edit or test result is not local to its form");
-            Require(Named("ApiKey").Name.LocalName == "PasswordBox" && (string?)Named("ApiKey").Attribute("ShowLastCharacterDuration") == "0", "API input can expose the entered key");
             Require(Named("SettingsConfirmation").Parent == root && (string?)Named("SettingsConfirmation").Attribute("Visibility") == "Collapsed" &&
                 Named("AcceptConfirmation").Ancestors().Contains(Named("SettingsConfirmation")), "Delete and discard confirmations are not available outside the disabled page");
             Require(Named("DeveloperCategory").Name.LocalName == "TabControl" &&

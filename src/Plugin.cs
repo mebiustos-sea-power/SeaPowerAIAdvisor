@@ -18,6 +18,9 @@ public sealed class Plugin : IAnchorChainMod
     private static CampaignIntegration? campaign;
     private static BattleIntegration? battle;
     private static AdvisorOptionsStore? options;
+    private static AdvisorBackendRegistry? backends;
+    internal static AdvisorBackendRegistry Backends => backends
+        ?? throw new InvalidOperationException("The adviser backend registry has not been initialized.");
     private static Type? campaignFiles;
     private static bool campaignInstallAttempted;
     private static bool installed;
@@ -37,21 +40,31 @@ public sealed class Plugin : IAnchorChainMod
                 return;
             }
             options = new AdvisorOptionsStore(AdvisorOptionsStore.PathIn(UnityEngine.Application.persistentDataPath));
+            backends = AdvisorServices.CreateRegistry(AdvisorSettings.PathIn(UnityEngine.Application.persistentDataPath));
             // A broken prompt package must remain visible without disabling settings or diagnostics.
             try { _ = AdvisorPrompts.Current; }
             catch (AdvisorPromptException error) { Log.LogError("System prompts unavailable until restart: " + error.Message); }
             campaignFiles = files;
             AdvisorDependencies.LoadMarkdown(typeof(Plugin).Assembly);
             harmony = new Harmony(ModId);
-            battle = new BattleIntegration(BattleRuntime, message => Log.LogWarning(message), options);
+            battle = new BattleIntegration(BattleRuntime, message => Log.LogWarning(message), options, Backends);
             harmony.Patch(Required(typeof(MainGameViewModel), "OnLateUpdate"), postfix: new HarmonyMethod(typeof(Plugin), nameof(BattleFrame)));
             harmony.Patch(Required(typeof(MainGameViewModel), "OnDestroy"), prefix: new HarmonyMethod(typeof(Plugin), nameof(BattleDestroyed)));
+            SeaPowerAIAdvisor.Api.AdvisorApi.Attach(extension =>
+            {
+                var owner = extension.GetType().Assembly;
+                if (!ModActivation.IsEnabled(files, Path.GetDirectoryName(owner.Location)!)) return false;
+                AdvisorServiceCatalog.BuiltIn.Register(extension);
+                Log.LogInfo("Registered AI extension: " + extension.Id);
+                return true;
+            });
             installed = true;
             Log.LogInfo("Advisor 0.13.1 ready for tactical battles. DCM is optional. Open AI in the bottom-right battle toolbar.");
             TryInstallCampaign();
         }
         catch (Exception error)
         {
+            SeaPowerAIAdvisor.Api.AdvisorApi.Detach();
             BattleRuntime.Fail(error);
         }
     }
@@ -76,7 +89,7 @@ public sealed class Plugin : IAnchorChainMod
             Log.LogInfo("DCM is disabled; tactical advisor is available independently.");
             return;
         }
-        campaign = new CampaignIntegration(assembly, CampaignRuntime, message => Log.LogWarning(message), options!);
+        campaign = new CampaignIntegration(assembly, CampaignRuntime, message => Log.LogWarning(message), options!, Backends);
         var ui = assembly.GetType("DynamicCampaignMod.UI.CampaignUI", true)!;
         harmony!.Patch(Required(ui, "Frame"), postfix: new HarmonyMethod(typeof(Plugin), nameof(CampaignFrame)));
         harmony.Patch(Required(ui, "Detach"), prefix: new HarmonyMethod(typeof(Plugin), nameof(CampaignDetach)));
