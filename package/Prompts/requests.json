@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "next_steps": "What should I do next? Give concrete actions in priority order, tied to the victory objectives.",
+  "next_steps": "Assess the tactical situation, then recommend one immediate order: unit, action, target and main reason, in one short paragraph.",
   "more_detail": "Make your previous advice more specific: identify relevant units, locations and actions using current evidence. Recheck unsupported earlier claims.",
   "key_risks": "What should I do now to address the most urgent tactical threats? Give concrete actions in priority order, including attacks when justified. Include only essential execution conditions.",
   "radar_operations": "Evaluate our current radar use and recommend concrete changes where needed.",
