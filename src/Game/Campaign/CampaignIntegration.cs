@@ -40,6 +40,7 @@ internal sealed class CampaignIntegration
 
     internal void Tick(object campaignUi)
     {
+        Plugin.LocalApi?.Detach(this);
         if (!options.Current.CampaignEnabled ||
             (runtime.Failed ? SceneManager.GetActiveScene().buildIndex != campaignScene : !InCampaign()))
         {
@@ -68,11 +69,9 @@ internal sealed class CampaignIntegration
             launcher = button;
             void OpenAdvisor()
             {
-                var host = view.FindName("WindowHost") as WindowHost
-                    ?? throw new InvalidOperationException("The campaign's own WindowHost is unavailable.");
-                advisor ??= new AdvisorWindow(view, host, guard, new CampaignAdvisorSource(Capture), GameLanguage.Read, warn, options, backends);
-                advisor.Toggle();
-                button.Control.IsChecked = advisor.IsOpen;
+                var currentAdvisor = GetAdvisor();
+                currentAdvisor.Toggle();
+                button.Control.IsChecked = currentAdvisor.IsOpen;
             }
             void ShowError()
             {
@@ -106,10 +105,22 @@ internal sealed class CampaignIntegration
                 else guard(Toggle);
             };
         }
-        if (!runtime.Failed) advisor?.Tick();
+        if (!runtime.Failed)
+        {
+            advisor?.Tick();
+            if (options.Current.DeveloperApiEnabled) Plugin.LocalApi?.Attach(this, "dynamic_campaign", GetAdvisor);
+        }
         if (showError != null) runtime.NotifyFailure(showError);
         errorWindow?.Tick();
         launcher.Control.IsChecked = errorWindow?.IsOpen == true || advisor?.IsOpen == true;
+    }
+
+    private AdvisorWindow GetAdvisor()
+    {
+        var view = CampaignView.Instance ?? throw new InvalidOperationException("The campaign view is unavailable.");
+        var host = view.FindName("WindowHost") as WindowHost
+            ?? throw new InvalidOperationException("The campaign's own WindowHost is unavailable.");
+        return advisor ??= new AdvisorWindow(view, host, guard, new CampaignAdvisorSource(Capture), GameLanguage.Read, warn, options, backends);
     }
 
     private bool InCampaign() => (bool)active.Invoke(null, null)! && SceneManager.GetActiveScene().buildIndex == campaignScene;
@@ -130,6 +141,7 @@ internal sealed class CampaignIntegration
 
     internal void Stop()
     {
+        Plugin.LocalApi?.Detach(this);
         var previous = advisor; advisor = null;
         previous?.Stop();
     }

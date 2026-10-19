@@ -7,11 +7,17 @@ namespace SeaPowerAIAdvisor;
 internal sealed class AdvisorBackendRegistry
 {
     private readonly object sync = new();
-    private readonly Dictionary<string, Func<AdvisorBackendSetup>> factories = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Func<bool, AdvisorBackendSetup>> factories = new(StringComparer.Ordinal);
     private string? selected;
     internal string? SelectedId { get { lock (sync) return selected; } }
 
     internal void Register(string id, Func<AdvisorBackendSetup> prepare)
+    {
+        if (prepare == null) throw new ArgumentNullException(nameof(prepare));
+        Register(id, allowFallback => allowFallback ? prepare() : throw new AdvisorConnectionException("fallback_policy_unavailable"));
+    }
+
+    internal void Register(string id, Func<bool, AdvisorBackendSetup> prepare)
     {
         if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("A backend ID is required.", nameof(id));
         if (prepare == null) throw new ArgumentNullException(nameof(prepare));
@@ -31,15 +37,15 @@ internal sealed class AdvisorBackendRegistry
         }
     }
 
-    internal AdvisorBackendSetup Prepare()
+    internal AdvisorBackendSetup Prepare(bool allowFallback = true)
     {
-        Func<AdvisorBackendSetup> prepare;
+        Func<bool, AdvisorBackendSetup> prepare;
         lock (sync)
         {
             if (selected == null) throw new InvalidOperationException("No adviser backend is selected.");
             prepare = factories[selected];
         }
         // Capture a configuration for this consultation; registration changes cannot replace it mid-flight.
-        return prepare() ?? throw new InvalidOperationException("The adviser backend returned no configuration.");
+        return prepare(allowFallback) ?? throw new InvalidOperationException("The adviser backend returned no configuration.");
     }
 }

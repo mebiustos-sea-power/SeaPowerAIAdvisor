@@ -30,6 +30,47 @@ internal static class SettingsOperationsTests
             var cancelled = store.Read().Find(pending.Id)!; cancelled.ApiKey = "unsaved";
             Require(store.Read().Main.ApiKey == "mock_main", "Canceling an editor altered saved credentials");
         }));
+        check("Duplicated API connections retain provider settings but stay independent and inactive until registered", () => InTemp(directory =>
+        {
+            foreach (var provider in new[] { "gemini", "ollama", "openrouter", "nanogpt" })
+            {
+                var path = Path.Combine(directory, provider + ".json");
+                var store = new AdvisorApiSettingsStore(path, () => "Connection {0}");
+                var settings = provider == "ollama"
+                    ? new JObject { ["base_url"] = "http://localhost:11434/proxy", ["model"] = "qwen3:8b", ["num_ctx"] = "32768" }
+                    : new JObject { ["api_key"] = "mock_source_secret", ["model"] = provider == "openrouter" ? "vendor/source" : provider == "gemini" ? "gemini-source" : "source-model" };
+                var original = new AdvisorApiConfiguration("source", "Original", provider, settings, 75);
+                store.SaveEntry(new AdvisorApiConfigurationDraft(original), true);
+                var sub = new AdvisorApiConfiguration("sub", "Existing sub", "mock_sub_secret", "gemini-sub");
+                store.SaveEntry(new AdvisorApiConfigurationDraft(sub), true); store.Assign(original.Id, sub.Id); store.SaveLogging(true);
+                var before = File.ReadAllBytes(path); var draft = store.Read();
+                ThrowsApi("api_selection_invalid", () => draft.Duplicate("missing"));
+                Require(draft.Configurations.Count == 2, "A missing duplicate source added a blank connection");
+                var copy = draft.Duplicate(original.Id, " - コピー");
+                Require(copy.Id != original.Id && copy.Name == original.Name + " - コピー" &&
+                    copy.Provider == original.Provider && copy.RequestTimeoutSeconds == 75 && JToken.DeepEquals(copy.Settings, original.Settings),
+                    "Duplication lost credentials, provider-specific fields, timeout, or its independent identity");
+                Require(File.ReadAllBytes(path).SequenceEqual(before) && draft.MainId == original.Id && draft.SubId == sub.Id,
+                    "Opening or cancelling a duplicate saved it or changed active connections");
+                copy.Model = provider == "openrouter" ? "vendor/changed" : provider == "gemini" ? "gemini-changed" : "changed-model";
+                Require(JToken.DeepEquals(draft.Main.Settings, original.Settings), "Editing a duplicate mutated its source draft");
+                store.SaveEntry(copy, true);
+                var saved = store.Read(); var registered = saved.Find(copy.Id)!;
+                Require(saved.Configurations.Count == 3 && saved.MainId == original.Id && saved.SubId == sub.Id && saved.LogAiJson &&
+                    JToken.DeepEquals(saved.Main.Settings, original.Settings) && saved.Sub!.ApiKey == "mock_sub_secret" &&
+                    registered.Provider == provider && registered.Model == copy.Model && registered.RequestTimeoutSeconds == 75,
+                    "Registering the duplicate replaced its source or changed main/sub/logging settings");
+                if (provider == "ollama")
+                    Require((string?)registered.Settings["base_url"] == "http://localhost:11434/proxy" && (string?)registered.Settings["num_ctx"] == "32768",
+                        "Duplicating a local provider lost its endpoint or context length");
+                else Require(registered.ApiKey == "mock_source_secret", "A model-only duplicate lost its copied credential");
+                var repeated = saved.Duplicate(original.Id, " - コピー");
+                Require(repeated.Id != copy.Id && repeated.Name == copy.Name, "A repeated duplicate changed the suggested name to avoid a collision");
+                var registeredBytes = File.ReadAllBytes(path);
+                ThrowsApi("api_configuration_name_invalid", () => store.SaveEntry(repeated, true));
+                Require(File.ReadAllBytes(path).SequenceEqual(registeredBytes), "Duplicate-name validation changed the saved connections");
+            }
+        }));
         check("Deleting an assigned API is durable, clears the role and never selects another credential", () => InTemp(directory =>
         {
             var path = Path.Combine(directory, "gemini.json"); var store = new AdvisorApiSettingsStore(path, () => "API {0}");

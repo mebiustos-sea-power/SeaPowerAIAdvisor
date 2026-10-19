@@ -46,7 +46,7 @@ Anchor Chain calls `GetExportedTypes()` as it discovers each DLL, before it appl
 
 Definitions implement `IAdvisorExtension` and exactly one execution interface below. `ApiVersion` must equal `AdvisorApi.ContractVersion`. IDs are unique and case-sensitive, with up to 80 ASCII letters, digits, dots, underscores or hyphens. Duplicate IDs/field keys and incompatible versions fail explicitly. Definitions should remain immutable after registration. Version 1 supports adding registrations, with no replacement or unregister operation; restart to reload an implementation. Register during startup before opening settings. Later registrations appear when the editor is reopened.
 
-Gemini, Ollama and OpenRouter pass through the same catalog registration/validation path and retain their native adapters.
+Gemini, Ollama, OpenRouter and NanoGPT pass through the same catalog registration/validation path and retain their native adapters.
 
 ## Settings and connection tests
 
@@ -56,7 +56,7 @@ Providers can optionally also implement `IAdvisorExtensionDescription.GetDescrip
 
 `ValidateSettings` receives opaque settings JSON and must perform local validation without network I/O or writes. `GetModel` supplies a display/log identifier, never a credential. Fields named `api_key` or `model` are not mandatory. The existing schema 3 stores provider IDs, settings and main/sub assignments. Loading does not write, and an unavailable provider's settings are preserved rather than replaced.
 
-`TestAsync` owns the adapter-specific test sequence; the host does not require a particular number of requests or a tool-calling workflow. The OpenRouter adapter tests its tool round trip with two requests and an isolated dummy result.
+`TestAsync` owns the adapter-specific test sequence; the host does not require a particular number of requests or a tool-calling workflow. The OpenRouter and NanoGPT adapters test their tool round trip with two requests and an isolated dummy result.
 
 `TestAsync` receives only pending connection settings, host connection services, a short test message and cancellation. It receives no game information, history or personality. It does not save/select a connection. Results stay in the settings screen; diagnostic logging follows the saved developer preference.
 

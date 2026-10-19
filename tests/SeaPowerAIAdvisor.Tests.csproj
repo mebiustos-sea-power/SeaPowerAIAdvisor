@@ -10,6 +10,9 @@
     <Compile Include="..\src\Providers\Extensions\AdvisorExtensionBridge.cs" Link="AdvisorExtensionBridge.cs" />
     <Compile Include="..\src\Providers\Extensions\BuiltInAdvisorExtension.cs" Link="BuiltInAdvisorExtension.cs" />
     <Compile Include="..\src\Providers\Extensions\AdvisorExtensionBackend.cs" Link="AdvisorExtensionBackend.cs" />
+    <Compile Include="..\src\Development\AdvisorLocalApi.cs" Link="AdvisorLocalApi.cs" />
+    <Compile Include="..\src\Development\AdvisorLocalRun.cs" Link="AdvisorLocalRun.cs" />
+    <Compile Include="..\src\Development\AdvisorLocalServer.cs" Link="AdvisorLocalServer.cs" />
     <Compile Include="..\src\UI\AdvisorMarkup.cs" Link="AdvisorMarkup.cs" />
     <Compile Include="..\src\UI\AdvisorMarkdown.cs" Link="AdvisorMarkdown.cs" />
     <Compile Include="..\src\Advisor\IAdvisorQuerySession.cs" Link="IAdvisorQuerySession.cs" />
@@ -62,6 +65,10 @@
     <Compile Include="..\src\Providers\Gemini\GeminiService.cs" Link="GeminiService.cs" />
     <Compile Include="..\src\Providers\Ollama\OllamaService.cs" Link="OllamaService.cs" />
     <Compile Include="..\src\Providers\Ollama\OllamaProvider.cs" Link="OllamaProvider.cs" />
+    <Compile Include="..\src\Providers\ChatCompletions\ChatCompletionProvider.cs" Link="ChatCompletionProvider.cs" />
+    <Compile Include="..\src\Providers\ChatCompletions\ChatCompletionConnectionTest.cs" Link="ChatCompletionConnectionTest.cs" />
+    <Compile Include="..\src\Providers\NanoGPT\NanoGptProvider.cs" Link="NanoGptProvider.cs" />
+    <Compile Include="..\src\Providers\NanoGPT\NanoGptService.cs" Link="NanoGptService.cs" />
     <Compile Include="..\src\Providers\OpenRouter\OpenRouterProvider.cs" Link="OpenRouterProvider.cs" />
     <Compile Include="..\src\Providers\OpenRouter\OpenRouterService.cs" Link="OpenRouterService.cs" />
     <Compile Include="..\src\Advisor\AdvisorBackend.cs" Link="AdvisorBackend.cs" />

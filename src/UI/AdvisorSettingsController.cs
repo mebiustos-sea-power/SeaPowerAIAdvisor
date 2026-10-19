@@ -26,7 +26,7 @@ internal sealed class AdvisorSettingsController
     private readonly Action<string> warn;
     private readonly TextBox rounds, history, prompt, userName;
     private readonly ComboBox size;
-    private readonly CheckBox campaign, log;
+    private readonly CheckBox campaign, log, localApi;
     private readonly TextBlock status, title, testStatus, testError, confirmationText;
     private readonly Button test, accept, cancelConfirmation, throwException;
     private Category? current;
@@ -52,6 +52,7 @@ internal sealed class AdvisorSettingsController
         prompt.MaxLength = AdvisorOptions.MaxCommonPromptLength;
         userName = Named<TextBox>("UserName"); userName.MaxLength = AdvisorOptions.MaxUserNameLength;
         size = Named<ComboBox>("ConversationTextSize"); campaign = Named<CheckBox>("EnableCampaignAdvisor"); log = Named<CheckBox>("LogAiJson");
+        localApi = Named<CheckBox>("EnableLocalApi");
         information = new AdvisorInformationView(Named<StackPanel>("InformationChoices"), guard);
         throwException = Named<Button>("ThrowTestException");
         test = Named<Button>("TestConnection"); testStatus = Named<TextBlock>("ConnectionTestStatus"); testError = Named<TextBlock>("ConnectionTestError");
@@ -69,7 +70,7 @@ internal sealed class AdvisorSettingsController
         Bind("SaveGeneral", () => Save(() => options.SaveGeneral((AdvisorTextSize)size.SelectedIndex, campaign.IsChecked == true, userName.Text ?? "")));
         Bind("SaveConsultation", () => Save(() => options.SaveConsultation(Number(rounds, "query_rounds_invalid"), Number(history, "history_exchanges_invalid"), prompt.Text ?? "")));
         Bind("SaveInformation", () => Save(() => options.SaveInformation(information.Value)));
-        Bind("SaveDeveloper", () => Save(() => apiStore.SaveLogging(log.IsChecked == true)));
+        Bind("SaveDeveloper", () => Save(() => options.SaveDeveloper(localApi.IsChecked == true, () => apiStore.SaveLogging(log.IsChecked == true))));
         Bind("TestConnection", TestConnection);
         Bind("ThrowTestException", () =>
         {
@@ -111,7 +112,7 @@ internal sealed class AdvisorSettingsController
             else if (category == Category.Developer)
             {
                 Named<TabControl>("DeveloperCategory").SelectedIndex = 0;
-                log.IsChecked = apiStore.Read().LogAiJson; promptEditor.Open(); log.Focus();
+                log.IsChecked = apiStore.Read().LogAiJson; localApi.IsChecked = options.Read().DeveloperApiEnabled; promptEditor.Open(); log.Focus();
             }
             else
             {
@@ -142,7 +143,7 @@ internal sealed class AdvisorSettingsController
         Category.General => userName.Text + "\0" + size.SelectedIndex + ":" + campaign.IsChecked,
         Category.Consultation => rounds.Text + "\0" + history.Text + "\0" + prompt.Text,
         Category.Information => information.Value.Key,
-        Category.Developer => log.IsChecked.ToString(),
+        Category.Developer => log.IsChecked + ":" + localApi.IsChecked,
         _ => ""
     };
     private bool HasChanges => available && ((current == Category.Developer && promptEditor.HasChanges) || (current == Category.Profile ? profiles.HasChanges : current == Category.Api ? api.HasChanges : Snapshot() != baseline));
@@ -224,6 +225,7 @@ internal sealed class AdvisorSettingsController
     internal void Tick()
     {
         profiles.Tick();
+        Named<TextBlock>("LocalApiStatus").Text = AdvisorLocalApiDriver.Status;
         errorHistory.Tick(current == Category.Api && Named<TabControl>("ApiCategory").SelectedIndex == 2);
         if (savedNotice.IsRunning)
         {

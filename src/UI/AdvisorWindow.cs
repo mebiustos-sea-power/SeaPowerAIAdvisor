@@ -3,11 +3,12 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using Noesis;
+using Newtonsoft.Json.Linq;
 using SeapowerUI;
 
 namespace SeaPowerAIAdvisor;
 
-internal sealed class AdvisorWindow
+internal sealed class AdvisorWindow : IAdvisorLocalTarget
 {
     private readonly FrameworkElement view, content, conversationPane;
     private readonly WindowHost host;
@@ -37,6 +38,7 @@ internal sealed class AdvisorWindow
     private readonly Button send, captureAction, inputAction;
     private readonly (AdvisorShortcut Shortcut, Button Button)[] shortcuts;
     private AdvisorJob? active;
+    private AdvisorLocalRun? localRun;
     private AdvisorTurn? pendingTurn;
     private AdvisorNotice? configurationNotice;
     private string pendingConnectionName = "";
@@ -191,7 +193,9 @@ internal sealed class AdvisorWindow
     // Fault teardown must cancel work and release input without rendering the broken conversation again.
     internal void Stop()
     {
-        var job = active; active = null; pendingTurn = null;
+        var job = active; active = null;
+        if (pendingTurn?.State == AdvisorTurnState.Waiting) pendingTurn.Cancel();
+        pendingTurn = null; FinishRecording();
         try { job?.Dispose(); }
         finally
         {
@@ -252,6 +256,45 @@ internal sealed class AdvisorWindow
         }
     }
 
+    JObject IAdvisorLocalTarget.LocalStatus() => new()
+    {
+        ["busy"] = active != null, ["settings_open"] = conversationPane.Visibility != Visibility.Visible,
+        ["advisor_name"] = DisplayName, ["answered_exchanges"] = conversation.Exchanges.Count
+    };
+    AdvisorLocalRun IAdvisorLocalTarget.LocalConsult(string? message, string? shortcut, bool allowFallback)
+    {
+        RequireLocalReady();
+        if (QuestionInputController.IsComposing) throw new AdvisorLocalApiException(409, "input_composing");
+        AdvisorQuestion request;
+        if (shortcut != null)
+        {
+            var preset = shortcut switch
+            {
+                "next_steps" => AdvisorShortcut.NextSteps, "key_risks" => AdvisorShortcut.KeyRisks,
+                "more_detail" => AdvisorShortcut.MoreDetail, _ => throw new AdvisorLocalApiException(400, "unknown_shortcut")
+            };
+            if (!preset.IsAvailable(false, conversation.Exchanges.Count, options.Current.HistoryExchanges))
+                throw new AdvisorLocalApiException(409, "shortcut_unavailable");
+            request = preset.Prepare(text[preset.LabelKey]);
+        }
+        else
+        {
+            if (!AdvisorConversation.Validate(message, out var error)) throw new AdvisorLocalApiException(400, error);
+            request = new AdvisorQuestion(message!);
+        }
+        var run = new AdvisorLocalRun(allowFallback);
+        guard(() => { if (!IsOpen) Toggle(); StartConsultation(request, recording: run); });
+        if (!run.Attached) throw new AdvisorLocalApiException(409, "advisor_unavailable");
+        return run;
+    }
+    void IAdvisorLocalTarget.LocalClear() { RequireLocalReady(); guard(Clear); }
+    void IAdvisorLocalTarget.LocalCancel() { guard(CancelActive); }
+    private void RequireLocalReady()
+    {
+        if (active != null) throw new AdvisorLocalApiException(409, "consultation_in_progress");
+        if (conversationPane.Visibility != Visibility.Visible) throw new AdvisorLocalApiException(409, "settings_open");
+    }
+
     private void StartConsultation() => StartConsultation(new AdvisorQuestion(question.Text ?? string.Empty));
 
     private void RetryConsultation(AdvisorTurn turn)
@@ -277,7 +320,7 @@ internal sealed class AdvisorWindow
         }
     }
 
-    private void StartConsultation(AdvisorQuestion request, AdvisorTurn? retry = null)
+    private void StartConsultation(AdvisorQuestion request, AdvisorTurn? retry = null, AdvisorLocalRun? recording = null)
     {
         if (active != null || conversationPane.Visibility != Visibility.Visible) return;
         if (QuestionInputController.IsComposing)
@@ -297,16 +340,18 @@ internal sealed class AdvisorWindow
         var answeringName = appliedProfile?.DisplayName ?? speakerName;
         var answeringId = appliedProfile?.ActiveId ?? AdvisorProfile.DefaultId;
         var turn = retry ?? conversation.Begin(request, answeringName, answeringId);
+        recording?.Attach(turn); localRun = recording;
         if (retry != null) conversation.Retry(turn, answeringName, answeringId);
-        else question.Text = request.DraftAfterSend(question.Text ?? string.Empty);
+        else if (recording == null) question.Text = request.DraftAfterSend(question.Text ?? string.Empty);
         configurationNotice = null;
         ShowConversation(false);
         ScrollToEnd();
         try
         {
             options.EnsureUserName(text["general.default_user_name"]);
-            var execution = backends.Prepare();
-            var session = source.CreateSession(replyLanguage(), request.Text, options.Current.MaxQueryRounds, options.Current.Information, request.Context);
+            var execution = backends.Prepare(recording?.AllowFallback ?? true);
+            IAdvisorQuerySession session = source.CreateSession(replyLanguage(), request.Text, options.Current.MaxQueryRounds, options.Current.Information, request.Context);
+            if (recording != null) session = recording.Observe(session);
             var historyLimit = options.Current.HistoryExchanges;
             pendingTurn = turn;
             pendingConnectionName = execution.ConnectionName;
@@ -323,6 +368,7 @@ internal sealed class AdvisorWindow
                     progress(new AdvisorProgress(update.Stage, update.ApiRequest, update.Rounds, update.MaxRounds,
                         update.Queries, update.UsingFallback, update.Model, connectionName));
                 }, historyLimit, userName);
+                recording?.CaptureInput(context.Input);
                 return AdvisorConsultation.RunAsync(execution, context, logDirectory, request, cancellation);
             }, warn);
             SetBusy(true);
@@ -397,6 +443,7 @@ internal sealed class AdvisorWindow
         else
         {
             var result = completion.Result ?? throw new InvalidOperationException("The completed consultation has no result.");
+            localRun?.Complete(result, turn.Progress?.ConnectionName ?? pendingConnectionName);
             turn.Complete(result.Text);
             ShowConversation(false);
             var connection = AdvisorProgress.FormatConnection(turn.Progress?.ConnectionName ?? pendingConnectionName,
@@ -404,6 +451,7 @@ internal sealed class AdvisorWindow
             status.Text = text.Format("status.completed", connection, result.QueryRounds, result.ApiRequests,
                 result.TotalTokens.HasValue ? text.Format("status.token_count", result.TotalTokens.Value) : text["status.tokens_unknown"]);
         }
+        FinishRecording();
         if (!follow) pendingScroll = () => transcriptScroll.ScrollToVerticalOffset(readingOffset, false);
         else if (turn.State == AdvisorTurnState.Answered) pendingScroll = () => transcript.ScrollToAnswer(turn, transcriptScroll);
         else ScrollToEnd();
@@ -415,11 +463,14 @@ internal sealed class AdvisorWindow
     private void FailTurn(AdvisorTurn turn, AdvisorNotice error)
     {
         turn.Fail(error);
+        FinishRecording();
         pendingTurn = null;
         ShowConversation(false);
         status.Text = text["status.failed"];
         ScrollToEnd();
     }
+
+    private void FinishRecording() { localRun?.Finish(); localRun = null; }
 
     private void SetBusy(bool busy)
     {
@@ -441,6 +492,7 @@ internal sealed class AdvisorWindow
         pendingTurn = null;
         job.Dispose();
         turn.Cancel();
+        FinishRecording();
         SetBusy(false);
         ShowConversation(false);
         status.Text = text["status.cancelled"];

@@ -8,7 +8,7 @@ An in-game operations adviser for **Sea Power: Naval Combat in the Missile Age**
 
 ## Features
 
-- **Gemini, Ollama and OpenRouter connections.** Register named connections and choose a main connection and an optional sub connection.
+- **Gemini, Ollama, OpenRouter and NanoGPT connections.** Register named connections and choose a main connection and an optional sub connection.
 - **On-demand tactical advice.** Ask your own question or use **Next steps**, **Key risks** and **More detail**.
 - **Unidentified-contact assessments.** Open an unidentified contact’s information window and click the **[adviser name]’s assessment** button. The adviser evaluates its displayed candidates, confirmed features and relevant known contacts. Buttons below the reply let you reassess assuming a friendly or enemy affiliation.
 - **Player-known information only.** Friendly capabilities, aircraft and bases, observed contacts, mission briefing, objectives and published reports are available as needed. Hidden enemy state is not supplied.
@@ -47,8 +47,11 @@ For an unidentified contact, open its information window and use **[adviser name
 | Gemini | API key, Gemini model ID | `gemini-3.5-flash-lite` |
 | Ollama | Server URL, installed model, context length | `qwen3:8b` |
 | OpenRouter | API key, model ID in `provider/model` form | `google/gemini-3.5-flash-lite` |
+| NanoGPT | API key, subscription-included model ID | `qwen/qwen3.8-27b` |
 
-Choose a model that supports **tool calling**. These are examples, not a guarantee that every model will interpret the supplied data correctly. OpenRouter's connection test checks a tool-call/result round trip as well as the final response.
+Choose a model that supports **tool calling**. These are examples, not a guarantee that every model will interpret the supplied data correctly. OpenRouter and NanoGPT connection tests check a tool-call/result round trip as well as the final response.
+
+NanoGPT uses its subscription-only API for both consultations and connection tests. An active subscription and an included model are required; requests outside the subscription allowance fail without retrying through NanoGPT's pay-as-you-go endpoint. Model names are editable. Any separately configured sub connection still follows the normal fallback policy.
 
 Ollama must be installed and running separately, with the selected model already available. Its default URL is `http://localhost:11434`, and the default context length is **8192**. Performance and memory requirements depend on the model, context length and hardware; the game and model share your computer's resources.
 
@@ -83,5 +86,7 @@ python build.py
 ```
 
 The script builds the mod, runs offline tests with mocked AI communication, and creates `dist/SeaPowerAIAdvisor`. It does not install the package unless `--install` is supplied. Do not distribute user settings, API keys, logs, or the proprietary game/dependency assemblies.
+
+The opt-in [developer local API](docs/developer-local-api.md) supports consultation and temporary prompt experiments against a loaded game situation, using the same UI workflow.
 
 The [token measurement tools](tools/README.md) document separate `countTokens` experiments and their measurement limitations.

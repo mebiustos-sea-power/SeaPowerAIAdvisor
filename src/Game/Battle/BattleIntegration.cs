@@ -32,6 +32,7 @@ internal sealed class BattleIntegration
 
     internal void Tick(MainGameViewModel current)
     {
+        Plugin.LocalApi?.Detach(this);
         if (current.RootControl == null) return;
         if (!runtime.Failed && (!SceneCreator.InstanceExists(false) ||
             !SceneCreator.Instance.IsLoadingDone || Globals._playerTaskforce == null)) return;
@@ -96,6 +97,7 @@ internal sealed class BattleIntegration
             contactAssessments ??= new BattleContactAssessments(GetAdvisor, () => options.Current.Information, guard);
             contactAssessments.Tick(current.RootControl, host);
             advisor?.Tick();
+            if (options.Current.DeveloperApiEnabled) Plugin.LocalApi?.Attach(this, "tactical_battle", GetAdvisor);
         }
         if (showError != null) runtime.NotifyFailure(showError);
         errorWindow?.Tick();
@@ -213,6 +215,7 @@ internal sealed class BattleIntegration
 
     internal void Stop()
     {
+        Plugin.LocalApi?.Detach(this);
         contactAssessments?.Suspend();
         var previous = advisor; advisor = null;
         previous?.Stop();

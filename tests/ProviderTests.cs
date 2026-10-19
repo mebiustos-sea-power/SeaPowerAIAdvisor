@@ -12,8 +12,10 @@ internal static partial class ProviderTests
     internal static void Run(Action<string, Action> check)
     {
         RunBackends(check);
+        RunLocalFallbackPolicy(check);
         RunOllama(check);
         RunOpenRouter(check);
+        RunNanoGpt(check);
         RunErrorHistory(check);
         RunRequestTimeouts(check);
         RunExtensions(check);

@@ -203,11 +203,13 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                   </Grid.ColumnDefinitions>
                   <ComboBox x:Name="ApiConfigurationSelector" MinHeight="30" />
                   <Button x:Name="AddApiConfiguration" Grid.Column="1" Content="{DynamicResource Advisor.profile.add}" Height="30" Padding="10,0" Margin="8,0,0,0" />
                   <Button x:Name="EditApiConfiguration" Grid.Column="2" Content="{DynamicResource Advisor.settings.edit}" Height="30" Padding="10,0" Margin="8,0,0,0" />
-                  <Button x:Name="RemoveApiConfiguration" Grid.Column="3" Content="{DynamicResource Advisor.profile.remove}" Height="30" Padding="10,0" Margin="8,0,0,0" />
+                  <Button x:Name="DuplicateApiConfiguration" Grid.Column="3" Content="{DynamicResource Advisor.settings.duplicate}" Height="30" Padding="10,0" Margin="8,0,0,0" />
+                  <Button x:Name="RemoveApiConfiguration" Grid.Column="4" Content="{DynamicResource Advisor.profile.remove}" Height="30" Padding="10,0" Margin="8,0,0,0" />
                 </Grid>
                 <StackPanel x:Name="ApiEditor" Visibility="Collapsed" Margin="0,14,0,0">
                   <Border Height="1" Background="#607080" Opacity="0.6" Margin="0,0,0,12" />
@@ -288,6 +290,8 @@
               </Grid.RowDefinitions>
               <StackPanel>
                 <CheckBox x:Name="LogAiJson" Content="{DynamicResource Advisor.developer.log_ai_json}" Margin="0,0,0,8" />
+                <CheckBox x:Name="EnableLocalApi" Content="{DynamicResource Advisor.developer.local_api}" Margin="0,0,0,8" />
+                <TextBlock x:Name="LocalApiStatus" FontSize="12" TextWrapping="Wrap" />
                 <WrapPanel HorizontalAlignment="Right" Margin="0,8,0,0">
                   <Button x:Name="SaveDeveloper" Content="{DynamicResource Advisor.settings.save_form}" Height="30" Padding="12,0" Margin="8,0,0,0" />
                 </WrapPanel>

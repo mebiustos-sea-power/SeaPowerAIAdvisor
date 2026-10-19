@@ -1,0 +1,89 @@
+using System;
+using Newtonsoft.Json.Linq;
+
+namespace SeaPowerAIAdvisor;
+
+// Only local-API consultations retain this diagnostic copy. No provider credentials or HTTP headers enter it.
+internal sealed class AdvisorLocalRun
+{
+    private readonly object gate = new();
+    private readonly JArray retrievals = new();
+    private JObject? input;
+    private AdvisorTurn? turn;
+    private AdviceResult? result;
+    private string connection = "";
+    private JObject? finished;
+    internal bool AllowFallback { get; }
+    internal AdvisorLocalRun(bool allowFallback = false) { AllowFallback = allowFallback; }
+    internal string Id { get; } = Guid.NewGuid().ToString("N");
+    private readonly string started = DateTime.UtcNow.ToString("O");
+
+    internal void Attach(AdvisorTurn value) => turn = value;
+    internal bool Attached => turn != null || finished != null;
+    internal void Complete(AdviceResult value, string connectionName) { result = value; connection = connectionName; }
+    internal void CaptureInput(AdvisorProviderInput value)
+    {
+        lock (gate) if (finished == null) input = new JObject { ["data"] = value.Data.DeepClone(), ["system_instruction"] = value.SystemInstruction, ["tool"] = value.Tool.DeepClone() };
+    }
+    internal IAdvisorQuerySession Observe(IAdvisorQuerySession session) => new RecordingSession(session, this);
+    internal void Finish()
+    {
+        lock (gate)
+        {
+            finished ??= Snapshot(); turn = null;
+            input = null; retrievals.Clear();
+        }
+    }
+    internal JObject Snapshot()
+    {
+        lock (gate) if (finished != null) return (JObject)finished.DeepClone();
+        var progress = turn?.Progress;
+        lock (gate) return new JObject
+        {
+            ["id"] = Id, ["started_utc"] = started, ["allow_fallback"] = AllowFallback,
+            ["state"] = turn?.State.ToString().ToLowerInvariant() ?? "starting",
+            ["question"] = turn?.Request.Text, ["display_question"] = turn?.Request.DisplayText,
+            ["advisor_name"] = turn?.AdvisorName, ["answer"] = turn?.Exchange?.Answer,
+            ["error"] = turn?.Error == null ? null : new JObject { ["code"] = turn.Error.Code, ["http_status"] = turn.Error.HttpStatus },
+            ["progress"] = progress == null ? null : new JObject
+            {
+                ["stage"] = progress.Stage.ToString(), ["api_request"] = progress.ApiRequest,
+                ["rounds"] = progress.Rounds, ["max_rounds"] = progress.MaxRounds,
+                ["queries"] = new JArray(progress.Queries), ["using_fallback"] = progress.UsingFallback,
+                ["connection_name"] = progress.ConnectionName, ["model"] = progress.Model
+            },
+            ["result"] = result == null ? null : new JObject
+            {
+                ["connection_name"] = connection, ["model"] = result.Model,
+                ["api_requests"] = result.ApiRequests, ["query_rounds"] = result.QueryRounds,
+                ["reported_total_tokens"] = result.TotalTokens, ["queries"] = new JArray(result.Queries)
+            },
+            ["input"] = input?.DeepClone(), ["retrievals"] = retrievals.DeepClone()
+        };
+    }
+
+    private sealed class RecordingSession : IAdvisorQuerySession
+    {
+        private readonly IAdvisorQuerySession inner;
+        private readonly AdvisorLocalRun run;
+        internal RecordingSession(IAdvisorQuerySession inner, AdvisorLocalRun run) { this.inner = inner; this.run = run; }
+        public string Id => inner.Id;
+        public int RoundsUsed => inner.RoundsUsed;
+        public int MaxRounds => inner.MaxRounds;
+        public AdvisorPrompts Prompts => inner.Prompts;
+        public JObject InitialInput() => inner.InitialInput();
+        public JObject Execute(JObject request)
+        {
+            var entry = new JObject { ["time_utc"] = DateTime.UtcNow.ToString("O"), ["request"] = request.DeepClone() };
+            try
+            {
+                var response = inner.Execute(request);
+                entry["response"] = response.DeepClone();
+                return response;
+            }
+            catch (AdvisorQueryException error) { entry["error_code"] = error.Code; throw; }
+            catch { entry["error_code"] = "unexpected_error"; throw; }
+            finally { lock (run.gate) if (run.finished == null) run.retrievals.Add(entry); }
+        }
+    }
+}

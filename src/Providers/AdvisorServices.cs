@@ -26,6 +26,7 @@ internal abstract class AdvisorService
 {
     internal abstract string Id { get; }
     internal abstract string Name { get; }
+    internal virtual string Caption(AdvisorText text) => Name;
     internal abstract string Protocol { get; }
     internal virtual string Description(AdvisorText text) => "";
     internal virtual bool Independent => false;
@@ -52,7 +53,7 @@ internal abstract class AdvisorService
 
 internal sealed class AdvisorServiceCatalog
 {
-    internal static AdvisorServiceCatalog BuiltIn { get; } = new(new AdvisorService[] { new GeminiService(), new OllamaService(), new OpenRouterService() });
+    internal static AdvisorServiceCatalog BuiltIn { get; } = new(new AdvisorService[] { new GeminiService(), new OllamaService(), new OpenRouterService(), new NanoGptService() });
     private readonly object sync = new();
     private readonly List<AdvisorService> services = new();
     internal IReadOnlyList<AdvisorService> Services { get { lock (sync) return Array.AsReadOnly(services.ToArray()); } }
@@ -115,15 +116,15 @@ internal static class AdvisorServices
         Func<AdvisorTrace?, AdvisorHttpTransport>? transportFactory = null)
     {
         var registry = new AdvisorBackendRegistry();
-        registry.Register("standard", () => Prepare(AdvisorSettings.Edit(path), catalog, transportFactory));
+        registry.Register("standard", allowFallback => Prepare(AdvisorSettings.Edit(path), catalog, transportFactory, allowFallback: allowFallback));
         registry.Select("standard");
         return registry;
     }
     internal static AdvisorBackendSetup Prepare(AdvisorSettingsDraft settings, AdvisorServiceCatalog? catalog = null,
-        Func<AdvisorTrace?, AdvisorHttpTransport>? transportFactory = null, AdvisorErrorHistory? errorHistory = null)
+        Func<AdvisorTrace?, AdvisorHttpTransport>? transportFactory = null, AdvisorErrorHistory? errorHistory = null, bool allowFallback = true)
     {
         catalog ??= AdvisorServiceCatalog.BuiltIn;
-        var main = settings.Main.Build(); var sub = settings.Sub?.Build();
+        var main = settings.Main.Build(); var sub = allowFallback ? settings.Sub?.Build() : null;
         var options = settings.Options;
         var mainService = catalog.Require(main.Provider); mainService.Validate(main.Settings);
         var subService = sub == null ? null : catalog.Require(sub.Provider);

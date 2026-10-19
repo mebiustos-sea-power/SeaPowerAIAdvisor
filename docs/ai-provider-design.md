@@ -279,3 +279,14 @@ OpenRouterの使用量は `usage.total_tokens`を共通結果へ渡し、欠落�
 - [ローカルAPIとクラウドAPIの認証](https://docs.ollama.com/api/authentication)
 - [思考設定](https://docs.ollama.com/capabilities/thinking)
 - [文脈長とメモリ](https://docs.ollama.com/context-length)
+
+
+## NanoGPT定額接続
+
+提供元IDは`nanogpt`、通信識別子は`nanogpt_subscription_chat`。APIキーとモデル名を登録し、例示初期値は`qwen/qwen3.8-27b`とする。モデル一覧を固定せず、定額対象／ツール対応の判定はサービスと既存の接続テストへ委ねる。
+
+相談・接続テストは`https://nano-gpt.com/api/subscription/v1/chat/completions`だけを利用し、通常の従量APIへ再送しない。OpenRouter固有のprovider指定は送らない。HTTP402は`subscription_unavailable`として表示し、生の応答は既存のAPIエラー閲覧へ残す。HTTP429等と明示的なサブ接続は既存のフォールバック方針を維持し、開発APIの`allow_fallback=false`も有効。
+
+OpenAI互換の履歴・ツール呼び出し／結果・不透明な応答メタデータの保持と、2段階接続テストを`Providers/ChatCompletions`へ共有する。各提供元はURL・要求固有項目・課金エラーの解釈を所有する。Gemini Interactions／Ollamaの処理や公開SDK契約は変えない。
+
+API仕様の参照先：https://docs.nano-gpt.com/api-reference/endpoint/chat-completion 、定額APIの案内：https://nano-gpt.com/support 。

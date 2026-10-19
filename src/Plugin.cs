@@ -19,6 +19,7 @@ public sealed class Plugin : IAnchorChainMod
     private static BattleIntegration? battle;
     private static AdvisorOptionsStore? options;
     private static AdvisorBackendRegistry? backends;
+    internal static AdvisorLocalApi? LocalApi { get; private set; }
     internal static AdvisorBackendRegistry Backends => backends
         ?? throw new InvalidOperationException("The adviser backend registry has not been initialized.");
     private static Type? campaignFiles;
@@ -59,6 +60,10 @@ public sealed class Plugin : IAnchorChainMod
                 Log.LogInfo("Registered AI extension: " + extension.Id);
                 return true;
             });
+            LocalApi = new AdvisorLocalApi(() => AdvisorPromptOverrides.Session, error => Log.LogError("Developer local API failed: " + error));
+            var driverObject = new UnityEngine.GameObject("SeaPowerAIAdvisor.DeveloperLocalApi");
+            UnityEngine.Object.DontDestroyOnLoad(driverObject);
+            driverObject.AddComponent<AdvisorLocalApiDriver>().Initialize(options, LocalApi, message => Log.LogWarning(message));
             installed = true;
             Log.LogInfo("Advisor 0.14.0 ready for tactical battles. DCM is optional. Open AI in the bottom-right battle toolbar.");
             TryInstallCampaign();

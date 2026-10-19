@@ -41,6 +41,16 @@ internal sealed class AdvisorSettingsDraft
         return added;
     }
 
+    internal AdvisorApiConfigurationDraft Duplicate(string id, string nameSuffix = " - Copy")
+    {
+        var original = Find(id) ?? throw new AdvisorConnectionException("api_selection_invalid");
+        var copy = new AdvisorApiConfigurationDraft(new AdvisorApiConfiguration(
+            "api-" + Guid.NewGuid().ToString("N"), original.Name + nameSuffix,
+            original.Provider, original.Settings, original.RequestTimeoutSeconds));
+        configurations.Add(copy);
+        return copy;
+    }
+
     internal void Put(AdvisorApiConfigurationDraft entry)
     {
         var index = configurations.FindIndex(c => c.Id == entry.Id);
