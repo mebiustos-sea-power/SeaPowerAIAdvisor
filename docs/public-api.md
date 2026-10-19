@@ -1,6 +1,6 @@
 # AI Advisor extension API
 
-This is the initial experimental public contract, version 1, on the multi-provider development branch. Older published releases do not include it.
+This is the initial experimental public contract, version 1, introduced in AI Advisor v0.14.0. Earlier releases do not include it.
 
 ## Projects and dependencies
 
@@ -124,6 +124,6 @@ python tools/test_extension_loading.py
 
 Build the host and example first. The check copies their DLLs into separate temporary directories, with a single API DLL in the host directory. It exercises all six host/API/extension discovery orders using `Assembly.LoadFile`, `GetExportedTypes`, interface/attribute inspection and extension construction, then runs the real extension entry point after host ordering. Registration uses the shipped API and the actual host catalog; the host's Unity initialization and mod-manager activation are not started. It also checks that a host which did not initialize registers no providers. No real settings, game installation or AI endpoint is touched.
 
-Automated tests use real separate client DLLs and mock HTTP. They cover both workflows, settings without Gemini field assumptions, disclosure/round limits, byte budgets, cancellation/disposal, both directions of Gemini handoff, terminal sub failure, programming errors, redaction and concurrent diagnostics. Full in-game Anchor Chain startup, mod-manager activation, UI rendering and live Gemini/Ollama communication for this public-API build remain a separate check.
+Automated tests use real separate client DLLs and mock HTTP. They cover both workflows, settings without Gemini field assumptions, disclosure/round limits, byte budgets, cancellation/disposal, both directions of Gemini handoff, terminal sub failure, programming errors, redaction and concurrent diagnostics. Automated checks do not replace in-game validation of third-party extensions or of each provider/model combination.
 
 Keep the host and shipped API DLL together. Future compatible releases must preserve existing contract members; breaking changes require a new contract version. Removing an extension does not delete its saved connection settings.

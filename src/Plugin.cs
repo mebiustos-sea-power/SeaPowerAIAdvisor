@@ -9,7 +9,7 @@ using SeapowerUI.ViewModels;
 
 namespace SeaPowerAIAdvisor;
 
-[ACPlugin(ModId, "Sea Power AI Advisor Prototype", "0.13.1", new string[0], new string[0])]
+[ACPlugin(ModId, "Sea Power AI Advisor Prototype", "0.14.0", new string[0], new string[0])]
 public sealed class Plugin : IAnchorChainMod
 {
     public const string ModId = "mebiustos.seapower.aiadvisor";
@@ -60,7 +60,7 @@ public sealed class Plugin : IAnchorChainMod
                 return true;
             });
             installed = true;
-            Log.LogInfo("Advisor 0.13.1 ready for tactical battles. DCM is optional. Open AI in the bottom-right battle toolbar.");
+            Log.LogInfo("Advisor 0.14.0 ready for tactical battles. DCM is optional. Open AI in the bottom-right battle toolbar.");
             TryInstallCampaign();
         }
         catch (Exception error)
