@@ -39,7 +39,7 @@ internal sealed class AdvisorWindow
     private AdvisorJob? active;
     private AdvisorTurn? pendingTurn;
     private AdvisorNotice? configurationNotice;
-    private string? pendingModel;
+    private string pendingConnectionName = "";
     private Action? pendingScroll;
     private bool diagnosticScrollPending;
 
@@ -309,14 +309,20 @@ internal sealed class AdvisorWindow
             var session = source.CreateSession(replyLanguage(), request.Text, options.Current.MaxQueryRounds, options.Current.Information, request.Context);
             var historyLimit = options.Current.HistoryExchanges;
             pendingTurn = turn;
-            pendingModel = execution.Model;
+            pendingConnectionName = execution.ConnectionName;
             var logDirectory = AdvisorTrace.DirectoryIn(UnityEngine.Application.persistentDataPath);
             var advisorProfile = appliedProfile;
             var sharedPrompt = options.Current.CommonPrompt;
             var userName = options.Current.UserName ?? throw new InvalidOperationException("The user name has not been initialized.");
             active = new AdvisorJob((cancellation, progress) =>
             {
-                var context = AdvisorContext.Create(session, history, advisorProfile, sharedPrompt, progress, historyLimit, userName);
+                var connectionName = execution.ConnectionName;
+                var context = AdvisorContext.Create(session, history, advisorProfile, sharedPrompt, update =>
+                {
+                    if (update.UsingFallback) connectionName = execution.SubConnectionName;
+                    progress(new AdvisorProgress(update.Stage, update.ApiRequest, update.Rounds, update.MaxRounds,
+                        update.Queries, update.UsingFallback, update.Model, connectionName));
+                }, historyLimit, userName);
                 return AdvisorConsultation.RunAsync(execution, context, logDirectory, request, cancellation);
             }, warn);
             SetBusy(true);
@@ -364,8 +370,8 @@ internal sealed class AdvisorWindow
     {
         var job = active;
         if (job == null || !job.Completion.IsCompleted) return;
+        UpdateActiveProgress();
         var turn = pendingTurn ?? throw new InvalidOperationException("The pending turn is missing.");
-        var model = pendingModel;
         var follow = FollowingLatest;
         var readingOffset = transcriptScroll.TargetVerticalOffset;
         active = null;
@@ -393,7 +399,9 @@ internal sealed class AdvisorWindow
             var result = completion.Result ?? throw new InvalidOperationException("The completed consultation has no result.");
             turn.Complete(result.Text);
             ShowConversation(false);
-            status.Text = text.Format("status.completed", result.Model.Length > 0 ? result.Model : model ?? string.Empty, result.QueryRounds, result.ApiRequests,
+            var connection = AdvisorProgress.FormatConnection(turn.Progress?.ConnectionName ?? pendingConnectionName,
+                result.Model.Length > 0 ? result.Model : turn.Progress?.Model ?? "", text);
+            status.Text = text.Format("status.completed", connection, result.QueryRounds, result.ApiRequests,
                 result.TotalTokens.HasValue ? text.Format("status.token_count", result.TotalTokens.Value) : text["status.tokens_unknown"]);
         }
         if (!follow) pendingScroll = () => transcriptScroll.ScrollToVerticalOffset(readingOffset, false);

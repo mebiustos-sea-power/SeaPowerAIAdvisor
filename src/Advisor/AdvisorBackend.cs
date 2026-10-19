@@ -29,12 +29,16 @@ internal sealed class AdviceResult
 internal sealed class AdvisorBackendSetup
 {
     internal string Model => Diagnostics.Model;
+    internal string ConnectionName { get; }
+    internal string SubConnectionName { get; }
     internal AdvisorTraceOptions Diagnostics { get; }
     private readonly Func<AdvisorTrace?, AdvisorBackendHandle> open;
-    internal AdvisorBackendSetup(AdvisorTraceOptions diagnostics, Func<AdvisorTrace?, AdvisorBackendHandle> open)
+    internal AdvisorBackendSetup(AdvisorTraceOptions diagnostics, Func<AdvisorTrace?, AdvisorBackendHandle> open,
+        string connectionName = "", string subConnectionName = "")
     {
         Diagnostics = diagnostics ?? throw new ArgumentNullException(nameof(diagnostics));
         this.open = open ?? throw new ArgumentNullException(nameof(open));
+        ConnectionName = connectionName; SubConnectionName = subConnectionName;
     }
     internal AdvisorBackendHandle Open(AdvisorTrace? trace) => open(trace)
         ?? throw new InvalidOperationException("The adviser backend returned no execution scope.");

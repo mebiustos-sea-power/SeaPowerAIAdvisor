@@ -143,7 +143,7 @@ internal static class AdvisorServices
                 return new AdvisorBackendHandle(new AdvisorErrorBackend(backend, transport), transport);
             }
             catch (Exception error) { transport.CaptureFailure(error); transport.Dispose(); throw; }
-        });
+        }, main.Name, sub?.Name ?? "");
     }
     internal static AdvisorTraceOptions Diagnostics(AdvisorConnectionOptions options, AdvisorApiConfiguration main,
         AdvisorApiConfiguration? sub, AdvisorServiceCatalog catalog) => new(options.LogAiJson,
