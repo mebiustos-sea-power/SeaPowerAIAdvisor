@@ -10,7 +10,8 @@ internal enum InformationKind
     BattleUnits, BattleFuel, BattleDamage, BattleWeapons, BattleContacts, BattleThreats, BattleBriefing, BattleReports,
     CampaignForces, CampaignShips, CampaignFuel, CampaignAmmunition, CampaignDamage, CampaignAviation,
     CampaignContacts, CampaignBases, CampaignOrders, CampaignReports,
-    BattleGroundUnits, BattleBases, BattleAviation, CampaignOwnBases, CampaignGroundUnits, BattleNeutralContacts, BattleDestroyedContacts
+    BattleGroundUnits, BattleBases, BattleAviation, CampaignOwnBases, CampaignGroundUnits, BattleNeutralContacts, BattleDestroyedContacts,
+    BattleLaunchedWeapons, BattleWeaponContacts
 }
 
 internal sealed class InformationItem
@@ -42,7 +43,9 @@ internal sealed class AdvisorInformation
         new InformationItem(InformationKind.BattleFuel, "battle_fuel", "fuel", InformationKind.BattleUnits),
         new InformationItem(InformationKind.BattleDamage, "battle_damage", "damage", InformationKind.BattleUnits),
         new InformationItem(InformationKind.BattleWeapons, "battle_weapons", "weapons", InformationKind.BattleUnits),
+        new InformationItem(InformationKind.BattleLaunchedWeapons, "battle_launched_weapons", "launched_weapons", InformationKind.BattleUnits),
         new InformationItem(InformationKind.BattleContacts, "battle_contacts", "contacts"),
+        new InformationItem(InformationKind.BattleWeaponContacts, "battle_weapon_contacts", "weapon_contacts", InformationKind.BattleContacts),
         new InformationItem(InformationKind.BattleNeutralContacts, "battle_neutral_contacts", "neutral", InformationKind.BattleContacts, defaultEnabled: false),
         new InformationItem(InformationKind.BattleDestroyedContacts, "battle_destroyed_contacts", "destroyed", InformationKind.BattleContacts, defaultEnabled: false),
         new InformationItem(InformationKind.BattleThreats, "battle_threats", "threats", InformationKind.BattleContacts),
@@ -66,8 +69,8 @@ internal sealed class AdvisorInformation
     });
     internal static readonly IReadOnlyList<InformationGroup> Groups = Array.AsReadOnly(new[]
     {
-        new InformationGroup(true, "battle_friendly", InformationKind.BattleUnits, InformationKind.BattleGroundUnits, InformationKind.BattleBases, InformationKind.BattleAviation, InformationKind.BattleFuel, InformationKind.BattleDamage, InformationKind.BattleWeapons),
-        new InformationGroup(true, "battle_intelligence", InformationKind.BattleContacts, InformationKind.BattleNeutralContacts, InformationKind.BattleDestroyedContacts, InformationKind.BattleThreats, InformationKind.BattleBriefing, InformationKind.BattleReports),
+        new InformationGroup(true, "battle_friendly", InformationKind.BattleUnits, InformationKind.BattleGroundUnits, InformationKind.BattleBases, InformationKind.BattleAviation, InformationKind.BattleFuel, InformationKind.BattleDamage, InformationKind.BattleWeapons, InformationKind.BattleLaunchedWeapons),
+        new InformationGroup(true, "battle_intelligence", InformationKind.BattleContacts, InformationKind.BattleWeaponContacts, InformationKind.BattleNeutralContacts, InformationKind.BattleDestroyedContacts, InformationKind.BattleThreats, InformationKind.BattleBriefing, InformationKind.BattleReports),
         new InformationGroup(false, "campaign_friendly", InformationKind.CampaignForces, InformationKind.CampaignShips, InformationKind.CampaignFuel, InformationKind.CampaignAmmunition, InformationKind.CampaignDamage, InformationKind.CampaignAviation, InformationKind.CampaignOwnBases, InformationKind.CampaignGroundUnits),
         new InformationGroup(false, "campaign_intelligence", InformationKind.CampaignContacts, InformationKind.CampaignBases, InformationKind.CampaignOrders, InformationKind.CampaignReports)
     });
@@ -164,6 +167,7 @@ internal sealed class AdvisorInformation
         "friendly_bases" => Allows(InformationKind.BattleBases),
         "hosted_air_units" or "aviation_tasks" => Allows(InformationKind.BattleAviation),
         "unit_capabilities" => BattleSections.Length > 0,
+        "friendly_launched_weapons" => Allows(InformationKind.BattleLaunchedWeapons),
         "observed_contacts" => Allows(InformationKind.BattleContacts),
         "public_class_threat_references" => Allows(InformationKind.BattleThreats),
         "mission_briefing" => Allows(InformationKind.BattleBriefing),
@@ -174,6 +178,7 @@ internal sealed class AdvisorInformation
     {
         "catalog" => true,
         "list_units" or "get_units" => Allows(InformationKind.BattleUnits),
+        "list_launched_weapons" => Allows(InformationKind.BattleLaunchedWeapons),
         "list_ground_units" or "get_ground_units" => Allows(InformationKind.BattleGroundUnits),
         "list_bases" or "get_bases" => Allows(InformationKind.BattleBases),
         "list_air_units" or "get_air_units" or "list_air_tasks" => Allows(InformationKind.BattleAviation),

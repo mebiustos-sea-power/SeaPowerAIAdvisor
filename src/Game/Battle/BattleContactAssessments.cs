@@ -57,7 +57,7 @@ internal sealed class BattleContactAssessments : IDisposable
         var map = Member(vehicle, "ViewModel");
         return map != null && BattleContactAssessment.IsAvailable(information(),
             (bool)Required(Required(vehicle, "Identified"), "Value"), !current.CanConsult,
-            Code(Required(map, "VisualPosture")), (bool)Required(Required(vehicle, "BaseObject"), "IsDestroyed"));
+            Code(Required(map, "VisualPosture")), (bool)Required(Required(vehicle, "BaseObject"), "IsDestroyed"), Code(Required(map, "VisualType")));
     }
 
     private void Request(object model, object vehicle)

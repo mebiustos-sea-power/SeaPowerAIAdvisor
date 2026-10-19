@@ -18,6 +18,10 @@ internal sealed class BattleSituationReader
         var ownObjects = Sequence(Member(player, "TaskforceObjects")).ToArray();
         var units = new JArray();
         var contacts = new JArray();
+        var launchedWeapons = new JArray();
+        var identities = new List<(object Object, string Id)>();
+        var ownWeapons = new List<(object Object, JObject Row)>();
+        var weaponContacts = new List<(object MapUnit, JObject Row)>();
         var capabilities = new JArray();
         var threats = new JArray();
         var bases = new JArray();
@@ -29,7 +33,7 @@ internal sealed class BattleSituationReader
             var identity = Member(vehicle, "Object");
             if (identity != null && ownObjects.Any(o => ReferenceEquals(o, identity)))
             {
-                // TaskforceObjects also contains launched weapons, which do not use platform capabilities.
+                // Launched weapons are captured separately; they do not use platform capabilities.
                 if (IsWeapon(identity)) continue;
                 var kind = Code(Required(identity, "_type"));
                 var parameters = Required(identity, "_obp");
@@ -48,6 +52,7 @@ internal sealed class BattleSituationReader
                     ["speed_knots"] = Number(Required(identity, "_velocityInKnots"))
                 });
                 var row = (JObject)units.Last!;
+                identities.Add((identity, (string)row["id"]!));
                 capabilities.Add(knowledge.CaptureOwn(identity, (string)row["id"]!, (string)row["display_name"]!));
                 if (category == "base")
                 {
@@ -62,7 +67,8 @@ internal sealed class BattleSituationReader
             var destroyed = (bool)Required(Required(vehicle, "BaseObject"), "IsDestroyed");
             var positionEstimate = Member(vehicle, "PositionEstimate");
             var classKnown = Member(vehicle, "Class") != null;
-            var viewModel = classKnown ? Member(mapUnit, "ObjectViewModel") : null;
+            var contactKind = Code(Member(mapUnit, "VisualType"));
+            var viewModel = classKnown && !BattleWeaponReader.IsKind(contactKind) ? Member(mapUnit, "ObjectViewModel") : null;
             var displayName = classKnown && viewModel != null
                 ? Reactive<string>(viewModel, "ObjectName")
                 : "Contact " + Convert.ToString(Required(vehicle, "Id"), CultureInfo.InvariantCulture);
@@ -74,7 +80,7 @@ internal sealed class BattleSituationReader
                 ["id"] = "observed_contact_" + (contacts.Count + 1).ToString(CultureInfo.InvariantCulture),
                 ["track_number"] = Convert.ToInt32(Required(vehicle, "Id"), CultureInfo.InvariantCulture),
                 ["display_name"] = displayName,
-                ["kind"] = Code(Member(mapUnit, "VisualType")),
+                ["kind"] = contactKind,
                 ["posture"] = Code(Member(mapUnit, "VisualPosture")),
                 ["identified"] = identified,
                 ["class_display_name"] = reference["class_display_name"]?.DeepClone() ?? JValue.CreateNull(),
@@ -87,13 +93,27 @@ internal sealed class BattleSituationReader
                 ["observation_time_utc"] = JValue.CreateNull(),
                 ["position_error_nm"] = JValue.CreateNull()
             });
-            BattleContactMotionReader.CopyTo((JObject)contacts.Last!, vehicle);
+            var contact = (JObject)contacts.Last!;
+            if (identity != null) identities.Add((identity, (string)contact["id"]!));
+            if (BattleWeaponReader.IsKind(contactKind)) weaponContacts.Add((mapUnit, contact));
+            BattleContactMotionReader.CopyTo(contact, vehicle);
             reference["id"] = contacts.Last!["id"]!.DeepClone();
             reference["display_name"] = displayName;
             reference["observed_posture"] = contacts.Last!["posture"]!.DeepClone();
             reference["destroyed"] = destroyed;
             threats.Add(reference);
         }
+        foreach (var weapon in ownObjects.Where(IsWeapon))
+        {
+            var row = BattleWeaponReader.CaptureOwn(weapon, "own_weapon_" + (launchedWeapons.Count + 1).ToString(CultureInfo.InvariantCulture));
+            if (row == null) continue;
+            launchedWeapons.Add(row);
+            identities.Add((weapon, (string)row["id"]!));
+            ownWeapons.Add((weapon, row));
+        }
+        string? Resolve(object target) => identities.FirstOrDefault(i => ReferenceEquals(i.Object, target)).Id;
+        foreach (var weapon in ownWeapons) BattleWeaponReader.AddOwnTargets(weapon.Row, weapon.Object, Resolve);
+        foreach (var contact in weaponContacts) BattleWeaponReader.AddContactTarget(contact.Row, contact.MapUnit, Resolve);
         var visibleObjectives = new JArray();
         foreach (var objective in Sequence(objectives))
         {
@@ -129,6 +149,7 @@ internal sealed class BattleSituationReader
             ["mission_briefing_source"] = string.IsNullOrWhiteSpace(xmlBriefing) ? "event_log" :
                 briefingFromBase ? "base_mission_xml" : "mission_xml",
             ["friendly_units"] = units,
+            ["friendly_launched_weapons"] = launchedWeapons,
             ["unit_capabilities"] = capabilities,
             ["contact_threat_references"] = threats,
             ["friendly_bases"] = bases,

@@ -10,8 +10,9 @@ internal enum ContactAssumption { Friendly, Enemy }
 internal sealed class BattleContactAssessment
 {
     internal const string Query = "list_identification_candidates";
-    internal static bool IsAvailable(AdvisorInformation information, bool identified, bool busy, string posture, bool destroyed) =>
+    internal static bool IsAvailable(AdvisorInformation information, bool identified, bool busy, string posture, bool destroyed, string kind = "") =>
         !identified && !busy && information.Allows(InformationKind.BattleContacts) &&
+        (!BattleWeaponReader.IsKind(kind) || information.Allows(InformationKind.BattleWeaponContacts)) &&
         (posture != "neutral" || information.Allows(InformationKind.BattleNeutralContacts)) &&
         (!destroyed || information.Allows(InformationKind.BattleDestroyedContacts));
     internal static bool CanReassess(AdvisorTurn turn) => turn.State == AdvisorTurnState.Answered && turn.Request.HasContext;

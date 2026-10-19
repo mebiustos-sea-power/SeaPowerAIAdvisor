@@ -10,7 +10,7 @@ namespace SeaPowerAIAdvisor;
 // Queries operate exclusively on the detached player view captured at consultation start.
 internal sealed class BattleQuerySession : IAdvisorQuerySession
 {
-    private static readonly string[] names = { "catalog", "list_units", "get_units", "list_contacts", "get_briefing", "list_reports", "get_reports", "get_unit_capabilities", "get_contact_threats", "list_ground_units", "get_ground_units", "list_bases", "get_bases", "list_air_units", "get_air_units", "list_air_tasks" };
+    private static readonly string[] names = { "catalog", "list_units", "get_units", "list_contacts", "get_briefing", "list_reports", "get_reports", "get_unit_capabilities", "get_contact_threats", "list_ground_units", "get_ground_units", "list_bases", "get_bases", "list_air_units", "get_air_units", "list_air_tasks", "list_launched_weapons" };
     private readonly JObject snapshot;
     private readonly AdvisorInformation information;
     private readonly JObject initial;
@@ -31,6 +31,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
         this.information = information ?? AdvisorInformation.Default;
         information = this.information;
         snapshot = situation.Copy();
+        snapshot["friendly_launched_weapons"] ??= new JArray();
         BattleInformation.Apply(snapshot, information);
         if (context != null) assessment = new BattleContactAssessment(snapshot, context, information);
         initial = AdvisorInputBuilder.Header(language, question, Prompts, true);
@@ -152,6 +153,8 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
                 Allowed(query, "query", "offset", "limit");
                 return Page(query, new JArray(Rows("friendly_units").OfType<JObject>()
                     .Select(r => new JObject { ["id"] = r["id"]!.DeepClone(), ["display_name"] = r["display_name"]!.DeepClone(), ["kind"] = r["kind"]!.DeepClone() })));
+            case "list_launched_weapons":
+                Allowed(query, "query", "offset", "limit"); return Page(query, Rows("friendly_launched_weapons"));
             case "list_ground_units":
                 Allowed(query, "query", "offset", "limit"); return Page(query, GroundUnits());
             case "get_ground_units":
@@ -192,6 +195,8 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
                 {
                     if (query["kind"]!.Type != JTokenType.String || !contactKinds.Contains((string)query["kind"]!))
                         throw Error("invalid_arguments", "contact_kind_invalid");
+                    if (BattleWeaponReader.IsKind((string)query["kind"]!) && !information.Allows(InformationKind.BattleWeaponContacts))
+                        throw Error("information_disabled", "information_disabled");
                     contacts = new JArray(contacts.OfType<JObject>().Where(c => (string?)c["kind"] == (string)query["kind"]!).Select(c => c.DeepClone()));
                 }
                 return Page(query, contacts);
@@ -340,6 +345,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
     private JObject RawCatalogue() => new()
     {
         ["friendly_units"] = new JObject { ["item_count"] = Rows("friendly_units").Count, ["list_query"] = "list_units", ["detail_query"] = "get_units", ["description"] = Prompts.Text("battle.json", "catalog_friendly_units") },
+        ["friendly_launched_weapons"] = new JObject { ["item_count"] = Rows("friendly_launched_weapons").Count, ["list_query"] = "list_launched_weapons", ["description"] = Prompts.Text("battle.json", "catalog_friendly_launched_weapons") },
         ["friendly_ground_units"] = new JObject { ["item_count"] = GroundUnits().Count, ["list_query"] = "list_ground_units", ["detail_query"] = "get_ground_units", ["description"] = Prompts.Text("battle.json", "catalog_friendly_ground_units") },
         ["friendly_bases"] = new JObject { ["item_count"] = Rows("friendly_bases").Count, ["list_query"] = "list_bases", ["detail_query"] = "get_bases", ["description"] = Prompts.Text("battle.json", "catalog_friendly_bases") },
         ["hosted_air_units"] = new JObject { ["item_count"] = Rows("hosted_air_units").Count, ["list_query"] = "list_air_units", ["detail_query"] = "get_air_units", ["description"] = Prompts.Text("battle.json", "catalog_hosted_air_units") },
@@ -390,6 +396,8 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
         }
         if (!information.Allows(InformationKind.BattleAviation)) { properties.Remove("host_ids"); properties.Remove("air_unit_ids"); }
         if (!information.Allows(InformationKind.BattleContacts)) properties.Remove("kind");
+        else if (!information.Allows(InformationKind.BattleWeaponContacts))
+            properties["kind"]!["enum"] = new JArray(contactKinds.Where(k => !BattleWeaponReader.IsKind(k)));
         return tool;
     }
     private static readonly string[] contactKinds = { "air", "helicopter", "surface", "submarine", "airbase", "installation", "mobileunit", "aaa", "mobileaaa", "sam", "radar", "port", "bridge", "missile", "torpedo", "biologic", "invisible", "airdecoy", "subdecoy", "activesonobouy", "passivesonobouy" };

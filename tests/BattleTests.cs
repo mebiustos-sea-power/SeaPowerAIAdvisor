@@ -10,6 +10,7 @@ internal static partial class BattleTests
 {
     internal static void Run(Action<string, Action> check)
     {
+        RunWeapons(check);
         check("Battle capture excludes hidden objectives, future reports and actual enemy details", () =>
         {
             var f = new Fixture();
@@ -30,7 +31,10 @@ internal static partial class BattleTests
             foreach (var kind in new[] { "Missile", "Torpedo", "ASROC", "RBU", "Bomb", "AerialRocket", "Chaff", "Noisemaker", "Decoy", "Projectile" })
                 f.OwnWeapons.Add(new OwnWeapon(kind));
             var captured = f.Capture();
-            Require(JToken.DeepEquals(baseline, captured.Copy()),
+            var platforms = captured.Copy();
+            Require(((JArray)platforms["friendly_launched_weapons"]!).Count == 2, "Missiles and torpedoes were not captured separately");
+            baseline.Remove("friendly_launched_weapons"); platforms.Remove("friendly_launched_weapons");
+            Require(JToken.DeepEquals(baseline, platforms),
                 "Launched weapons changed friendly platforms, observed contacts or current capabilities");
             var session = new BattleQuerySession(captured, "en", "What should I do next?");
             var data = session.Execute(Request(session, new JObject { ["query"] = "get_unit_capabilities", ["ids"] = new JArray("own_unit_1") }));
@@ -509,6 +513,7 @@ internal static partial class BattleTests
         private readonly DateTime now = new(1985, 6, 1, 12, 0, 0);
         internal readonly List<OwnUnit> OwnUnits = new();
         internal readonly List<OwnWeapon> OwnWeapons = new();
+        internal readonly List<object> ExtraMapUnits = new();
         internal readonly List<PublicWeapon> PublicWeapons = new() { new PublicWeapon() };
         internal readonly List<PublicClass> PublicClasses = new();
         internal bool Ready = true;
@@ -524,7 +529,7 @@ internal static partial class BattleTests
         internal BattleSnapshot Capture(bool disclosure = false, string xmlBriefing = "", bool briefingUnavailable = false, bool briefingFromBase = false) => new BattleSituationReader().Capture(
             OwnUnits.Cast<object>().Concat(OwnWeapons).Select(u => (object)new { Unit = new { Object = u } }).Concat(new object[] {
                 new { Unit = Track, ObjectViewModel = ContactDisplay, VisualType = ContactKind, VisualPosture = ContactPosture }
-            }).ToArray(), new { TaskforceObjects = OwnUnits.Cast<object>().Concat(OwnWeapons).ToArray() },
+            }).Concat(ExtraMapUnits).ToArray(), new { TaskforceObjects = OwnUnits.Cast<object>().Concat(OwnWeapons).ToArray() },
             new object[] { new { IsHidden = false, Text = "輸送船を保護する", Status = 0 }, Hidden },
             new
             {
@@ -565,6 +570,20 @@ internal static partial class BattleTests
         public object? _obp => null;
         internal OwnWeapon(string kind) { _type = kind; }
         public bool isWeapon() => true;
+        internal bool Launched = true;
+        public bool isLaunched() => Launched;
+        public bool IsDestroyed { get; set; }
+        public string _flightStage { get; set; } = "TerminalApproach";
+        public Reactive<string> Name { get; } = new("Launched test weapon");
+        public Reactive<Geo> Position { get; } = new(new Geo(31, 131));
+        public Reactive<double> Heading { get; } = new(90);
+        public double _velocityInKnots => 500;
+        public Reactive<double> Altitude { get; set; } = new(50);
+        public object? _launchPlatform { get; set; }
+        public object? CurrentIntendedTargetObject { get; set; }
+        public Geo? CommandPosition { get; set; }
+        public WeaponSeeker _seeker { get; } = new();
+        public object? CurrentStrongestTargetEcho => _seeker.Target == null ? null : new { _objectBase = _seeker.Target };
     }
     private sealed class Parameters
     {
@@ -630,7 +649,7 @@ internal static partial class BattleTests
         public bool HasLiveTrack => false;
         public Reactive<bool> Identified { get; } = new(true);
         public Reactive<bool> IsDormant { get; } = new(true);
-        public int Id => 7;
+        public int Id { get; set; } = 7;
     }
     private sealed class SecretEnemy
     {

@@ -19,6 +19,7 @@
     <Compile Include="..\src\Game\AdvisorSource.cs" Link="AdvisorSource.cs" />
     <Compile Include="..\src\Game\Battle\BattleBriefingReader.cs" Link="BattleBriefingReader.cs" />
     <Compile Include="..\src\Game\Battle\BattleValue.cs" Link="BattleValue.cs" />
+    <Compile Include="..\src\Game\Battle\BattleWeaponReader.cs" Link="BattleWeaponReader.cs" />
     <Compile Include="..\src\Game\Battle\BattleCapabilityReader.cs" Link="BattleCapabilityReader.cs" />
     <Compile Include="..\src\Game\Battle\BattleReferenceCatalog.cs" Link="BattleReferenceCatalog.cs" />
     <Compile Include="..\src\Game\Battle\BattleAviationReader.cs" Link="BattleAviationReader.cs" />

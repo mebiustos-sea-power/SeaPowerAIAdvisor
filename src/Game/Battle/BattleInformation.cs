@@ -23,8 +23,25 @@ internal static class BattleInformation
         var contacts = (JArray)snapshot["observed_contacts"]!;
         foreach (var contact in contacts.OfType<JObject>().Where(c =>
             !information.Allows(InformationKind.BattleContacts) ||
+            (BattleWeaponReader.IsKind((string)c["kind"]!) && !information.Allows(InformationKind.BattleWeaponContacts)) ||
             ((string?)c["posture"] == "neutral" && !information.Allows(InformationKind.BattleNeutralContacts)) ||
             ((bool?)c["destroyed"] == true && !information.Allows(InformationKind.BattleDestroyedContacts))).ToArray()) contact.Remove();
+        var weapons = (JArray)snapshot["friendly_launched_weapons"]!;
+        if (!information.Allows(InformationKind.BattleLaunchedWeapons)) weapons.Clear();
+        var visibleIds = ids.Concat(contacts.OfType<JObject>().Select(c => (string)c["id"]!))
+            .Concat(weapons.OfType<JObject>().Select(w => (string)w["id"]!)).ToHashSet(System.StringComparer.Ordinal);
+        foreach (var row in weapons.Concat(contacts).OfType<JObject>())
+        {
+            if (row["launch_platform_id"]?.Type == JTokenType.String && !visibleIds.Contains((string)row["launch_platform_id"]!))
+                row["launch_platform_id"] = JValue.CreateNull();
+            if (row["targeting"] is not JObject targeting) continue;
+            foreach (var key in new[] { "tracked_target_id", "commanded_target_id" })
+            {
+                if (targeting[key]?.Type != JTokenType.String || visibleIds.Contains((string)targeting[key]!)) continue;
+                targeting[key] = JValue.CreateNull();
+                targeting[key == "tracked_target_id" ? "tracking_status" : "commanded_target_status"] = "unknown";
+            }
+        }
         var contactIds = contacts.OfType<JObject>().Select(c => (string)c["id"]!).ToHashSet(System.StringComparer.Ordinal);
         foreach (var reference in ((JArray)snapshot["contact_threat_references"]!).OfType<JObject>()
             .Where(r => !contactIds.Contains((string)r["id"]!)).ToArray()) reference.Remove();
