@@ -23,6 +23,7 @@ internal sealed class AdvisorSettings
     internal int RequestTimeoutSeconds => IsFallbackKey ? fallbackRequestTimeoutSeconds : requestTimeoutSeconds;
     internal int MaxOutputTokens { get; }
     internal bool LogAiJson { get; }
+    internal static int Revision { get; private set; }
     internal static string PathIn(string gameDataPath) => Path.Combine(gameDataPath, "SeaPowerAIAdvisor", "gemini.json");
 
     private AdvisorSettings(string key, string model, int requestTimeout, int outputTokens, bool logAiJson,
@@ -58,13 +59,13 @@ internal sealed class AdvisorSettings
     }
     internal static void Restore(string path, byte[]? before)
     {
-        try { AdvisorConfigFile.Restore(path, before); }
+        try { AdvisorConfigFile.Restore(path, before); Revision++; }
         catch (IOException) { throw new AdvisorConnectionException("settings_write_failed"); }
         catch (UnauthorizedAccessException) { throw new AdvisorConnectionException("settings_write_failed"); }
     }
     internal static void WriteBytes(string path, byte[] bytes)
     {
-        try { AdvisorConfigFile.Write(path, bytes); }
+        try { AdvisorConfigFile.Write(path, bytes); Revision++; }
         catch (IOException) { throw new AdvisorConnectionException("settings_write_failed"); }
         catch (UnauthorizedAccessException) { throw new AdvisorConnectionException("settings_write_failed"); }
     }

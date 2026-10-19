@@ -262,7 +262,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         ["busy"] = active != null, ["settings_open"] = conversationPane.Visibility != Visibility.Visible,
         ["advisor_name"] = DisplayName, ["answered_exchanges"] = conversation.Exchanges.Count
     };
-    AdvisorLocalRun IAdvisorLocalTarget.LocalConsult(string? message, string? shortcut, bool allowFallback)
+    AdvisorLocalRun IAdvisorLocalTarget.LocalConsult(string? message, string? shortcut, bool allowFallback, AdvisorBackendSetup execution)
     {
         RequireLocalReady();
         if (QuestionInputController.IsComposing) throw new AdvisorLocalApiException(409, "input_composing");
@@ -285,7 +285,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
             request = new AdvisorQuestion(message!);
         }
         var run = new AdvisorLocalRun(allowFallback);
-        guard(() => { if (!IsOpen) Toggle(); StartConsultation(request, recording: run); });
+        guard(() => { if (!IsOpen) Toggle(); StartConsultation(request, recording: run, prepared: execution); });
         if (!run.Attached) throw new AdvisorLocalApiException(409, "advisor_unavailable");
         return run;
     }
@@ -322,7 +322,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         }
     }
 
-    private void StartConsultation(AdvisorQuestion request, AdvisorTurn? retry = null, AdvisorLocalRun? recording = null)
+    private void StartConsultation(AdvisorQuestion request, AdvisorTurn? retry = null, AdvisorLocalRun? recording = null, AdvisorBackendSetup? prepared = null)
     {
         if (active != null || conversationPane.Visibility != Visibility.Visible) return;
         if (QuestionInputController.IsComposing)
@@ -351,7 +351,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         try
         {
             options.EnsureUserName(text["general.default_user_name"]);
-            var execution = backends.Prepare(recording?.AllowFallback ?? true);
+            var execution = prepared ?? backends.Prepare(recording?.AllowFallback ?? true);
             IAdvisorQuerySession session = source.CreateSession(replyLanguage(), request.Text, options.Current.MaxQueryRounds, options.Current.Information, request.Context);
             if (recording != null) session = recording.Observe(session);
             var historyLimit = options.Current.HistoryExchanges;

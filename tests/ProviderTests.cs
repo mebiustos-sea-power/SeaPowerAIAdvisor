@@ -13,6 +13,7 @@ internal static partial class ProviderTests
     {
         RunBackends(check);
         RunLocalFallbackPolicy(check);
+        RunLocalConnections(check);
         RunOllama(check);
         RunOpenRouter(check);
         RunNanoGpt(check);

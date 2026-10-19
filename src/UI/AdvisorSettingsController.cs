@@ -18,6 +18,7 @@ internal sealed class AdvisorSettingsController
     private readonly AdvisorApiSettingsView api;
     private readonly AdvisorProfileSettingsView profiles;
     private readonly AdvisorInformationView information;
+    private readonly AdvisorLocalConnectionsView localConnections;
     private readonly AdvisorPromptSettingsView promptEditor;
     private readonly AdvisorErrorHistoryView errorHistory;
     private readonly Action<Action> guard;
@@ -53,6 +54,7 @@ internal sealed class AdvisorSettingsController
         userName = Named<TextBox>("UserName"); userName.MaxLength = AdvisorOptions.MaxUserNameLength;
         size = Named<ComboBox>("ConversationTextSize"); campaign = Named<CheckBox>("EnableCampaignAdvisor"); log = Named<CheckBox>("LogAiJson");
         localApi = Named<CheckBox>("EnableLocalApi");
+        localConnections = new AdvisorLocalConnectionsView(Named<StackPanel>("LocalApiConnections"), Named<ComboBox>("LocalApiDefaultConnection"), text, guard);
         information = new AdvisorInformationView(Named<StackPanel>("InformationChoices"), guard);
         throwException = Named<Button>("ThrowTestException");
         test = Named<Button>("TestConnection"); testStatus = Named<TextBlock>("ConnectionTestStatus"); testError = Named<TextBlock>("ConnectionTestError");
@@ -71,7 +73,9 @@ internal sealed class AdvisorSettingsController
         Bind("SaveConsultation", () => Save(() => options.SaveConsultation(Number(rounds, "query_rounds_invalid"), Number(history, "history_exchanges_invalid"), prompt.Text ?? "")));
         Bind("ResetInformation", () => { if (available) { information.Reset(AdvisorInformation.Default); Notice(""); } });
         Bind("SaveInformation", () => Save(() => options.SaveInformation(information.Value)));
-        Bind("SaveDeveloper", () => Save(() => options.SaveDeveloper(localApi.IsChecked == true, () => apiStore.SaveLogging(log.IsChecked == true))));
+        void SaveDeveloper() => Save(() => options.SaveDeveloper(localApi.IsChecked == true,
+            () => apiStore.SaveLogging(log.IsChecked == true), localConnections.Value));
+        Bind("SaveDeveloper", SaveDeveloper); Bind("SaveLocalApi", SaveDeveloper);
         Bind("TestConnection", TestConnection);
         Bind("ThrowTestException", () =>
         {
@@ -113,7 +117,9 @@ internal sealed class AdvisorSettingsController
             else if (category == Category.Developer)
             {
                 Named<TabControl>("DeveloperCategory").SelectedIndex = 0;
-                log.IsChecked = apiStore.Read().LogAiJson; localApi.IsChecked = options.Read().DeveloperApiEnabled; promptEditor.Open(); log.Focus();
+                var developer = options.Read(); var connections = apiStore.Read();
+                log.IsChecked = connections.LogAiJson; localApi.IsChecked = developer.DeveloperApiEnabled;
+                localConnections.Open(developer.LocalConnections, connections); promptEditor.Open(); log.Focus();
             }
             else
             {
@@ -144,7 +150,7 @@ internal sealed class AdvisorSettingsController
         Category.General => userName.Text + "\0" + size.SelectedIndex + ":" + campaign.IsChecked,
         Category.Consultation => rounds.Text + "\0" + history.Text + "\0" + prompt.Text,
         Category.Information => information.Value.Key,
-        Category.Developer => log.IsChecked + ":" + localApi.IsChecked,
+        Category.Developer => log.IsChecked + ":" + localApi.IsChecked + ":" + localConnections.Value.Json().ToString(),
         _ => ""
     };
     private bool HasChanges => available && ((current == Category.Developer && promptEditor.HasChanges) || (current == Category.Profile ? profiles.HasChanges : current == Category.Api ? api.HasChanges : Snapshot() != baseline));

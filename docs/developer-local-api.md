@@ -4,7 +4,7 @@ The local API drives the same conversation, selected connections, adviser, infor
 
 ## Enable and connect
 
-Open **Settings → For developers → Diagnostics**, enable **Enable developer local API (this PC only)** and save. It is off by default. Its address, or a startup error, appears below the checkbox. The fixed endpoint is:
+Open **Settings → For developers → Local API**. Choose the allowed API connections and one developer default, enable **Enable developer local API (this PC only)** and save. Existing installations start with no allowed connections or developer default. It is off by default. Its address, or a startup error, appears below the checkbox. The fixed endpoint is:
 
 ```text
 http://127.0.0.1:18765
@@ -14,12 +14,19 @@ Close settings before starting a consultation or changing prompts externally. A 
 
 Every request must include `X-Advisor-Developer: 1`. Send JSON bodies with `Content-Type: application/json`. Browser `Origin` requests are rejected; CORS is not enabled. Only IPv4 loopback is bound. Disabling the option closes the listener and drops its retained diagnostic result. It does not cancel a consultation already running in the UI. A port or permission error is shown and logged; toggle the setting off and on after fixing its cause. Do not expose this endpoint through a network proxy.
 
+## Temp discovery file
+
+While the local API is enabled and listening, `%TEMP%\SeaPowerAIAdvisor\developer-api.json` contains the endpoint, game `process_id`, `default_connection_id` and the same allowed `connections` metadata as `/v1/connections`. Connection settings and credentials are not included. Read this file to discover choices without making an API request.
+
+The file is written at startup and after saved option/connection changes, and removed when the local API is disabled or the game exits normally. An abnormal exit can leave it behind; check the recorded process ID before using it. Unchecking or deleting the developer default leaves it unselected rather than choosing another connection automatically.
+
 ## Endpoints
 
 All responses are JSON. These endpoints are experimental and separate from the public provider-extension SDK.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
+| GET | `/v1/connections` | Allowed connection IDs, names, providers, models and the developer default. |
 | GET | `/v1/status` | Current mode, adviser availability, busy/settings state and last consultation ID. |
 | POST | `/v1/consultations` | Start one question or quick consultation; returns HTTP 202 and an ID. |
 | GET | `/v1/consultations/{id}` | Read progress, final answer, errors and captured input/retrievals. |
@@ -39,13 +46,21 @@ Question bodies specify exactly one of `question` and `shortcut`:
 {"shortcut":"key_risks"}
 ```
 
+`connection_id` is optional. Omit it to use the developer default; supply an ID from `/v1/connections` to choose another allowed connection:
+
+```json
+{"shortcut":"key_risks","connection_id":"api-example","allow_fallback":false}
+```
+
+An unset or deleted default returns HTTP 409 (`default_connection_missing`). An unavailable or unapproved connection returns HTTP 403 (`connection_not_allowed`). Developer selections do not rewrite the normal main/sub assignments. The accepted response includes the selected `connection_id` and `connection_name`.
+
 `allow_fallback` is optional and **defaults to false** for local-API consultations. The host does not open or use the sub connection unless you explicitly permit it on that request:
 
 ```json
 {"shortcut":"key_risks","allow_fallback":true}
 ```
 
-With the default, a main-connection failure ends the consultation instead of switching to a possibly metered sub connection. The saved main/sub assignments remain unchanged. UI-initiated consultations keep their normal fallback behavior. The accepted response and retained result include the effective `allow_fallback` value. A custom consultation backend that cannot honor a no-fallback policy is rejected before execution.
+With the default, a selected-connection failure ends the consultation. When explicitly allowed, fallback uses the saved sub connection only if it is also permitted for the local API and differs from the selected connection. The saved main/sub assignments remain unchanged. UI-initiated consultations keep their normal fallback behavior. The accepted response and retained result include the effective `allow_fallback` value. A custom consultation backend that cannot honor a no-fallback policy is rejected before execution.
 
 Quick IDs are `key_risks`, `next_steps`, `radar_operations` and `more_detail`. They use the current request prompts and localized UI captions. `more_detail` requires an answered exchange and enabled conversation history. Questions use the normal 2,000-character limit.
 

@@ -42,7 +42,8 @@ public sealed class Plugin : IAnchorChainMod
             }
             AdvisorErrorHistory.StartRun(message => Log.LogWarning(message));
             options = new AdvisorOptionsStore(AdvisorOptionsStore.PathIn(UnityEngine.Application.persistentDataPath));
-            backends = AdvisorServices.CreateRegistry(AdvisorSettings.PathIn(UnityEngine.Application.persistentDataPath));
+            var settingsPath = AdvisorSettings.PathIn(UnityEngine.Application.persistentDataPath);
+            backends = AdvisorServices.CreateRegistry(settingsPath);
             // A broken prompt package must remain visible without disabling settings or diagnostics.
             try { _ = AdvisorPrompts.Current; }
             catch (AdvisorPromptException error) { Log.LogError("System prompts unavailable until restart: " + error.Message); }
@@ -60,7 +61,13 @@ public sealed class Plugin : IAnchorChainMod
                 Log.LogInfo("Registered AI extension: " + extension.Id);
                 return true;
             });
-            LocalApi = new AdvisorLocalApi(() => AdvisorPromptOverrides.Session, error => Log.LogError("Developer local API failed: " + error));
+            LocalApi = new AdvisorLocalApi(() => AdvisorPromptOverrides.Session, error => Log.LogError("Developer local API failed: " + error),
+                () => options.Current.LocalConnections.Describe(AdvisorSettings.Edit(settingsPath)), (id, allowFallback) =>
+                {
+                    var saved = AdvisorSettings.Edit(settingsPath);
+                    options.Current.LocalConnections.Select(saved, id, allowFallback);
+                    return AdvisorServices.Prepare(saved, allowFallback: allowFallback);
+                });
             var driverObject = new UnityEngine.GameObject("SeaPowerAIAdvisor.DeveloperLocalApi");
             UnityEngine.Object.DontDestroyOnLoad(driverObject);
             driverObject.AddComponent<AdvisorLocalApiDriver>().Initialize(options, LocalApi, message => Log.LogWarning(message));

@@ -9,10 +9,11 @@ using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using SeaPowerAIAdvisor;
 
-internal static class LocalApiTests
+internal static partial class LocalApiTests
 {
     internal static void Run(Action<string, Action> check)
     {
+        RunConnections(check);
         check("Developer API is opt-in and unrelated settings saves preserve its choice", () =>
         {
             var directory = Path.Combine(Path.GetTempPath(), "advisor-local-api-" + Guid.NewGuid().ToString("N"));
@@ -87,7 +88,7 @@ internal static class LocalApiTests
         check("Local prompt patches merge atomically, preserve consultation snapshots and reset without writing files", () =>
         {
             var original = AdvisorPrompts.Load(AdvisorPrompts.DefaultDirectory); var overrides = new AdvisorPromptOverrides(original);
-            var api = new AdvisorLocalApi(() => overrides, error => throw error); api.Enable();
+            var api = Api(overrides); api.Enable();
             var before = Directory.GetFiles(AdvisorPrompts.DefaultDirectory).ToDictionary(p => p, File.ReadAllBytes);
             var first = original.Fields[0].Id; var second = original.Fields[1].Id;
             Require(Send(api, "PATCH", "/v1/prompts", new JObject { ["values"] = new JObject { [first] = "SHORT_TEST" } }).Status == 200, "Prompt patch failed");
@@ -125,7 +126,10 @@ internal static class LocalApiTests
             using var replacement = new AdvisorLocalServer((m, p, b) => Task.FromResult(new AdvisorLocalResponse(200, new())), _ => { }, endpoint); replacement.Start();
         });
     }
-    private static AdvisorLocalApi Api() => new(() => new AdvisorPromptOverrides(AdvisorPrompts.Load(AdvisorPrompts.DefaultDirectory)), error => throw error);
+    private static AdvisorLocalApi Api(AdvisorPromptOverrides? overrides = null) => new(
+        () => overrides ?? new AdvisorPromptOverrides(AdvisorPrompts.Load(AdvisorPrompts.DefaultDirectory)), error => throw error,
+        () => new JObject { ["default_connection_id"] = "test", ["connections"] = new JArray(new JObject { ["id"] = "test" }) },
+        (_, fallback) => AdvisorServices.Prepare(new AdvisorSettingsDraft(new JObject { ["api_key"] = "mock-local-key" }), allowFallback: fallback));
     private static AdvisorLocalResponse Send(AdvisorLocalApi api, string method, string path, JObject? body = null)
     { var task = api.Enqueue(method, path, body ?? new()); api.Pump(); return task.GetAwaiter().GetResult(); }
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
@@ -138,7 +142,7 @@ internal static class LocalApiTests
         internal AdvisorLocalRun? Run;
         internal AdvisorTurn? Turn;
         public JObject LocalStatus() => new() { ["busy"] = Busy, ["settings_open"] = Editing };
-        public AdvisorLocalRun LocalConsult(string? question, string? shortcut, bool allowFallback)
+        public AdvisorLocalRun LocalConsult(string? question, string? shortcut, bool allowFallback, AdvisorBackendSetup execution)
         {
             if (Busy) throw new AdvisorLocalApiException(409, "consultation_in_progress");
             Called = Busy = true; Thread = Environment.CurrentManagedThreadId; Shortcut = shortcut;

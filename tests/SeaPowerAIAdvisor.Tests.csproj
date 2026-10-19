@@ -10,6 +10,8 @@
     <Compile Include="..\src\Providers\Extensions\AdvisorExtensionBridge.cs" Link="AdvisorExtensionBridge.cs" />
     <Compile Include="..\src\Providers\Extensions\BuiltInAdvisorExtension.cs" Link="BuiltInAdvisorExtension.cs" />
     <Compile Include="..\src\Providers\Extensions\AdvisorExtensionBackend.cs" Link="AdvisorExtensionBackend.cs" />
+    <Compile Include="..\src\Development\AdvisorLocalConnections.cs" Link="AdvisorLocalConnections.cs" />
+    <Compile Include="..\src\Development\AdvisorLocalDiscovery.cs" Link="AdvisorLocalDiscovery.cs" />
     <Compile Include="..\src\Development\AdvisorLocalApi.cs" Link="AdvisorLocalApi.cs" />
     <Compile Include="..\src\Development\AdvisorLocalRun.cs" Link="AdvisorLocalRun.cs" />
     <Compile Include="..\src\Development\AdvisorLocalServer.cs" Link="AdvisorLocalServer.cs" />
