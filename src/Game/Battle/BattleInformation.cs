@@ -23,7 +23,8 @@ internal static class BattleInformation
         var contacts = (JArray)snapshot["observed_contacts"]!;
         foreach (var contact in contacts.OfType<JObject>().Where(c =>
             !information.Allows(InformationKind.BattleContacts) ||
-            ((string?)c["posture"] == "neutral" && !information.Allows(InformationKind.BattleNeutralContacts))).ToArray()) contact.Remove();
+            ((string?)c["posture"] == "neutral" && !information.Allows(InformationKind.BattleNeutralContacts)) ||
+            ((bool?)c["destroyed"] == true && !information.Allows(InformationKind.BattleDestroyedContacts))).ToArray()) contact.Remove();
         var contactIds = contacts.OfType<JObject>().Select(c => (string)c["id"]!).ToHashSet(System.StringComparer.Ordinal);
         foreach (var reference in ((JArray)snapshot["contact_threat_references"]!).OfType<JObject>()
             .Where(r => !contactIds.Contains((string)r["id"]!)).ToArray()) reference.Remove();

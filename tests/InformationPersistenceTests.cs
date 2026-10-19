@@ -15,7 +15,7 @@ internal static partial class InformationTests
         {
             var old = AdvisorOptions.Parse("{\"disabled_information\":[\"battle_weapons\",\"campaign_forces\"]}");
             Require(!old.Information.Allows(BattleWeapons) && !old.Information.Allows(CampaignShips) &&
-                old.Information.Allows(BattleBases) && old.Information.Allows(BattleGroundUnits) && old.Information.Allows(BattleAviation) && !old.Information.Allows(BattleNeutralContacts),
+                old.Information.Allows(BattleBases) && old.Information.Allows(BattleGroundUnits) && old.Information.Allows(BattleAviation) && !old.Information.Allows(BattleNeutralContacts) && !old.Information.Allows(BattleDestroyedContacts),
                 "Legacy choices changed or new categories did not receive their defaults");
             var selected = old.Information.With(BattleBases, false).With(BattleAviation, true).With(BattleUnits, false);
             var data = new AdvisorOptions(information:selected).Data();
@@ -26,15 +26,16 @@ internal static partial class InformationTests
             Require(!restored.Allows(BattleBases) && restored.Allows(BattleAviation) && !restored.Allows(BattleWeapons),
                 "Reopening or enabling a parent overwrote a saved child choice");
             var partial = AdvisorOptions.Parse("{\"information_selection\":{\"battle_bases\":false,\"battle_aviation\":true}}").Information;
-            Require(!partial.Allows(BattleBases) && partial.Allows(BattleAviation) && partial.Allows(BattleGroundUnits) && !partial.Allows(BattleNeutralContacts),
+            Require(!partial.Allows(BattleBases) && partial.Allows(BattleAviation) && partial.Allows(BattleGroundUnits) && !partial.Allows(BattleNeutralContacts) && !partial.Allows(BattleDestroyedContacts),
                 "Missing new selections replaced explicit choices instead of using item defaults");
+            foreach (var kind in new[] { BattleNeutralContacts, BattleDestroyedContacts })
             foreach (var enabled in new[] { false, true })
             {
-                var neutral = AdvisorInformation.Default.With(BattleNeutralContacts, enabled).With(BattleContacts, false);
-                var inactive = AdvisorOptions.Parse(Encoding.UTF8.GetString(new AdvisorOptions(information: neutral).Data())).Information;
-                Require(!inactive.Allows(BattleNeutralContacts) && !inactive.CanEdit(BattleNeutralContacts) &&
-                    inactive.With(BattleContacts, true).Allows(BattleNeutralContacts) == enabled,
-                    "Saving or toggling the contact parent replaced the user's neutral selection");
+                var choice = AdvisorInformation.Default.With(kind, enabled).With(BattleContacts, false);
+                var inactive = AdvisorOptions.Parse(Encoding.UTF8.GetString(new AdvisorOptions(information: choice).Data())).Information;
+                Require(!inactive.Allows(kind) && !inactive.CanEdit(kind) &&
+                    inactive.With(BattleContacts, true).Allows(kind) == enabled,
+                    "Saving or toggling the contact parent replaced the user's opt-in selection");
             }
         });
         check("Malformed explicit information choices and conflicting legacy formats are reported", () =>

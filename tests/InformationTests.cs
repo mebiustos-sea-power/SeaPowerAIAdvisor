@@ -11,11 +11,12 @@ internal static partial class InformationTests
     internal static void Run(Action<string, Action> check)
     {
         RunPersistence(check);
-        check("Existing information stays enabled by default while neutral contacts are opt-in and dependent selections persist", () =>
+        check("Existing information stays enabled by default while neutral and destroyed contacts are opt-in and dependent selections persist", () =>
         {
             var defaults = AdvisorOptions.Parse("{}").Information;
-            Require(!defaults.Allows(BattleNeutralContacts) && AdvisorInformation.Items.Where(i => i.Kind != BattleNeutralContacts).All(i => defaults.Allows(i.Kind)),
-                "Neutral contacts were enabled by default or another existing category was disabled");
+            Require(!defaults.Allows(BattleNeutralContacts) && !defaults.Allows(BattleDestroyedContacts) &&
+                AdvisorInformation.Items.Where(i => i.Kind is not BattleNeutralContacts and not BattleDestroyedContacts).All(i => defaults.Allows(i.Kind)),
+                "Opt-in contacts were enabled by default or another existing category was disabled");
             var initial = AdvisorInformation.All;
             var disabled = initial.With(CampaignForces, false);
             Require(!disabled.Allows(CampaignShips) && !disabled.Allows(CampaignFuel) && disabled.Allows(CampaignAviation),

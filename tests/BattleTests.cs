@@ -326,6 +326,67 @@ internal static partial class BattleTests
                 snapshot.Copy()["observed_contacts"]!.Count() == 5,
                 "Enabling neutral data did not restore both kinds or filtering mutated the captured snapshot");
         });
+        check("Displayed destroyed contacts are opt-in across counts, pages and threat details while lost contacts remain available", () =>
+        {
+            var f = new Fixture { ContactPosture = "Hostile" };
+            f.Secret.IsDestroyed = true;
+            var captured = f.Capture();
+            f.Secret.IsDestroyed = false;
+            var data = captured.Copy();
+            Require((bool?)data["observed_contacts"]![0]!["destroyed"] == true &&
+                (bool?)data["contact_threat_references"]![0]!["destroyed"] == true,
+                "The map's destroyed flag was lost or reread after capture");
+            var contactTemplate = (JObject)data["observed_contacts"]![0]!;
+            var referenceTemplate = (JObject)data["contact_threat_references"]![0]!.DeepClone();
+            data["contact_threat_references"]![0]!["possible_weapon_reference_ids"] = new JArray("destroyed_weapon_only");
+            ((JArray)data["weapon_references"]!).Add(new JObject { ["id"] = "destroyed_weapon_only", ["display_name"] = "Historical public weapon" });
+            foreach (var (id, destroyed, dormant, posture, kind) in new[] {
+                ("observed_contact_2", true, false, "neutral", "air"),
+                ("observed_contact_3", false, true, "unknown", "surface"),
+                ("observed_contact_4", false, false, "hostile", "surface") })
+            {
+                var contact = (JObject)contactTemplate.DeepClone();
+                contact["id"] = id; contact["destroyed"] = destroyed; contact["dormant"] = dormant;
+                contact["posture"] = posture; contact["kind"] = kind;
+                var reference = (JObject)referenceTemplate.DeepClone();
+                reference["id"] = id; reference["destroyed"] = destroyed; reference["observed_posture"] = posture;
+                ((JArray)data["observed_contacts"]!).Add(contact);
+                ((JArray)data["contact_threat_references"]!).Add(reference);
+            }
+            var snapshot = new BattleSnapshot(data);
+            var off = new BattleQuerySession(snapshot, "en", "Risks", 20,
+                information: AdvisorInformation.Default.With(InformationKind.BattleNeutralContacts, true));
+            var initial = off.InitialInput();
+            var page = off.Execute(Request(off, new JObject { ["query"] = "list_contacts", ["limit"] = 1 }))["results"]![0]!["data"]!;
+            Require((int?)initial["situation"]!["overview"]!["observed_contact_count"] == 2 &&
+                (int?)initial["knowledge_catalog"]!["observed_contacts"]!["item_count"] == 2 &&
+                (int?)page["total_count"] == 2 && (int?)page["next_offset"] == 1 &&
+                (string?)page["items"]![0]!["id"] == "observed_contact_3" && (bool?)page["items"]![0]!["dormant"] == true,
+                "Destroyed contacts leaked into counts or pagination, or a lost contact was excluded");
+            var threats = off.Execute(Request(off, new JObject { ["query"] = "get_contact_threats",
+                ["ids"] = new JArray("observed_contact_3", "observed_contact_4") }));
+            Require((string?)threats["status"] == "ok" && threats["results"]![0]!["data"]!["contacts"]!.Count() == 2 &&
+                !threats.ToString().Contains("destroyed_weapon_only", StringComparison.Ordinal),
+                "Destroyed-only reference data leaked through a retained contact");
+            var rejected = off.Execute(Request(off, new JObject { ["query"] = "get_contact_threats",
+                ["ids"] = new JArray("observed_contact_3", "observed_contact_1") }));
+            Require((string?)rejected["error"]?["code"] == "unknown_id" && rejected["results"] == null,
+                "A direct or mixed-ID query recovered an excluded destroyed contact");
+            var on = new BattleQuerySession(snapshot, "en", "Historical contacts",
+                information: AdvisorInformation.Default.With(InformationKind.BattleDestroyedContacts, true));
+            var included = on.Execute(Request(on, new JObject { ["query"] = "list_contacts" },
+                new JObject { ["query"] = "get_contact_threats", ["ids"] = new JArray("observed_contact_1") }));
+            Require((int?)on.InitialInput()["situation"]!["overview"]!["observed_contact_count"] == 3 &&
+                (bool?)included["results"]![0]!["data"]!["items"]![0]!["destroyed"] == true &&
+                (bool?)included["results"]![1]!["data"]!["contacts"]![0]!["destroyed"] == true &&
+                included["results"]![1]!["data"]!["weapon_references"]!.Any(w => (string?)w["id"] == "destroyed_weapon_only"),
+                "Enabling destroyed contacts lost their explicit state or bypassed the neutral selection");
+            var both = new BattleQuerySession(snapshot, "en", "All contacts", information: AdvisorInformation.Default
+                .With(InformationKind.BattleDestroyedContacts, true).With(InformationKind.BattleNeutralContacts, true));
+            Require((int?)both.InitialInput()["situation"]!["overview"]!["observed_contact_count"] == 4 &&
+                snapshot.Copy()["observed_contacts"]!.Count() == 4,
+                "Independent opt-ins failed to restore contacts or filtering mutated the source snapshot");
+        });
         check("Gemini receives the restricted tool schema and a disabled request returns no data", () =>
         {
             var policy = AdvisorInformation.All.With(InformationKind.BattleWeapons, false);
@@ -558,6 +619,7 @@ internal static partial class BattleTests
     private sealed class Track
     {
         public object Object { get; set; } = null!;
+        public object BaseObject => Object;
         public object? PositionEstimate { get; set; } = new { Item1 = new Geo(32, 130) };
         public object? Class { get; set; } = new { Value = "test_class" };
         public object Position => throw new InvalidOperationException("Read a contact position outside its estimate");
@@ -569,6 +631,7 @@ internal static partial class BattleTests
     private sealed class SecretEnemy
     {
         internal string Value = "Actual enemy secrets";
+        public bool IsDestroyed { get; set; }
         public object Position => throw new InvalidOperationException("Read actual enemy position");
         public string Name => throw new InvalidOperationException("Read actual enemy name");
         public object _obp => throw new InvalidOperationException("Read actual enemy capabilities");

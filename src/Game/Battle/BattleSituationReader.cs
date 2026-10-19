@@ -7,7 +7,7 @@ using static SeaPowerAIAdvisor.BattleValue;
 
 namespace SeaPowerAIAdvisor;
 
-// Reads the player's map projection and published mission UI, never scenario definitions or enemy objects.
+// Reads the player's map projection and published mission UI, never scenario definitions.
 internal sealed class BattleSituationReader
 {
     internal BattleSnapshot Capture(object knownUnits, object player, object objectives, object eventLog,
@@ -25,7 +25,7 @@ internal sealed class BattleSituationReader
         foreach (var mapUnit in Sequence(knownUnits))
         {
             var vehicle = Required(mapUnit, "Unit");
-            // Compare references only; an observed enemy's Object is never dereferenced for details.
+            // Compare identity here; enemy state is limited to the map's destroyed flag below.
             var identity = Member(vehicle, "Object");
             if (identity != null && ownObjects.Any(o => ReferenceEquals(o, identity)))
             {
@@ -58,6 +58,8 @@ internal sealed class BattleSituationReader
                 if (deck != null) aviation.Capture(deck, (string)row["id"]!, (string)row["display_name"]!);
                 continue;
             }
+            // MapContactVisuals.Resolve reads this same flag to display destroyed contacts.
+            var destroyed = (bool)Required(Required(vehicle, "BaseObject"), "IsDestroyed");
             var positionEstimate = Member(vehicle, "PositionEstimate");
             var classKnown = Member(vehicle, "Class") != null;
             var viewModel = classKnown ? Member(mapUnit, "ObjectViewModel") : null;
@@ -80,12 +82,14 @@ internal sealed class BattleSituationReader
                 ["position"] = positionEstimate != null ? Position(Required(positionEstimate, "Item1")) : JValue.CreateNull(),
                 ["position_source"] = positionEstimate == null ? "unknown" : (bool)Required(vehicle, "HasLiveTrack") ? "observed_estimate" : "extrapolated_estimate",
                 ["dormant"] = Reactive<bool>(vehicle, "IsDormant"),
+                ["destroyed"] = destroyed,
                 ["observation_time_utc"] = JValue.CreateNull(),
                 ["position_error_nm"] = JValue.CreateNull()
             });
             reference["id"] = contacts.Last!["id"]!.DeepClone();
             reference["display_name"] = displayName;
             reference["observed_posture"] = contacts.Last!["posture"]!.DeepClone();
+            reference["destroyed"] = destroyed;
             threats.Add(reference);
         }
         var visibleObjectives = new JArray();

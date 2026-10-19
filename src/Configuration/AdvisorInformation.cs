@@ -10,7 +10,7 @@ internal enum InformationKind
     BattleUnits, BattleFuel, BattleDamage, BattleWeapons, BattleContacts, BattleThreats, BattleBriefing, BattleReports,
     CampaignForces, CampaignShips, CampaignFuel, CampaignAmmunition, CampaignDamage, CampaignAviation,
     CampaignContacts, CampaignBases, CampaignOrders, CampaignReports,
-    BattleGroundUnits, BattleBases, BattleAviation, CampaignOwnBases, CampaignGroundUnits, BattleNeutralContacts
+    BattleGroundUnits, BattleBases, BattleAviation, CampaignOwnBases, CampaignGroundUnits, BattleNeutralContacts, BattleDestroyedContacts
 }
 
 internal sealed class InformationItem
@@ -44,6 +44,7 @@ internal sealed class AdvisorInformation
         new InformationItem(InformationKind.BattleWeapons, "battle_weapons", "weapons", InformationKind.BattleUnits),
         new InformationItem(InformationKind.BattleContacts, "battle_contacts", "contacts"),
         new InformationItem(InformationKind.BattleNeutralContacts, "battle_neutral_contacts", "neutral", InformationKind.BattleContacts, defaultEnabled: false),
+        new InformationItem(InformationKind.BattleDestroyedContacts, "battle_destroyed_contacts", "destroyed", InformationKind.BattleContacts, defaultEnabled: false),
         new InformationItem(InformationKind.BattleThreats, "battle_threats", "threats", InformationKind.BattleContacts),
         new InformationItem(InformationKind.BattleBriefing, "battle_briefing", "briefing"),
         new InformationItem(InformationKind.BattleReports, "battle_reports", "reports"),
@@ -66,7 +67,7 @@ internal sealed class AdvisorInformation
     internal static readonly IReadOnlyList<InformationGroup> Groups = Array.AsReadOnly(new[]
     {
         new InformationGroup(true, "battle_friendly", InformationKind.BattleUnits, InformationKind.BattleGroundUnits, InformationKind.BattleBases, InformationKind.BattleAviation, InformationKind.BattleFuel, InformationKind.BattleDamage, InformationKind.BattleWeapons),
-        new InformationGroup(true, "battle_intelligence", InformationKind.BattleContacts, InformationKind.BattleNeutralContacts, InformationKind.BattleThreats, InformationKind.BattleBriefing, InformationKind.BattleReports),
+        new InformationGroup(true, "battle_intelligence", InformationKind.BattleContacts, InformationKind.BattleNeutralContacts, InformationKind.BattleDestroyedContacts, InformationKind.BattleThreats, InformationKind.BattleBriefing, InformationKind.BattleReports),
         new InformationGroup(false, "campaign_friendly", InformationKind.CampaignForces, InformationKind.CampaignShips, InformationKind.CampaignFuel, InformationKind.CampaignAmmunition, InformationKind.CampaignDamage, InformationKind.CampaignAviation, InformationKind.CampaignOwnBases, InformationKind.CampaignGroundUnits),
         new InformationGroup(false, "campaign_intelligence", InformationKind.CampaignContacts, InformationKind.CampaignBases, InformationKind.CampaignOrders, InformationKind.CampaignReports)
     });

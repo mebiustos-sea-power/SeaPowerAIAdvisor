@@ -245,6 +245,7 @@
   "information.weapons": "弾薬・兵器性能",
   "information.contacts": "観測済みの接触情報",
   "information.neutral": "中立",
+  "information.destroyed": "撃破済み",
   "information.threats": "識別済みユニットの公開性能・脅威推定資料",
   "information.briefing": "ブリーフィング",
   "information.reports": "公開済みの報告",
