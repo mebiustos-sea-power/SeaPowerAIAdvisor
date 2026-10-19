@@ -154,6 +154,7 @@ internal static class PromptTests
             var edits = original.Fields.ToDictionary(f => f.Id, f => f.Value);
             foreach (var key in new[] { "next_steps", "key_risks", "more_detail" }) edits["requests.json:" + key] = "EDITED_REQUEST_" + key;
             edits["requests.json:connection_test"] = "EDITED_CONNECTION_CHECK";
+            edits["requests.json:connection_tool_test"] = "EDITED_TOOL_CONNECTION_CHECK";
             var oldQuestion = AdvisorShortcut.KeyRisks.Prepare("主なリスク", original);
             runtime.Apply(edits);
             var chat = new AdvisorConversation();
@@ -169,6 +170,7 @@ internal static class PromptTests
                 Require(chat.TryAdd(question, "Answer", out _), "An edited shortcut could not be stored in conversation history");
             }
             Require(AdvisorPrompts.ConnectionTestRequest(runtime.Current) == "EDITED_CONNECTION_CHECK", "Connection checks ignored applied request edits");
+            Require(AdvisorPrompts.ToolConnectionTestRequest(runtime.Current) == "EDITED_TOOL_CONNECTION_CHECK", "Tool probe instructions ignored temporary prompt edits");
             runtime.Reset();
             Require(AdvisorShortcut.KeyRisks.Prepare("主なリスク", runtime.Current).Text == oldQuestion.Text &&
                 chat.Exchanges[1].Question == "EDITED_REQUEST_key_risks", "Reset failed to restore future questions or rewrote an existing conversation");

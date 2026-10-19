@@ -13,6 +13,7 @@ internal static partial class ProviderTests
     {
         RunBackends(check);
         RunOllama(check);
+        RunOpenRouter(check);
         RunRequestTimeouts(check);
         RunExtensions(check);
         check("A provider without Gemini wire types uses the shared engine and receives correctly mapped parallel results", () => Async(async () =>

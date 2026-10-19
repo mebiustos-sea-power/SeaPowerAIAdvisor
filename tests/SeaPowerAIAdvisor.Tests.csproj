@@ -59,6 +59,8 @@
     <Compile Include="..\src\Providers\Gemini\GeminiService.cs" Link="GeminiService.cs" />
     <Compile Include="..\src\Providers\Ollama\OllamaService.cs" Link="OllamaService.cs" />
     <Compile Include="..\src\Providers\Ollama\OllamaProvider.cs" Link="OllamaProvider.cs" />
+    <Compile Include="..\src\Providers\OpenRouter\OpenRouterProvider.cs" Link="OpenRouterProvider.cs" />
+    <Compile Include="..\src\Providers\OpenRouter\OpenRouterService.cs" Link="OpenRouterService.cs" />
     <Compile Include="..\src\Advisor\AdvisorBackend.cs" Link="AdvisorBackend.cs" />
     <Compile Include="..\src\Advisor\AdvisorBackendRegistry.cs" Link="AdvisorBackendRegistry.cs" />
     <Compile Include="..\src\Providers\Gemini\GeminiBackend.cs" Link="GeminiBackend.cs" />

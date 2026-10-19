@@ -1,0 +1,147 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+
+namespace SeaPowerAIAdvisor;
+
+// OpenRouter owns chat history, call IDs and opaque reasoning/signature blocks.
+internal sealed class OpenRouterProvider : IAdvisorProvider
+{
+    private static readonly Uri Endpoint = new("https://openrouter.ai/api/v1/chat/completions");
+    private readonly AdvisorHttpTransport transport;
+    private readonly AdvisorApiConfiguration configuration;
+    private readonly AdvisorConnectionOptions options;
+    private readonly bool fallback;
+    public string Model => configuration.Model;
+    internal OpenRouterProvider(AdvisorHttpTransport transport, AdvisorApiConfiguration configuration, AdvisorConnectionOptions options, bool fallback)
+    { this.transport = transport; this.configuration = configuration; this.options = options; this.fallback = fallback; }
+    public IAdvisorProviderSession Start(AdvisorProviderInput input, AdvisorContinuation? continuation) => new Session(this, input, continuation);
+
+    internal static JObject Request(AdvisorApiConfiguration configuration, AdvisorConnectionOptions options, JArray messages, JObject tool, JToken choice) => new()
+    {
+        ["model"] = configuration.Model, ["messages"] = messages.DeepClone(), ["stream"] = false,
+        ["max_tokens"] = options.MaxOutputTokens, ["provider"] = new JObject { ["require_parameters"] = true },
+        ["tools"] = new JArray(new JObject { ["type"] = "function", ["function"] = tool.DeepClone() }),
+        ["tool_choice"] = choice.DeepClone()
+    };
+    internal async Task<JObject> SendAsync(JObject body, CancellationToken cancellation)
+    {
+        try
+        {
+            return await transport.SendAsync(Endpoint, body, configuration.RequestTimeoutSeconds, fallback, Model, cancellation,
+                new Dictionary<string, string> { ["Authorization"] = "Bearer " + configuration.ApiKey }).ConfigureAwait(false);
+        }
+        catch (AdvisorConnectionException error) when (error.HttpStatus == 402)
+        { throw new AdvisorConnectionException("insufficient_credits", 402); }
+    }
+    internal static AdvisorReply Read(JObject response)
+    {
+        CheckError(response["error"]);
+        if (response["choices"] is not JArray choices || choices.Count != 1 || choices[0] is not JObject choice)
+            throw new AdvisorConnectionException("invalid_response");
+        CheckError(choice["error"]);
+        if (choice["finish_reason"]?.Type != JTokenType.String) throw new AdvisorConnectionException("invalid_response");
+        var finish = (string?)choice["finish_reason"];
+        if (finish == "length") throw new AdvisorConnectionException("output_limit");
+        if (finish == "content_filter") throw new AdvisorConnectionException("response_blocked");
+        if (finish == "error") throw new AdvisorConnectionException("api_error");
+        if (finish is not ("stop" or "tool_calls") || choice["message"] is not JObject message ||
+            message["role"]?.Type != JTokenType.String || (string?)message["role"] != "assistant" || (message["content"] != null && message["content"]!.Type is not (JTokenType.String or JTokenType.Null)))
+            throw new AdvisorConnectionException("invalid_response");
+        var calls = new List<AdvisorToolCall>();
+        if (message["tool_calls"] != null && message["tool_calls"]!.Type != JTokenType.Null)
+        {
+            if (message["tool_calls"] is not JArray items) throw new AdvisorConnectionException("invalid_function_call");
+            foreach (var item in items)
+            {
+                if (item is not JObject call || call["type"]?.Type != JTokenType.String || (string?)call["type"] != "function" || call["id"]?.Type != JTokenType.String ||
+                    string.IsNullOrWhiteSpace((string?)call["id"]) || call["function"] is not JObject function ||
+                    function["name"]?.Type != JTokenType.String || string.IsNullOrWhiteSpace((string?)function["name"]) ||
+                    function["arguments"]?.Type != JTokenType.String)
+                    throw new AdvisorConnectionException("invalid_function_call");
+                calls.Add(new AdvisorToolCall((string)call["id"]!, (string)function["name"]!, Arguments((string)function["arguments"]!)));
+            }
+        }
+        if ((finish == "tool_calls") != (calls.Count > 0) || calls.Select(c => c.Id).Distinct(StringComparer.Ordinal).Count() != calls.Count)
+            throw new AdvisorConnectionException("invalid_function_call");
+        var text = (string?)message["content"] ?? "";
+        if (calls.Count == 0 && string.IsNullOrWhiteSpace(text)) throw new AdvisorConnectionException("empty_response");
+        if (response["usage"] != null && response["usage"]!.Type is not (JTokenType.Object or JTokenType.Null))
+            throw new AdvisorConnectionException("invalid_response");
+        var usage = (response["usage"] as JObject)?["total_tokens"];
+        long? total = usage?.Type == JTokenType.Integer && long.TryParse(usage.ToString(), out var n) && n >= 0 ? n : (long?)null;
+        return new AdvisorReply(text, calls, total);
+    }
+    private static JObject Arguments(string json)
+    {
+        try
+        {
+            using var source = new StringReader(json);
+            using var reader = new JsonTextReader(source) { DateParseHandling = DateParseHandling.None, MaxDepth = 64 };
+            var result = JObject.Load(reader, new JsonLoadSettings { DuplicatePropertyNameHandling = DuplicatePropertyNameHandling.Error });
+            if (reader.Read()) throw new JsonReaderException();
+            return result;
+        }
+        catch (JsonException) { throw new AdvisorConnectionException("invalid_function_call"); }
+    }
+    private static void CheckError(JToken? error)
+    {
+        if (error == null || error.Type == JTokenType.Null) return;
+        int? status = error is JObject details && details["code"]?.Type == JTokenType.Integer &&
+            int.TryParse(details["code"]!.ToString(), out var n) && n is >= 400 and <= 599 ? n : (int?)null;
+        throw new AdvisorConnectionException(status switch
+        {
+            400 => "api_bad_request", 401 or 403 => "api_access_denied", 402 => "insufficient_credits",
+            404 => "model_unavailable", 429 => "rate_limited", _ => "api_error"
+        }, status);
+    }
+
+    private sealed class Session : IAdvisorProviderSession
+    {
+        private readonly OpenRouterProvider owner;
+        private readonly JObject tool;
+        private readonly JArray messages;
+        private IReadOnlyList<AdvisorToolCall> pending = Array.Empty<AdvisorToolCall>();
+        internal Session(OpenRouterProvider owner, AdvisorProviderInput input, AdvisorContinuation? continuation)
+        {
+            this.owner = owner; tool = input.Tool;
+            var data = (JObject)input.Data.DeepClone();
+            if (continuation != null) data["continuation"] = new JObject
+            {
+                ["reason"] = "fallback_connection_changed", ["query_rounds_used"] = continuation.RoundsUsed,
+                ["remaining_query_rounds"] = Math.Max(0, continuation.MaxRounds - continuation.RoundsUsed),
+                ["completed_retrievals"] = continuation.Retrievals.DeepClone()
+            };
+            messages = new JArray(new JObject { ["role"] = "system", ["content"] = input.SystemInstruction },
+                new JObject { ["role"] = "user", ["content"] = data.ToString(Formatting.None) });
+        }
+        public AdvisorProviderRequest Prepare(bool allowTools)
+        {
+            if (pending.Count != 0) throw new InvalidOperationException("OpenRouter tool results have not been accepted.");
+            var body = Request(owner.configuration, owner.options, messages, tool, new JValue(allowTools ? "auto" : "none"));
+            return new AdvisorProviderRequest(AdvisorQueryLimits.Bytes(body), async cancellation =>
+            {
+                var response = await owner.SendAsync(body, cancellation).ConfigureAwait(false);
+                cancellation.ThrowIfCancellationRequested();
+                var reply = Read(response);
+                // Replay the complete assistant message to preserve provider-specific reasoning signatures.
+                messages.Add(response["choices"]![0]!["message"]!.DeepClone()); pending = reply.Calls;
+                return reply;
+            });
+        }
+        public void AcceptResults(IReadOnlyList<AdvisorToolResult> results)
+        {
+            if (results.Count != pending.Count || results.Where((r, i) => r.Id != pending[i].Id || r.Name != pending[i].Name).Any())
+                throw new InvalidOperationException("OpenRouter tool results do not match the pending calls.");
+            foreach (var result in results) messages.Add(new JObject
+            { ["role"] = "tool", ["tool_call_id"] = result.Id, ["content"] = result.Data.ToString(Formatting.None) });
+            pending = Array.Empty<AdvisorToolCall>();
+        }
+        public void Dispose() { }
+    }
+}

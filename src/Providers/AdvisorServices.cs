@@ -52,7 +52,7 @@ internal abstract class AdvisorService
 
 internal sealed class AdvisorServiceCatalog
 {
-    internal static AdvisorServiceCatalog BuiltIn { get; } = new(new AdvisorService[] { new GeminiService(), new OllamaService() });
+    internal static AdvisorServiceCatalog BuiltIn { get; } = new(new AdvisorService[] { new GeminiService(), new OllamaService(), new OpenRouterService() });
     private readonly object sync = new();
     private readonly List<AdvisorService> services = new();
     internal IReadOnlyList<AdvisorService> Services { get { lock (sync) return Array.AsReadOnly(services.ToArray()); } }

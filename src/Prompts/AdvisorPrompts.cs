@@ -97,6 +97,9 @@ internal sealed class AdvisorPrompts
     internal static string ConnectionTestRequest(AdvisorPrompts? prompts = null) =>
         (prompts ?? AdvisorPromptOverrides.LoadedCurrent)?.Text("requests.json", "connection_test")
         ?? (string)DefaultRequests.Value["connection_test"]!;
+    internal static string ToolConnectionTestRequest(AdvisorPrompts? prompts = null) =>
+        (prompts ?? AdvisorPromptOverrides.LoadedCurrent)?.Text("requests.json", "connection_tool_test")
+        ?? (string)DefaultRequests.Value["connection_tool_test"]!;
     internal static JObject ReadRequests(string directory) => Read(directory, "requests.json", RequestFields);
     private static readonly string[] BattleFields =
     {
@@ -130,7 +133,7 @@ internal sealed class AdvisorPrompts
     };
     private static readonly string[] RequestFields =
     {
-        "next_steps", "more_detail", "key_risks", "connection_test", "contact_assessment", "contact_reassessment",
+        "next_steps", "more_detail", "key_risks", "connection_test", "connection_tool_test", "contact_assessment", "contact_reassessment",
     };
 
     private static JObject Read(string directory, string name, params string[] fields)
