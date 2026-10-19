@@ -214,6 +214,7 @@
                   <TextBox x:Name="ApiConfigurationName" FontSize="14" Padding="7" MaxLength="80" />
                   <TextBlock Text="{DynamicResource Advisor.connection.provider}" FontSize="12" Margin="0,12,0,4" />
                   <ComboBox x:Name="ApiProvider" MinHeight="30" />
+                  <TextBlock x:Name="ApiProviderDescription" FontSize="12" TextWrapping="Wrap" Opacity="0.85" Margin="0,8,0,0" Visibility="Collapsed" />
                   <StackPanel x:Name="ApiProviderFields" />
                   <TextBlock x:Name="ApiProviderError" Foreground="{DynamicResource AdvisorErrorBrush}" TextWrapping="Wrap" Margin="0,8,0,0" Visibility="Collapsed" />
                   <TextBlock Text="{DynamicResource Advisor.connection.request_timeout_label}" FontSize="12" Margin="0,12,0,4" />

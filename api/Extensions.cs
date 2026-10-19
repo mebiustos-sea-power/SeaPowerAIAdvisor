@@ -38,6 +38,12 @@ public interface IAdvisorExtension
         string testMessage, CancellationToken cancellation);
 }
 
+// Optional provider-wide guidance for the connection form. Empty text leaves no display area.
+public interface IAdvisorExtensionDescription
+{
+    string GetDescription(string uiLanguage);
+}
+
 public interface IStandardAdvisorExtension : IAdvisorExtension
 {
     IAdvisorSession OpenSession(ConnectionSettings connection, IAdvisorConnectionServices services,

@@ -22,12 +22,15 @@ internal static class ProviderRegistration
 }
 
 // These examples make no AI requests. Their replies identify them as offline examples.
-internal abstract class ExampleDefinition : IAdvisorExtension
+internal abstract class ExampleDefinition : IAdvisorExtension, IAdvisorExtensionDescription
 {
     public int ApiVersion => AdvisorApi.ContractVersion;
     public abstract string Id { get; }
     public abstract string Name { get; }
     public string Protocol => "offline_example";
+    public string GetDescription(string uiLanguage) => uiLanguage == "ja"
+        ? "オフラインの実装例です。AIへの通信は行いません。"
+        : "Offline implementation example. No AI requests are sent.";
     public IReadOnlyList<ConnectionField> Fields { get; } = Array.AsReadOnly(new[]
     { new ConnectionField("model", "Model", "offline-example", translations: new Dictionary<string,string> { ["ja"] = "モデル名" }) });
     public void ValidateSettings(string settingsJson)

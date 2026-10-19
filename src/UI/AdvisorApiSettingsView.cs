@@ -12,7 +12,7 @@ internal sealed class AdvisorApiSettingsView
     private readonly ComboBox main, sub, selector, provider;
     private readonly TextBox name, timeout;
     private readonly StackPanel fields;
-    private readonly TextBlock providerError;
+    private readonly TextBlock providerDescription, providerError;
     private readonly AdvisorServiceCatalog services = AdvisorServiceCatalog.BuiltIn;
     private IReadOnlyList<AdvisorService> providerChoices = Array.Empty<AdvisorService>();
     private readonly Dictionary<string, JObject> providerDrafts = new(StringComparer.Ordinal);
@@ -45,6 +45,7 @@ internal sealed class AdvisorApiSettingsView
         main = Named<ComboBox>("MainApiConfiguration"); sub = Named<ComboBox>("SubApiConfiguration"); selector = Named<ComboBox>("ApiConfigurationSelector");
         name = Named<TextBox>("ApiConfigurationName"); timeout = Named<TextBox>("RequestTimeout"); provider = Named<ComboBox>("ApiProvider");
         fields = Named<StackPanel>("ApiProviderFields"); providerError = Named<TextBlock>("ApiProviderError");
+        providerDescription = Named<TextBlock>("ApiProviderDescription");
         add = Named<Button>("AddApiConfiguration"); edit = Named<Button>("EditApiConfiguration"); remove = Named<Button>("RemoveApiConfiguration");
         saveEntry = Named<Button>("SaveApiEntry"); cancelEntry = Named<Button>("CancelApiEntry"); saveAssignments = Named<Button>("SaveApiAssignments");
         editorPane = Named<FrameworkElement>("ApiEditor"); useTab = Named<FrameworkElement>("ApiUseTab");
@@ -84,6 +85,8 @@ internal sealed class AdvisorApiSettingsView
     {
         typing.Release(); fields.Children.Clear(); fieldValues.Clear();
         var service = editor == null ? null : services.Find(editor.Provider);
+        providerDescription.Text = service == null ? "" : service.Description(text());
+        providerDescription.Visibility = string.IsNullOrWhiteSpace(providerDescription.Text) ? Visibility.Collapsed : Visibility.Visible;
         providerError.Text = service == null && editor != null ? text()["connection.provider_unavailable"] : "";
         providerError.Visibility = providerError.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         if (service == null) return;
@@ -132,6 +135,7 @@ internal sealed class AdvisorApiSettingsView
             main.SelectedIndex = Array.IndexOf(ids, selectedMain) + 1; sub.SelectedIndex = Array.IndexOf(ids, selectedSub) + 1;
             selector.SelectedIndex = selection == null ? (ids.Length == 0 ? -1 : 0) : Array.IndexOf(ids, selection);
             editorPane.Visibility = Visibility.Collapsed; name.Text = timeout.Text = ""; provider.Items.Clear(); fields.Children.Clear(); fieldValues.Clear(); providerDrafts.Clear();
+            providerDescription.Text = ""; providerDescription.Visibility = Visibility.Collapsed;
         }
         finally { updating = false; }
         SetBusy(busy);

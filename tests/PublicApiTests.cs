@@ -29,6 +29,8 @@ internal static partial class ProviderTests
             Require(Api.AdvisorApi.IsAvailable && AdvisorServiceCatalog.BuiltIn.Find(external.Id) != null &&
                 AdvisorServiceCatalog.BuiltIn.Require(external.Id).Fields[1].Caption(AdvisorText.Load("ja")) == "認証情報",
                 "Registered fields did not reach the same catalog used by settings");
+            Require(AdvisorServiceCatalog.BuiltIn.Require(external.Id).Description(AdvisorText.Load("ja")) == "",
+                "An extension without a description acquired a required implementation or a placeholder message");
             var count = AdvisorServiceCatalog.BuiltIn.Services.Count;
             ThrowsPublic<ArgumentException>(() => new Api.AdvisorException("raw service response with credentials"));
             ThrowsPublic<InvalidOperationException>(() => Api.AdvisorApi.Register(external));
@@ -263,6 +265,12 @@ internal static partial class ProviderTests
             Require(host.Registrations.Count == 2, "The sample entry point did not register both strategies");
             foreach (var extension in host.Registrations)
             {
+                var service = AdvisorServiceCatalog.BuiltIn.Require(extension.Id);
+                Require(service.Description(AdvisorText.Load("ja")) == "オフラインの実装例です。AIへの通信は行いません。" &&
+                    service.Description(AdvisorText.Load("en")) == "Offline implementation example. No AI requests are sent." &&
+                    service.Description(AdvisorText.Load("fr")) == service.Description(AdvisorText.Load("en")) &&
+                    ((Api.IAdvisorExtensionDescription)extension).GetDescription("fr") == service.Description(AdvisorText.Load("en")),
+                    "Provider-wide guidance was lost, translated into the wrong language, or failed its English fallback");
                 var answer = await RunPrepared(AdvisorServices.Prepare(ExtensionDraft(extension)));
                 Require(answer.Text.Contains("Offline API example", StringComparison.Ordinal) && answer.QueryRounds == 1,
                     "A separately compiled public sample could not retrieve known information");

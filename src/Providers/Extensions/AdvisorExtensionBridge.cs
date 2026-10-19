@@ -104,6 +104,10 @@ internal sealed class ExternalAdvisorService : AdvisorService
     internal override string Protocol => protocol;
     internal override IReadOnlyList<AdvisorConnectionField> Fields { get; }
     internal override bool Independent => extension is Api.IIndependentAdvisorExtension;
+    internal override string Description(AdvisorText text) => extension is Api.IAdvisorExtensionDescription description
+        ? AdvisorExtensionBridge.Invoke(() => description.GetDescription(text.Language))
+            ?? throw new InvalidOperationException("The advisor extension returned no connection description.")
+        : "";
     internal ExternalAdvisorService(Api.IAdvisorExtension extension)
     {
         this.extension = extension; id = extension.Id; name = extension.Name; protocol = extension.Protocol;

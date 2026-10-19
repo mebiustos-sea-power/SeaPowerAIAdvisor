@@ -52,6 +52,8 @@ Gemini and Ollama pass through the same catalog registration/validation path and
 
 Declare fields with `ConnectionField`: key, English label, default string, secret flag and optional translated labels. The current form supports text and password inputs. The extension owns numeric conversion and validation. Missing translations use the English label.
 
+Providers can optionally also implement `IAdvisorExtensionDescription.GetDescription(string uiLanguage)`. Return a plain-text description of the connection method; the host displays it below provider selection and above all provider-specific fields, updating it when the provider changes. Return an empty string for no description; blank text occupies no display area. Supply English text when a translation is unavailable, and perform no I/O. Both execution interfaces support this optional metadata. Existing extensions need no changes and the contract/assembly version remains 1.
+
 `ValidateSettings` receives opaque settings JSON and must perform local validation without network I/O or writes. `GetModel` supplies a display/log identifier, never a credential. Fields named `api_key` or `model` are not mandatory. The existing schema 3 stores provider IDs, settings and main/sub assignments. Loading does not write, and an unavailable provider's settings are preserved rather than replaced.
 
 `TestAsync` receives only pending connection settings, host connection services, a short test message and cancellation. It receives no game information, history or personality. It does not save/select a connection. Results stay in the settings screen; diagnostic logging follows the saved developer preference.
