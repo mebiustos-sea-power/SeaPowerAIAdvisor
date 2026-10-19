@@ -10,7 +10,7 @@ An in-game operations adviser for **Sea Power: Naval Combat in the Missile Age**
 
 - **Gemini, Ollama and OpenRouter connections.** Register named connections and choose a main connection and an optional sub connection.
 - **On-demand tactical advice.** Ask your own question or use **Next steps**, **Key risks** and **More detail**.
-- **Unidentified-contact assessments.** Ask the adviser for a view on a contact using its displayed candidates, confirmed features and relevant known contacts. Follow up by assuming a friendly or enemy affiliation.
+- **Unidentified-contact assessments.** Open an unidentified contact’s information window and click the **[adviser name]’s assessment** button. The adviser evaluates its displayed candidates, confirmed features and relevant known contacts. Buttons below the reply let you reassess assuming a friendly or enemy affiliation.
 - **Player-known information only.** Friendly capabilities, aircraft and bases, observed contacts, mission briefing, objectives and published reports are available as needed. Hidden enemy state is not supplied.
 - **Custom advisers.** Register portraits, names and personality/tone preferences. The displayed title is cosmetic. Shared preferences and your name can also be configured.
 - **Readable conversations.** Markdown replies, configurable conversation text size, progress updates and copying of messages.
