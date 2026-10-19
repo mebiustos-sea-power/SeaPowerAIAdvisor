@@ -92,8 +92,20 @@ internal static class ProgressTests
             var first = chat.Begin(new AdvisorQuestion("First"), "Alice", "alice-id");
             first.UpdateProgress(new AdvisorProgress(AdvisorStage.Waiting, 2, 1, 5, new[] { "catalog" }));
             var pending = AdvisorTranscript.Render(chat, text, "Bob", "empty");
-            Require(pending.Contains(text["progress.topic.catalog"], StringComparison.Ordinal), "The pending transcript omitted communication progress");
+            var pendingView = XDocument.Parse(pending);
+            var pendingName = pendingView.Descendants().Single(e => (string?)e.Attribute("Foreground") == "{DynamicResource AdvisorNameBrush}");
+            Require(pending.Contains(text["progress.topic.catalog"], StringComparison.Ordinal) &&
+                (string?)pendingName.Attribute("Text") == "Alice" && (string?)pendingName.Attribute("FontWeight") == "Bold" &&
+                !pendingView.Descendants().Attributes().Any(a => a.Name.LocalName == "Name" && a.Value == "CopyAnswer0"),
+                "The waiting reply lost its actual adviser identity/style or exposed an unavailable answer copy action");
+            var waitingHeader = pendingName.Parent!;
             first.Complete("Alice answer");
+            var completedHeader = XDocument.Parse(AdvisorTranscript.Render(chat, text, "Bob", "empty")).Descendants()
+                .Single(e => e.Attributes().Any(a => a.Name.LocalName == "Name" && a.Value == "AnswerHeader0"));
+            Require(waitingHeader.Attributes().Any(a => a.Name.LocalName == "Name" && a.Value == "AnswerHeader0") &&
+                completedHeader.Descendants().Any(e => (string?)e.Attribute("Text") == "Alice") &&
+                completedHeader.Descendants().Attributes().Any(a => a.Name.LocalName == "Name" && a.Value == "CopyAnswer0"),
+                "Completion did not retain the waiting response's scroll header and add answer copying");
             var second = chat.Begin(new AdvisorQuestion("Second"), "Bob", "bob-id"); second.Complete("Bob answer");
             var view = XDocument.Parse(AdvisorTranscript.Render(chat, text, "Renamed current adviser", "empty"));
             var names = view.Descendants().Where(e => (string?)e.Attribute("Foreground") == "{DynamicResource AdvisorNameBrush}")

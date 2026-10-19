@@ -13,6 +13,7 @@ internal sealed class AdvisorTranscriptView
     private readonly Action<AdvisorTurn> retry;
     private readonly Action<AdvisorTurn, ContactAssumption> reassess;
     private readonly List<Button> reassessmentButtons = new();
+    private readonly Dictionary<AdvisorTurn, FrameworkElement> answerHeaders = new();
     private readonly Stopwatch clock = Stopwatch.StartNew();
     private readonly Dictionary<(AdvisorTurn Turn, bool Answer), double> copiedUntil = new();
     private readonly List<CopyBinding> copyButtons = new();
@@ -44,7 +45,7 @@ internal sealed class AdvisorTranscriptView
         var root = GUI.ParseXaml(AdvisorTranscript.Render(conversation, text, advisor, empty, notice, textSize)) as StackPanel
             ?? throw new InvalidOperationException("The Markdown conversation view is not a StackPanel.");
         waitingTurn = null; waitingText = null;
-        copyButtons.Clear(); reassessmentButtons.Clear();
+        copyButtons.Clear(); reassessmentButtons.Clear(); answerHeaders.Clear();
         var now = clock.Elapsed.TotalSeconds;
         foreach (var key in copiedUntil.Keys.Where(key => !conversation.Turns.Contains(key.Turn) || copiedUntil[key] <= now).ToArray())
             copiedUntil.Remove(key);
@@ -52,6 +53,9 @@ internal sealed class AdvisorTranscriptView
         {
             var turn = conversation.Turns[i];
             BindCopy(root, "CopyQuestion" + i, turn.Request.IsShortcut ? turn.Request.Text : turn.Request.DisplayText, turn, false);
+            if (turn.State == AdvisorTurnState.Waiting || turn.State == AdvisorTurnState.Answered)
+                answerHeaders.Add(turn, root.FindName("AnswerHeader" + i) as FrameworkElement
+                    ?? throw new InvalidOperationException("The advisor response header is missing."));
             if (turn.State == AdvisorTurnState.Waiting)
             {
                 waitingTurn = turn;
@@ -77,6 +81,14 @@ internal sealed class AdvisorTranscriptView
         }
         panel.Children.Clear();
         panel.Children.Add(root);
+    }
+
+    internal void ScrollToAnswer(AdvisorTurn turn, ScrollViewer scroll)
+    {
+        if (!answerHeaders.TryGetValue(turn, out var header))
+            throw new InvalidOperationException("The answer scroll target is missing.");
+        var origin = new Vector4(0, 0, 0, 1) * header.TransformToAncestor(panel);
+        scroll.ScrollToVerticalOffset(origin.Y, false);
     }
 
     private void BindCopy(FrameworkElement root, string name, string value, AdvisorTurn turn, bool answer)

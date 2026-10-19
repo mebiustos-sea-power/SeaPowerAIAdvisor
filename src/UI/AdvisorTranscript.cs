@@ -22,11 +22,17 @@ internal static class AdvisorTranscript
             var row = Element("StackPanel", new XAttribute("Margin", "0,0,0,20"),
                 Header(text["speaker.you"], "AdvisorPlayerNameBrush", "CopyQuestion" + i, text, copyTip, "0,0,0,6", copyCaption),
                 Plain(turn.Request.DisplayText));
+            if (turn.State == AdvisorTurnState.Waiting || turn.State == AdvisorTurnState.Answered)
+            {
+                var header = Header(turn.AdvisorName.Length == 0 ? advisor : turn.AdvisorName, "AdvisorNameBrush",
+                    turn.State == AdvisorTurnState.Answered ? "CopyAnswer" + i : null, text, "transcript.copy_tip", "0,6,0,6");
+                header.Add(new XAttribute(XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml") + "Name", "AnswerHeader" + i));
+                row.Add(header);
+            }
             if (turn.State == AdvisorTurnState.Answered)
             {
                 var exchange = turn.Exchange ?? throw new InvalidOperationException("The completed answer is missing.");
-                row.Add(Header(turn.AdvisorName.Length == 0 ? advisor : turn.AdvisorName, "AdvisorNameBrush",
-                    "CopyAnswer" + i, text, "transcript.copy_tip", "0,6,0,6"), AdvisorMarkdown.Render(exchange.Answer));
+                row.Add(AdvisorMarkdown.Render(exchange.Answer));
                 if (BattleContactAssessment.CanReassess(turn))
                 {
                     var actions = Element("WrapPanel", new XAttribute("Margin", "0,6,0,0"));
@@ -56,11 +62,14 @@ internal static class AdvisorTranscript
         return root.ToString(SaveOptions.DisableFormatting);
     }
 
-    private static XElement Header(string speaker, string brush, string copyName, AdvisorText text, string tipKey, string margin, string captionKey = "action.copy") =>
-        Element("Grid", new XAttribute("Margin", margin),
+    private static XElement Header(string speaker, string brush, string? copyName, AdvisorText text, string tipKey, string margin, string captionKey = "action.copy")
+    {
+        var header = Element("Grid", new XAttribute("Margin", margin),
             Element("Grid.ColumnDefinitions", Element("ColumnDefinition", new XAttribute("Width", "*")),
-                Element("ColumnDefinition", new XAttribute("Width", "Auto"))),
-            Label(speaker, brush), Action(copyName, text[captionKey], text[tipKey], 1));
+                Element("ColumnDefinition", new XAttribute("Width", "Auto"))), Label(speaker, brush));
+        if (copyName != null) header.Add(Action(copyName, text[captionKey], text[tipKey], 1));
+        return header;
+    }
 
     private static XElement Action(string name, string caption, string? tip, int column = 0)
     {

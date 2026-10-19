@@ -40,7 +40,8 @@ internal sealed class AdvisorWindow
     private AdvisorTurn? pendingTurn;
     private AdvisorNotice? configurationNotice;
     private string? pendingModel;
-    private bool scrollPending, diagnosticScrollPending;
+    private Action? pendingScroll;
+    private bool diagnosticScrollPending;
 
     internal AdvisorWindow(FrameworkElement view, WindowHost host, Action<Action> guard, IAdvisorSource source, Func<string> replyLanguage, Action<string> warn, AdvisorOptionsStore options, AdvisorBackendRegistry backends)
     {
@@ -178,10 +179,12 @@ internal sealed class AdvisorWindow
             diagnosticOutput.ScrollToHome();
             diagnosticScrollPending = false;
         }
-        if (scrollPending)
+        if (pendingScroll != null && conversationPane.Visibility == Visibility.Visible)
         {
-            transcriptScroll.ScrollToEnd();
-            scrollPending = false;
+            var scroll = pendingScroll; pendingScroll = null;
+            transcriptScroll.UpdateLayout();
+            scroll();
+            transcriptScroll.UpdateLayout();
         }
     }
 
@@ -298,7 +301,7 @@ internal sealed class AdvisorWindow
         else question.Text = request.DraftAfterSend(question.Text ?? string.Empty);
         configurationNotice = null;
         ShowConversation(false);
-        scrollPending = true;
+        ScrollToEnd();
         try
         {
             options.EnsureUserName(text["general.default_user_name"]);
@@ -351,10 +354,10 @@ internal sealed class AdvisorWindow
         var progress = active?.TakeProgress();
         if (progress == null) return;
         var turn = pendingTurn ?? throw new InvalidOperationException("The pending turn is missing.");
-        var follow = transcriptScroll.VerticalOffset >= transcriptScroll.ScrollableHeight - 4;
+        var follow = FollowingLatest;
         turn.UpdateProgress(progress);
         transcript.UpdateProgress(turn, text);
-        if (follow) scrollPending = true;
+        if (follow) ScrollToEnd();
     }
 
     private void CompleteActive()
@@ -363,6 +366,8 @@ internal sealed class AdvisorWindow
         if (job == null || !job.Completion.IsCompleted) return;
         var turn = pendingTurn ?? throw new InvalidOperationException("The pending turn is missing.");
         var model = pendingModel;
+        var follow = FollowingLatest;
+        var readingOffset = transcriptScroll.TargetVerticalOffset;
         active = null;
         pendingTurn = null;
         var completion = job.TakeCompleted();
@@ -391,8 +396,13 @@ internal sealed class AdvisorWindow
             status.Text = text.Format("status.completed", result.Model.Length > 0 ? result.Model : model ?? string.Empty, result.QueryRounds, result.ApiRequests,
                 result.TotalTokens.HasValue ? text.Format("status.token_count", result.TotalTokens.Value) : text["status.tokens_unknown"]);
         }
-        scrollPending = true;
+        if (!follow) pendingScroll = () => transcriptScroll.ScrollToVerticalOffset(readingOffset, false);
+        else if (turn.State == AdvisorTurnState.Answered) pendingScroll = () => transcript.ScrollToAnswer(turn, transcriptScroll);
+        else ScrollToEnd();
     }
+
+    private bool FollowingLatest => transcriptScroll.TargetVerticalOffset >= transcriptScroll.ScrollableHeight - 4;
+    private void ScrollToEnd() => pendingScroll = () => transcriptScroll.ScrollToVerticalOffset(transcriptScroll.ScrollableHeight, false);
 
     private void FailTurn(AdvisorTurn turn, AdvisorNotice error)
     {
@@ -400,7 +410,7 @@ internal sealed class AdvisorWindow
         pendingTurn = null;
         ShowConversation(false);
         status.Text = text["status.failed"];
-        scrollPending = true;
+        ScrollToEnd();
     }
 
     private void SetBusy(bool busy)
@@ -426,7 +436,7 @@ internal sealed class AdvisorWindow
         SetBusy(false);
         ShowConversation(false);
         status.Text = text["status.cancelled"];
-        scrollPending = true;
+        ScrollToEnd();
     }
 
     private void RefreshConfigurationNotice()
@@ -444,7 +454,7 @@ internal sealed class AdvisorWindow
     private void Preview(bool structured)
     {
         // Never leave a stale request on screen after a refused or failed capture.
-        scrollPending = false;
+        pendingScroll = null;
         diagnosticScrollPending = false;
         diagnosticOutput.Text = string.Empty;
         if (structured && !string.IsNullOrEmpty(UnityEngine.Input.compositionString))
@@ -499,7 +509,7 @@ internal sealed class AdvisorWindow
 
     private void ShowConversation(bool updateStatus = true, string? empty = null)
     {
-        scrollPending = false;
+        pendingScroll = null;
         diagnosticScrollPending = false;
         question.FontSize = AdvisorTypography.FontSize(options.Current.TextSize, 15);
         transcript.Show(conversation, text, speakerName, empty ?? text["transcript.empty"], configurationNotice, options.Current.TextSize);
@@ -512,7 +522,7 @@ internal sealed class AdvisorWindow
         questionInput.Reset();
         CancelActive();
         conversation.Clear();
-        scrollPending = false;
+        pendingScroll = null;
         diagnosticScrollPending = false;
         RefreshConfigurationNotice();
         ShowConversation(false, text["transcript.cleared"]);
@@ -524,7 +534,7 @@ internal sealed class AdvisorWindow
 
     private void ReturnToConversation()
     {
-        ReleaseInput(); RefreshConfigurationNotice(); ShowConversation(false); scrollPending = true; question.Focus();
+        ReleaseInput(); RefreshConfigurationNotice(); ShowConversation(false); ScrollToEnd(); question.Focus();
     }
 
     private void LoadProfile()
