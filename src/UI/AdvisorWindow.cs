@@ -262,7 +262,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         ["busy"] = active != null, ["settings_open"] = conversationPane.Visibility != Visibility.Visible,
         ["advisor_name"] = DisplayName, ["answered_exchanges"] = conversation.Exchanges.Count
     };
-    AdvisorLocalRun IAdvisorLocalTarget.LocalConsult(string? message, string? shortcut, bool allowFallback, AdvisorBackendSetup execution)
+    AdvisorLocalRun IAdvisorLocalTarget.LocalConsult(string? message, string? shortcut, bool allowFallback, AdvisorBackendSetup execution, bool plainAdvisor)
     {
         RequireLocalReady();
         if (QuestionInputController.IsComposing) throw new AdvisorLocalApiException(409, "input_composing");
@@ -284,7 +284,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
             if (!AdvisorConversation.Validate(message, out var error)) throw new AdvisorLocalApiException(400, error);
             request = new AdvisorQuestion(message!);
         }
-        var run = new AdvisorLocalRun(allowFallback);
+        var run = new AdvisorLocalRun(allowFallback, plainAdvisor);
         guard(() => { if (!IsOpen) Toggle(); StartConsultation(request, recording: run, prepared: execution); });
         if (!run.Attached) throw new AdvisorLocalApiException(409, "advisor_unavailable");
         return run;
@@ -339,8 +339,9 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         }
         conversation.UseInformationPolicy(options.Current.Information.Key);
         var history = conversation.Exchanges.ToArray();
-        var answeringName = appliedProfile?.DisplayName ?? speakerName;
-        var answeringId = appliedProfile?.ActiveId ?? AdvisorProfile.DefaultId;
+        var advisorProfile = recording?.ProfileFor(appliedProfile) ?? appliedProfile;
+        var answeringName = advisorProfile?.DisplayName ?? speakerName;
+        var answeringId = advisorProfile?.ActiveId ?? AdvisorProfile.DefaultId;
         var turn = retry ?? conversation.Begin(request, answeringName, answeringId);
         recording?.Attach(turn); localRun = recording;
         if (retry != null) conversation.Retry(turn, answeringName, answeringId);
@@ -358,8 +359,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
             pendingTurn = turn;
             pendingConnectionName = execution.ConnectionName;
             var logDirectory = AdvisorTrace.DirectoryIn(UnityEngine.Application.persistentDataPath);
-            var advisorProfile = appliedProfile;
-            var sharedPrompt = options.Current.CommonPrompt;
+            var sharedPrompt = recording?.CommonPromptFor(options.Current.CommonPrompt) ?? options.Current.CommonPrompt;
             var userName = options.Current.UserName ?? throw new InvalidOperationException("The user name has not been initialized.");
             active = new AdvisorJob((cancellation, progress) =>
             {

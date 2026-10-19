@@ -1,8 +1,12 @@
-# Token measurement tools
+# Developer tools
+
+The [developer local API CLI](advisor-dev.md) operates connections, temporary prompts and consultations through one command-line tool.
+
+## Token measurement tools
 
 `measure_tokens.py` captures and compares AI Advisor consultations without changing the MOD or launching the game. It requires Python 3.10 or later and uses only the standard library.
 
-## Usage
+### Usage
 
 Enable the MOD's full AI communication logging, complete a consultation, then run these commands from the repository root:
 
@@ -25,7 +29,7 @@ Only `measure` sends requests to Google's `countTokens` endpoint; it does not ge
 
 A measurement failure stops the run and leaves the count unknown. Run the same `measure` command again to resume; successful counts are retained. Archived log and prepared input hashes are checked before any API call.
 
-## Output
+### Output
 
 Each capture contains:
 
@@ -36,7 +40,7 @@ Each capture contains:
 
 Counts remain unknown (`null`) when missing or unsuccessful. The report keeps `countTokens` input counts separate from the API-reported `total_input_tokens`, `total_output_tokens`, `total_thought_tokens`, total, cache, and tool-use values. Captures retain conversation text, game data, and the source log path; store them locally under the ignored `artifacts/` directory.
 
-## Measurement method and limitations
+### Measurement method and limitations
 
 The method identifier is `visible-context-v1`. The script reconstructs a GenerateContent input from the visible Interactions log for each API request:
 
@@ -51,7 +55,7 @@ For comparisons, use the same save, paused game state, question, model, prompts,
 
 API references: [countTokens](https://ai.google.dev/api/tokens) and [GenerateContent](https://ai.google.dev/api/generate-content).
 
-## Offline tests
+### Offline tests
 
 ```sh
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools -p 'test_measure_tokens.py' -v

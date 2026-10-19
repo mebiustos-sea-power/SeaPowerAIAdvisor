@@ -58,6 +58,44 @@ internal static class PromptTests
             Require((string?)new BattleQuerySession(Battle(), "en", "Again", prompts: prompts).InitialInput()["instructions"]!["task"] == "EXTERNAL_TASK_V1",
                 "A later consultation required the files again");
         }));
+        check("Plain consultations suppress saved style and shared preferences while retaining temporary system instructions", () => InTemp(directory =>
+        {
+            Prepare(directory);
+            var original = AdvisorPrompts.Load(directory); var runtime = new AdvisorPromptOverrides(original);
+            var edits = original.Fields.ToDictionary(f => f.Id, f => f.Value);
+            edits["common.json:system"] = "TEMPORARY_SYSTEM_FOR_COMPARISON";
+            runtime.Apply(edits);
+            foreach (var useDefault in new[] { false, true })
+            foreach (var plain in new[] { false, true })
+            {
+                var saved = new AdvisorProfile("Selected custom", "portrait.png", useDefault,
+                    "Saved default personality", "Saved custom personality");
+                var run = new AdvisorLocalRun(plainAdvisor: plain);
+                var effective = run.ProfileFor(saved)!;
+                var history = new[] { new ChatExchange("Earlier question", "Earlier answer") };
+                const string configuredCommon = "Saved shared instruction";
+                var session = new BattleQuerySession(Battle(), "ja", "Test question", prompts: runtime.Current);
+                var expectedSystem = runtime.Current.SystemInstruction(session.InitialInput()["instructions"]!);
+                var transport = new CaptureTransport(body =>
+                {
+                    var input = InteractionFixture.Initial(body);
+                    Require((string?)input["advisor_preferences"]!["name"] == (plain ? AdvisorProfile.DefaultName : saved.DisplayName) &&
+                        (string?)input["advisor_preferences"]!["personality_and_tone"] == (plain ? "" : saved.Personality) &&
+                        (string?)input["common_prompt"] == (plain ? "" : configuredCommon),
+                        "Saved style or shared instructions leaked into a plain request, or normal preferences were erased");
+                    Require((string?)body["system_instruction"] == expectedSystem &&
+                        (string?)input["reply_language"] == "ja" && (string?)input["user_name"] == "Commander" &&
+                        input["prior_dialogue"]!.Count() == 1 && (string?)input["question"] == "Test question",
+                        "Plain mode reset temporary system instructions, history, language or other consultation inputs");
+                });
+                _ = new GeminiAdvisor(transport).ConsultAsync(session, AdvisorSettings.Parse("{\"api_key\":\"mock-plain-key\"}"),
+                    history, CancellationToken.None, profile: effective, commonPrompt: run.CommonPromptFor(configuredCommon), userName: "Commander").GetAwaiter().GetResult();
+                Require(transport.Calls == 1 && saved.DefaultPersonality == "Saved default personality" &&
+                    saved.CustomPersonality == "Saved custom personality" && saved.UseDefault == useDefault &&
+                    new AdvisorLocalRun().ProfileFor(saved) == saved && new AdvisorLocalRun().CommonPromptFor(configuredCommon) == configuredCommon,
+                    "Plain mode changed saved preferences or contaminated the next normal consultation");
+            }
+        }));
         check("Missing, malformed and incomplete prompt files surface errors instead of using a hidden default", () => InTemp(directory =>
         {
             Prepare(directory); File.Delete(Path.Combine(directory, "battle.json"));

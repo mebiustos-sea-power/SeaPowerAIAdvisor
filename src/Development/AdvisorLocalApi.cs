@@ -10,7 +10,7 @@ namespace SeaPowerAIAdvisor;
 internal interface IAdvisorLocalTarget
 {
     JObject LocalStatus();
-    AdvisorLocalRun LocalConsult(string? question, string? shortcut, bool allowFallback, AdvisorBackendSetup execution);
+    AdvisorLocalRun LocalConsult(string? question, string? shortcut, bool allowFallback, AdvisorBackendSetup execution, bool plainAdvisor);
     void LocalClear();
     void LocalCancel();
 }
@@ -137,22 +137,25 @@ internal sealed class AdvisorLocalApi
         if (method == "POST" && path == "/v1/consultations")
         {
             var question = body["question"]; var shortcut = body["shortcut"]; var fallback = body["allow_fallback"];
-            if (body.Properties().Any(p => p.Name != "question" && p.Name != "shortcut" && p.Name != "allow_fallback" && p.Name != "connection_id") ||
+            if (body.Properties().Any(p => p.Name != "question" && p.Name != "shortcut" && p.Name != "allow_fallback" && p.Name != "connection_id" && p.Name != "plain_advisor") ||
                 (question == null) == (shortcut == null) || (question != null && question.Type != JTokenType.String) ||
                 (shortcut != null && shortcut.Type != JTokenType.String))
                 throw new AdvisorLocalApiException(400, "specify_question_or_shortcut");
             if (fallback != null && fallback.Type != JTokenType.Boolean) throw new AdvisorLocalApiException(400, "invalid_fallback_policy");
             if (body["connection_id"] != null && body["connection_id"]!.Type != JTokenType.String)
                 throw new AdvisorLocalApiException(400, "invalid_connection_id");
+            var plain = body["plain_advisor"];
+            if (plain != null && plain.Type != JTokenType.Boolean)
+                throw new AdvisorLocalApiException(400, "invalid_plain_advisor");
             var info = ConnectionInfo();
             var id = (string?)body["connection_id"] ?? (string?)info["default_connection_id"];
             if (id == null) throw new AdvisorLocalApiException(409, "default_connection_missing");
             if (!((JArray)info["connections"]!).Any(c => (string?)c["id"] == id))
                 throw new AdvisorLocalApiException(403, "connection_not_allowed");
             var execution = prepareConnection(id, (bool?)fallback ?? false);
-            last = Target().LocalConsult((string?)question, (string?)shortcut, (bool?)fallback ?? false, execution);
+            last = Target().LocalConsult((string?)question, (string?)shortcut, (bool?)fallback ?? false, execution, (bool?)plain ?? false);
             return new(202, new JObject { ["connection_id"] = id, ["connection_name"] = execution.ConnectionName,
-                ["allow_fallback"] = last.AllowFallback, ["id"] = last.Id, ["status_url"] = "/v1/consultations/" + last.Id });
+                ["allow_fallback"] = last.AllowFallback, ["plain_advisor"] = last.PlainAdvisor, ["id"] = last.Id, ["status_url"] = "/v1/consultations/" + last.Id });
         }
         return AdvisorLocalResponse.Error(404, "unknown_endpoint");
     }

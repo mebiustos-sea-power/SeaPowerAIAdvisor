@@ -2,6 +2,10 @@
 
 The local API drives the same conversation, selected connections, adviser, information policy and consultation workflow as the in-game UI. It is intended for prompt experiments against a loaded game situation. It does not select units, issue orders, load saves or expose API credentials.
 
+## Command-line tool
+
+Use the [developer CLI](../tools/advisor-dev.md) for status/connections, temporary prompt changes, consultation, progress and saved results. It accepts arguments and UTF-8 text/JSON files, including explicit connection and fallback choices. It runs outside the MOD and uses only Python's standard library.
+
 ## Enable and connect
 
 Open **Settings → For developers → Local API**. Choose the allowed API connections and one developer default, enable **Enable developer local API (this PC only)** and save. Existing installations start with no allowed connections or developer default. It is off by default. Its address, or a startup error, appears below the checkbox. The fixed endpoint is:
@@ -61,6 +65,14 @@ An unset or deleted default returns HTTP 409 (`default_connection_missing`). An 
 ```
 
 With the default, a selected-connection failure ends the consultation. When explicitly allowed, fallback uses the saved sub connection only if it is also permitted for the local API and differs from the selected connection. The saved main/sub assignments remain unchanged. UI-initiated consultations keep their normal fallback behavior. The accepted response and retained result include the effective `allow_fallback` value. A custom consultation backend that cannot honor a no-fallback policy is rejected before execution.
+
+`plain_advisor` is an optional boolean, default **false**. Set it to true to use **Michael Reed with empty personality/tone and empty user-configured Common instructions for this consultation only**:
+
+```json
+{"shortcut":"key_risks","plain_advisor":true,"allow_fallback":false}
+```
+
+The selected/saved adviser and shared preferences are not modified. The answer and waiting transcript use Michael Reed; the profile sidebar keeps the user's selection. External system instructions and their temporary overrides, game data, language, user name and configured history are retained. Clear history explicitly when a comparison needs it. Acceptance and retained diagnostics include the effective `plain_advisor` flag. It does not affect later UI or local consultations unless requested again.
 
 Quick IDs are `key_risks`, `next_steps`, `radar_operations` and `more_detail`. They use the current request prompts and localized UI captions. `more_detail` requires an answered exchange and enabled conversation history. Questions use the normal 2,000-character limit.
 

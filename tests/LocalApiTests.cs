@@ -85,6 +85,28 @@ internal static partial class LocalApiTests
             var pending = api.Enqueue("POST", "/v1/conversation/clear", new()); api.Disable();
             Require(pending.GetAwaiter().GetResult().Status == 503, "Disabling left queued commands pending");
         });
+        check("Plain adviser is an explicit consultation choice and is retained without becoming a global setting", () =>
+        {
+            var target = new Target(); var api = Api();
+            api.Attach(new object(), "tactical_battle", () => target); api.Enable();
+            foreach (var invalid in new JToken[] { new JValue("true"), new JValue(1), JValue.CreateNull() })
+            {
+                var rejected = Send(api, "POST", "/v1/consultations", new JObject { ["question"] = "Question", ["plain_advisor"] = invalid });
+                Require(rejected.Status == 400 && (string?)rejected.Data["error"] == "invalid_plain_advisor" && !target.Called,
+                    "A malformed plain-adviser option reached the target");
+            }
+            var accepted = Send(api, "POST", "/v1/consultations", new JObject { ["question"] = "Question", ["plain_advisor"] = true });
+            Require(accepted.Status == 202 && (bool?)accepted.Data["plain_advisor"] == true && target.Run!.PlainAdvisor &&
+                target.Turn!.AdvisorName == AdvisorProfile.DefaultName, "The plain choice or its displayed identity was lost");
+            var id = target.Run!.Id;
+            Send(api, "POST", "/v1/consultations/cancel");
+            Require((bool?)Send(api, "GET", "/v1/consultations/" + id).Data["plain_advisor"] == true,
+                "Completed diagnostic results lost the requested adviser mode");
+            accepted = Send(api, "POST", "/v1/consultations", new JObject { ["question"] = "Normal question" });
+            Require(accepted.Status == 202 && (bool?)accepted.Data["plain_advisor"] == false && !target.Run!.PlainAdvisor &&
+                target.Turn!.AdvisorName == "Michael", "A plain request changed the following request's default mode");
+            api.Disable();
+        });
         check("Local prompt patches merge atomically, preserve consultation snapshots and reset without writing files", () =>
         {
             var original = AdvisorPrompts.Load(AdvisorPrompts.DefaultDirectory); var overrides = new AdvisorPromptOverrides(original);
@@ -142,12 +164,12 @@ internal static partial class LocalApiTests
         internal AdvisorLocalRun? Run;
         internal AdvisorTurn? Turn;
         public JObject LocalStatus() => new() { ["busy"] = Busy, ["settings_open"] = Editing };
-        public AdvisorLocalRun LocalConsult(string? question, string? shortcut, bool allowFallback, AdvisorBackendSetup execution)
+        public AdvisorLocalRun LocalConsult(string? question, string? shortcut, bool allowFallback, AdvisorBackendSetup execution, bool plainAdvisor)
         {
             if (Busy) throw new AdvisorLocalApiException(409, "consultation_in_progress");
             Called = Busy = true; Thread = Environment.CurrentManagedThreadId; Shortcut = shortcut;
-            Turn = new AdvisorTurn(new AdvisorQuestion(question ?? shortcut!), 0, "Michael", "default");
-            Run = new AdvisorLocalRun(allowFallback); Run.Attach(Turn); return Run;
+            Turn = new AdvisorTurn(new AdvisorQuestion(question ?? shortcut!), 0, plainAdvisor ? AdvisorProfile.DefaultName : "Michael", "default");
+            Run = new AdvisorLocalRun(allowFallback, plainAdvisor); Run.Attach(Turn); return Run;
         }
         public void LocalClear() { if (Busy) throw new AdvisorLocalApiException(409, "consultation_in_progress"); Cleared = true; }
         public void LocalCancel() { Turn!.Cancel(); Run!.Finish(); Busy = false; }
