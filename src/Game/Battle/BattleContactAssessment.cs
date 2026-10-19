@@ -54,7 +54,6 @@ internal sealed class BattleContactAssessment
             ["observed_features"] = observed.DeepClone(),
             ["candidate_count"] = candidates.Count,
             ["list_query"] = Query,
-            ["candidate_order"] = "not_probability_ranked",
             ["candidates_truncated"] = evidence["candidates_truncated"]!.DeepClone(),
             ["undisplayed_candidate_count"] = evidence["undisplayed_candidate_count"]!.DeepClone(),
             ["evidence_captured_at_utc"] = context["captured_at_utc"]!.DeepClone()

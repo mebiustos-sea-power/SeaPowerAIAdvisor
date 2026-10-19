@@ -46,8 +46,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
             ["victory_conditions"] = new JObject
             {
                 ["source"] = "public_mission_objectives",
-                ["objectives"] = snapshot["public_objectives"]!.DeepClone(),
-                ["hidden_conditions_available"] = false
+                ["objectives"] = snapshot["public_objectives"]!.DeepClone()
             },
             ["overview"] = new JObject
             {
@@ -62,7 +61,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
             {
                 ["available_on_request"] = new JArray("friendly_units", "unit_capabilities", "observed_contacts", "public_class_threat_references", "mission_briefing", "published_reports"),
                 ["not_included"] = new JArray("current_attack_feasibility", "terrain",
-                    "contact_observation_times", "contact_error_bounds", "bearing_only_track_geometry", "hidden_triggers"),
+                    "contact_observation_times", "contact_error_bounds", "bearing_only_track_geometry"),
                 ["reference_scope"] = "this_consultation",
                 ["report_limit"] = 10
             }
