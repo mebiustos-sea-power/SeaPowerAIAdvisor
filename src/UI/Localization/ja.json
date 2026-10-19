@@ -11,7 +11,7 @@
   "speaker.advisor": "アドバイザー",
   "advisor.role": "作戦アドバイザー",
   "activity.idle": "待機中",
-  "activity.busy": "相談中…",
+  "activity.busy": "検討中…",
   "pane.settings": "設定",
   "action.settings": "設定",
   "action.cancel_settings": "戻る",
