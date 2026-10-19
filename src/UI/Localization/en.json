@@ -355,6 +355,8 @@
   "action.copy_prompt": "Copy prompt",
   "transcript.copy_prompt_tip": "Copy the English prompt used for this quick action.",
   "connection.provider": "Provider",
+  "connection.gemini_description": "Specify a Gemini model that supports tool calling. Example: gemini-3.5-flash-lite.",
+  "connection.ollama_description": "Start Ollama and specify a model that supports tool calling. Example: qwen3:8b.",
   "connection.server_url": "Server URL",
   "connection.context_length": "Context length (tokens)",
   "connection.provider_unavailable": "The required provider is unavailable. Install it or select another provider.",

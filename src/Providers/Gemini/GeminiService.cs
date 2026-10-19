@@ -11,6 +11,7 @@ internal sealed class GeminiService : AdvisorService
 {
     internal override string Id => "gemini";
     internal override string Name => "Gemini";
+    internal override string Description(AdvisorText text) => text["connection.gemini_description"];
     internal override string Protocol => "interactions";
     internal override IReadOnlyList<AdvisorConnectionField> Fields { get; } = Array.AsReadOnly(new[]
     {

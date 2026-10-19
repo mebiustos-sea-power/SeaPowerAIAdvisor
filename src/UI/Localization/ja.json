@@ -355,6 +355,8 @@
   "action.copy_prompt": "質問文をコピー",
   "transcript.copy_prompt_tip": "AIに送る英語の質問文をコピーします。",
   "connection.provider": "提供元",
+  "connection.gemini_description": "ツール呼び出しに対応したGeminiモデルを指定してください。例：gemini-3.5-flash-lite",
+  "connection.ollama_description": "Ollamaを起動し、ツール呼び出しに対応したモデルを指定してください。例：qwen3:8b",
   "connection.server_url": "サーバーURL",
   "connection.context_length": "コンテキスト長（トークン）",
   "connection.provider_unavailable": "必要な提供元が見つかりません。導入するか、別の提供元を選択してください。",
