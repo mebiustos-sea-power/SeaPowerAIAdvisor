@@ -120,7 +120,7 @@ internal static class AdvisorServices
         return registry;
     }
     internal static AdvisorBackendSetup Prepare(AdvisorSettingsDraft settings, AdvisorServiceCatalog? catalog = null,
-        Func<AdvisorTrace?, AdvisorHttpTransport>? transportFactory = null)
+        Func<AdvisorTrace?, AdvisorHttpTransport>? transportFactory = null, AdvisorErrorHistory? errorHistory = null)
     {
         catalog ??= AdvisorServiceCatalog.BuiltIn;
         var main = settings.Main.Build(); var sub = settings.Sub?.Build();
@@ -132,15 +132,17 @@ internal static class AdvisorServices
         return new AdvisorBackendSetup(diagnostics, trace =>
         {
             var transport = transportFactory?.Invoke(trace) ?? new AdvisorHttpTransport(trace);
+            ObserveErrors(transport, main, sub, catalog, "consultation", errorHistory);
+            void Switched(AdvisorConnectionException error) { transport.CaptureFailure(error); trace?.Fallback(error); }
             try
             {
                 IAdvisorBackend backend = mainService.Independent || subService?.Independent == true
-                    ? new AdvisorExtensionBackend(mainService, subService, main, sub, options, transport, error => trace?.Fallback(error))
+                    ? new AdvisorExtensionBackend(mainService, subService, main, sub, options, transport, Switched)
                     : new AdvisorEngine(mainService.Open(main, options, false, transport),
-                        sub == null ? null : subService!.Open(sub, options, true, transport), error => trace?.Fallback(error));
-                return new AdvisorBackendHandle(backend, transport);
+                        sub == null ? null : subService!.Open(sub, options, true, transport), Switched);
+                return new AdvisorBackendHandle(new AdvisorErrorBackend(backend, transport), transport);
             }
-            catch { transport.Dispose(); throw; }
+            catch (Exception error) { transport.CaptureFailure(error); transport.Dispose(); throw; }
         });
     }
     internal static AdvisorTraceOptions Diagnostics(AdvisorConnectionOptions options, AdvisorApiConfiguration main,
@@ -151,7 +153,7 @@ internal static class AdvisorServices
 
     internal static async Task<AdviceResult> TestAsync(string directory, AdvisorApiConfiguration configuration,
         AdvisorConnectionOptions options, string request, CancellationToken cancellation,
-        AdvisorServiceCatalog? catalog = null, Func<AdvisorTrace?, AdvisorHttpTransport>? transportFactory = null)
+        AdvisorServiceCatalog? catalog = null, Func<AdvisorTrace?, AdvisorHttpTransport>? transportFactory = null, AdvisorErrorHistory? errorHistory = null)
     {
         catalog ??= AdvisorServiceCatalog.BuiltIn;
         var service = catalog.Require(configuration.Provider); service.Validate(configuration.Settings);
@@ -160,7 +162,22 @@ internal static class AdvisorServices
         return await AdvisorConsultation.RunAsync(async () =>
         {
             using var transport = transportFactory?.Invoke(trace) ?? new AdvisorHttpTransport(trace);
-            return await service.TestAsync(configuration, options, transport, request, cancellation).ConfigureAwait(false);
+            ObserveErrors(transport, configuration, null, catalog, "connection_test", errorHistory);
+            try { return await service.TestAsync(configuration, options, transport, request, cancellation).ConfigureAwait(false); }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception error) { transport.CaptureFailure(error); throw; }
         }, trace, cancellation).ConfigureAwait(false);
     }
+    private static void ObserveErrors(AdvisorHttpTransport transport, AdvisorApiConfiguration main, AdvisorApiConfiguration? sub,
+        AdvisorServiceCatalog catalog, string operation, AdvisorErrorHistory? history)
+    {
+        history ??= AdvisorErrorHistory.Active;
+        if (history == null) return;
+        var mainService = catalog.Require(main.Provider);
+        var subService = sub == null ? null : catalog.Require(sub.Provider);
+        transport.ObserveErrors(new AdvisorErrorCapture(history, new AdvisorErrorConnection(mainService, main),
+            sub == null ? null : new AdvisorErrorConnection(subService!, sub), operation,
+            mainService.Secrets(main).Concat(sub == null ? Array.Empty<string>() : subService!.Secrets(sub))));
+    }
+
 }

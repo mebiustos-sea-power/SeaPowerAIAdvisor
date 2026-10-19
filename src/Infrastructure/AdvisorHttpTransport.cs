@@ -16,14 +16,20 @@ internal sealed class AdvisorHttpTransport : IDisposable
     private readonly HttpClient client;
     private readonly AdvisorTrace? trace;
     private int requests;
+    private AdvisorErrorCapture? errors;
+    internal void ObserveErrors(AdvisorErrorCapture capture) => errors = capture;
+    internal void CaptureFailure(Exception error) => errors?.Failure(error);
+    internal static string ErrorCode(int status) => status == 401 || status == 403 ? "api_access_denied" :
+        status == 429 ? "rate_limited" : status == 400 ? "api_bad_request" : status == 404 ? "model_unavailable" : "api_error";
     internal int RequestCount => Volatile.Read(ref requests);
     internal int BeginRequest(string json, bool fallback, string model)
     {
-        var index = Interlocked.Increment(ref requests); trace?.Request(index, json, fallback, model); return index;
+        var index = Interlocked.Increment(ref requests); errors?.Begin(index, fallback, model); trace?.Request(index, json, fallback, model); return index;
     }
-    internal void EndRequest(int request, int status, string body, bool complete) =>
-        trace?.Response(request, status, body, complete, Encoding.UTF8.GetByteCount(body));
-    internal void FailRequest(int request, string code, int? status) => trace?.RequestFailed(request, code, status);
+    internal void EndRequest(int request, int status, string body, bool complete)
+    { errors?.Response(request, status, body, complete); trace?.Response(request, status, body, complete, Encoding.UTF8.GetByteCount(body)); }
+    internal void FailRequest(int request, string code, int? status)
+    { errors?.Failure(new AdvisorConnectionException(code, status), request); trace?.RequestFailed(request, code, status); }
     internal AdvisorHttpTransport(AdvisorTrace? trace = null) : this(new HttpClientHandler { AllowAutoRedirect = false }, trace) { }
     internal AdvisorHttpTransport(HttpMessageHandler handler, AdvisorTrace? trace = null)
     { client = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan }; this.trace = trace; }
@@ -32,6 +38,7 @@ internal sealed class AdvisorHttpTransport : IDisposable
         CancellationToken cancellation, IReadOnlyDictionary<string, string>? headers = null)
     {
         var index = Interlocked.Increment(ref requests);
+        errors?.Begin(index, fallback, model);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
         deadline.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
         try
@@ -63,11 +70,12 @@ internal sealed class AdvisorHttpTransport : IDisposable
             }
             finally
             {
-                trace?.Response(index, status, Encoding.UTF8.GetString(bytes.ToArray()), complete, bytes.Length);
+                var received = Encoding.UTF8.GetString(bytes.ToArray());
+                errors?.Response(index, status, received, complete);
+                trace?.Response(index, status, received, complete, bytes.Length);
             }
             if (!response.IsSuccessStatusCode)
-                throw new AdvisorConnectionException(status == 401 || status == 403 ? "api_access_denied" :
-                    status == 429 ? "rate_limited" : status == 400 ? "api_bad_request" : status == 404 ? "model_unavailable" : "api_error", status);
+                throw new AdvisorConnectionException(ErrorCode(status), status);
             if (tooLarge) throw new AdvisorConnectionException("response_too_large");
             try
             {
@@ -84,11 +92,11 @@ internal sealed class AdvisorHttpTransport : IDisposable
             var code = cancellation.IsCancellationRequested ? "cancelled" : "request_timeout";
             trace?.RequestFailed(index, code);
             if (cancellation.IsCancellationRequested) throw;
-            throw new AdvisorConnectionException(code);
+            var error = new AdvisorConnectionException(code); errors?.Failure(error, index); throw error;
         }
-        catch (AdvisorConnectionException error) { trace?.RequestFailed(index, error.Code, error.HttpStatus); throw; }
-        catch (HttpRequestException) { trace?.RequestFailed(index, "network_error"); throw new AdvisorConnectionException("network_error"); }
-        catch (IOException) { trace?.RequestFailed(index, "network_error"); throw new AdvisorConnectionException("network_error"); }
+        catch (AdvisorConnectionException error) { errors?.Failure(error, index); trace?.RequestFailed(index, error.Code, error.HttpStatus); throw; }
+        catch (HttpRequestException cause) { var error = new AdvisorConnectionException("network_error"); errors?.Failure(error, index, cause); trace?.RequestFailed(index, "network_error"); throw error; }
+        catch (IOException cause) { var error = new AdvisorConnectionException("network_error"); errors?.Failure(error, index, cause); trace?.RequestFailed(index, "network_error"); throw error; }
     }
 
     public void Dispose() => client.Dispose();

@@ -194,7 +194,7 @@
               </StackPanel>
             </ScrollViewer>
           </TabItem>
-          <TabItem Header="{DynamicResource Advisor.settings.registration_tab}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+          <TabItem x:Name="ApiEditTab" Header="{DynamicResource Advisor.settings.registration_tab}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
               <StackPanel Margin="0,8,8,0">
                 <Grid>
@@ -229,6 +229,16 @@
                 </StackPanel>
               </StackPanel>
             </ScrollViewer>
+          </TabItem>
+          <TabItem x:Name="ApiErrorsTab" Header="{DynamicResource Advisor.errorlog.tab}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+            <Grid Margin="0,8,0,0">
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+              </Grid.RowDefinitions>
+              <TextBlock x:Name="ApiErrorHistoryStatus" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8" />
+              <TextBox x:Name="ApiErrorHistoryDetails" Grid.Row="1" FontSize="13" Padding="7" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" />
+            </Grid>
           </TabItem>
         </TabControl>
         <Grid x:Name="ConsultationCategory" Visibility="Collapsed">

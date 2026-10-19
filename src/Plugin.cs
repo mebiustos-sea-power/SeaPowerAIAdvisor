@@ -39,6 +39,7 @@ public sealed class Plugin : IAnchorChainMod
                 Log.LogInfo("Disabled in the mod manager; advisor was not installed.");
                 return;
             }
+            AdvisorErrorHistory.StartRun(message => Log.LogWarning(message));
             options = new AdvisorOptionsStore(AdvisorOptionsStore.PathIn(UnityEngine.Application.persistentDataPath));
             backends = AdvisorServices.CreateRegistry(AdvisorSettings.PathIn(UnityEngine.Application.persistentDataPath));
             // A broken prompt package must remain visible without disabling settings or diagnostics.

@@ -19,6 +19,7 @@ internal sealed class AdvisorSettingsController
     private readonly AdvisorProfileSettingsView profiles;
     private readonly AdvisorInformationView information;
     private readonly AdvisorPromptSettingsView promptEditor;
+    private readonly AdvisorErrorHistoryView errorHistory;
     private readonly Action<Action> guard;
     private readonly Action releaseInput, changed, back;
     private readonly Func<bool> consultationBusy;
@@ -55,6 +56,7 @@ internal sealed class AdvisorSettingsController
         throwException = Named<Button>("ThrowTestException");
         test = Named<Button>("TestConnection"); testStatus = Named<TextBlock>("ConnectionTestStatus"); testError = Named<TextBlock>("ConnectionTestError");
         promptEditor = new AdvisorPromptSettingsView(content, text, guard, typing, changed, warn);
+        errorHistory = new AdvisorErrorHistoryView(content, text, guard, typing);
         apiStore = new AdvisorApiSettingsStore(settingsPath, () => text()["connection.configuration_name_pattern"]);
         api = new AdvisorApiSettingsView(content, apiStore, text, guard, typing, ApiChanged, Saved, () => Notice(text()["profile.ime"], true), ApiError, ConfirmDelete);
         profiles = new AdvisorProfileSettingsView(content, profileDirectory, text, defaultPortrait, guard, typing,
@@ -88,7 +90,7 @@ internal sealed class AdvisorSettingsController
     }
     internal void Close()
     {
-        CancelTest(); HideConfirmation(); profiles.Close(); api.Close(); promptEditor.Close(); current = null; available = false;
+        CancelTest(); HideConfirmation(); profiles.Close(); api.Close(); promptEditor.Close(); errorHistory.Close(); current = null; available = false;
         Notice(""); pane.Visibility = Visibility.Collapsed; chat.Visibility = Visibility.Visible;
     }
     private void OpenCategory(Category category)
@@ -100,7 +102,12 @@ internal sealed class AdvisorSettingsController
         try
         {
             if (category == Category.Profile) { Named<TabControl>("ProfileCategory").SelectedIndex = 0; profiles.Open(); profiles.Focus(); }
-            else if (category == Category.Api) { Named<TabControl>("ApiCategory").SelectedIndex = 0; api.Open(); api.Focus(); }
+            else if (category == Category.Api)
+            {
+                Named<TabControl>("ApiCategory").SelectedIndex = 0;
+                Named<TabItem>("ApiUseTab").IsEnabled = Named<TabItem>("ApiEditTab").IsEnabled = true;
+                api.Open(); api.Focus();
+            }
             else if (category == Category.Developer)
             {
                 Named<TabControl>("DeveloperCategory").SelectedIndex = 0;
@@ -119,7 +126,17 @@ internal sealed class AdvisorSettingsController
         catch (AdvisorConnectionException error) { ApiError(error); api.Close(); DisablePage(); }
         catch (AdvisorProfileException error) { ProfileError(error); profiles.Close(); DisablePage(); }
     }
-    private void DisablePage() { if (current.HasValue) pages[(int)current.Value].IsEnabled = false; Named<Button>("BackToSettings").Focus(); }
+    private void DisablePage()
+    {
+        if (current == Category.Api)
+        {
+            // Error history must remain reachable when the saved connection settings are unreadable.
+            Named<TabItem>("ApiUseTab").IsEnabled = Named<TabItem>("ApiEditTab").IsEnabled = false;
+            Named<TabControl>("ApiCategory").SelectedIndex = 2;
+        }
+        else if (current.HasValue) pages[(int)current.Value].IsEnabled = false;
+        Named<Button>("BackToSettings").Focus();
+    }
     private string Snapshot() => current switch
     {
         Category.General => userName.Text + "\0" + size.SelectedIndex + ":" + campaign.IsChecked,
@@ -131,7 +148,7 @@ internal sealed class AdvisorSettingsController
     private bool HasChanges => available && ((current == Category.Developer && promptEditor.HasChanges) || (current == Category.Profile ? profiles.HasChanges : current == Category.Api ? api.HasChanges : Snapshot() != baseline));
     private void BackToHome()
     {
-        void Go() { CancelTest(); profiles.Close(); api.Close(); promptEditor.Close(); current = null; available = false; releaseInput(); page.Visibility = Visibility.Collapsed; home.Visibility = Visibility.Visible; Named<Button>("OpenGeneralCategory").Focus(); }
+        void Go() { CancelTest(); profiles.Close(); api.Close(); promptEditor.Close(); errorHistory.Close(); current = null; available = false; releaseInput(); page.Visibility = Visibility.Collapsed; home.Visibility = Visibility.Visible; Named<Button>("OpenGeneralCategory").Focus(); }
         if (HasChanges) Confirm(text()["settings.discard_question"], text()["settings.discard_action"], Go); else Go();
     }
     private void ConfirmDelete(string name, Action action) => Confirm(text().Format("settings.delete_question", name), text()["profile.remove"], action);
@@ -193,7 +210,7 @@ internal sealed class AdvisorSettingsController
             testing = new AdvisorJob(cancellation => AdvisorServices.TestAsync(directory, configuration, connectionOptions, requestText, cancellation), warn);
             testStatus.Text = TestMessage(text()["connection.test_running"]); UpdateBusy();
         }
-        catch (AdvisorConnectionException error) { TestError(AdvisorNotice.Connection(error).Message(text())); }
+        catch (AdvisorConnectionException error) { TestError(AdvisorNotice.Connection(error).Message(text(), true)); }
         catch (AdvisorPromptException error) { TestError(AdvisorNotice.Prompts(error).Message(text())); warn("Connection test prompt unavailable: " + error.Message); }
     }
     private string TestMessage(string message) => text().Format("connection.test_result", testingName, message);
@@ -207,6 +224,7 @@ internal sealed class AdvisorSettingsController
     internal void Tick()
     {
         profiles.Tick();
+        errorHistory.Tick(current == Category.Api && Named<TabControl>("ApiCategory").SelectedIndex == 2);
         if (savedNotice.IsRunning)
         {
             var elapsed = savedNotice.Elapsed.TotalSeconds;
@@ -217,7 +235,7 @@ internal sealed class AdvisorSettingsController
         testing = null; var result = job.TakeCompleted(); UpdateBusy();
         if (result.UnexpectedError != null) { TestError(AdvisorNotice.Unexpected().Message(text())); throw result.UnexpectedError; }
         if (result.IsCancelled) testStatus.Text = TestMessage(text()["connection.test_cancelled"]);
-        else if (result.Error != null) { TestError(AdvisorNotice.Connection(result.Error).Message(text())); warn("Advisor connection test failed: " + result.Error.Code); }
+        else if (result.Error != null) { TestError(AdvisorNotice.Connection(result.Error).Message(text(), true)); warn("Advisor connection test failed: " + result.Error.Code); }
         else { _ = result.Result ?? throw new InvalidOperationException("The connection test has no result."); testStatus.Text = TestMessage(text()["connection.test_succeeded"]); }
     }
 }

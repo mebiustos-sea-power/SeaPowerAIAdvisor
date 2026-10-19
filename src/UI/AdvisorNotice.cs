@@ -1,14 +1,14 @@
 namespace SeaPowerAIAdvisor;
 
-// Provider details stay as fixed codes; presentation never displays raw JSON or credentials.
+// Ordinary notices use fixed codes; redacted provider details are read only in the dedicated history tab.
 internal sealed class AdvisorNotice
 {
     internal string TextKey { get; }
     internal string Code { get; }
     internal int? HttpStatus { get; }
-    private readonly bool usingFallback;
-    private AdvisorNotice(string key, string code, int? status = null, bool fallback = false)
-    { TextKey = key; Code = code; HttpStatus = status; usingFallback = fallback; }
+    private readonly bool usingFallback, hasDetails;
+    private AdvisorNotice(string key, string code, int? status = null, bool fallback = false, bool details = false)
+    { TextKey = key; Code = code; HttpStatus = status; usingFallback = fallback; hasDetails = details; }
 
     internal static AdvisorNotice Connection(AdvisorConnectionException error)
     {
@@ -36,13 +36,14 @@ internal sealed class AdvisorNotice
             "request_budget" or "request_limit" => "request_budget",
             _ => "unknown"
         };
-        return new AdvisorNotice("connection." + key, error.Code, error.HttpStatus, error.UsingFallback);
+        return new AdvisorNotice("connection." + key, error.Code, error.HttpStatus, error.UsingFallback, error.HasDetails);
     }
 
     internal static AdvisorNotice Options(AdvisorOptionsException error) => new("settings.error." + error.Code, error.Code);
     internal static AdvisorNotice Situation(string code) => new("situation.error." + code, code);
     internal static AdvisorNotice Prompts(AdvisorPromptException error) => new("prompts.error." + error.Code, error.Code);
     internal static AdvisorNotice Unexpected() => new("connection.unknown", "unexpected_error");
-    internal string Message(AdvisorText text) => (usingFallback ? text["connection.fallback_failed"] + " " : "") + text[TextKey] + " [" + Code +
-        (HttpStatus.HasValue ? " / HTTP " + HttpStatus : "") + "]";
+    internal string Message(AdvisorText text, bool inSettings = false) => (usingFallback ? text["connection.fallback_failed"] + " " : "") + text[TextKey] + " [" + Code +
+        (HttpStatus.HasValue ? " / HTTP " + HttpStatus : "") + "]" +
+        (hasDetails ? "\n" + text[inSettings ? "errorlog.test_hint" : "errorlog.hint"] : "");
 }

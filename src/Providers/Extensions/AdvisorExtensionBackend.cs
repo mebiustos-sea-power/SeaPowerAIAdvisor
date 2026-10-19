@@ -56,7 +56,7 @@ internal sealed class AdvisorExtensionBackend : IAdvisorBackend
             }
         }
         catch (AdvisorConnectionException error) when (sub != null && switchedToSub)
-        { throw new AdvisorConnectionException(error.Code, error.HttpStatus, true); }
+        { throw new AdvisorConnectionException(error.Code, error.HttpStatus, true) { HasDetails = error.HasDetails }; }
 
         AdviceResult Complete(AdviceResult answer, bool fallback) => new(answer.Text,
             Math.Max(transport.RequestCount, answer.ApiRequests), knowledge.RoundsUsed,

@@ -368,5 +368,11 @@
   "connection.ollama_model_invalid": "Ollamaのモデル名を入力してください（例：qwen3:8b）。",
   "connection.context_length_invalid": "コンテキスト長は4096～262144トークンで指定してください。",
   "connection.request_timeout_invalid": "通信タイムアウトは1～86400秒で指定してください。",
-  "connection.request_timeout_label": "通信タイムアウト（秒）"
+  "connection.request_timeout_label": "通信タイムアウト（秒）",
+  "errorlog.tab": "APIエラー",
+  "errorlog.empty": "今回のゲーム起動中に記録されたプロバイダーエラーはありません。",
+  "errorlog.hint": "詳細は「設定 → API接続 → APIエラー」で確認できます。",
+  "errorlog.test_hint": "詳細は「API接続 → APIエラー」で確認できます。",
+  "errorlog.storage_failed": "エラーログを保存できませんでした。\n{0}",
+  "errorlog.read_failed": "エラーの詳細を読み込めませんでした。\n{0}"
 }

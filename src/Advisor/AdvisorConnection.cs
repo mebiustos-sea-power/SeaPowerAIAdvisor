@@ -49,7 +49,7 @@ internal sealed class AdvisorConnection : IDisposable
             }
         }
         catch (AdvisorConnectionException error) when (UsingFallback)
-        { throw new AdvisorConnectionException(error.Code, error.HttpStatus, true); }
+        { throw new AdvisorConnectionException(error.Code, error.HttpStatus, true) { HasDetails = error.HasDetails }; }
     }
 
     internal void AcceptResults(IReadOnlyList<AdvisorToolResult> results) =>
@@ -67,6 +67,7 @@ internal sealed class AdvisorConnectionException : Exception
     internal string Code { get; }
     internal int? HttpStatus { get; }
     internal bool UsingFallback { get; }
+    internal bool HasDetails { get; set; }
     internal AdvisorConnectionException(string code, int? httpStatus = null, bool usingFallback = false) : base(code + (httpStatus.HasValue ? " HTTP " + httpStatus : ""))
     { Code = code; HttpStatus = httpStatus; UsingFallback = usingFallback; }
 }

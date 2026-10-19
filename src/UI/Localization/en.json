@@ -368,5 +368,11 @@
   "connection.ollama_model_invalid": "Enter an Ollama model name, such as qwen3:8b.",
   "connection.context_length_invalid": "Enter a context length between 4096 and 262144 tokens.",
   "connection.request_timeout_invalid": "Enter a request timeout between 1 and 86400 seconds.",
-  "connection.request_timeout_label": "Request timeout (seconds)"
+  "connection.request_timeout_label": "Request timeout (seconds)",
+  "errorlog.tab": "API errors",
+  "errorlog.empty": "No provider errors have been recorded during this game session.",
+  "errorlog.hint": "For details, see Settings → API connections → API errors.",
+  "errorlog.test_hint": "For details, see API connections → API errors.",
+  "errorlog.storage_failed": "Could not save the error log.\n{0}",
+  "errorlog.read_failed": "Could not read the error details.\n{0}"
 }

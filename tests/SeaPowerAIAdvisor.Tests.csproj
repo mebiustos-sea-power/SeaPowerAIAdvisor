@@ -50,6 +50,9 @@
     <Compile Include="..\src\Configuration\PortraitImage.cs" Link="PortraitImage.cs" />
     <Compile Include="..\src\Providers\Gemini\GeminiTransport.cs" Link="GeminiTransport.cs" />
     <Compile Include="..\src\Diagnostics\AdvisorTrace.cs" Link="AdvisorTrace.cs" />
+    <Compile Include="..\src\Diagnostics\AdvisorSecretRedactor.cs" Link="AdvisorSecretRedactor.cs" />
+    <Compile Include="..\src\Diagnostics\AdvisorErrorHistory.cs" Link="AdvisorErrorHistory.cs" />
+    <Compile Include="..\src\Diagnostics\AdvisorErrorCapture.cs" Link="AdvisorErrorCapture.cs" />
     <Compile Include="..\src\Advisor\AdvisorConsultation.cs" Link="AdvisorConsultation.cs" />
     <Compile Include="..\src\Providers\Gemini\GeminiAdvisor.cs" Link="GeminiAdvisor.cs" />
     <Compile Include="..\src\Providers\Gemini\GeminiInteraction.cs" Link="GeminiInteraction.cs" />
