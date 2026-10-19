@@ -354,7 +354,7 @@
   "transcript.copy_question_tip": "このメッセージをコピーします。",
   "action.copy_prompt": "質問文をコピー",
   "transcript.copy_prompt_tip": "AIに送る英語の質問文をコピーします。",
-  "connection.provider": "提供元",
+  "connection.provider": "プロバイダー",
   "connection.gemini_description": "ツール呼び出しに対応したGeminiモデルを指定してください。例：gemini-3.5-flash-lite",
   "connection.ollama_description": "Ollamaを起動し、ツール呼び出しに対応したモデルを指定してください。例：qwen3:8b",
   "connection.openrouter_description": "ツール呼び出しに対応したモデルを「提供元/モデル名」で指定してください。例：google/gemini-3.5-flash-lite",

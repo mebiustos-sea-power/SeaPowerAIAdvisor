@@ -210,11 +210,14 @@
                   <Button x:Name="RemoveApiConfiguration" Grid.Column="3" Content="{DynamicResource Advisor.profile.remove}" Height="30" Padding="10,0" Margin="8,0,0,0" />
                 </Grid>
                 <StackPanel x:Name="ApiEditor" Visibility="Collapsed" Margin="0,14,0,0">
+                  <Border Height="1" Background="#607080" Opacity="0.6" Margin="0,0,0,12" />
                   <TextBlock Text="{DynamicResource Advisor.connection.configuration_name}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,4" />
                   <TextBox x:Name="ApiConfigurationName" FontSize="14" Padding="7" MaxLength="80" />
                   <TextBlock Text="{DynamicResource Advisor.connection.provider}" FontSize="12" Margin="0,12,0,4" />
                   <ComboBox x:Name="ApiProvider" MinHeight="30" />
-                  <TextBlock x:Name="ApiProviderDescription" FontSize="12" TextWrapping="Wrap" Opacity="0.85" Margin="0,8,0,0" Visibility="Collapsed" />
+                  <Border x:Name="ApiProviderDescriptionBox" BorderBrush="#55606B" BorderThickness="1" Padding="8" Margin="0,8,0,0" Visibility="Collapsed">
+                    <TextBlock x:Name="ApiProviderDescription" FontSize="12" TextWrapping="Wrap" Opacity="0.85" />
+                  </Border>
                   <StackPanel x:Name="ApiProviderFields" />
                   <TextBlock x:Name="ApiProviderError" Foreground="{DynamicResource AdvisorErrorBrush}" TextWrapping="Wrap" Margin="0,8,0,0" Visibility="Collapsed" />
                   <TextBlock Text="{DynamicResource Advisor.connection.request_timeout_label}" FontSize="12" Margin="0,12,0,4" />
