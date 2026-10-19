@@ -251,6 +251,8 @@
   "information.damage": "損傷",
   "information.weapons": "弾薬・兵器性能",
   "information.contacts": "観測済みの接触情報",
+  "information.sensor_status": "センサーの稼働状況",
+  "information.sensor_performance": "センサーの性能情報",
   "information.launched_weapons": "発射済みのミサイル・魚雷",
   "information.weapon_contacts": "ミサイル・魚雷",
   "information.neutral": "中立",

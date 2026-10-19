@@ -11,7 +11,7 @@ internal enum InformationKind
     CampaignForces, CampaignShips, CampaignFuel, CampaignAmmunition, CampaignDamage, CampaignAviation,
     CampaignContacts, CampaignBases, CampaignOrders, CampaignReports,
     BattleGroundUnits, BattleBases, BattleAviation, CampaignOwnBases, CampaignGroundUnits, BattleNeutralContacts, BattleDestroyedContacts,
-    BattleLaunchedWeapons, BattleWeaponContacts
+    BattleLaunchedWeapons, BattleWeaponContacts, BattleSensors, BattleSensorPerformance
 }
 
 internal sealed class InformationItem
@@ -43,6 +43,8 @@ internal sealed class AdvisorInformation
         new InformationItem(InformationKind.BattleFuel, "battle_fuel", "fuel", InformationKind.BattleUnits),
         new InformationItem(InformationKind.BattleDamage, "battle_damage", "damage", InformationKind.BattleUnits),
         new InformationItem(InformationKind.BattleWeapons, "battle_weapons", "weapons", InformationKind.BattleUnits),
+        new InformationItem(InformationKind.BattleSensors, "battle_sensors", "sensor_status", InformationKind.BattleUnits),
+        new InformationItem(InformationKind.BattleSensorPerformance, "battle_sensor_performance", "sensor_performance", InformationKind.BattleUnits, defaultEnabled: false),
         new InformationItem(InformationKind.BattleLaunchedWeapons, "battle_launched_weapons", "launched_weapons", InformationKind.BattleUnits),
         new InformationItem(InformationKind.BattleContacts, "battle_contacts", "contacts"),
         new InformationItem(InformationKind.BattleWeaponContacts, "battle_weapon_contacts", "weapon_contacts", InformationKind.BattleContacts),
@@ -69,7 +71,7 @@ internal sealed class AdvisorInformation
     });
     internal static readonly IReadOnlyList<InformationGroup> Groups = Array.AsReadOnly(new[]
     {
-        new InformationGroup(true, "battle_friendly", InformationKind.BattleUnits, InformationKind.BattleGroundUnits, InformationKind.BattleBases, InformationKind.BattleAviation, InformationKind.BattleFuel, InformationKind.BattleDamage, InformationKind.BattleWeapons, InformationKind.BattleLaunchedWeapons),
+        new InformationGroup(true, "battle_friendly", InformationKind.BattleUnits, InformationKind.BattleGroundUnits, InformationKind.BattleBases, InformationKind.BattleAviation, InformationKind.BattleFuel, InformationKind.BattleDamage, InformationKind.BattleWeapons, InformationKind.BattleSensors, InformationKind.BattleSensorPerformance, InformationKind.BattleLaunchedWeapons),
         new InformationGroup(true, "battle_intelligence", InformationKind.BattleContacts, InformationKind.BattleWeaponContacts, InformationKind.BattleNeutralContacts, InformationKind.BattleDestroyedContacts, InformationKind.BattleThreats, InformationKind.BattleBriefing, InformationKind.BattleReports),
         new InformationGroup(false, "campaign_friendly", InformationKind.CampaignForces, InformationKind.CampaignShips, InformationKind.CampaignFuel, InformationKind.CampaignAmmunition, InformationKind.CampaignDamage, InformationKind.CampaignAviation, InformationKind.CampaignOwnBases, InformationKind.CampaignGroundUnits),
         new InformationGroup(false, "campaign_intelligence", InformationKind.CampaignContacts, InformationKind.CampaignBases, InformationKind.CampaignOrders, InformationKind.CampaignReports)
@@ -158,8 +160,14 @@ internal sealed class AdvisorInformation
         "list_reports" or "get_reports" => Allows(InformationKind.CampaignReports),
         _ => throw new AdvisorQueryException("unknown_query", "Use a query from the current catalogue.")
     };
-    internal string[] BattleSections => new[] { "fuel", "damage", "weapons" }.Where(s => Allows(s switch
-        { "fuel" => InformationKind.BattleFuel, "damage" => InformationKind.BattleDamage, _ => InformationKind.BattleWeapons })).ToArray();
+    internal static readonly string[] BattleCapabilitySections = { "fuel", "damage", "weapons", "sensors", "sensor_performance" };
+    internal string[] BattleSections => BattleCapabilitySections.Where(s => Allows(s switch
+    {
+        "fuel" => InformationKind.BattleFuel, "damage" => InformationKind.BattleDamage,
+        "weapons" => InformationKind.BattleWeapons, "sensors" => InformationKind.BattleSensors,
+        "sensor_performance" => InformationKind.BattleSensorPerformance,
+        _ => throw new InvalidOperationException("Unmapped battle capability section: " + s)
+    })).ToArray();
     internal bool BattleCategory(string category) => category switch
     {
         "friendly_units" => Allows(InformationKind.BattleUnits),

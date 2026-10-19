@@ -251,6 +251,8 @@
   "information.damage": "Damage",
   "information.weapons": "Ammunition and weapon specifications",
   "information.contacts": "Observed contacts",
+  "information.sensor_status": "Sensor operating status",
+  "information.sensor_performance": "Sensor specifications",
   "information.launched_weapons": "Launched missiles and torpedoes",
   "information.weapon_contacts": "Missiles and torpedoes",
   "information.neutral": "Neutral",

@@ -22,6 +22,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
     public AdvisorPrompts Prompts { get; }
     private int returnedBytes;
     private readonly HashSet<string> deliveredWeaponReferences = new(StringComparer.Ordinal);
+    private readonly HashSet<string> deliveredSensorReferences = new(StringComparer.Ordinal);
 
     internal BattleQuerySession(BattleSnapshot situation, string language, string? question, int maxRounds = DefaultMaxRounds, AdvisorInformation? information = null, AdvisorPrompts? prompts = null, JObject? context = null)
     {
@@ -32,6 +33,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
         information = this.information;
         snapshot = situation.Copy();
         snapshot["friendly_launched_weapons"] ??= new JArray();
+        snapshot["sensor_references"] ??= new JArray();
         BattleInformation.Apply(snapshot, information);
         if (context != null) assessment = new BattleContactAssessment(snapshot, context, information);
         initial = AdvisorInputBuilder.Header(language, question, Prompts, true);
@@ -88,6 +90,8 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
         if (information.Allows(InformationKind.BattleWeapons) || information.Allows(InformationKind.BattleThreats))
             initial["situation"]!["coverage"]!["weapon_reference_delivery"] =
                 Prompts.Text("battle.json", "weapon_reference_delivery");
+        if (information.Allows(InformationKind.BattleSensorPerformance))
+            initial["situation"]!["coverage"]!["sensor_reference_delivery"] = Prompts.Text("battle.json", "sensor_reference_delivery");
         returnedBytes = Bytes(initial);
         if (returnedBytes > MaxTotalBytes) throw new InvalidOperationException("Mandatory battle input exceeds the consultation payload limit.");
     }
@@ -112,7 +116,8 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
                     throw Error("invalid_arguments", "query_name_invalid");
                 results.Add(new JObject { ["query"] = query["query"]!.DeepClone(), ["data"] = Dispatch(query) });
             }
-            var delivered = DeduplicateWeaponReferences(results);
+            var delivered = DeduplicateReferences(results, "weapon_references", deliveredWeaponReferences);
+            var sensorDelivered = DeduplicateReferences(results, "sensor_references", deliveredSensorReferences);
             var response = Envelope("ok");
             response["results"] = results;
             var bytes = Bytes(response);
@@ -120,6 +125,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
             if (returnedBytes + bytes > MaxTotalBytes) throw Error("payload_limit", "payload_limit");
             returnedBytes += bytes;
             deliveredWeaponReferences.UnionWith(delivered);
+            deliveredSensorReferences.UnionWith(sensorDelivered);
             return response;
         }
         catch (AdvisorQueryException error)
@@ -277,11 +283,11 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
 
     private JObject Capabilities(JObject query)
     {
-        var supported = new[] { "fuel", "damage", "weapons" };
+        var supported = AdvisorInformation.BattleCapabilitySections;
         var sections = information.BattleSections;
         if (query["sections"] != null)
         {
-            if (!(query["sections"] is JArray selected) || selected.Count < 1 || selected.Count > 3 ||
+            if (!(query["sections"] is JArray selected) || selected.Count < 1 || selected.Count > supported.Length ||
                 selected.Any(s => s.Type != JTokenType.String || !supported.Contains((string)s!)) ||
                 selected.Values<string>().Distinct(StringComparer.Ordinal).Count() != selected.Count)
                 throw Error("invalid_arguments", "sections_invalid");
@@ -299,19 +305,27 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
                 references.AddRange(((JArray)original["weapons"]!["ammunition"]!).OfType<JObject>().Select(w => (string)w["reference_id"]!));
             rows.Add(unit);
         }
-        return Bundle("units", rows, references);
+        var result = Bundle("units", rows, references);
+        if (sections.Contains("sensor_performance"))
+        {
+            var sensorIds = rows.OfType<JObject>().SelectMany(u => (JArray)u["sensor_performance"]!)
+                .Select(s => (string)s["reference_id"]!).ToHashSet(StringComparer.Ordinal);
+            result["sensor_references"] = new JArray(Rows("sensor_references").OfType<JObject>()
+                .Where(s => sensorIds.Contains((string)s["id"]!)).Select(s => s.DeepClone()));
+        }
+        return result;
     }
 
     // Commit first-delivery IDs only after the whole response passes the payload limits.
-    private HashSet<string> DeduplicateWeaponReferences(JArray results)
+    private static HashSet<string> DeduplicateReferences(JArray results, string collection, HashSet<string> previous)
     {
-        var delivered = new HashSet<string>(deliveredWeaponReferences, StringComparer.Ordinal);
+        var delivered = new HashSet<string>(previous, StringComparer.Ordinal);
         foreach (var result in results.OfType<JObject>())
         {
-            if (result["data"] is not JObject bundle || bundle["weapon_references"] is not JArray definitions) continue;
+            if (result["data"] is not JObject bundle || bundle[collection] is not JArray definitions) continue;
             foreach (var definition in definitions.OfType<JObject>().ToArray())
             {
-                var id = (string?)definition["id"] ?? throw new InvalidOperationException("A weapon reference ID is missing.");
+                var id = (string?)definition["id"] ?? throw new InvalidOperationException("A reference ID is missing.");
                 if (!delivered.Add(id)) definition.Remove();
             }
         }
@@ -423,7 +437,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
                             ["host_ids"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = MaxIdsPerQuery, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string" }, ["description"] = Prompts.Text("battle.json", "tool_host_ids") },
                             ["air_unit_ids"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = MaxIdsPerQuery, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string" }, ["description"] = Prompts.Text("battle.json", "tool_air_unit_ids") },
                             ["kind"] = new JObject { ["type"] = "string", ["enum"] = new JArray(contactKinds), ["description"] = Prompts.Text("battle.json", "tool_kind") },
-                            ["sections"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = 3, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string", ["enum"] = new JArray("fuel", "damage", "weapons") }, ["description"] = Prompts.Text("battle.json", "tool_sections") },
+                            ["sections"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = AdvisorInformation.BattleCapabilitySections.Length, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string", ["enum"] = new JArray(AdvisorInformation.BattleCapabilitySections) }, ["description"] = Prompts.Text("battle.json", "tool_sections") },
                             ["offset"] = new JObject { ["type"] = "integer", ["minimum"] = 0, ["description"] = Prompts.Text("battle.json", "tool_offset") },
                             ["limit"] = new JObject { ["type"] = "integer", ["minimum"] = 1, ["maximum"] = MaxPageSize, ["description"] = Prompts.Text("battle.json", "tool_limit") }
                         }

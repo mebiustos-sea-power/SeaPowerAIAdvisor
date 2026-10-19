@@ -88,6 +88,7 @@ internal sealed class BattleSituationReader
                 ["class_known"] = classKnown,
                 ["position"] = positionEstimate != null ? Position(Required(positionEstimate, "Item1")) : JValue.CreateNull(),
                 ["position_source"] = positionEstimate == null ? "unknown" : (bool)Required(vehicle, "HasLiveTrack") ? "observed_estimate" : "extrapolated_estimate",
+                ["detection_methods"] = BattleSensorReader.DetectionMethods(vehicle),
                 ["dormant"] = Reactive<bool>(vehicle, "IsDormant"),
                 ["destroyed"] = destroyed,
                 ["observation_time_utc"] = JValue.CreateNull(),
@@ -156,6 +157,7 @@ internal sealed class BattleSituationReader
             ["hosted_air_units"] = aviation.Units,
             ["aviation_hosts"] = aviation.Hosts,
             ["weapon_references"] = knowledge.References.SnapshotWeapons(),
+            ["sensor_references"] = knowledge.SensorReferences(),
             ["observed_contacts"] = contacts,
             ["published_reports"] = reports
         });

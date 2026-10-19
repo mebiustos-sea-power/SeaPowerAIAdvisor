@@ -11,6 +11,7 @@ internal static partial class BattleTests
     internal static void Run(Action<string, Action> check)
     {
         RunWeapons(check);
+        RunSensors(check);
         check("Battle capture excludes hidden objectives, future reports and actual enemy details", () =>
         {
             var f = new Fixture();
@@ -263,7 +264,8 @@ internal static partial class BattleTests
         });
         check("Battle sections and shared references respect independent own and contact permissions", () =>
         {
-            var policy = AdvisorInformation.All.With(InformationKind.BattleWeapons, false).With(InformationKind.BattleDamage, false);
+            var policy = AdvisorInformation.All.With(InformationKind.BattleWeapons, false).With(InformationKind.BattleDamage, false)
+                .With(InformationKind.BattleSensors, false).With(InformationKind.BattleSensorPerformance, false);
             var session = new BattleQuerySession(new Fixture().Capture(), "ja", "Fuel and threats", information: policy);
             var initial = session.InitialInput();
             var sections = initial["query_tool"]!["parameters"]!["properties"]!["requests"]!["items"]!["properties"]!["sections"]!["items"]!["enum"]!.Values<string>();
@@ -592,6 +594,7 @@ internal static partial class BattleTests
         public double _currentFuelMass = 600;
         public double _maxFuel = 1200;
         public double _defaultMaxFuel = 1000;
+        public object[] _sensorSystems { get; set; } = Array.Empty<object>();
         public object[] _systems = { new { CurrentDamageType = "no" }, new {
             CurrentDamageType = "Severe", DisplayName = new Reactive<string>("捜索レーダー"), Repairable = false } };
     }
@@ -647,6 +650,7 @@ internal static partial class BattleTests
         public object Position => throw new InvalidOperationException("Read a contact position outside its estimate");
         public object? UnityVelocityVector { get; set; } = new ContactVelocity(0, 0, 0);
         public bool HasLiveTrack => false;
+        public uint DetectingSensors { get; set; }
         public Reactive<bool> Identified { get; } = new(true);
         public Reactive<bool> IsDormant { get; } = new(true);
         public int Id { get; set; } = 7;

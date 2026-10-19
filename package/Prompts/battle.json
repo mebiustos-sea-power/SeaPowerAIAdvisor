@@ -26,10 +26,10 @@
   "catalog_friendly_bases": "Own airbases, ports and installations. Observed opposing/neutral facilities are contacts.",
   "catalog_hosted_air_units": "Own hosted inventory, squadrons, loadouts and host status. Filter by host_ids; tasks use list_air_tasks.",
   "catalog_aviation_tasks": "Displayed preparation, launch, recovery and cooldown tasks. Filter by host_ids or air_unit_ids.",
-  "catalog_unit_capabilities": "Own fuel/damage/weapons by available_sections; omit sections for all enabled.",
+  "catalog_unit_capabilities": "Own fuel/damage/weapons, individual sensor status and displayed sensor specifications by available_sections; omit sections for all enabled.",
   "catalog_public_class_threat_references": "Identified-class public encyclopedia armament alternatives and ranges.",
   "catalog_identification_candidates": "Candidates from the selected contact information window. Matching features were observed; unconfirmed features are candidate references only. Only this selected contact has candidate data; normal contact lists provide surrounding known context.",
-  "catalog_observed_contacts": "Displayed contact classifications, destroyed status, estimated positions, speed/heading and applicable altitude/depth. Weapon contacts include player-visible tracking. Optional kind filter; contact selections apply.",
+  "catalog_observed_contacts": "Displayed contact classifications, destroyed status, estimated positions, speed/heading, applicable altitude/depth and detection_methods (our detection sources). Weapon contacts include player-visible tracking. Optional kind filter; contact selections apply.",
   "catalog_mission_briefing": "Displayed mission briefing.",
   "catalog_published_reports": "Retained published reports, oldest first; body by ID.",
   "weapon_reference_delivery": "weapon_references adds definitions once per consultation. Reuse IDs in earlier results; an empty array means no new definitions.",
@@ -42,5 +42,6 @@
   "tool_sections": "get_unit_capabilities: selected sections; omit for all enabled.",
   "tool_offset": "Zero-based offset for list queries only.",
   "tool_limit": "Page size for list queries only.",
-  "host_count_semantics": "Host occupancy, unassigned inventory, squadrons, tasks and airborne units overlap or describe different states. Do not add them into a fleet total."
+  "host_count_semantics": "Host occupancy, unassigned inventory, squadrons, tasks and airborne units overlap or describe different states. Do not add them into a fleet total.",
+  "sensor_reference_delivery": "Reuse earlier sensor_references IDs; definitions are sent once per consultation. Instrumented limits do not guarantee detection."
 }

@@ -110,7 +110,7 @@ internal sealed class AdvisorPrompts
         "error_pagination_invalid", "error_unsupported_argument", "catalog_friendly_units", "catalog_friendly_ground_units",
         "catalog_friendly_bases", "catalog_hosted_air_units", "catalog_aviation_tasks", "catalog_unit_capabilities",
         "catalog_public_class_threat_references", "catalog_observed_contacts", "catalog_mission_briefing", "catalog_published_reports",
-        "weapon_reference_delivery", "tool_enabled_sections", "tool_description", "tool_ids",
+        "weapon_reference_delivery", "sensor_reference_delivery", "tool_enabled_sections", "tool_description", "tool_ids",
         "tool_host_ids", "tool_air_unit_ids", "tool_kind", "tool_sections",
         "tool_offset", "tool_limit", "host_count_semantics",
         "catalog_identification_candidates", "catalog_friendly_launched_weapons",

@@ -20,6 +20,16 @@ internal static class BattleInformation
             foreach (var row in ((JArray)snapshot["hosted_air_units"]!).OfType<JObject>()) row.Remove("loadouts");
         if (!information.Allows(InformationKind.BattleAviation))
             foreach (var row in ((JArray)snapshot["friendly_bases"]!).OfType<JObject>()) row.Remove("has_aviation_facility");
+        foreach (var capability in ((JArray)snapshot["unit_capabilities"]!).OfType<JObject>())
+        {
+            if (!information.Allows(InformationKind.BattleSensors)) capability.Remove("sensors");
+            if (!information.Allows(InformationKind.BattleSensorPerformance)) capability.Remove("sensor_performance");
+        }
+        var sensorIds = ((JArray)snapshot["unit_capabilities"]!).OfType<JObject>()
+            .SelectMany(c => c["sensor_performance"] as JArray ?? new JArray())
+            .Select(s => (string)s["reference_id"]!).ToHashSet(System.StringComparer.Ordinal);
+        foreach (var reference in ((JArray)snapshot["sensor_references"]!).OfType<JObject>()
+            .Where(s => !sensorIds.Contains((string)s["id"]!)).ToArray()) reference.Remove();
         var contacts = (JArray)snapshot["observed_contacts"]!;
         foreach (var contact in contacts.OfType<JObject>().Where(c =>
             !information.Allows(InformationKind.BattleContacts) ||

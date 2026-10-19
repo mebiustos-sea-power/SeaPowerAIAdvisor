@@ -10,6 +10,8 @@ namespace SeaPowerAIAdvisor;
 internal sealed class BattleCapabilityReader
 {
     internal BattleReferenceCatalog References { get; }
+    private readonly BattleSensorReader sensors = new();
+    internal JArray SensorReferences() => sensors.References();
     internal BattleCapabilityReader(BattleReferenceCatalog references) { References = references; }
 
     internal JObject CaptureOwn(object unit, string id, string name)
@@ -31,9 +33,11 @@ internal sealed class BattleCapabilityReader
                 ["remaining_count"] = counts.TryGetValue(key, out var count) ? count : 0
             });
         }
+        var sensorData = sensors.Capture(parameters, id);
         return new JObject
         {
             ["id"] = id, ["display_name"] = name,
+            ["sensors"] = sensorData.State, ["sensor_performance"] = sensorData.Performance,
             ["fuel"] = Fuel(unit, parameters), ["damage"] = Damage(unit, parameters),
             ["weapons"] = new JObject
             {
