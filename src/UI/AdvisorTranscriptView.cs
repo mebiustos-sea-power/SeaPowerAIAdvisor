@@ -11,6 +11,8 @@ internal sealed class AdvisorTranscriptView
     private readonly StackPanel panel;
     private readonly Action<Action> guard;
     private readonly Action<AdvisorTurn> retry;
+    private readonly Action<AdvisorTurn, ContactAssumption> reassess;
+    private readonly List<Button> reassessmentButtons = new();
     private readonly Stopwatch clock = Stopwatch.StartNew();
     private readonly Dictionary<(AdvisorTurn Turn, bool Answer), double> copiedUntil = new();
     private readonly List<CopyBinding> copyButtons = new();
@@ -30,15 +32,19 @@ internal sealed class AdvisorTranscriptView
             { copiedUntil.Remove(binding.Key); binding.SetCopied(false); }
     }
 
-    internal AdvisorTranscriptView(StackPanel panel, Action<Action> guard, Action<AdvisorTurn> retry)
-    { this.panel = panel; this.guard = guard; this.retry = retry; }
+    internal AdvisorTranscriptView(StackPanel panel, Action<Action> guard, Action<AdvisorTurn> retry,
+        Action<AdvisorTurn, ContactAssumption> reassess)
+    { this.panel = panel; this.guard = guard; this.retry = retry; this.reassess = reassess; }
+
+    internal void UpdateBusy(bool busy)
+    { foreach (var button in reassessmentButtons) button.IsEnabled = !busy; }
 
     internal void Show(AdvisorConversation conversation, AdvisorText text, string advisor, string empty, AdvisorNotice? notice, AdvisorTextSize textSize)
     {
         var root = GUI.ParseXaml(AdvisorTranscript.Render(conversation, text, advisor, empty, notice, textSize)) as StackPanel
             ?? throw new InvalidOperationException("The Markdown conversation view is not a StackPanel.");
         waitingTurn = null; waitingText = null;
-        copyButtons.Clear();
+        copyButtons.Clear(); reassessmentButtons.Clear();
         var now = clock.Elapsed.TotalSeconds;
         foreach (var key in copiedUntil.Keys.Where(key => !conversation.Turns.Contains(key.Turn) || copiedUntil[key] <= now).ToArray())
             copiedUntil.Remove(key);
@@ -54,6 +60,14 @@ internal sealed class AdvisorTranscriptView
             }
             if (turn.Exchange != null)
                 BindCopy(root, "CopyAnswer" + i, turn.Exchange.Answer, turn, true);
+            if (BattleContactAssessment.CanReassess(turn))
+                foreach (var assumption in new[] { ContactAssumption.Friendly, ContactAssumption.Enemy })
+                {
+                    var button = root.FindName("Reassess" + assumption + i) as Button
+                        ?? throw new InvalidOperationException("The contact reassessment button is missing.");
+                    reassessmentButtons.Add(button);
+                    button.Click += (_, _) => guard(() => { if (button.IsEnabled) reassess(turn, assumption); });
+                }
             if (conversation.CanRetry(turn))
             {
                 var button = root.FindName("RetryTurn" + i) as Button

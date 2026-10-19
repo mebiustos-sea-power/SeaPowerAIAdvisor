@@ -406,6 +406,8 @@ internal static partial class BattleTests
                 result.Text == "公開目標を優先し、接触を確認してください。", "Battle consultation did not complete");
         });
         RunGroundAir(check);
+        RunContactMotion(check);
+        RunContactAssessment(check);
     }
 
     private static JObject Request(IAdvisorQuerySession session, params JObject[] queries) =>
@@ -512,6 +514,7 @@ internal static partial class BattleTests
         internal bool Ready = true;
         internal string ContactKind = "Surface";
         internal string ContactPosture = "Unknown";
+        internal object? ContactDisplay = new { ObjectName = new Reactive<string>("画面で識別した艦") };
         internal Fixture()
         {
             Track = new Track { Object = Secret };
@@ -520,7 +523,7 @@ internal static partial class BattleTests
         }
         internal BattleSnapshot Capture(bool disclosure = false, string xmlBriefing = "", bool briefingUnavailable = false, bool briefingFromBase = false) => new BattleSituationReader().Capture(
             OwnUnits.Cast<object>().Concat(OwnWeapons).Select(u => (object)new { Unit = new { Object = u } }).Concat(new object[] {
-                new { Unit = Track, ObjectViewModel = new { ObjectName = new Reactive<string>("画面で識別した艦") }, VisualType = ContactKind, VisualPosture = ContactPosture }
+                new { Unit = Track, ObjectViewModel = ContactDisplay, VisualType = ContactKind, VisualPosture = ContactPosture }
             }).ToArray(), new { TaskforceObjects = OwnUnits.Cast<object>().Concat(OwnWeapons).ToArray() },
             new object[] { new { IsHidden = false, Text = "輸送船を保護する", Status = 0 }, Hidden },
             new
@@ -623,6 +626,7 @@ internal static partial class BattleTests
         public object? PositionEstimate { get; set; } = new { Item1 = new Geo(32, 130) };
         public object? Class { get; set; } = new { Value = "test_class" };
         public object Position => throw new InvalidOperationException("Read a contact position outside its estimate");
+        public object? UnityVelocityVector { get; set; } = new ContactVelocity(0, 0, 0);
         public bool HasLiveTrack => false;
         public Reactive<bool> Identified { get; } = new(true);
         public Reactive<bool> IsDormant { get; } = new(true);
@@ -632,6 +636,16 @@ internal static partial class BattleTests
     {
         internal string Value = "Actual enemy secrets";
         public bool IsDestroyed { get; set; }
+        internal bool ForbidAltitudeRead;
+        private object? altitude = new Reactive<float>(0);
+        public object? Altitude
+        {
+            get => ForbidAltitudeRead ? throw new InvalidOperationException("Read surface-contact altitude") : altitude;
+            set => altitude = value;
+        }
+        public string _type => throw new InvalidOperationException("Read actual enemy type");
+        public object UnityVelocityVector => throw new InvalidOperationException("Read actual enemy velocity");
+        public object Heading => throw new InvalidOperationException("Read actual enemy heading");
         public object Position => throw new InvalidOperationException("Read actual enemy position");
         public string Name => throw new InvalidOperationException("Read actual enemy name");
         public object _obp => throw new InvalidOperationException("Read actual enemy capabilities");

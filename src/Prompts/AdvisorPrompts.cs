@@ -110,6 +110,7 @@ internal sealed class AdvisorPrompts
         "weapon_reference_delivery", "tool_enabled_sections", "tool_description", "tool_ids",
         "tool_host_ids", "tool_air_unit_ids", "tool_kind", "tool_sections",
         "tool_offset", "tool_limit", "host_count_semantics",
+        "catalog_identification_candidates",
     };
     private static readonly string[] CampaignFields =
     {
@@ -129,7 +130,7 @@ internal sealed class AdvisorPrompts
     };
     private static readonly string[] RequestFields =
     {
-        "next_steps", "more_detail", "key_risks", "connection_test",
+        "next_steps", "more_detail", "key_risks", "connection_test", "contact_assessment", "contact_reassessment",
     };
 
     private static JObject Read(string directory, string name, params string[] fields)

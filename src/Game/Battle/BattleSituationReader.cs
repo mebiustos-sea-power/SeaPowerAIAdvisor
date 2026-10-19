@@ -25,7 +25,7 @@ internal sealed class BattleSituationReader
         foreach (var mapUnit in Sequence(knownUnits))
         {
             var vehicle = Required(mapUnit, "Unit");
-            // Compare identity here; enemy state is limited to the map's destroyed flag below.
+            // Compare identity before reading own-unit capabilities; contacts below use map/display values.
             var identity = Member(vehicle, "Object");
             if (identity != null && ownObjects.Any(o => ReferenceEquals(o, identity)))
             {
@@ -72,6 +72,7 @@ internal sealed class BattleSituationReader
             contacts.Add(new JObject
             {
                 ["id"] = "observed_contact_" + (contacts.Count + 1).ToString(CultureInfo.InvariantCulture),
+                ["track_number"] = Convert.ToInt32(Required(vehicle, "Id"), CultureInfo.InvariantCulture),
                 ["display_name"] = displayName,
                 ["kind"] = Code(Member(mapUnit, "VisualType")),
                 ["posture"] = Code(Member(mapUnit, "VisualPosture")),
@@ -86,6 +87,7 @@ internal sealed class BattleSituationReader
                 ["observation_time_utc"] = JValue.CreateNull(),
                 ["position_error_nm"] = JValue.CreateNull()
             });
+            BattleContactMotionReader.CopyTo((JObject)contacts.Last!, vehicle);
             reference["id"] = contacts.Last!["id"]!.DeepClone();
             reference["display_name"] = displayName;
             reference["observed_posture"] = contacts.Last!["posture"]!.DeepClone();

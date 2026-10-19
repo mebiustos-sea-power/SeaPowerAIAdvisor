@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Xml.Linq;
 using static SeaPowerAIAdvisor.AdvisorMarkup;
 
@@ -10,6 +11,7 @@ internal static class AdvisorTranscript
         AdvisorNotice? configurationNotice = null, AdvisorTextSize textSize = AdvisorTypography.DefaultSize)
     {
         var root = Element("StackPanel", new XAttribute(XNamespace.Xmlns + "x", "http://schemas.microsoft.com/winfx/2006/xaml"));
+        var busy = conversation.Turns.Any(t => t.State == AdvisorTurnState.Waiting);
         if (configurationNotice != null) root.Add(Error(configurationNotice.Message(text)));
         if (conversation.Turns.Count == 0 && configurationNotice == null) root.Add(Plain(empty));
         for (var i = 0; i < conversation.Turns.Count; i++)
@@ -25,6 +27,18 @@ internal static class AdvisorTranscript
                 var exchange = turn.Exchange ?? throw new InvalidOperationException("The completed answer is missing.");
                 row.Add(Header(turn.AdvisorName.Length == 0 ? advisor : turn.AdvisorName, "AdvisorNameBrush",
                     "CopyAnswer" + i, text, "transcript.copy_tip", "0,6,0,6"), AdvisorMarkdown.Render(exchange.Answer));
+                if (BattleContactAssessment.CanReassess(turn))
+                {
+                    var actions = Element("WrapPanel", new XAttribute("Margin", "0,6,0,0"));
+                    foreach (var assumption in new[] { ContactAssumption.Friendly, ContactAssumption.Enemy })
+                    {
+                        var button = Action("Reassess" + assumption + i,
+                            text["contact.reassess_" + BattleContactAssessment.AffiliationCode(assumption)], null);
+                        button.Add(new XAttribute("Margin", "0,0,6,6"), new XAttribute("IsEnabled", !busy));
+                        actions.Add(button);
+                    }
+                    row.Add(actions);
+                }
             }
             else if (turn.State == AdvisorTurnState.Failed)
                 row.Add(Error((turn.Error ?? throw new InvalidOperationException("The failed turn has no error.")).Message(text)));
@@ -48,11 +62,14 @@ internal static class AdvisorTranscript
                 Element("ColumnDefinition", new XAttribute("Width", "Auto"))),
             Label(speaker, brush), Action(copyName, text[captionKey], text[tipKey], 1));
 
-    private static XElement Action(string name, string caption, string tip, int column = 0) => Element("Button",
-        new XAttribute(XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml") + "Name", name),
-        new XAttribute("Grid.Column", column), new XAttribute("FontSize", "12"), new XAttribute("Padding", "8,2"),
-        new XAttribute("Focusable", "False"), new XAttribute("HorizontalAlignment", "Left"),
-        Text("Content", caption), Text("ToolTip", tip));
+    private static XElement Action(string name, string caption, string? tip, int column = 0)
+    {
+        var button = Element("Button", new XAttribute(XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml") + "Name", name),
+            new XAttribute("Grid.Column", column), new XAttribute("FontSize", "12"), new XAttribute("Padding", "8,2"),
+            new XAttribute("Focusable", "False"), new XAttribute("HorizontalAlignment", "Left"), Text("Content", caption));
+        if (tip != null) button.Add(Text("ToolTip", tip));
+        return button;
+    }
     private static XElement Error(string value)
     {
         var element = Plain(value);

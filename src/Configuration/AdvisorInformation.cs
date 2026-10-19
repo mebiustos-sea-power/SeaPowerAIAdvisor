@@ -178,7 +178,7 @@ internal sealed class AdvisorInformation
         "list_bases" or "get_bases" => Allows(InformationKind.BattleBases),
         "list_air_units" or "get_air_units" or "list_air_tasks" => Allows(InformationKind.BattleAviation),
         "get_unit_capabilities" => BattleSections.Length > 0,
-        "list_contacts" => Allows(InformationKind.BattleContacts),
+        "list_contacts" or BattleContactAssessment.Query => Allows(InformationKind.BattleContacts),
         "get_contact_threats" => Allows(InformationKind.BattleThreats),
         "get_briefing" => Allows(InformationKind.BattleBriefing),
         "list_reports" or "get_reports" => Allows(InformationKind.BattleReports),

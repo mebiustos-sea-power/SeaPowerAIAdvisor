@@ -14,6 +14,8 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
     private readonly JObject snapshot;
     private readonly AdvisorInformation information;
     private readonly JObject initial;
+    private readonly BattleContactAssessment? assessment;
+    private IEnumerable<string> QueryNames => assessment == null ? names : names.Concat(new[] { BattleContactAssessment.Query });
     public string Id { get; } = Guid.NewGuid().ToString("N");
     public int RoundsUsed { get; private set; }
     public int MaxRounds { get; }
@@ -21,7 +23,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
     private int returnedBytes;
     private readonly HashSet<string> deliveredWeaponReferences = new(StringComparer.Ordinal);
 
-    internal BattleQuerySession(BattleSnapshot situation, string language, string? question, int maxRounds = DefaultMaxRounds, AdvisorInformation? information = null, AdvisorPrompts? prompts = null)
+    internal BattleQuerySession(BattleSnapshot situation, string language, string? question, int maxRounds = DefaultMaxRounds, AdvisorInformation? information = null, AdvisorPrompts? prompts = null, JObject? context = null)
     {
         if (maxRounds < 1 || maxRounds > MaximumRounds) throw new ArgumentOutOfRangeException(nameof(maxRounds));
         MaxRounds = maxRounds;
@@ -30,6 +32,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
         information = this.information;
         snapshot = situation.Copy();
         BattleInformation.Apply(snapshot, information);
+        if (context != null) assessment = new BattleContactAssessment(snapshot, context, information);
         initial = AdvisorInputBuilder.Header(language, question, Prompts, true);
         initial["schema_version"] = 5;
         initial["mode"] = "tactical_battle";
@@ -64,6 +67,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
                 ["report_limit"] = 10
             }
         };
+        if (assessment != null) initial["contact_assessment"] = assessment.Focus.DeepClone();
         initial["knowledge_catalog"] = Catalogue();
         initial["query_tool"] = Tool();
         initial["query_limits"] = new JObject
@@ -176,6 +180,10 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
                 Allowed(query, "query", "ids"); return AirUnits(query);
             case "list_air_tasks":
                 Allowed(query, "query", "offset", "limit", "host_ids", "air_unit_ids"); return AirTasks(query);
+            case BattleContactAssessment.Query:
+                Allowed(query, "query", "offset", "limit");
+                if (assessment == null) throw Error("unknown_query", "unknown_query");
+                return Page(query, assessment.Candidates);
             case "list_contacts":
                 Allowed(query, "query", "offset", "limit", "kind");
                 var contacts = (JArray)Rows("observed_contacts").DeepClone();
@@ -322,6 +330,11 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
     {
         var result = RawCatalogue();
         foreach (var property in result.Properties().Where(p => !information.BattleCategory(p.Name)).ToArray()) property.Remove();
+        if (assessment != null) result["contact_identification_candidates"] = new JObject
+        {
+            ["item_count"] = assessment.Candidates.Count, ["list_query"] = BattleContactAssessment.Query,
+            ["description"] = Prompts.Text("battle.json", "catalog_identification_candidates")
+        };
         if (result["unit_capabilities"] is JObject capabilities) capabilities["available_sections"] = new JArray(information.BattleSections);
         return result;
     }
@@ -369,7 +382,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
     {
         var tool = RawTool();
         var properties = (JObject)tool["parameters"]!["properties"]!["requests"]!["items"]!["properties"]!;
-        properties["query"]!["enum"] = new JArray(names.Where(information.BattleQuery));
+        properties["query"]!["enum"] = new JArray(QueryNames.Where(information.BattleQuery));
         if (information.BattleSections.Length == 0) properties.Remove("sections");
         else
         {
@@ -398,7 +411,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
                         ["type"] = "object", ["additionalProperties"] = false, ["required"] = new JArray("query"),
                         ["properties"] = new JObject
                         {
-                            ["query"] = new JObject { ["type"] = "string", ["enum"] = new JArray(names) },
+                            ["query"] = new JObject { ["type"] = "string", ["enum"] = new JArray(QueryNames) },
                             ["ids"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = MaxIdsPerQuery, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string" }, ["description"] = Prompts.Text("battle.json", "tool_ids") },
                             ["host_ids"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = MaxIdsPerQuery, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string" }, ["description"] = Prompts.Text("battle.json", "tool_host_ids") },
                             ["air_unit_ids"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = MaxIdsPerQuery, ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string" }, ["description"] = Prompts.Text("battle.json", "tool_air_unit_ids") },

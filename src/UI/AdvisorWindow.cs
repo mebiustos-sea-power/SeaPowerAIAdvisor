@@ -63,7 +63,7 @@ internal sealed class AdvisorWindow
         ApplyTextResources();
         question = Named<TextBox>(content, "Question");
         transcriptScroll = Named<ScrollViewer>(content, "Transcript");
-        transcript = new AdvisorTranscriptView(Named<StackPanel>(content, "TranscriptMessages"), guard, RetryConsultation);
+        transcript = new AdvisorTranscriptView(Named<StackPanel>(content, "TranscriptMessages"), guard, RetryConsultation, ReassessContact);
         status = Named<TextBlock>(content, "Status");
         diagnosticStatus = Named<TextBlock>(content, "DiagnosticStatus");
         diagnosticOutput = Named<TextBox>(content, "DiagnosticOutput");
@@ -123,12 +123,34 @@ internal sealed class AdvisorWindow
                 RefreshConfigurationNotice(); ShowConversation(false);
             }, ReturnToConversation, warn);
         Named<Button>(content, "Settings").Click += (_, _) => guard(settings.Open);
-        try { AdvisorProfile.EnsureCreated(profileDirectory, DefaultPortrait, text["advisor.role"]); }
+        try
+        {
+            AdvisorProfile.EnsureCreated(profileDirectory, DefaultPortrait, text["advisor.role"]);
+            appliedProfile = AdvisorProfile.Load(profileDirectory);
+        }
         catch (AdvisorProfileException failure) { ProfileError(failure); }
         ShowConversation();
     }
 
     internal bool IsOpen => host.Windows.Contains(window);
+    internal string DisplayName => appliedProfile?.DisplayName ?? speakerName;
+    internal bool CanConsult => active == null && conversationPane.Visibility == Visibility.Visible;
+
+    internal void ConsultContext(string promptKey, string caption, Newtonsoft.Json.Linq.JObject context)
+    {
+        if (!CanConsult) return;
+        if (!IsOpen) Toggle();
+        questionInput.Reset();
+        try
+        {
+            StartConsultation(new AdvisorQuestion(AdvisorPrompts.Current.Text("requests.json", promptKey), caption, true, context));
+        }
+        catch (AdvisorPromptException error)
+        {
+            configurationNotice = AdvisorNotice.Prompts(error); ShowConversation(false);
+            warn("Contextual consultation prompt unavailable: " + error.Message);
+        }
+    }
 
     internal void Toggle()
     {
@@ -236,6 +258,22 @@ internal sealed class AdvisorWindow
         StartConsultation(turn.Request, turn);
     }
 
+    private void ReassessContact(AdvisorTurn turn, ContactAssumption assumption)
+    {
+        if (!CanConsult || !conversation.Turns.Contains(turn) || !BattleContactAssessment.CanReassess(turn)) return;
+        questionInput.Reset();
+        try
+        {
+            StartConsultation(BattleContactAssessment.Reassess(turn, assumption,
+                text["contact.reassess_" + BattleContactAssessment.AffiliationCode(assumption)]));
+        }
+        catch (AdvisorPromptException error)
+        {
+            configurationNotice = AdvisorNotice.Prompts(error); ShowConversation(false);
+            warn("Contact reassessment prompt unavailable: " + error.Message);
+        }
+    }
+
     private void StartConsultation(AdvisorQuestion request, AdvisorTurn? retry = null)
     {
         if (active != null || conversationPane.Visibility != Visibility.Visible) return;
@@ -265,7 +303,7 @@ internal sealed class AdvisorWindow
         {
             options.EnsureUserName(text["general.default_user_name"]);
             var execution = backends.Prepare();
-            var session = source.CreateSession(replyLanguage(), request.Text, options.Current.MaxQueryRounds, options.Current.Information);
+            var session = source.CreateSession(replyLanguage(), request.Text, options.Current.MaxQueryRounds, options.Current.Information, request.Context);
             var historyLimit = options.Current.HistoryExchanges;
             pendingTurn = turn;
             pendingModel = execution.Model;
@@ -374,6 +412,7 @@ internal sealed class AdvisorWindow
         activity.Text = text[busy ? "activity.busy" : "activity.idle"];
         UpdateShortcuts();
         settings.UpdateBusy();
+        transcript.UpdateBusy(busy);
     }
 
     private void CancelActive()

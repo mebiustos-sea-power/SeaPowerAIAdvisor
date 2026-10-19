@@ -23,6 +23,7 @@ internal sealed class BattleIntegration
     private object? player;
     private AdvisorHudButton? launcher;
     private AdvisorWindow? advisor;
+    private BattleContactAssessments? contactAssessments;
     private AdvisorErrorWindow? errorWindow;
     private Action? showError;
 
@@ -54,10 +55,9 @@ internal sealed class BattleIntegration
             launcher = button;
             void OpenAdvisor()
             {
-                var host = FindHost(current.RootControl) ?? throw new InvalidOperationException("The battle window host is unavailable.");
-                advisor ??= new AdvisorWindow(root, host, guard, new BattleAdvisorSource(Capture), GameLanguage.Read, warn, options, backends);
-                advisor.Toggle();
-                button.Control.IsChecked = advisor.IsOpen;
+                var currentAdvisor = GetAdvisor();
+                currentAdvisor.Toggle();
+                button.Control.IsChecked = currentAdvisor.IsOpen;
             }
             void ShowError()
             {
@@ -90,10 +90,23 @@ internal sealed class BattleIntegration
             };
         }
         launcher.Control.Visibility = current.IsHudVisible ? Visibility.Visible : Visibility.Collapsed;
-        if (!runtime.Failed) advisor?.Tick();
+        if (!runtime.Failed)
+        {
+            var host = FindHost(current.RootControl) ?? throw new InvalidOperationException("The battle window host is unavailable.");
+            contactAssessments ??= new BattleContactAssessments(GetAdvisor, () => options.Current.Information, guard);
+            contactAssessments.Tick(current.RootControl, host);
+            advisor?.Tick();
+        }
         if (showError != null) runtime.NotifyFailure(showError);
         errorWindow?.Tick();
         launcher.Control.IsChecked = errorWindow?.IsOpen == true || advisor?.IsOpen == true;
+    }
+
+    private AdvisorWindow GetAdvisor()
+    {
+        if (view == null || model?.RootControl == null) throw new InvalidOperationException("The battle advisor view is unavailable.");
+        var host = FindHost(model.RootControl) ?? throw new InvalidOperationException("The battle window host is unavailable.");
+        return advisor ??= new AdvisorWindow(view, host, guard, new BattleAdvisorSource(Capture), GameLanguage.Read, warn, options, backends);
     }
 
     private BattleSnapshot Capture()
@@ -200,6 +213,7 @@ internal sealed class BattleIntegration
 
     internal void Stop()
     {
+        contactAssessments?.Suspend();
         var previous = advisor; advisor = null;
         previous?.Stop();
     }
@@ -210,9 +224,14 @@ internal sealed class BattleIntegration
         finally
         {
             var previous = launcher; var report = errorWindow;
+            var contacts = contactAssessments; contactAssessments = null;
             advisor = null; errorWindow = null; showError = null; launcher = null; model = null; view = null; uiRoot = null; mission = null; player = null;
-            try { report?.Close(); }
-            finally { previous?.Dispose(); }
+            try { contacts?.Dispose(); }
+            finally
+            {
+                try { report?.Close(); }
+                finally { previous?.Dispose(); }
+            }
         }
     }
 }
