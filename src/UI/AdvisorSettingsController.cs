@@ -69,6 +69,7 @@ internal sealed class AdvisorSettingsController
         Bind("BackToSettings", BackToHome); Bind("BackToConversation", () => { Close(); back(); });
         Bind("SaveGeneral", () => Save(() => options.SaveGeneral((AdvisorTextSize)size.SelectedIndex, campaign.IsChecked == true, userName.Text ?? "")));
         Bind("SaveConsultation", () => Save(() => options.SaveConsultation(Number(rounds, "query_rounds_invalid"), Number(history, "history_exchanges_invalid"), prompt.Text ?? "")));
+        Bind("ResetInformation", () => { if (available) { information.Reset(AdvisorInformation.Default); Notice(""); } });
         Bind("SaveInformation", () => Save(() => options.SaveInformation(information.Value)));
         Bind("SaveDeveloper", () => Save(() => options.SaveDeveloper(localApi.IsChecked == true, () => apiStore.SaveLogging(log.IsChecked == true))));
         Bind("TestConnection", TestConnection);

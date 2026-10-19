@@ -47,7 +47,7 @@ Question bodies specify exactly one of `question` and `shortcut`:
 
 With the default, a main-connection failure ends the consultation instead of switching to a possibly metered sub connection. The saved main/sub assignments remain unchanged. UI-initiated consultations keep their normal fallback behavior. The accepted response and retained result include the effective `allow_fallback` value. A custom consultation backend that cannot honor a no-fallback policy is rejected before execution.
 
-Quick IDs are `next_steps`, `key_risks` and `more_detail`. They use the current request prompts and localized UI captions. `more_detail` requires an answered exchange and enabled conversation history. Questions use the normal 2,000-character limit.
+Quick IDs are `key_risks`, `next_steps`, `radar_operations` and `more_detail`. They use the current request prompts and localized UI captions. `more_detail` requires an answered exchange and enabled conversation history. Questions use the normal 2,000-character limit.
 
 Prompt changes use this form; unknown IDs or invalid values reject the entire change:
 

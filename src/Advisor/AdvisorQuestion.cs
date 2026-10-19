@@ -27,6 +27,8 @@ internal sealed class AdvisorShortcut
         "more_detail", true);
     internal static readonly AdvisorShortcut KeyRisks = new("preset.key_risks",
         "key_risks");
+    internal static readonly AdvisorShortcut RadarOperations = new("preset.radar_operations",
+        "radar_operations");
 
     internal string LabelKey { get; }
     private string PromptKey { get; }

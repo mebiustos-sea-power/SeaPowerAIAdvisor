@@ -133,7 +133,7 @@ internal sealed class AdvisorPrompts
     };
     private static readonly string[] RequestFields =
     {
-        "next_steps", "more_detail", "key_risks", "connection_test", "connection_tool_test", "contact_assessment", "contact_reassessment",
+        "next_steps", "more_detail", "key_risks", "radar_operations", "connection_test", "connection_tool_test", "contact_assessment", "contact_reassessment",
     };
 
     private static JObject Read(string directory, string name, params string[] fields)
