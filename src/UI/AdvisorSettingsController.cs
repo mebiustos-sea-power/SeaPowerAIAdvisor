@@ -158,12 +158,13 @@ internal sealed class AdvisorSettingsController
     private void BackToHome()
     {
         void Go() { CancelTest(); profiles.Close(); api.Close(); promptEditor.Close(); errorHistory.Close(); current = null; available = false; releaseInput(); page.Visibility = Visibility.Collapsed; home.Visibility = Visibility.Visible; Named<Button>("OpenGeneralCategory").Focus(); }
-        if (HasChanges) Confirm(text()["settings.discard_question"], text()["settings.discard_action"], Go); else Go();
+        if (HasChanges) Confirm(text()["settings.discard_question"], text()["settings.discard_action"], Go, "settings.continue_editing"); else Go();
     }
     private void ConfirmDelete(string name, Action action) => Confirm(text().Format("settings.delete_question", name), text()["profile.remove"], action);
-    private void Confirm(string message, string caption, Action action)
+    private void Confirm(string message, string caption, Action action, string cancelKey = "settings.cancel")
     {
         releaseInput(); confirmed = action; confirmationText.Text = message; accept.Content = caption;
+        cancelConfirmation.Content = text()[cancelKey];
         pane.IsEnabled = false; confirmation.Visibility = Visibility.Visible; cancelConfirmation.Focus();
     }
     private void HideConfirmation() { confirmed = null; confirmation.Visibility = Visibility.Collapsed; pane.IsEnabled = true; }
