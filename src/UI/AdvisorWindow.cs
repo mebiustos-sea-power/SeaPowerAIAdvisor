@@ -70,7 +70,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         transcriptScroll = Named<ScrollViewer>(content, "Transcript");
         unitNavigationHint = Named<TextBlock>(content, "UnitNavigationHint");
         canNavigateUnits = navigation != null;
-        transcript = new AdvisorTranscriptView(Named<StackPanel>(content, "TranscriptMessages"), guard, RetryConsultation, ReassessContact, navigation, weapons);
+        transcript = new AdvisorTranscriptView(Named<StackPanel>(content, "TranscriptMessages"), transcriptScroll, guard, RetryConsultation, ReassessContact, navigation, weapons);
         status = Named<TextBlock>(content, "Status");
         diagnosticStatus = Named<TextBlock>(content, "DiagnosticStatus");
         diagnosticOutput = Named<TextBox>(content, "DiagnosticOutput");

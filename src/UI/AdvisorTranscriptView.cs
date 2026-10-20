@@ -35,9 +35,18 @@ internal sealed class AdvisorTranscriptView
             { copiedUntil.Remove(binding.Key); binding.SetCopied(false); }
     }
 
-    internal AdvisorTranscriptView(StackPanel panel, Action<Action> guard, Action<AdvisorTurn> retry,
+    internal AdvisorTranscriptView(StackPanel panel, ScrollViewer scroll, Action<Action> guard, Action<AdvisorTurn> retry,
         Action<AdvisorTurn, ContactAssumption> reassess, IAdvisorUnitNavigation? navigation = null, IAdvisorWeaponNavigation? weapons = null)
-    { this.panel = panel; this.guard = guard; this.retry = retry; this.reassess = reassess; this.navigation = navigation; this.weapons = weapons; }
+    {
+        this.panel = panel; this.guard = guard; this.retry = retry; this.reassess = reassess; this.navigation = navigation; this.weapons = weapons;
+        panel.PreviewMouseWheel += (_, e) =>
+        {
+            if (e.Orientation != Orientation.Vertical) return;
+            e.Handled = true;
+            // Route vertical input past the table/code horizontal viewers to the transcript's native handler.
+            guard(() => scroll.RaiseEvent(new MouseWheelEventArgs(scroll, UIElement.MouseWheelEvent, e.Delta, e.Orientation)));
+        };
+    }
 
     internal void UpdateBusy(bool busy)
     { foreach (var button in reassessmentButtons) button.IsEnabled = !busy; }
