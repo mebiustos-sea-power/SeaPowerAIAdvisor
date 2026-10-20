@@ -49,6 +49,7 @@
   "diagnostics.situation_ready": "Snapshot captured. Capture again to refresh. Text can be copied.",
   "diagnostics.situation_refused": "No situation was captured.",
   "diagnostics.ime": "Finish composing text before previewing AI input.",
+  "transcript.unit_navigation_hint": "Units in chat: LMB select / RMB menu",
   "question.label": "Message",
   "validation.question_required": "Enter a message.",
   "validation.question_too_long": "Keep the message within {0} characters.",

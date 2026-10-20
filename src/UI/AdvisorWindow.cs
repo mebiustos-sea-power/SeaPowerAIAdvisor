@@ -28,7 +28,8 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     private readonly TextBox question, diagnosticOutput;
     private readonly ScrollViewer transcriptScroll;
     private readonly AdvisorTranscriptView transcript;
-    private readonly TextBlock advisorName, advisorRole, activity, portraitError, status, diagnosticStatus;
+    private readonly TextBlock advisorName, advisorRole, activity, portraitError, status, diagnosticStatus, unitNavigationHint;
+    private readonly bool canNavigateUnits;
     private readonly Image portraitImage;
     private readonly string settingsPath, profileDirectory;
     private AdvisorPortrait? portrait;
@@ -67,6 +68,8 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         ApplyTextResources();
         question = Named<TextBox>(content, "Question");
         transcriptScroll = Named<ScrollViewer>(content, "Transcript");
+        unitNavigationHint = Named<TextBlock>(content, "UnitNavigationHint");
+        canNavigateUnits = navigation != null;
         transcript = new AdvisorTranscriptView(Named<StackPanel>(content, "TranscriptMessages"), guard, RetryConsultation, ReassessContact, navigation);
         status = Named<TextBlock>(content, "Status");
         diagnosticStatus = Named<TextBlock>(content, "DiagnosticStatus");
@@ -576,6 +579,8 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         pendingScroll = null;
         diagnosticScrollPending = false;
         question.FontSize = AdvisorTypography.FontSize(options.Current.TextSize, 15);
+        unitNavigationHint.Visibility = canNavigateUnits && (options.Current.LinkOwnUnits || options.Current.LinkContacts)
+            ? Visibility.Visible : Visibility.Collapsed;
         transcript.Show(conversation, text, speakerName, empty ?? text["transcript.empty"], configurationNotice, options.Current.TextSize, options.Current.LinkOwnUnits, options.Current.LinkContacts);
         UpdateShortcuts();
         if (updateStatus) status.Text = text["status.ready"];

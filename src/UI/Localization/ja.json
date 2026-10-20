@@ -49,6 +49,7 @@
   "diagnostics.situation_ready": "取得時点の状況です。再度取得すると更新できます。コピーできます。",
   "diagnostics.situation_refused": "状況は取得していません。",
   "diagnostics.ime": "文字の変換を確定してからAI入力を確認してください。",
+  "transcript.unit_navigation_hint": "履歴内ユニット：LMB 選択／RMB メニュー",
   "question.label": "メッセージ",
   "validation.question_required": "メッセージを入力してください。",
   "validation.question_too_long": "メッセージは{0}文字以内にしてください。",
