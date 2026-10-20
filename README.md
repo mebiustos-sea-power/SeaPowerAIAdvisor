@@ -51,6 +51,8 @@ For an unidentified contact, open its information window and use **[adviser name
 
 Choose a model that supports **tool calling**. These are examples, not a guarantee that every model will interpret the supplied data correctly. OpenRouter and NanoGPT connection tests check a tool-call/result round trip as well as the final response.
 
+Future prompt tuning and evaluation of adviser responses will primarily use **GLM 5.3 through NanoGPT**. Other supported services and models remain available, but response quality and information retrieval behavior may vary by model.
+
 NanoGPT uses its subscription-only API for both consultations and connection tests. An active subscription and an included model are required; requests outside the subscription allowance fail without retrying through NanoGPT's pay-as-you-go endpoint. Model names are editable. Any separately configured sub connection still follows the normal fallback policy.
 
 Ollama must be installed and running separately, with the selected model already available. Its default URL is `http://localhost:11434`, and the default context length is **8192**. Performance and memory requirements depend on the model, context length and hardware; the game and model share your computer's resources.
