@@ -17,14 +17,18 @@ internal sealed class AdvisorUnitLinks
     private readonly Dictionary<string, HashSet<int>> ownNames = new(StringComparer.Ordinal);
     private readonly Regex mentions;
     private readonly bool linkOwnUnits;
+    private readonly bool linkContacts;
+    private readonly HashSet<int> ownIds = new();
     private readonly List<(string Name, int UnitId)> links = new();
     internal IReadOnlyList<(string Name, int UnitId)> Links => links;
 
     internal AdvisorUnitLinks(Func<int, bool> known, IEnumerable<(int Id, string Name)>? ownUnits = null, bool linkContacts = true, bool linkOwnUnits = true)
     {
-        this.known = known; this.linkOwnUnits = linkOwnUnits;
-        foreach (var unit in (linkOwnUnits ? ownUnits : null) ?? Array.Empty<(int, string)>())
+        this.known = known; this.linkOwnUnits = linkOwnUnits; this.linkContacts = linkContacts;
+        foreach (var unit in ownUnits ?? Array.Empty<(int, string)>())
         {
+            ownIds.Add(unit.Id);
+            if (!linkOwnUnits) continue;
             var name = unit.Name.Trim();
             AddName(name, unit.Id);
             for (var i = name.Length - 1; i >= 0; i--)
@@ -47,6 +51,13 @@ internal sealed class AdvisorUnitLinks
         label.AddAnnotation(new LocalReference());
         var target = references.Resolve(id);
         return linkOwnUnits && target.HasValue && known(target.Value) ? Link(target.Value, true, label) : label;
+    }
+
+    internal XElement BadgeReference(int id, XElement label)
+    {
+        var own = ownIds.Contains(id);
+        return (own ? linkOwnUnits : linkContacts) && known(id)
+            ? Link(id, own, label, "AdvisorUnitBadgeLinkStyle") : label;
     }
 
     internal XElement Decorate(XElement content)
@@ -85,12 +96,12 @@ internal sealed class AdvisorUnitLinks
         return content;
     }
 
-    private XElement Link(int id, bool own, XElement label)
+    private XElement Link(int id, bool own, XElement label, string? style = null)
     {
         var name = "AdvisorUnit" + links.Count.ToString(CultureInfo.InvariantCulture);
         links.Add((name, id));
         return Element("Hyperlink", new XAttribute(Xaml + "Name", name),
-            new XAttribute("Style", own ? "{DynamicResource AdvisorOwnUnitLinkStyle}" : "{DynamicResource AdvisorTrackLinkStyle}"),
+            new XAttribute("Style", "{DynamicResource " + (style ?? (own ? "AdvisorOwnUnitLinkStyle" : "AdvisorTrackLinkStyle")) + "}"),
             new XAttribute("TextDecorations", "None"), new XAttribute("Focusable", "False"), label);
     }
 

@@ -121,6 +121,53 @@ internal static class MarkdownTests
             Require(chat.Exchanges.Single().Question == question && chat.Exchanges.Single().Answer == answer,
                 "Changing the display size altered the saved AI conversation");
         });
+        check("Submitted targets appear as history badges between the speaker and typed message without editing controls", () =>
+        {
+            var draft = new AdvisorUnitDraft(); draft.Add(1005, "S61 オリオン"); draft.Add(7018, "Contact 7018");
+            var request = draft.Prepare("現在深度は？");
+            var chat = new AdvisorConversation(); chat.Begin(request).Complete("回答"); draft.Clear();
+            var rendered = XDocument.Parse(AdvisorTranscript.Render(chat, AdvisorText.Load("ja"), "ゆきな", "empty")).Root!;
+            var row = rendered.Elements().Single();
+            var parts = row.Elements().ToArray();
+            Require(parts[0].Descendants(Ns + "TextBlock").Any(e => (string?)e.Attribute("Text") == "あなた") &&
+                parts[1].Name == Ns + "WrapPanel" && parts[1].Elements(Ns + "Border").Select(Visible)
+                    .SequenceEqual(new[] { "S61 オリオン", "7018" }) && Visible(parts[2]) == "現在深度は？",
+                "Targets duplicated into the body, lost their captions or moved below the typed message");
+            Require(!parts[1].Descendants(Ns + "Button").Any() && !Visible(rendered).Contains("unit_id:") &&
+                request.Text == "現在深度は？\n\nS61 オリオン (unit_id: 1005)\nContact 7018 (unit_id: 7018)" &&
+                chat.Exchanges.Single().Question == request.Text,
+                "History badges acquired removal controls or rendering changed the copyable AI question");
+            var onlyTargets = new AdvisorUnitDraft(); onlyTargets.Add(1005, "S61 オリオン");
+            var targetChat = new AdvisorConversation(); targetChat.Begin(onlyTargets.Prepare("")).Complete("回答");
+            var targetRow = XDocument.Parse(AdvisorTranscript.Render(targetChat, AdvisorText.Load("en"), "Adviser", "empty"))
+                .Root!.Elements().Single().Elements().ToArray();
+            Require(targetRow.Length == 4 && targetRow[1].Name == Ns + "WrapPanel" &&
+                targetRow[2].Name == Ns + "Grid",
+                "A targets-only request added an empty question block");
+        });
+        check("History badge actions use exact target identities and obey independent link settings and target availability", () =>
+        {
+            var draft = new AdvisorUnitDraft();
+            draft.Add(1001, "同名"); draft.Add(1002, "同名"); draft.Add(7018, "Contact 7018");
+            var chat = new AdvisorConversation(); chat.Begin(draft.Prepare("確認")).Complete("回答");
+            var known = new System.Collections.Generic.HashSet<int> { 1001, 1002, 7018 };
+            foreach (var own in new[] { false, true })
+                foreach (var contacts in new[] { false, true })
+                {
+                    var links = new AdvisorUnitLinks(known.Contains, new[] { (1001, "同名"), (1002, "同名") }, contacts, own);
+                    var rendered = XDocument.Parse(AdvisorTranscript.Render(chat, AdvisorText.Load("ja"), "ゆきな", "empty", links: links)).Root!;
+                    var expected = new[] { 1001, 1002, 7018 }.Where(id => id == 7018 ? contacts : own);
+                    Require(links.Links.Select(link => link.UnitId).SequenceEqual(expected),
+                        "An ambiguous badge was linked by its caption or ignored its own/contact setting");
+                    Require(rendered.Descendants(Ns + "WrapPanel").Single().Elements().Select(Visible)
+                        .SequenceEqual(new[] { "同名", "同名", "7018" }), "Turning links off removed or relabelled a badge");
+                }
+            known.Remove(1001);
+            var remaining = new AdvisorUnitLinks(known.Contains, new[] { (1002, "同名") });
+            var missing = XDocument.Parse(AdvisorTranscript.Render(chat, AdvisorText.Load("ja"), "ゆきな", "empty", links: remaining)).Root!;
+            Require(remaining.Links.Select(link => link.UnitId).SequenceEqual(new[] { 1002, 7018 }) &&
+                Visible(missing).Contains("同名同名7018"), "A removed badge target was retargeted or its historical label disappeared");
+        });
         check("Track links preserve question and Markdown content while targeting only known four-digit contacts", () =>
         {
             var known = new System.Collections.Generic.HashSet<int> { 7008, 7018 };

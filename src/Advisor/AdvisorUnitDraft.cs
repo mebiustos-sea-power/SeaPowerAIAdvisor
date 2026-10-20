@@ -3,7 +3,7 @@ using System.Linq;
 
 namespace SeaPowerAIAdvisor;
 
-// Selected targets belong to the draft; submitted questions retain independent immutable text.
+// Selected targets belong to the draft; submitted questions retain independent text and badge snapshots.
 internal sealed class AdvisorUnitDraft
 {
     private readonly List<(int Id, string Name)> units = new();
@@ -21,6 +21,6 @@ internal sealed class AdvisorUnitDraft
         var references = string.Join("\n", units.Select(unit => AdvisorUnitMentions.Format(unit.Id, unit.Name)));
         var names = string.Join(" / ", units.Select(unit => unit.Name));
         return new AdvisorQuestion(text.Length == 0 ? references : text + "\n\n" + references,
-            text.Length == 0 ? names : text + "\n\n" + names, false, draftText: text);
+            text.Length == 0 ? names : text + "\n\n" + names, false, draftText: text, units: units);
     }
 }

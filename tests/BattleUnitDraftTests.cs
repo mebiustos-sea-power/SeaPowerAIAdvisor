@@ -15,13 +15,15 @@ internal static partial class BattleTests
                 "Targets were deduplicated by name or the same target acquired duplicate badges");
             var request = draft.Prepare(text);
             Require(request.Text.Contains("(unit_id: 1001)") && request.Text.Contains("(unit_id: 2002)") &&
-                request.DisplayText.Contains(text) && !request.DisplayText.Contains("unit_id:") && !request.HasContext,
+                request.DisplayText.Contains(text) && !request.DisplayText.Contains("unit_id:") && !request.HasContext &&
+                request.DisplayBody == text && request.Units.Select(unit => unit.Id).SequenceEqual(new[] { 1001, 2002 }),
                 "Badge identities were missing from the AI question, visible as technical tokens, or mistaken for contact assessments");
             draft.Remove(1001);
             Require(draft.Units.Count == 1 && draft.Units[0].Id == 2002 && !draft.Prepare(text).Text.Contains("(unit_id: 1001)"),
                 "Removing one badge removed another target or left the removed identity in the question");
             draft.Clear();
-            Require(draft.Units.Count == 0 && draft.Prepare(text).Text == text && request.Text.Contains("(unit_id: 1001)"),
+            Require(draft.Units.Count == 0 && draft.Prepare(text).Text == text && request.Text.Contains("(unit_id: 1001)") &&
+                request.Units.Count == 2 && request.Units[0].Name == "同じ表示名",
                 "Clearing badges changed a submitted question or left a target in a new question");
             var chat = new AdvisorConversation(); chat.Begin(request).Complete("比較結果");
             Require(chat.Exchanges.Single().Question == request.Text && chat.Exchanges.Single().DisplayQuestion == request.DisplayText,
@@ -37,7 +39,8 @@ internal static partial class BattleTests
             Require(!shortcut.ConsumesDraft("質問") && draft.Units.Count == 1,
                 "A shortcut consumed the unsent draft or its targets");
             var onlyTargets = draft.Prepare("");
-            Require(AdvisorConversation.Validate(onlyTargets.Text, out _) && onlyTargets.DisplayText == "対象" && onlyTargets.ConsumesDraft(""),
+            Require(AdvisorConversation.Validate(onlyTargets.Text, out _) && onlyTargets.DisplayText == "対象" &&
+                onlyTargets.DisplayBody == "" && onlyTargets.Units.Count == 1 && onlyTargets.ConsumesDraft(""),
                 "A targets-only draft lost its identity or visible name");
             Require(!AdvisorConversation.Validate(draft.Prepare(new string('a', AdvisorConversation.MaxQuestionLength)).Text, out var error) &&
                 error == "validation.question_too_long", "Target metadata bypassed the consultation input-size limit");

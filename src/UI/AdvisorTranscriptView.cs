@@ -56,7 +56,7 @@ internal sealed class AdvisorTranscriptView
     internal void Show(AdvisorConversation conversation, AdvisorText text, string advisor, string empty, AdvisorNotice? notice, AdvisorTextSize textSize, bool linkOwnUnits, bool linkContacts)
     {
         var links = navigation == null || (!linkOwnUnits && !linkContacts) ? null :
-            new AdvisorUnitLinks(navigation.Contains, linkOwnUnits ? navigation.OwnUnits() : null, linkContacts, linkOwnUnits);
+            new AdvisorUnitLinks(navigation.Contains, navigation.OwnUnits(), linkContacts, linkOwnUnits);
         var weaponLinks = weapons == null ? null : new AdvisorWeaponLinks(weapons.Contains);
         var coordinates = map == null ? null : new AdvisorCoordinateLinks();
         var markup = AdvisorTranscript.Render(conversation, text, advisor, empty, notice, textSize, links, weaponLinks, coordinates);
@@ -101,7 +101,7 @@ internal sealed class AdvisorTranscriptView
         for (var i = 0; i < conversation.Turns.Count; i++)
         {
             var turn = conversation.Turns[i];
-            BindCopy(root, "CopyQuestion" + i, turn.Request.IsShortcut ? turn.Request.Text : turn.Request.DisplayText, turn, false);
+            BindCopy(root, "CopyQuestion" + i, turn.Request.Text, turn, false);
             if (turn.State == AdvisorTurnState.Waiting || turn.State == AdvisorTurnState.Answered)
                 answerHeaders.Add(turn, root.FindName("AnswerHeader" + i) as FrameworkElement
                     ?? throw new InvalidOperationException("The advisor response header is missing."));

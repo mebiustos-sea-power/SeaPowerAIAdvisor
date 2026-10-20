@@ -25,8 +25,12 @@ internal static class AdvisorTranscript
             var copyCaption = turn.Request.IsShortcut ? "action.copy_prompt" : "action.copy";
             var copyTip = turn.Request.IsShortcut ? "transcript.copy_prompt_tip" : "transcript.copy_question_tip";
             var row = Element("StackPanel", new XAttribute("Margin", "0,0,0,20"),
-                Header(text["speaker.you"], "AdvisorPlayerNameBrush", "CopyQuestion" + i, text, copyTip, "0,0,0,6", copyCaption),
-                links?.Decorate(Plain(turn.Request.DisplayText)) ?? Plain(turn.Request.DisplayText));
+                Header(text["speaker.you"], "AdvisorPlayerNameBrush", "CopyQuestion" + i, text, copyTip, "0,0,0,6", copyCaption));
+            if (turn.Request.Units.Count > 0)
+                row.Add(Element("WrapPanel", new XAttribute("Margin", "0,0,0,6"),
+                    turn.Request.Units.Select(unit => AdvisorUnitBadge.Render(unit.Id, unit.Name, links))));
+            if (turn.Request.DisplayBody.Length > 0)
+                row.Add(links?.Decorate(Plain(turn.Request.DisplayBody)) ?? Plain(turn.Request.DisplayBody));
             if (turn.State == AdvisorTurnState.Waiting || turn.State == AdvisorTurnState.Answered)
             {
                 var header = Header(turn.AdvisorName.Length == 0 ? advisor : turn.AdvisorName, "AdvisorNameBrush",

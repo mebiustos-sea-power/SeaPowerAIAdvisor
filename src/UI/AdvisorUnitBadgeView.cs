@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using Noesis;
 
 namespace SeaPowerAIAdvisor;
@@ -28,8 +27,7 @@ internal sealed class AdvisorUnitBadgeView
         panel.Children.Clear();
         foreach (var unit in units)
         {
-            var number = unit.Id.ToString(CultureInfo.InvariantCulture);
-            var caption = unit.Name == "Contact " + number ? number : unit.Name;
+            var caption = AdvisorUnitBadge.Caption(unit.Id, unit.Name);
             var row = new StackPanel { Orientation = Orientation.Horizontal };
             row.Children.Add(new TextBlock { Text = caption, FontSize = 12, MaxWidth = 220,
                 TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center });

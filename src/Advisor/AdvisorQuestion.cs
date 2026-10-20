@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using Newtonsoft.Json.Linq;
 
 namespace SeaPowerAIAdvisor;
@@ -7,14 +10,21 @@ internal sealed class AdvisorQuestion
 {
     internal string Text { get; }
     internal string DisplayText { get; }
+    internal IReadOnlyList<(int Id, string Name)> Units { get; }
+    internal string DisplayBody => Units.Count == 0 ? DisplayText : draftText;
     internal bool IsShortcut { get; }
     private readonly JObject? context;
     private readonly string draftText;
     internal bool HasContext => context != null;
     internal JObject? Context => context == null ? null : (JObject)context.DeepClone();
     internal AdvisorQuestion(string text) : this(text, text, false) { }
-    internal AdvisorQuestion(string text, string caption, bool shortcut, JObject? context = null, string? draftText = null)
-    { Text = text; DisplayText = caption; IsShortcut = shortcut; this.context = context == null ? null : (JObject)context.DeepClone(); this.draftText = draftText ?? text; }
+    internal AdvisorQuestion(string text, string caption, bool shortcut, JObject? context = null, string? draftText = null,
+        IEnumerable<(int Id, string Name)>? units = null)
+    {
+        Text = text; DisplayText = caption; IsShortcut = shortcut;
+        this.context = context == null ? null : (JObject)context.DeepClone(); this.draftText = draftText ?? text;
+        Units = Array.AsReadOnly((units ?? Array.Empty<(int, string)>()).ToArray());
+    }
 
     internal bool ConsumesDraft(string draft) => !IsShortcut && draft == draftText;
 }

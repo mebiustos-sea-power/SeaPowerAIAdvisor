@@ -18,9 +18,11 @@
     <Style x:Key="AdvisorOwnUnitLinkStyle" TargetType="{x:Type Hyperlink}" BasedOn="{StaticResource AdvisorTrackLinkStyle}">
       <Setter Property="Foreground" Value="{StaticResource AdvisorOwnUnitNormalBrush}" />
     </Style>
-    <Style x:Key="AdvisorWeaponLinkStyle" TargetType="{x:Type Hyperlink}" BasedOn="{StaticResource AdvisorTrackLinkStyle}">
+    <Style x:Key="AdvisorPlainLinkStyle" TargetType="{x:Type Hyperlink}" BasedOn="{StaticResource AdvisorTrackLinkStyle}">
       <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type TextBlock}}}" />
     </Style>
+    <Style x:Key="AdvisorWeaponLinkStyle" TargetType="{x:Type Hyperlink}" BasedOn="{StaticResource AdvisorPlainLinkStyle}" />
+    <Style x:Key="AdvisorUnitBadgeLinkStyle" TargetType="{x:Type Hyperlink}" BasedOn="{StaticResource AdvisorPlainLinkStyle}" />
   </Grid.Resources>
   <Grid x:Name="ConversationPane">
     <Grid.RowDefinitions>

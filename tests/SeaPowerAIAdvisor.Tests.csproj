@@ -47,6 +47,7 @@
     <Compile Include="..\src\Advisor\AdvisorQuestion.cs" Link="AdvisorQuestion.cs" />
     <Compile Include="..\src\UI\AdvisorTranscript.cs" Link="AdvisorTranscript.cs" />
     <Compile Include="..\src\UI\AdvisorUnitLinks.cs" Link="AdvisorUnitLinks.cs" />
+    <Compile Include="..\src\UI\AdvisorUnitBadge.cs" Link="AdvisorUnitBadge.cs" />
     <Compile Include="..\src\UI\AdvisorWeaponLinks.cs" Link="AdvisorWeaponLinks.cs" />
     <Compile Include="..\src\UI\AdvisorCoordinateLinks.cs" Link="AdvisorCoordinateLinks.cs" />
     <Compile Include="..\src\UI\IAdvisorUnitNavigation.cs" Link="IAdvisorUnitNavigation.cs" />
