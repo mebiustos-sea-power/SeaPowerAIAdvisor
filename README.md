@@ -8,12 +8,12 @@ An in-game operations adviser for **Sea Power: Naval Combat in the Missile Age**
 
 ## Features
 
-- **Gemini, Ollama, OpenRouter and NanoGPT connections.** Register named connections and choose a main connection and an optional sub connection.
-- **On-demand tactical advice.** Ask your own question or use **Next steps**, **Key risks** and **More detail**.
+- **Gemini, Ollama, OpenRouter and NanoGPT connections.** Register named connections and choose a main connection and an optional sub connection. Duplicate a connection to reuse its settings with another model.
+- **On-demand tactical advice.** Ask your own question or use **Next steps**, **Key risks**, **Radar operations** and **More detail**.
 - **Unidentified-contact assessments.** Open an unidentified contact’s information window and click the **[adviser name]’s assessment** button. The adviser evaluates its displayed candidates, confirmed features and relevant known contacts. Buttons below the reply let you reassess assuming a friendly or enemy affiliation.
-- **Player-known information only.** Friendly capabilities, aircraft and bases, observed contacts, mission briefing, objectives and published reports are available as needed. Hidden enemy state is not supplied.
+- **Player-known information only.** Friendly capabilities, sensor operating states and specifications, launched missiles and torpedoes with player-visible target information, aircraft and bases, observed contacts and detection methods, mission briefing, objectives and published reports are available as needed. Hidden enemy state is not supplied.
 - **Custom advisers.** Register portraits, names and personality/tone preferences. The displayed title is cosmetic. Shared preferences and your name can also be configured.
-- **Readable conversations.** Markdown replies, configurable conversation text size, progress updates and copying of messages.
+- **Readable conversations.** Markdown replies, configurable conversation text size, progress updates and copying of messages. Left-click a linked unit name or contact number to select and center it on the map; right-click to open the game's standard menu for that unit. Friendly-unit and contact links can be enabled separately in settings.
 
 The English and Japanese UI follows the game language, with English as the fallback. The AI is separately instructed to answer in the game's selected language.
 
@@ -59,7 +59,7 @@ The request timeout is configurable per connection and also applies to connectio
 
 ## Information, token usage and response time
 
-The adviser first receives objectives, a situation overview and a catalog of information it can request. It then chooses which details to retrieve, can combine requests, and may ask for further details before answering. **One question can therefore generate several API requests.** Settings let you choose information categories, the retrieval-round limit and how many previous exchanges are included.
+The adviser first receives objectives, a situation overview and a catalog of information it can request. It then chooses which details to retrieve, can combine requests, and may ask for further details before answering. **One question can therefore generate several API requests.** Settings let you choose information categories, the retrieval-round limit and how many previous exchanges are included. Data for AI includes a button to restore its default selections. Sensor operating states are enabled by default; detailed sensor specifications are disabled by default.
 
 This avoids sending every available detail at the start, but it does **not** guarantee low token usage or lower cost than a single larger request. Large situations, unit capabilities and conversation context can still consume many tokens; earlier context may also be processed during later requests. Retrieval and model processing can make replies take time. Displayed usage depends on the provider's reporting and is not a billing statement.
 
