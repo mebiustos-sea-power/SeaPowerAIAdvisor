@@ -21,6 +21,17 @@ internal static class MarkdownTests
             Require(strong.Any(e => Visible(e) == "佐世保") && strong.Any(e => Visible(e).Contains("索敵を優先")), "Emphasis applied to the wrong text");
             Require(rendered.Descendants(Ns + "Span").Any(e => (string?)e.Attribute("FontStyle") == "Italic" && Visible(e) == "索敵を優先"), "Nested italic content was lost");
             Require(Visible(rendered).Contains("**太字と A_B_C"), "Unclosed Markdown was removed");
+            var contacts = AdvisorMarkdown.Render("敵確認接触は**Contact 7008（識別済み）**と**Contact 7018（未識別）**の2点。");
+            Require(Visible(contacts) == "敵確認接触はContact 7008（識別済み）とContact 7018（未識別）の2点。" &&
+                contacts.Descendants(Ns + "Span").Where(e => (string?)e.Attribute("FontWeight") == "Bold")
+                    .Select(Visible).SequenceEqual(new[] { "Contact 7008（識別済み）", "Contact 7018（未識別）" }),
+                "Japanese punctuation left emphasis markers visible or emphasized only the joining word");
+            var english = AdvisorMarkdown.Render("**Contact 7008 (identified)** and *Contact 7018 (unknown)*.");
+            Require(Visible(english) == "Contact 7008 (identified) and Contact 7018 (unknown)." &&
+                english.Descendants(Ns + "Span").Single(e => (string?)e.Attribute("FontWeight") == "Bold") is var bold &&
+                Visible(bold) == "Contact 7008 (identified)" &&
+                english.Descendants(Ns + "Span").Single(e => (string?)e.Attribute("FontStyle") == "Italic") is var italic &&
+                Visible(italic) == "Contact 7018 (unknown)", "CJK-friendly emphasis changed English strong or italic text");
             var strike = AdvisorMarkdown.Render("~~以前の案~~  \n現在の案");
             Require(strike.Descendants(Ns + "Span").Any(e => (string?)e.Attribute("TextDecorations") == "Strikethrough" && Visible(e) == "以前の案") &&
                 strike.Descendants(Ns + "LineBreak").Any(), "Strikethrough or an explicit line break was lost");

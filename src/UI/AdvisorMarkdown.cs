@@ -16,7 +16,8 @@ namespace SeaPowerAIAdvisor;
 internal static class AdvisorMarkdown
 {
     private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder()
-        .DisableHtml().UsePipeTables().UseEmphasisExtras(EmphasisExtraOptions.Strikethrough).Build();
+        .DisableHtml().UsePipeTables().UseEmphasisExtras(EmphasisExtraOptions.Strikethrough)
+        .UseCjkFriendlyEmphasis().Build();
 
     internal static XElement Render(string markdown, Func<string, XElement, XElement>? unitLink = null)
     {
