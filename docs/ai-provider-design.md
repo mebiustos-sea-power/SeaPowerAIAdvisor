@@ -283,7 +283,7 @@ OpenRouterの使用量は `usage.total_tokens`を共通結果へ渡し、欠落�
 
 ## NanoGPT定額接続
 
-提供元IDは`nanogpt`、通信識別子は`nanogpt_subscription_chat`。APIキーとモデル名を登録し、例示初期値は`qwen/qwen3.8-27b`とする。モデル一覧を固定せず、定額対象／ツール対応の判定はサービスと既存の接続テストへ委ねる。
+提供元IDは`nanogpt`、通信識別子は`nanogpt_subscription_chat`。APIキーとモデル名を登録し、例示初期値は`z-ai/glm-5.3`とする。モデル一覧を固定せず、定額対象／ツール対応の判定はサービスと既存の接続テストへ委ねる。
 
 相談・接続テストは`https://nano-gpt.com/api/subscription/v1/chat/completions`だけを利用し、通常の従量APIへ再送しない。OpenRouter固有のprovider指定は送らない。HTTP402は`subscription_unavailable`として表示し、生の応答は既存のAPIエラー閲覧へ残す。HTTP429等と明示的なサブ接続は既存のフォールバック方針を維持し、開発APIの`allow_fallback=false`も有効。
 

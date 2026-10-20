@@ -15,10 +15,12 @@ internal static class OptionsTests
         {
             var path = Path.Combine(directory, "options.json");
             var store = new AdvisorOptionsStore(path);
-            Require(!store.Current.CampaignEnabled && store.Current.MaxQueryRounds == 5 && store.Current.TextSize == AdvisorTextSize.Small && store.Current.HistoryExchanges == 3 && !File.Exists(path),
+            Require(!store.Current.CampaignEnabled && store.Current.MaxQueryRounds == 5 && store.Current.TextSize == AdvisorTextSize.Standard && store.Current.HistoryExchanges == 3 && !File.Exists(path),
                 "A new or existing installation implicitly enabled campaign alpha support or wrote settings on read");
-            Require(!AdvisorOptions.Parse("{}").CampaignEnabled && AdvisorOptions.Parse("{}").MaxQueryRounds == 5 && AdvisorOptions.Parse("{}").TextSize == AdvisorTextSize.Small && AdvisorOptions.Parse("{}").HistoryExchanges == 3,
+            Require(!AdvisorOptions.Parse("{}").CampaignEnabled && AdvisorOptions.Parse("{}").MaxQueryRounds == 5 && AdvisorOptions.Parse("{}").TextSize == AdvisorTextSize.Standard && AdvisorOptions.Parse("{}").HistoryExchanges == 3,
                 "Absent fields did not use compatible defaults");
+            Require(AdvisorOptions.Parse("{\"conversation_text_size\":\"small\"}").TextSize == AdvisorTextSize.Small,
+                "An explicitly saved small text size was replaced by the new default");
             foreach (var invalid in new[] { "{", "{\"campaign_advisor_enabled\":\"true\"}", "{\"unknown\":1}",
                 "{\"max_query_rounds\":5,\"max_query_rounds\":7}", "{\"max_query_rounds\":0}", "{\"max_query_rounds\":21}", "{\"max_query_rounds\":1.5}", "{\"conversation_text_size\":\"unknown\"}",
                 "{\"conversation_text_size\":17}", "{\"conversation_text_size\":null}", "{\"conversation_text_size\":true}",
@@ -30,7 +32,7 @@ internal static class OptionsTests
                 try { _ = store.Read(); }
                 catch (AdvisorOptionsException)
                 {
-                    Require(store.Current.MaxQueryRounds == 5 && !store.Current.CampaignEnabled && store.Current.TextSize == AdvisorTextSize.Small && store.Current.HistoryExchanges == 3 && File.ReadAllText(path) == invalid,
+                    Require(store.Current.MaxQueryRounds == 5 && !store.Current.CampaignEnabled && store.Current.TextSize == AdvisorTextSize.Standard && store.Current.HistoryExchanges == 3 && File.ReadAllText(path) == invalid,
                         "Invalid settings were silently replaced or applied");
                     continue;
                 }
@@ -106,7 +108,7 @@ internal static class OptionsTests
             try { store.SaveGeneral(AdvisorTextSize.Large, true, "Commander"); }
             catch (AdvisorOptionsException error) when (error.Code == "options_write_failed")
             {
-                Require(store.Current.TextSize == AdvisorTextSize.Small && !store.Current.CampaignEnabled && File.ReadAllText(apiPath) == "untouched" &&
+                Require(store.Current.TextSize == AdvisorTextSize.Standard && !store.Current.CampaignEnabled && File.ReadAllText(apiPath) == "untouched" &&
                     store.Current.UserName == null && !File.Exists(AdvisorProfile.SettingsPath(directory)), "A failed options write published changes or modified another category");
                 return;
             }

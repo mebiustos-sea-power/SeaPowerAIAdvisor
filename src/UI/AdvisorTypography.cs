@@ -10,7 +10,7 @@ internal enum AdvisorTextSize { Small, Standard, Large }
 // Scale only locally generated conversation text. Layout dimensions and message content stay unchanged.
 internal static class AdvisorTypography
 {
-    internal const AdvisorTextSize DefaultSize = AdvisorTextSize.Small;
+    internal const AdvisorTextSize DefaultSize = AdvisorTextSize.Standard;
     internal static float FontSize(AdvisorTextSize size, double standard) => (float)Math.Round(standard * (size switch
     {
         AdvisorTextSize.Small => 0.85,

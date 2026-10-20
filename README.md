@@ -47,7 +47,7 @@ For an unidentified contact, open its information window and use **[adviser name
 | Gemini | API key, Gemini model ID | `gemini-3.5-flash-lite` |
 | Ollama | Server URL, installed model, context length | `qwen3:8b` |
 | OpenRouter | API key, model ID in `provider/model` form | `google/gemini-3.5-flash-lite` |
-| NanoGPT | API key, subscription-included model ID | `qwen/qwen3.8-27b` |
+| NanoGPT | API key, subscription-included model ID | `z-ai/glm-5.3` |
 
 Choose a model that supports **tool calling**. These are examples, not a guarantee that every model will interpret the supplied data correctly. OpenRouter and NanoGPT connection tests check a tool-call/result round trip as well as the final response.
 

@@ -9,7 +9,7 @@ namespace SeaPowerAIAdvisor;
 
 internal sealed class NanoGptService : AdvisorService
 {
-    internal const string DefaultModel = "qwen/qwen3.8-27b";
+    internal const string DefaultModel = "z-ai/glm-5.3";
     internal override string Id => "nanogpt";
     internal override string Name => "NanoGPT";
     internal override string Caption(AdvisorText text) => text["connection.nanogpt_name"];

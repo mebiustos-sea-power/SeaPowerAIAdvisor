@@ -89,8 +89,8 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
 
         shortcuts = new[]
         {
-            (AdvisorShortcut.KeyRisks, Named<Button>(content, "KeyRisks")),
             (AdvisorShortcut.NextSteps, Named<Button>(content, "NextSteps")),
+            (AdvisorShortcut.KeyRisks, Named<Button>(content, "KeyRisks")),
             (AdvisorShortcut.RadarOperations, Named<Button>(content, "RadarOperations")),
             (AdvisorShortcut.MoreDetail, Named<Button>(content, "MoreDetail"))
         };
