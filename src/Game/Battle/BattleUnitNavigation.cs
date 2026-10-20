@@ -36,7 +36,9 @@ internal sealed class BattleUnitNavigation : IAdvisorUnitNavigation
     {
         var current = map();
         var unit = Find(current, unitId);
-        if (unit != null) current!.DisplayMap.Center = unit.Location;
+        if (unit == null) return;
+        unit.Selected = true;
+        current!.DisplayMap.Center = unit.Location;
     }
 
     public void OpenMenu(int unitId)
