@@ -36,6 +36,8 @@
     <Compile Include="..\src\Game\Battle\BattleContactAssessment.cs" Link="BattleContactAssessment.cs" />
     <Compile Include="..\src\Advisor\AdvisorConversation.cs" Link="AdvisorConversation.cs" />
     <Compile Include="..\src\Advisor\AdvisorUnitReferences.cs" Link="AdvisorUnitReferences.cs" />
+    <Compile Include="..\src\Advisor\AdvisorUnitMentions.cs" Link="AdvisorUnitMentions.cs" />
+    <Compile Include="..\src\Advisor\AdvisorUnitDraft.cs" Link="AdvisorUnitDraft.cs" />
     <Compile Include="..\src\UI\AdvisorNotice.cs" Link="AdvisorNotice.cs" />
     <Compile Include="..\src\Diagnostics\AdvisorRuntime.cs" Link="AdvisorRuntime.cs" />
     <Compile Include="..\src\Providers\Gemini\GeminiConnectionTest.cs" Link="GeminiConnectionTest.cs" />

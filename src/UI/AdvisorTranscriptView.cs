@@ -12,6 +12,7 @@ internal sealed class AdvisorTranscriptView
     private readonly Action<Action> guard;
     private readonly Action<AdvisorTurn> retry;
     private readonly Action<AdvisorTurn, ContactAssumption> reassess;
+    private readonly Action<int> insertUnit;
     private readonly IAdvisorUnitNavigation? navigation;
     private readonly IAdvisorWeaponNavigation? weapons;
     private readonly IAdvisorMapNavigation? map;
@@ -37,9 +38,9 @@ internal sealed class AdvisorTranscriptView
     }
 
     internal AdvisorTranscriptView(StackPanel panel, ScrollViewer scroll, Action<Action> guard, Action<AdvisorTurn> retry,
-        Action<AdvisorTurn, ContactAssumption> reassess, IAdvisorUnitNavigation? navigation = null, IAdvisorWeaponNavigation? weapons = null, IAdvisorMapNavigation? map = null)
+        Action<AdvisorTurn, ContactAssumption> reassess, Action<int> insertUnit, IAdvisorUnitNavigation? navigation = null, IAdvisorWeaponNavigation? weapons = null, IAdvisorMapNavigation? map = null)
     {
-        this.panel = panel; this.guard = guard; this.retry = retry; this.reassess = reassess; this.navigation = navigation; this.weapons = weapons; this.map = map;
+        this.panel = panel; this.guard = guard; this.retry = retry; this.reassess = reassess; this.insertUnit = insertUnit; this.navigation = navigation; this.weapons = weapons; this.map = map;
         panel.PreviewMouseWheel += (_, e) =>
         {
             if (e.Orientation != Orientation.Vertical) return;
@@ -66,7 +67,15 @@ internal sealed class AdvisorTranscriptView
             {
                 var link = root.FindName(item.Name) as Hyperlink
                     ?? throw new InvalidOperationException("The conversation unit link is missing.");
-                link.Click += (_, e) => { e.Handled = true; guard(() => navigation!.Focus(item.UnitId)); };
+                link.Click += (_, e) =>
+                {
+                    e.Handled = true;
+                    guard(() =>
+                    {
+                        if ((panel.Keyboard.Modifiers & ModifierKeys.Control) != 0) insertUnit(item.UnitId);
+                        else navigation!.Focus(item.UnitId);
+                    });
+                };
                 link.PreviewMouseRightButtonDown += (_, e) => { e.Handled = true; guard(() => navigation!.OpenMenu(item.UnitId)); };
             }
         if (weaponLinks != null)

@@ -2,21 +2,21 @@ using Newtonsoft.Json.Linq;
 
 namespace SeaPowerAIAdvisor;
 
-// The visible caption and actual question are distinct throughout the request.
+// Draft text, visible captions and actual questions remain distinct throughout the request.
 internal sealed class AdvisorQuestion
 {
     internal string Text { get; }
     internal string DisplayText { get; }
     internal bool IsShortcut { get; }
     private readonly JObject? context;
+    private readonly string draftText;
     internal bool HasContext => context != null;
     internal JObject? Context => context == null ? null : (JObject)context.DeepClone();
     internal AdvisorQuestion(string text) : this(text, text, false) { }
-    internal AdvisorQuestion(string text, string caption, bool shortcut, JObject? context = null)
-    { Text = text; DisplayText = caption; IsShortcut = shortcut; this.context = context == null ? null : (JObject)context.DeepClone(); }
+    internal AdvisorQuestion(string text, string caption, bool shortcut, JObject? context = null, string? draftText = null)
+    { Text = text; DisplayText = caption; IsShortcut = shortcut; this.context = context == null ? null : (JObject)context.DeepClone(); this.draftText = draftText ?? text; }
 
-    internal string DraftAfterSend(string draft) =>
-        !IsShortcut && draft == Text ? string.Empty : draft;
+    internal bool ConsumesDraft(string draft) => !IsShortcut && draft == draftText;
 }
 
 internal sealed class AdvisorShortcut

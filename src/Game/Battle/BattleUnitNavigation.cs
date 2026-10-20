@@ -30,6 +30,29 @@ internal sealed class BattleUnitNavigation : IAdvisorUnitNavigation
         return result;
     }
 
+    public (int Id, string Name)? SelectedUnit()
+    {
+        var current = map();
+        var selected = current?.SelectedObject.Value;
+        if (selected == null) return null;
+        var unit = current!.MapKnownUnits.AllUnits.FirstOrDefault(item =>
+            ReferenceEquals(item.Unit, selected) || ReferenceEquals(item.Unit.Object, selected));
+        if (unit == null) return null;
+        return Describe(unit);
+    }
+
+    public (int Id, string Name)? GetUnit(int unitId)
+    {
+        var unit = Find(map(), unitId);
+        return unit == null ? null : Describe(unit);
+    }
+
+    private static (int Id, string Name) Describe(MapUnitViewModel unit)
+    {
+        var own = OwnObject(unit);
+        return (unit.Unit.Id, own != null ? own.Name.Value : BattleSituationReader.ContactDisplayName(unit));
+    }
+
     public bool Contains(int unitId) => Find(map(), unitId) != null;
 
     public void Focus(int unitId)

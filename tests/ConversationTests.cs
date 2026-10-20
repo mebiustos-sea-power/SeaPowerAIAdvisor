@@ -19,7 +19,7 @@ internal static class ConversationTests
                 Require(turn.State == AdvisorTurnState.Waiting && chat.Exchanges.Count == 0 &&
                     display.Contains(request.DisplayText) && !display.Contains(request.Text) && display.Contains(text["transcript.waiting"]),
                     "A pending question is missing, leaks its internal prompt, or became prior dialogue");
-                Require(request.DraftAfterSend("下書き") == "下書き" && new AdvisorQuestion("入力").DraftAfterSend("入力") == "",
+                Require(!request.ConsumesDraft("下書き") && new AdvisorQuestion("入力").ConsumesDraft("入力"),
                     "Sending a message did not clear its own draft or cleared a quick-action draft");
                 turn.Complete("**回答**");
                 Require(chat.Turns.Count == 1 && chat.Exchanges.Single().Question == request.Text &&

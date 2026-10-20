@@ -23,6 +23,7 @@ internal sealed class BattleSituationReader
         var identities = new List<(object Object, string Id)>();
         var movementUnits = new List<(object Object, string Id)>();
         var ownWeapons = new List<(object Object, JObject Row)>();
+        var ownWeaponIds = new List<(object Object, int UnitId)>();
         var weaponContacts = new List<(object MapUnit, JObject Row)>();
         var capabilities = new JArray();
         var threats = new JArray();
@@ -36,7 +37,11 @@ internal sealed class BattleSituationReader
             if (identity != null && ownObjects.Any(o => ReferenceEquals(o, identity)))
             {
                 // Launched weapons are captured separately; they do not use platform capabilities.
-                if (IsWeapon(identity)) continue;
+                if (IsWeapon(identity))
+                {
+                    ownWeaponIds.Add((identity, Convert.ToInt32(Required(vehicle, "Id"), CultureInfo.InvariantCulture)));
+                    continue;
+                }
                 var kind = Code(Required(identity, "_type"));
                 var parameters = Required(identity, "_obp");
                 var subtype = kind == "landunit" ? Code(Required(parameters, "_landUnitSubType")) : null;
@@ -72,10 +77,7 @@ internal sealed class BattleSituationReader
             var positionEstimate = Member(vehicle, "PositionEstimate");
             var classKnown = Member(vehicle, "Class") != null;
             var contactKind = Code(Member(mapUnit, "VisualType"));
-            var viewModel = classKnown && !BattleWeaponReader.IsKind(contactKind) ? Member(mapUnit, "ObjectViewModel") : null;
-            var displayName = classKnown && viewModel != null
-                ? Reactive<string>(viewModel, "ObjectName")
-                : "Contact " + Convert.ToString(Required(vehicle, "Id"), CultureInfo.InvariantCulture);
+            var displayName = ContactDisplayName(mapUnit);
             var identified = Reactive<bool>(vehicle, "Identified");
             var observedClass = identified && classKnown ? (string)Required(Required(vehicle, "Class"), "Value") : null;
             var reference = knowledge.References.ClassReference(observedClass);
@@ -99,6 +101,7 @@ internal sealed class BattleSituationReader
                 ["position_error_nm"] = JValue.CreateNull()
             });
             var contact = (JObject)contacts.Last!;
+            unitReferences.Add(((string)contact["id"]!, (int)contact["track_number"]!));
             if (identity != null) identities.Add((identity, (string)contact["id"]!));
             if (BattleWeaponReader.IsKind(contactKind)) weaponContacts.Add((mapUnit, contact));
             BattleContactMotionReader.CopyTo(contact, vehicle);
@@ -114,6 +117,8 @@ internal sealed class BattleSituationReader
             var row = BattleWeaponReader.CaptureOwn(weapon, "own_weapon_" + (launchedWeapons.Count + 1).ToString(CultureInfo.InvariantCulture));
             if (row == null) continue;
             launchedWeapons.Add(row);
+            var knownWeapon = ownWeaponIds.FirstOrDefault(item => ReferenceEquals(item.Object, weapon));
+            if (knownWeapon.Object != null) unitReferences.Add(((string)row["id"]!, knownWeapon.UnitId));
             identities.Add((weapon, (string)row["id"]!));
             ownWeapons.Add((weapon, row));
         }
@@ -168,6 +173,15 @@ internal sealed class BattleSituationReader
             ["observed_contacts"] = contacts,
             ["published_reports"] = reports
         }, new AdvisorUnitReferences(unitReferences));
+    }
+
+    internal static string ContactDisplayName(object mapUnit)
+    {
+        var vehicle = Required(mapUnit, "Unit");
+        var model = Member(vehicle, "Class") != null && !BattleWeaponReader.IsKind(Code(Member(mapUnit, "VisualType")))
+            ? Member(mapUnit, "ObjectViewModel") : null;
+        return model != null ? Reactive<string>(model, "ObjectName")
+            : "Contact " + Convert.ToString(Required(vehicle, "Id"), CultureInfo.InvariantCulture);
     }
 
     private static bool IsWeapon(object unit)

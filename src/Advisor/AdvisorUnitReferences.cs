@@ -12,6 +12,7 @@ internal sealed class AdvisorUnitReferences
     internal AdvisorUnitReferences(IEnumerable<(string Id, int UnitId)> units) =>
         this.units = units.ToDictionary(unit => unit.Id, unit => unit.UnitId, StringComparer.Ordinal);
     internal int? Resolve(string id) => units.TryGetValue(id, out var unit) ? unit : null;
+    internal string? IdFor(int unitId) => units.FirstOrDefault(unit => unit.Value == unitId).Key;
     internal AdvisorUnitReferences Only(IEnumerable<string> ids) =>
         new(ids.Where(units.ContainsKey).Select(id => (id, units[id])));
 }

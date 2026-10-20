@@ -74,6 +74,9 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession, IAdvisorUnitRef
                 ["report_limit"] = 10
             }
         };
+        var mentions = AdvisorUnitMentions.Bind(question ?? string.Empty, situation.UnitReferences,
+            Rows("friendly_units").Concat(Rows("observed_contacts")).Concat(Rows("friendly_launched_weapons")).OfType<JObject>());
+        if (mentions.Count > 0) initial["referenced_units"] = mentions;
         if (assessment != null) initial["contact_assessment"] = assessment.Focus.DeepClone();
         initial["knowledge_catalog"] = Catalogue();
         initial["query_tool"] = Tool();

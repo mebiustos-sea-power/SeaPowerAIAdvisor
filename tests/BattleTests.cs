@@ -24,6 +24,8 @@ internal static partial class BattleTests
         RunWeapons(check);
         RunSensors(check);
         RunMovement(check);
+        RunUnitMentions(check);
+        RunUnitDraft(check);
         check("Battle capture excludes hidden objectives, future reports and actual enemy details", () =>
         {
             var f = new Fixture();
@@ -41,8 +43,8 @@ internal static partial class BattleTests
         {
             var f = new Fixture();
             var snapshot = f.Capture();
-            Require(snapshot.UnitReferences.Resolve("own_unit_1") == 1001 && snapshot.UnitReferences.Resolve("observed_contact_1") == null,
-                "The local binding was not taken from a player-owned map unit");
+            Require(snapshot.UnitReferences.Resolve("own_unit_1") == 1001 && snapshot.UnitReferences.Resolve("observed_contact_1") == f.Track.Id,
+                "The local binding did not preserve the displayed map identities");
             var session = new BattleQuerySession(snapshot, "en", "Assess");
             Require(session.UnitReferences.Resolve("own_unit_1") == 1001, "The session lost its captured own-unit binding");
             var listed = session.Execute(Request(session, new JObject { ["query"] = "list_units" }));

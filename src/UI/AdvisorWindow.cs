@@ -21,6 +21,8 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     private readonly AdvisorConversation conversation = new();
     private readonly TypingScope typing = new();
     private readonly QuestionInputController questionInput;
+    private readonly AdvisorUnitDraft unitDraft = new();
+    private readonly AdvisorUnitBadgeView unitBadges;
     private readonly Window window;
     private readonly AdvisorSettingsController settings;
     private AdvisorText text;
@@ -29,14 +31,14 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     private readonly ScrollViewer transcriptScroll;
     private readonly AdvisorTranscriptView transcript;
     private readonly TextBlock advisorName, advisorRole, activity, portraitError, status, diagnosticStatus, unitNavigationHint;
-    private readonly bool canNavigateUnits;
+    private readonly IAdvisorUnitNavigation? navigation;
     private readonly Image portraitImage;
     private readonly string settingsPath, profileDirectory;
     private AdvisorPortrait? portrait;
     private AdvisorProfile? appliedProfile;
     private string speakerName;
     private bool profileLoaded;
-    private readonly Button send, captureAction, inputAction;
+    private readonly Button send, captureAction, inputAction, insertSelectedUnit, clearInput;
     private readonly (AdvisorShortcut Shortcut, Button Button)[] shortcuts;
     private AdvisorJob? active;
     private AdvisorLocalRun? localRun;
@@ -69,8 +71,8 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         question = Named<TextBox>(content, "Question");
         transcriptScroll = Named<ScrollViewer>(content, "Transcript");
         unitNavigationHint = Named<TextBlock>(content, "UnitNavigationHint");
-        canNavigateUnits = navigation != null;
-        transcript = new AdvisorTranscriptView(Named<StackPanel>(content, "TranscriptMessages"), transcriptScroll, guard, RetryConsultation, ReassessContact, navigation, weapons, map);
+        this.navigation = navigation;
+        transcript = new AdvisorTranscriptView(Named<StackPanel>(content, "TranscriptMessages"), transcriptScroll, guard, RetryConsultation, ReassessContact, InsertUnit, navigation, weapons, map);
         status = Named<TextBlock>(content, "Status");
         diagnosticStatus = Named<TextBlock>(content, "DiagnosticStatus");
         diagnosticOutput = Named<TextBox>(content, "DiagnosticOutput");
@@ -84,7 +86,17 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         settingsPath = AdvisorSettings.PathIn(UnityEngine.Application.persistentDataPath);
         send = Named<Button>(content, "Send");
         send.Click += (_, _) => guard(Send);
+        insertSelectedUnit = Named<Button>(content, "InsertSelectedUnit");
+        insertSelectedUnit.Visibility = navigation == null ? Visibility.Collapsed : Visibility.Visible;
+        insertSelectedUnit.Click += (_, _) => guard(InsertSelectedUnit);
         Named<Button>(content, "Clear").Click += (_, _) => guard(Clear);
+        clearInput = Named<Button>(content, "ClearInput");
+        clearInput.Click += (_, _) => guard(ClearInput);
+        question.TextChanged += (_, _) => guard(UpdateInputClear);
+        var conversationBackground = content.Resources["AdvisorConversationBackgroundBrush"] as Brush
+            ?? throw new InvalidOperationException("The advisor conversation background brush is missing.");
+        unitBadges = new AdvisorUnitBadgeView(question, Named<ScrollViewer>(content, "UnitBadgeArea"),
+            Named<WrapPanel>(content, "UnitBadges"), conversationBackground, RemoveUnit, guard);
         captureAction = Named<Button>(content, "Capture");
         captureAction.Click += (_, _) => guard(() => Preview(false));
         inputAction = Named<Button>(content, "Input");
@@ -178,6 +190,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     {
         if (!IsOpen) { CancelActive(); questionInput.Reset(); typing.Release(); ReleasePortrait(); return; }
         settings.Tick();
+        UpdateUnitInsertion();
         questionInput.Tick();
         CompleteActive();
         UpdateActiveProgress();
@@ -237,6 +250,57 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         questionInput.Reset();
         typing.Release();
         if (window.IsKeyboardFocusWithin) window.Keyboard.ClearFocus();
+    }
+
+    private void UpdateUnitInsertion() => insertSelectedUnit.IsEnabled = active == null && navigation?.SelectedUnit() != null;
+
+    private void InsertSelectedUnit() => InsertUnit(navigation?.SelectedUnit());
+    private void InsertUnit(int unitId) => InsertUnit(navigation?.GetUnit(unitId));
+
+    private bool CanEditDraft()
+    {
+        if (!CanConsult || question.IsReadOnly) return false;
+        if (!QuestionInputController.IsComposing) return true;
+        status.Text = text["status.ime"];
+        return false;
+    }
+
+    private void InsertUnit((int Id, string Name)? selected)
+    {
+        if (!CanEditDraft() || !selected.HasValue) return;
+        questionInput.Reset();
+        if (unitDraft.Add(selected.Value.Id, selected.Value.Name)) RefreshUnitBadges();
+        question.Focus();
+    }
+
+    private void RemoveUnit(int unitId)
+    {
+        if (!CanEditDraft()) return;
+        questionInput.Reset();
+        unitDraft.Remove(unitId);
+        RefreshUnitBadges();
+        question.Focus();
+    }
+
+    private void RefreshUnitBadges() { unitBadges.Show(unitDraft.Units); UpdateInputClear(); }
+    private void UpdateInputClear() => clearInput.IsEnabled = active == null &&
+        (!string.IsNullOrEmpty(question.Text) || unitDraft.Units.Count > 0);
+
+    private void ClearDraft()
+    {
+        question.Text = string.Empty;
+        unitDraft.Clear();
+        RefreshUnitBadges();
+    }
+
+    private void ClearInput()
+    {
+        if (!CanEditDraft()) return;
+        questionInput.Reset();
+        ClearDraft();
+        question.SelectionStart = 0;
+        question.SelectionLength = 0;
+        question.Focus();
     }
 
     private void Send()
@@ -303,7 +367,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         if (conversationPane.Visibility != Visibility.Visible) throw new AdvisorLocalApiException(409, "settings_open");
     }
 
-    private void StartConsultation() => StartConsultation(new AdvisorQuestion(question.Text ?? string.Empty));
+    private void StartConsultation() => StartConsultation(unitDraft.Prepare(question.Text ?? string.Empty));
 
     private void RetryConsultation(AdvisorTurn turn)
     {
@@ -351,7 +415,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         var turn = retry ?? conversation.Begin(request, answeringName, answeringId);
         recording?.Attach(turn); localRun = recording;
         if (retry != null) conversation.Retry(turn, answeringName, answeringId);
-        else if (recording == null) question.Text = request.DraftAfterSend(question.Text ?? string.Empty);
+        else if (recording == null && request.ConsumesDraft(question.Text ?? string.Empty)) ClearDraft();
         configurationNotice = null;
         ShowConversation(false);
         ScrollToEnd();
@@ -485,6 +549,9 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     {
         send.Content = text[busy ? "action.cancel" : "action.send"];
         question.IsReadOnly = busy;
+        unitBadges.SetBusy(busy);
+        UpdateUnitInsertion();
+        UpdateInputClear();
         captureAction.IsEnabled = !busy;
         inputAction.IsEnabled = !busy;
         activity.Text = text[busy ? "activity.busy" : "activity.idle"];
@@ -531,7 +598,8 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
             diagnosticStatus.Text = text["diagnostics.ime"];
             return;
         }
-        if (structured && (question.Text?.Length ?? 0) > AdvisorConversation.MaxQuestionLength)
+        var draftQuestion = structured ? unitDraft.Prepare(question.Text ?? string.Empty).Text : string.Empty;
+        if (structured && draftQuestion.Length > AdvisorConversation.MaxQuestionLength)
         {
             diagnosticStatus.Text = ValidationMessage("validation.question_too_long");
             return;
@@ -542,7 +610,8 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
             {
                 options.EnsureUserName(text["general.default_user_name"]);
                 var language = replyLanguage();
-                var input = source.CreateSession(language, question.Text, options.Current.MaxQueryRounds, options.Current.Information).InitialInput();
+                var input = source.CreateSession(language, draftQuestion,
+                    options.Current.MaxQueryRounds, options.Current.Information).InitialInput();
                 appliedProfile?.AddAnswerPreferences(input);
                 input["common_prompt"] = options.Current.CommonPrompt;
                 input["user_name"] = options.Current.UserName;
@@ -581,7 +650,9 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         pendingScroll = null;
         diagnosticScrollPending = false;
         question.FontSize = AdvisorTypography.FontSize(options.Current.TextSize, 15);
-        unitNavigationHint.Visibility = canNavigateUnits && (options.Current.LinkOwnUnits || options.Current.LinkContacts)
+        UpdateUnitInsertion();
+        UpdateInputClear();
+        unitNavigationHint.Visibility = navigation != null && (options.Current.LinkOwnUnits || options.Current.LinkContacts)
             ? Visibility.Visible : Visibility.Collapsed;
         transcript.Show(conversation, text, speakerName, empty ?? text["transcript.empty"], configurationNotice, options.Current.TextSize, options.Current.LinkOwnUnits, options.Current.LinkContacts);
         UpdateShortcuts();
