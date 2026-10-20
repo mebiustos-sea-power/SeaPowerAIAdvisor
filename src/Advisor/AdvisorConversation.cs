@@ -27,6 +27,9 @@ internal sealed class AdvisorTurn
     internal AdvisorTurnState State { get; private set; } = AdvisorTurnState.Waiting;
     internal ChatExchange? Exchange { get; private set; }
     internal AdvisorNotice? Error { get; private set; }
+    internal AdvisorUnitReferences UnitReferences { get; private set; } = AdvisorUnitReferences.Empty;
+    internal void SetUnitReferences(AdvisorUnitReferences references)
+    { RequireWaiting(); UnitReferences = references; }
     internal AdvisorTurn(AdvisorQuestion request, int contextGeneration, string advisorName, string advisorId)
     { Request = request; ContextGeneration = contextGeneration; AdvisorName = advisorName; AdvisorId = advisorId; }
 
@@ -45,7 +48,7 @@ internal sealed class AdvisorTurn
     {
         if (State != AdvisorTurnState.Failed && State != AdvisorTurnState.Cancelled)
             throw new InvalidOperationException("Only an unsuccessful turn can be retried.");
-        Error = null;
+        Error = null; UnitReferences = AdvisorUnitReferences.Empty;
         ContextGeneration = contextGeneration;
         AdvisorName = advisorName ?? AdvisorName; AdvisorId = advisorId ?? AdvisorId; Progress = null;
         State = AdvisorTurnState.Waiting;

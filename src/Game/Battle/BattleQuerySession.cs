@@ -8,7 +8,7 @@ using static SeaPowerAIAdvisor.AdvisorQueryLimits;
 namespace SeaPowerAIAdvisor;
 
 // Queries operate exclusively on the detached player view captured at consultation start.
-internal sealed class BattleQuerySession : IAdvisorQuerySession
+internal sealed class BattleQuerySession : IAdvisorQuerySession, IAdvisorUnitReferenceSource
 {
     private static readonly string[] names = { "catalog", "list_units", "get_units", "list_contacts", "get_briefing", "list_reports", "get_reports", "get_unit_capabilities", "get_contact_threats", "list_ground_units", "get_ground_units", "list_bases", "get_bases", "list_air_units", "get_air_units", "list_air_tasks", "list_launched_weapons" };
     private readonly JObject snapshot;
@@ -20,6 +20,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
     public int RoundsUsed { get; private set; }
     public int MaxRounds { get; }
     public AdvisorPrompts Prompts { get; }
+    public AdvisorUnitReferences UnitReferences { get; }
     private int returnedBytes;
     private readonly HashSet<string> deliveredWeaponReferences = new(StringComparer.Ordinal);
     private readonly HashSet<string> deliveredSensorReferences = new(StringComparer.Ordinal);
@@ -35,6 +36,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession
         snapshot["friendly_launched_weapons"] ??= new JArray();
         snapshot["sensor_references"] ??= new JArray();
         BattleInformation.Apply(snapshot, information);
+        UnitReferences = situation.UnitReferences.Only(Rows("friendly_units").Select(row => (string)row["id"]!));
         if (context != null) assessment = new BattleContactAssessment(snapshot, context, information);
         initial = AdvisorInputBuilder.Header(language, question, Prompts, true);
         initial["schema_version"] = 5;

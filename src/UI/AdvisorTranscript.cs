@@ -36,7 +36,8 @@ internal static class AdvisorTranscript
             if (turn.State == AdvisorTurnState.Answered)
             {
                 var exchange = turn.Exchange ?? throw new InvalidOperationException("The completed answer is missing.");
-                var answer = AdvisorMarkdown.Render(exchange.Answer);
+                var answer = AdvisorMarkdown.Render(exchange.Answer, links == null ? null :
+                    (id, label) => links.Reference(id, label, turn.UnitReferences));
                 row.Add(links?.Decorate(answer) ?? answer);
                 if (BattleContactAssessment.CanReassess(turn))
                 {

@@ -355,6 +355,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
             options.EnsureUserName(text["general.default_user_name"]);
             var execution = prepared ?? backends.Prepare(recording?.AllowFallback ?? true);
             IAdvisorQuerySession session = source.CreateSession(replyLanguage(), request.Text, options.Current.MaxQueryRounds, options.Current.Information, request.Context);
+            turn.SetUnitReferences(session is IAdvisorUnitReferenceSource references ? references.UnitReferences : AdvisorUnitReferences.Empty);
             if (recording != null) session = recording.Observe(session);
             var historyLimit = options.Current.HistoryExchanges;
             pendingTurn = turn;

@@ -44,7 +44,7 @@ internal sealed class AdvisorTranscriptView
     internal void Show(AdvisorConversation conversation, AdvisorText text, string advisor, string empty, AdvisorNotice? notice, AdvisorTextSize textSize, bool linkOwnUnits, bool linkContacts)
     {
         var links = navigation == null || (!linkOwnUnits && !linkContacts) ? null :
-            new AdvisorUnitLinks(navigation.Contains, linkOwnUnits ? navigation.OwnUnits() : null, linkContacts);
+            new AdvisorUnitLinks(navigation.Contains, linkOwnUnits ? navigation.OwnUnits() : null, linkContacts, linkOwnUnits);
         var markup = AdvisorTranscript.Render(conversation, text, advisor, empty, notice, textSize, links);
         var root = GUI.ParseXaml(markup) as StackPanel
             ?? throw new InvalidOperationException("The Markdown conversation view is not a StackPanel.");

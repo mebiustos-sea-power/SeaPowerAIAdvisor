@@ -6,6 +6,8 @@ namespace SeaPowerAIAdvisor;
 internal sealed class BattleSnapshot
 {
     private readonly JObject data;
-    internal BattleSnapshot(JObject data) { this.data = (JObject)data.DeepClone(); }
+    internal AdvisorUnitReferences UnitReferences { get; }
+    internal BattleSnapshot(JObject data, AdvisorUnitReferences? unitReferences = null)
+    { this.data = (JObject)data.DeepClone(); UnitReferences = unitReferences ?? AdvisorUnitReferences.Empty; }
     internal JObject Copy() => (JObject)data.DeepClone();
 }

@@ -214,6 +214,67 @@ internal static class MarkdownTests
                         "A display toggle changed text or also affected the other class of links");
                 }
         });
+        check("Explicit unit links retain their consultation targets across later answers and coexist with name and track fallbacks", () =>
+        {
+            var chat = new AdvisorConversation();
+            const string firstAnswer = "# [**P-3C**](unit:own_unit_1)\n\n[カリフォルニア](unit:own_unit_2)と7008。";
+            const string secondAnswer = "[P-3C](unit:own_unit_1)とP-3C 第9航空隊 'Seastar'。";
+            var map = new System.Collections.Generic.List<(string, int)> { ("own_unit_1", 101), ("own_unit_2", 104) };
+            var first = chat.Begin(new AdvisorQuestion("First")); first.SetUnitReferences(new AdvisorUnitReferences(map)); first.Complete(firstAnswer);
+            map[0] = ("own_unit_1", 999);
+            var second = chat.Begin(new AdvisorQuestion("Second"));
+            second.SetUnitReferences(new AdvisorUnitReferences(new[] { ("own_unit_1", 202) })); second.Complete(secondAnswer);
+            var known = new System.Collections.Generic.HashSet<int> { 101, 104, 202, 303, 400, 7008 };
+            var links = new AdvisorUnitLinks(known.Contains, new[] { (303, "P-3C 第9航空隊 'Seastar'"), (400, "カリフォルニア CGN-36") });
+            var rendered = XDocument.Parse(AdvisorTranscript.Render(chat, AdvisorText.Load("ja"), "Michael Reed", "empty", links: links)).Root!;
+            Require(links.Links.Select(link => link.UnitId).SequenceEqual(new[] { 101, 104, 7008, 202, 303 }),
+                "An old reference was rebound to a new consultation, or an explicit destination was replaced by name matching");
+            var anchors = rendered.Descendants(Ns + "Hyperlink").ToArray();
+            Require(anchors.Length == 5 && anchors.All(link => !link.Descendants(Ns + "Hyperlink").Any()) &&
+                anchors.First().Descendants(Ns + "Span").Any(span => (string?)span.Attribute("FontWeight") == "Bold"),
+                "An explicit label lost Markdown formatting or became nested links");
+            Require(!Visible(rendered).Contains("unit:") && !Visible(rendered).Contains("own_unit_") &&
+                chat.Exchanges.First().Answer == firstAnswer && chat.Exchanges.Last().Answer == secondAnswer,
+                "A local ID became visible or rendering rewrote copied/API history");
+            var retry = chat.Begin(new AdvisorQuestion("Retry")); retry.SetUnitReferences(first.UnitReferences); retry.Cancel();
+            chat.Retry(retry);
+            Require(retry.UnitReferences.Resolve("own_unit_1") == null, "Retry retained targets from the failed capture");
+        });
+        check("Unresolved explicit IDs remain plain labels and cannot be retargeted through their names or numbers", () =>
+        {
+            const string answer = "[P-3C](unit:missing) / [7008](unit:missing) / [P-3C](unit:) / [P-3C](unit:own_unit_9) / P-3C / 7008";
+            var chat = new AdvisorConversation(); var turn = chat.Begin(new AdvisorQuestion("Assess"));
+            turn.SetUnitReferences(new AdvisorUnitReferences(new[] { ("own_unit_9", 999) })); turn.Complete(answer);
+            var links = new AdvisorUnitLinks(id => id == 303 || id == 7008, new[] { (303, "P-3C Seastar") });
+            var rendered = XDocument.Parse(AdvisorTranscript.Render(chat, AdvisorText.Load("en"), "Michael Reed", "empty", links: links)).Root!;
+            Require(links.Links.Select(link => link.UnitId).SequenceEqual(new[] { 303, 7008 }),
+                "An unknown or disappeared explicit target fell through to a different unit");
+            Require(Visible(rendered).Contains("P-3C / 7008 / P-3C / P-3C / P-3C / 7008") &&
+                !Visible(rendered).Contains("unit:") && !rendered.Descendants().Attributes("NavigateUri").Any(),
+                "An unresolved destination leaked implementation text or triggered URI navigation");
+            var unsupported = XDocument.Parse(AdvisorTranscript.Render(chat, AdvisorText.Load("en"), "Michael Reed", "empty")).Root!;
+            Require(!unsupported.Descendants(Ns + "Hyperlink").Any() && !Visible(unsupported).Contains("unit:"),
+                "An unsupported view created actionable local references or exposed their IDs");
+        });
+        check("Explicit references obey link visibility independently and preserve external and literal Markdown behavior", () =>
+        {
+            var chat = new AdvisorConversation(); var turn = chat.Begin(new AdvisorQuestion("Assess"));
+            turn.SetUnitReferences(new AdvisorUnitReferences(new[] { ("own_unit_1", 101) }));
+            turn.Complete("[7008](unit:own_unit_1) / P-3C / 7008");
+            foreach (var own in new[] { false, true })
+                foreach (var contacts in new[] { false, true })
+                {
+                    var links = new AdvisorUnitLinks(_ => true, new[] { (303, "P-3C Seastar") }, contacts, own);
+                    var rendered = XDocument.Parse(AdvisorTranscript.Render(chat, AdvisorText.Load("en"), "Michael Reed", "empty", links: links)).Root!;
+                    Require(links.Links.Count(link => link.UnitId == 101) == (own ? 1 : 0) &&
+                        links.Links.Count(link => link.UnitId == 303) == (own ? 1 : 0) &&
+                        links.Links.Count(link => link.UnitId == 7008) == (contacts ? 1 : 0) && !Visible(rendered).Contains("unit:"),
+                        "An explicit reference ignored its display setting or was reinterpreted as a contact number");
+                }
+            var literal = AdvisorMarkdown.Render("`[P-3C](unit:own_unit_1)`\n\n[x](https://example.invalid) ![画像](https://example.invalid/p.png)");
+            Require(Visible(literal).Contains("[P-3C](unit:own_unit_1)") && !literal.Descendants(Ns + "Hyperlink").Any() &&
+                !literal.Descendants(Ns + "Image").Any(), "Literal code or external references acquired actions");
+        });
         check("The packaged netstandard Markdown parser renders advice without an external parser DLL", () =>
         {
             using var built = AssemblyDefinition.ReadAssembly(advisorPath);
@@ -232,7 +293,7 @@ internal static class MarkdownTests
                 };
                 var assembly = context.LoadFromAssemblyPath(Path.GetFullPath(advisorPath));
                 var method = assembly.GetType("SeaPowerAIAdvisor.AdvisorMarkdown", true)!.GetMethod("Render", BindingFlags.NonPublic | BindingFlags.Static)!;
-                var result = (XElement)method.Invoke(null, new object[] { "# Ready\n\n**Bundled** parser." })!;
+                var result = (XElement)method.Invoke(null, new object[] { "# Ready\n\n**Bundled** parser.", null! })!;
                 Require(Visible(result) == "ReadyBundled parser.", "The distributed parser could not render the actual advisor code");
             }
             finally { context.Unload(); }

@@ -25,6 +25,21 @@ internal static partial class BattleTests
             Require((string?)data["friendly_units"]![0]!["display_name"] == "ミッドウェイ" &&
                 (string?)data["observed_contacts"]![0]!["display_name"] == "画面で識別した艦", "Displayed names were lost");
         });
+        check("Local own-unit references follow the captured map identity and information selection without entering AI data", () =>
+        {
+            var f = new Fixture();
+            var snapshot = f.Capture();
+            Require(snapshot.UnitReferences.Resolve("own_unit_1") == 1001 && snapshot.UnitReferences.Resolve("observed_contact_1") == null,
+                "The local binding was not taken from a player-owned map unit");
+            var session = new BattleQuerySession(snapshot, "en", "Assess");
+            Require(session.UnitReferences.Resolve("own_unit_1") == 1001, "The session lost its captured own-unit binding");
+            var listed = session.Execute(Request(session, new JObject { ["query"] = "list_units" }));
+            Require(!session.InitialInput().ToString().Contains("1001") && !listed.ToString().Contains("1001") &&
+                !snapshot.Copy().Properties().Any(property => property.Name.Contains("reference_map")),
+                "UI map identities were included in provider data");
+            var hidden = new BattleQuerySession(snapshot, "en", "Assess", information: AdvisorInformation.Default.With(InformationKind.BattleUnits, false));
+            Require(hidden.UnitReferences.Resolve("own_unit_1") == null, "An excluded unit remained an explicit link target");
+        });
         check("Launched own weapons do not interrupt platform capture or become enemy contacts", () =>
         {
             var f = new Fixture();
@@ -529,7 +544,7 @@ internal static partial class BattleTests
             PublicClasses.Add(new PublicClass { WeaponEntries = new List<PublicWeapon>(PublicWeapons) });
         }
         internal BattleSnapshot Capture(bool disclosure = false, string xmlBriefing = "", bool briefingUnavailable = false, bool briefingFromBase = false) => new BattleSituationReader().Capture(
-            OwnUnits.Cast<object>().Concat(OwnWeapons).Select(u => (object)new { Unit = new { Object = u } }).Concat(new object[] {
+            OwnUnits.Cast<object>().Concat(OwnWeapons).Select((u, i) => (object)new { Unit = new { Object = u, Id = 1001 + i } }).Concat(new object[] {
                 new { Unit = Track, ObjectViewModel = ContactDisplay, VisualType = ContactKind, VisualPosture = ContactPosture }
             }).Concat(ExtraMapUnits).ToArray(), new { TaskforceObjects = OwnUnits.Cast<object>().Concat(OwnWeapons).ToArray() },
             new object[] { new { IsHidden = false, Text = "輸送船を保護する", Status = 0 }, Hidden },

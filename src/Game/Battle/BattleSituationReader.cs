@@ -17,6 +17,7 @@ internal sealed class BattleSituationReader
         if (enemyControl) throw new SituationUnavailableException("battle_disclosure");
         var ownObjects = Sequence(Member(player, "TaskforceObjects")).ToArray();
         var units = new JArray();
+        var unitReferences = new List<(string Id, int UnitId)>();
         var contacts = new JArray();
         var launchedWeapons = new JArray();
         var identities = new List<(object Object, string Id)>();
@@ -52,6 +53,7 @@ internal sealed class BattleSituationReader
                     ["speed_knots"] = Number(Required(identity, "_velocityInKnots"))
                 });
                 var row = (JObject)units.Last!;
+                unitReferences.Add(((string)row["id"]!, Convert.ToInt32(Required(vehicle, "Id"), CultureInfo.InvariantCulture)));
                 identities.Add((identity, (string)row["id"]!));
                 capabilities.Add(knowledge.CaptureOwn(identity, (string)row["id"]!, (string)row["display_name"]!));
                 if (category == "base")
@@ -160,7 +162,7 @@ internal sealed class BattleSituationReader
             ["sensor_references"] = knowledge.SensorReferences(),
             ["observed_contacts"] = contacts,
             ["published_reports"] = reports
-        });
+        }, new AdvisorUnitReferences(unitReferences));
     }
 
     private static bool IsWeapon(object unit)

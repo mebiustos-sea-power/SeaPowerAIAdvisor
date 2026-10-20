@@ -12,21 +12,21 @@ using static SeaPowerAIAdvisor.AdvisorMarkup;
 
 namespace SeaPowerAIAdvisor;
 
-// Translate parsed Markdown into a fixed set of Noesis elements; content is always literal text.
+// Translate Markdown into fixed Noesis elements; only resolved local unit references become actions.
 internal static class AdvisorMarkdown
 {
     private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder()
         .DisableHtml().UsePipeTables().UseEmphasisExtras(EmphasisExtraOptions.Strikethrough).Build();
 
-    internal static XElement Render(string markdown)
+    internal static XElement Render(string markdown, Func<string, XElement, XElement>? unitLink = null)
     {
         var root = Element("StackPanel",
             new XAttribute(XNamespace.Xmlns + "x", "http://schemas.microsoft.com/winfx/2006/xaml"),
-            new XAttribute("TextElement.FontSize", "14"), Blocks(Markdown.Parse(markdown, Pipeline)));
+            new XAttribute("TextElement.FontSize", "14"), Blocks(Markdown.Parse(markdown, Pipeline), unitLink));
         return root;
     }
 
-    private static IEnumerable<XElement> Blocks(ContainerBlock container, bool compact = false)
+    private static IEnumerable<XElement> Blocks(ContainerBlock container, Func<string, XElement, XElement>? unitLink, bool compact = false)
     {
         foreach (var block in container)
         {
@@ -34,11 +34,11 @@ internal static class AdvisorMarkdown
             {
                 case HeadingBlock heading:
                     var size = heading.Level switch { 1 => 22, 2 => 20, 3 => 18, 4 => 16, _ => 14 };
-                    yield return Paragraph(heading, false, new XAttribute("FontSize", size),
+                    yield return Paragraph(heading, false, unitLink, new XAttribute("FontSize", size),
                         new XAttribute("FontWeight", "Bold"));
                     break;
                 case ParagraphBlock paragraph:
-                    yield return Paragraph(paragraph, compact);
+                    yield return Paragraph(paragraph, compact, unitLink);
                     break;
                 case CodeBlock code:
                     yield return Element("Border", new XAttribute("Background", "#18212C"),
@@ -51,7 +51,7 @@ internal static class AdvisorMarkdown
                 case QuoteBlock quote:
                     yield return Element("Border", new XAttribute("BorderBrush", "#607080"),
                         new XAttribute("BorderThickness", "3,0,0,0"), new XAttribute("Padding", "10,0,0,0"),
-                        new XAttribute("Margin", "0,2,0,10"), Element("StackPanel", Blocks(quote)));
+                        new XAttribute("Margin", "0,2,0,10"), Element("StackPanel", Blocks(quote, unitLink)));
                     break;
                 case ListBlock list:
                     var number = list.IsOrdered ? int.Parse(list.OrderedStart ?? "1", CultureInfo.InvariantCulture) : 0;
@@ -63,7 +63,7 @@ internal static class AdvisorMarkdown
                                 Element("ColumnDefinition", new XAttribute("Width", "*"))),
                             Element("TextBlock", Text("Text", marker), new XAttribute("MinWidth", "18"),
                                 new XAttribute("Margin", "0,0,6,0")),
-                            Element("StackPanel", new XAttribute("Grid.Column", "1"), Blocks(item, !list.IsLoose)));
+                            Element("StackPanel", new XAttribute("Grid.Column", "1"), Blocks(item, unitLink, !list.IsLoose)));
                     }
                     break;
                 case ThematicBreakBlock:
@@ -71,7 +71,7 @@ internal static class AdvisorMarkdown
                         new XAttribute("Background", "#607080"), new XAttribute("Margin", "0,6,0,12"));
                     break;
                 case Table table:
-                    yield return RenderTable(table);
+                    yield return RenderTable(table, unitLink);
                     break;
                 case LinkReferenceDefinitionGroup:
                     break;
@@ -81,11 +81,11 @@ internal static class AdvisorMarkdown
         }
     }
 
-    private static XElement Paragraph(LeafBlock block, bool compact, params object[] attributes) =>
+    private static XElement Paragraph(LeafBlock block, bool compact, Func<string, XElement, XElement>? unitLink, params object[] attributes) =>
         Element("TextBlock", new XAttribute("TextWrapping", "Wrap"),
-            new XAttribute("Margin", compact ? "0,0,0,3" : "0,0,0,10"), attributes, Inlines(block.Inline));
+            new XAttribute("Margin", compact ? "0,0,0,3" : "0,0,0,10"), attributes, Inlines(block.Inline, unitLink));
 
-    private static IEnumerable<XElement> Inlines(ContainerInline? container)
+    private static IEnumerable<XElement> Inlines(ContainerInline? container, Func<string, XElement, XElement>? unitLink)
     {
         for (var inline = container?.FirstChild; inline != null; inline = inline.NextSibling)
         {
@@ -101,15 +101,21 @@ internal static class AdvisorMarkdown
                     yield return Element("Span", emphasis.DelimiterChar == '~'
                         ? new XAttribute("TextDecorations", "Strikethrough")
                         : emphasis.DelimiterCount >= 2 ? new XAttribute("FontWeight", "Bold")
-                        : new XAttribute("FontStyle", "Italic"), Inlines(emphasis));
+                        : new XAttribute("FontStyle", "Italic"), Inlines(emphasis, unitLink));
                     break;
                 case LineBreakInline line:
                     yield return line.IsHard ? Element("LineBreak") : Run(" ");
                     break;
                 case LinkInline link:
-                    // Links and image references remain text; rendering never opens URLs or loads images.
-                    yield return Element("Span", Inlines(link));
-                    if (!string.IsNullOrEmpty(link.Url)) yield return Run(" (" + link.Url + ")");
+                    var label = Element("Span", Inlines(link, unitLink));
+                    if (!link.IsImage && link.Url?.StartsWith("unit:", StringComparison.OrdinalIgnoreCase) == true)
+                        yield return unitLink == null ? label : unitLink(link.Url.Substring(5), label);
+                    else
+                    {
+                        // External links and image references remain text; no URL is opened or image loaded.
+                        yield return label;
+                        if (!string.IsNullOrEmpty(link.Url)) yield return Run(" (" + link.Url + ")");
+                    }
                     break;
                 case AutolinkInline link:
                     yield return Run(link.Url);
@@ -123,7 +129,7 @@ internal static class AdvisorMarkdown
         }
     }
 
-    private static XElement RenderTable(Table table)
+    private static XElement RenderTable(Table table, Func<string, XElement, XElement>? unitLink)
     {
         var rows = table.Cast<TableRow>().ToArray();
         var columns = table.ColumnDefinitions.Count;
@@ -142,7 +148,7 @@ internal static class AdvisorMarkdown
                 {
                     TableColumnAlign.Center => "Center", TableColumnAlign.Right => "Right", _ => "Left"
                 };
-                var blocks = Blocks(cell, true).ToArray();
+                var blocks = Blocks(cell, unitLink, true).ToArray();
                 foreach (var paragraph in blocks.Where(b => b.Name.LocalName == "TextBlock"))
                 {
                     paragraph.SetAttributeValue("TextAlignment", alignment);

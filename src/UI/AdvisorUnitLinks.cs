@@ -16,13 +16,15 @@ internal sealed class AdvisorUnitLinks
     private readonly Func<int, bool> known;
     private readonly Dictionary<string, HashSet<int>> ownNames = new(StringComparer.Ordinal);
     private readonly Regex mentions;
+    private readonly bool linkOwnUnits;
+    private sealed class ExplicitReference { }
     private readonly List<(string Name, int UnitId)> links = new();
     internal IReadOnlyList<(string Name, int UnitId)> Links => links;
 
-    internal AdvisorUnitLinks(Func<int, bool> known, IEnumerable<(int Id, string Name)>? ownUnits = null, bool linkContacts = true)
+    internal AdvisorUnitLinks(Func<int, bool> known, IEnumerable<(int Id, string Name)>? ownUnits = null, bool linkContacts = true, bool linkOwnUnits = true)
     {
-        this.known = known;
-        foreach (var unit in ownUnits ?? Array.Empty<(int, string)>())
+        this.known = known; this.linkOwnUnits = linkOwnUnits;
+        foreach (var unit in (linkOwnUnits ? ownUnits : null) ?? Array.Empty<(int, string)>())
         {
             var name = unit.Name.Trim();
             AddName(name, unit.Id);
@@ -40,9 +42,18 @@ internal sealed class AdvisorUnitLinks
         mentions = new Regex(string.Join("|", patterns.Append(linkContacts ? TrackNumber : "(?!)")), RegexOptions.CultureInvariant);
     }
 
+    internal XElement Reference(string id, XElement label, AdvisorUnitReferences references)
+    {
+        // An explicit destination must never be retargeted by the text-matching fallback.
+        label.AddAnnotation(new ExplicitReference());
+        var target = references.Resolve(id);
+        return linkOwnUnits && target.HasValue && known(target.Value) ? Link(target.Value, true, label) : label;
+    }
+
     internal XElement Decorate(XElement content)
     {
         var fields = content.DescendantsAndSelf().Where(e => e.Name.LocalName is "Run" or "TextBlock")
+            .Where(e => !e.AncestorsAndSelf().Any(a => a.Name.LocalName == "Hyperlink" || a.Annotation<ExplicitReference>() != null))
             .Select(e => e.Attribute("Text")).Where(a => a != null).Cast<XAttribute>().ToArray();
         foreach (var field in fields)
         {
@@ -61,12 +72,7 @@ internal sealed class AdvisorUnitLinks
                 else if (!int.TryParse(match.Value, NumberStyles.None, CultureInfo.InvariantCulture, out id)) continue;
                 if (!known(id)) continue;
                 if (match.Index > offset) pieces.Add(Element("Run", Text("Text", value.Substring(offset, match.Index - offset))));
-                var name = "AdvisorUnit" + links.Count.ToString(CultureInfo.InvariantCulture);
-                pieces.Add(Element("Hyperlink", new XAttribute(Xaml + "Name", name),
-                    new XAttribute("Style", own ? "{DynamicResource AdvisorOwnUnitLinkStyle}" : "{DynamicResource AdvisorTrackLinkStyle}"),
-                    new XAttribute("TextDecorations", "None"), new XAttribute("Focusable", "False"),
-                    Element("Run", Text("Text", match.Value))));
-                links.Add((name, id));
+                pieces.Add(Link(id, own, Element("Run", Text("Text", match.Value))));
                 offset = match.Index + match.Length;
             }
             if (pieces.Count == 0) continue;
@@ -78,6 +84,15 @@ internal sealed class AdvisorUnitLinks
             else owner.Add(pieces);
         }
         return content;
+    }
+
+    private XElement Link(int id, bool own, XElement label)
+    {
+        var name = "AdvisorUnit" + links.Count.ToString(CultureInfo.InvariantCulture);
+        links.Add((name, id));
+        return Element("Hyperlink", new XAttribute(Xaml + "Name", name),
+            new XAttribute("Style", own ? "{DynamicResource AdvisorOwnUnitLinkStyle}" : "{DynamicResource AdvisorTrackLinkStyle}"),
+            new XAttribute("TextDecorations", "None"), new XAttribute("Focusable", "False"), label);
     }
 
     private void AddName(string name, int id)
