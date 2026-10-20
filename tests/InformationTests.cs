@@ -11,11 +11,11 @@ internal static partial class InformationTests
     internal static void Run(Action<string, Action> check)
     {
         RunPersistence(check);
-        check("Sensor performance, movement plans and neutral/destroyed contacts are opt-in while other information and dependent selections persist", () =>
+        check("Sensor performance and neutral/destroyed contacts are opt-in while other information and dependent selections persist", () =>
         {
             var defaults = AdvisorOptions.Parse("{}").Information;
-            Require(!defaults.Allows(BattleNeutralContacts) && !defaults.Allows(BattleDestroyedContacts) && !defaults.Allows(BattleSensorPerformance) && !defaults.Allows(BattleMovementPlans) &&
-                AdvisorInformation.Items.Where(i => i.Kind is not BattleNeutralContacts and not BattleDestroyedContacts and not BattleSensorPerformance and not BattleMovementPlans).All(i => defaults.Allows(i.Kind)),
+            Require(!defaults.Allows(BattleNeutralContacts) && !defaults.Allows(BattleDestroyedContacts) && !defaults.Allows(BattleSensorPerformance) &&
+                AdvisorInformation.Items.Where(i => i.Kind is not BattleNeutralContacts and not BattleDestroyedContacts and not BattleSensorPerformance).All(i => defaults.Allows(i.Kind)),
                 "Opt-in information was enabled by default or another category was disabled");
             var initial = AdvisorInformation.All;
             var disabled = initial.With(CampaignForces, false);

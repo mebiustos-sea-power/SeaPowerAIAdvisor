@@ -40,7 +40,7 @@ internal sealed class AdvisorInformation
     internal static readonly IReadOnlyList<InformationItem> Items = Array.AsReadOnly(new[]
     {
         new InformationItem(InformationKind.BattleUnits, "battle_units", "basic"),
-        new InformationItem(InformationKind.BattleMovementPlans, "battle_movement_plans", "movement_plans", InformationKind.BattleUnits, defaultEnabled: false),
+        new InformationItem(InformationKind.BattleMovementPlans, "battle_movement_plans", "movement_plans", InformationKind.BattleUnits),
         new InformationItem(InformationKind.BattleFuel, "battle_fuel", "fuel", InformationKind.BattleUnits),
         new InformationItem(InformationKind.BattleDamage, "battle_damage", "damage", InformationKind.BattleUnits),
         new InformationItem(InformationKind.BattleWeapons, "battle_weapons", "weapons", InformationKind.BattleUnits),

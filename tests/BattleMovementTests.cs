@@ -42,12 +42,14 @@ internal static partial class BattleTests
             var ownDetails = session.Execute(Request(session, new JObject { ["query"] = "get_units", ["ids"] = new JArray("own_unit_1") }));
             Require(ownDetails["results"]![0]!["data"]![0]!["movement_mode"] == null, "Basic unit retrieval bypassed optional movement retrieval");
         });
-        check("Movement is opt-in for new and old settings, saved choices persist and excluded units cannot leak routes", () =>
+        check("Movement defaults to enabled for missing selections, saved choices persist and excluded units cannot leak routes", () =>
         {
             var kind = InformationKind.BattleMovementPlans;
             var oldSelections = AdvisorInformation.All.Data(); oldSelections.Remove("battle_movement_plans");
-            Require(!AdvisorInformation.Default.Allows(kind) && !AdvisorInformation.ParseSelections(oldSelections).Allows(kind) &&
-                !AdvisorInformation.Parse(new JArray()).Allows(kind), "A newly introduced movement category was enabled without consent");
+            Require(AdvisorInformation.Default.Allows(kind) && AdvisorInformation.ParseSelections(oldSelections).Allows(kind) &&
+                AdvisorInformation.Parse(new JArray()).Allows(kind), "Missing movement selections did not use the enabled default");
+            Require(!AdvisorInformation.Parse(new JArray("battle_movement_plans")).Allows(kind),
+                "The enabled default overwrote an explicitly disabled legacy movement selection");
             foreach (var enabled in new[] { true, false })
                 Require(AdvisorInformation.ParseSelections(AdvisorInformation.Default.With(kind, enabled).Data()).Allows(kind) == enabled,
                     "A saved movement preference was replaced by its default");
