@@ -6,6 +6,37 @@ internal static partial class BattleTests
 {
     private static void RunContactMotion(Action<string, Action> check)
     {
+        check("Own unit details include frozen vertical status in feet and respect the existing own-unit permission", () =>
+        {
+            foreach (var (kind, altitude, key, expected) in new[] {
+                ("Submarine", -250f, "depth_ft", 250d),
+                ("Aircraft", 12345f, "altitude_ft", 12345d),
+                ("Helicopter", 50f, "altitude_ft", 50d),
+                ("Biologic", -75f, "depth_ft", 75d) })
+            {
+                var f = new Fixture();
+                f.Own._type = kind;
+                f.Own.Altitude.Value = altitude;
+                var snapshot = f.Capture();
+                f.Own.Altitude.Value = -600;
+                var session = new BattleQuerySession(snapshot, "en", "What is this unit's altitude or depth?");
+                var data = session.Execute(Request(session, new JObject { ["query"] = "get_units", ["ids"] = new JArray("own_unit_1") }));
+                var row = data["results"]![0]!["data"]![0]!;
+                Require((double?)row[key] == expected && row[key == "depth_ft" ? "altitude_ft" : "depth_ft"] == null,
+                    "Own vertical status was missing, in the wrong units/axis or read after capture");
+                var excluded = new BattleQuerySession(snapshot, "en", "Vertical status",
+                    information: AdvisorInformation.Default.With(InformationKind.BattleUnits, false));
+                var blocked = excluded.Execute(Request(excluded, new JObject { ["query"] = "get_units", ["ids"] = new JArray("own_unit_1") }));
+                Require((string?)blocked["error"]?["code"] == "information_disabled" && blocked["results"] == null,
+                    "Vertical status bypassed the own-unit information setting");
+            }
+            var surface = new Fixture().Capture().Copy()["friendly_units"]![0]!;
+            Require(surface["depth_ft"] == null && surface["altitude_ft"] == null,
+                "Surface units acquired inapplicable vertical fields");
+            var surfacedSubmarine = new Fixture(); surfacedSubmarine.Own._type = "Submarine";
+            Require((double?)surfacedSubmarine.Capture().Copy()["friendly_units"]![0]!["depth_ft"] == 0,
+                "A surfaced submarine's known zero depth became unavailable");
+        });
         check("Contact motion uses displayed units without a selected UI and remains frozen behind contact permissions", () =>
         {
             var f = new Fixture { ContactDisplay = null };
@@ -30,12 +61,16 @@ internal static partial class BattleTests
                 excluded.InitialInput()["situation"]!["overview"]!["observed_contact_count"] == null,
                 "Contact motion bypassed the existing contact permission");
         });
-        check("Air contacts receive altitude and submarines receive depth in displayed feet before identification", () =>
+        check("Airborne and underwater contacts receive displayed vertical status before identification", () =>
         {
             foreach (var (kind, altitude, key, expected) in new[] {
                 ("Air", 12345f, "altitude_ft", 12345f),
                 ("Helicopter", 50f, "altitude_ft", 50f),
-                ("Submarine", -250f, "depth_ft", 250f) })
+                ("Submarine", -250f, "depth_ft", 250f),
+                ("Missile", 125f, "altitude_ft", 125f),
+                ("Torpedo", -150f, "depth_ft", 150f),
+                ("Torpedo", 25f, "depth_ft", 0f),
+                ("Biologic", -75f, "depth_ft", 75f) })
             {
                 var f = new Fixture { ContactKind = kind };
                 f.Track.Class = null;
@@ -52,7 +87,9 @@ internal static partial class BattleTests
         });
         check("Unavailable contact motion remains unknown and malformed displayed values stay visible as errors", () =>
         {
-            foreach (var kind in new[] { "Air", "Submarine", "Surface" })
+            foreach (var (kind, key) in new[] {
+                ("Air", "altitude_ft"), ("Helicopter", "altitude_ft"), ("Missile", "altitude_ft"),
+                ("Submarine", "depth_ft"), ("Torpedo", "depth_ft"), ("Biologic", "depth_ft"), ("Surface", "") })
             {
                 var f = new Fixture { ContactKind = kind };
                 f.Track.UnityVelocityVector = null;
@@ -60,7 +97,7 @@ internal static partial class BattleTests
                 var row = f.Capture().Copy()["observed_contacts"]![0]!;
                 Require(row["speed_knots"]!.Type == JTokenType.Null && row["heading_deg"]!.Type == JTokenType.Null,
                     "Unavailable motion was invented or read from the actual target");
-                if (kind != "Surface") Require(row[kind == "Air" ? "altitude_ft" : "depth_ft"]!.Type == JTokenType.Null,
+                if (key.Length > 0) Require(row[key]!.Type == JTokenType.Null,
                     "Unknown altitude/depth was converted to sea level");
             }
             var invalid = new Fixture { ContactKind = "Air" };

@@ -23,8 +23,8 @@ internal static class BattleWeaponReader
             ["position"] = Position(Required(Required(weapon, "Position"), "Value")),
             ["heading_deg"] = Number(Required(Required(weapon, "Heading"), "Value")),
             ["speed_knots"] = Number(Required(weapon, "_velocityInKnots")),
-            [kind == "torpedo" ? "depth_ft" : "altitude_ft"] =
-                Number(Required(Required(weapon, "Altitude"), "Value")) * (kind == "torpedo" ? -1 : 1)
+            [BattleVerticalPosition.FieldName(kind)!] =
+                BattleVerticalPosition.Read(kind, Required(Required(weapon, "Altitude"), "Value"))
         };
     }
 

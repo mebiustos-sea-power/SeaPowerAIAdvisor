@@ -8,6 +8,19 @@ internal static partial class BattleTests
 {
     private static void RunWeapons(Action<string, Action> check)
     {
+        check("Own launched torpedoes use the displayed depth and waterline clamp", () =>
+        {
+            foreach (var (altitude, expectedDepth) in new[] { (-150d, 150d), (0d, 0d), (25d, 0d) })
+            {
+                var f = new Fixture();
+                f.OwnWeapons.Add(new OwnWeapon("Torpedo") { Altitude = new Reactive<double>(altitude) });
+                var session = new BattleQuerySession(f.Capture(), "en", "Torpedo depth");
+                var data = session.Execute(Request(session, new JObject { ["query"] = "list_launched_weapons" }));
+                var row = data["results"]![0]!["data"]!["items"]![0]!;
+                Require((double?)row["depth_ft"] == expectedDepth && row["altitude_ft"] == null,
+                    "Torpedo depth differed from the information panel, including its above-water limit");
+            }
+        });
         check("Launched weapons are captured separately, fetched in bounded pages and frozen before communication", () =>
         {
             var f = new Fixture();
@@ -72,6 +85,7 @@ internal static partial class BattleTests
             var model = AddWeaponContact(f, enemy, "Missile");
             JToken Contact() => f.Capture().Copy()["observed_contacts"]![1]!;
             var visible = Contact();
+            Require((double?)visible["altitude_ft"] == 125, "An observed missile lost its displayed altitude");
             Require((string?)visible["targeting"]!["tracking_status"] == "tracking" &&
                 (string?)visible["targeting"]!["tracked_target_id"] == "own_unit_1" &&
                 visible["targeting"]!["commanded_target_id"] == null && visible["targeting"]!["commanded_position"] == null &&
@@ -149,6 +163,7 @@ internal static partial class BattleTests
     {
         internal object? Target;
         internal bool Reportable = true, ForbidEcho;
+        public Reactive<float> Altitude { get; } = new(125);
         public bool IsDestroyed => false;
         public bool TargetedAtUnitWhichCanReportDetection() => Reportable;
         public object? CurrentStrongestTargetEcho => ForbidEcho ? throw new InvalidOperationException("Read non-displayed enemy tracking") :

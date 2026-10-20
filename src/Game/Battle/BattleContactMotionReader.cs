@@ -27,13 +27,11 @@ internal static class BattleContactMotionReader
             contact["heading_deg"] = new JValue(heading);
         }
         var kind = (string)contact["kind"]!;
-        if (kind != "air" && kind != "helicopter" && kind != "submarine") return;
-        // The contact UI displays Object.Altitude in feet; submarine depth negates that same value.
-        // Do not read vertical status for surface/unknown kinds or infer a type from the actual target.
+        var key = BattleVerticalPosition.FieldName(kind);
+        if (key == null) return;
+        // Read only the displayed kind's vertical status, without inferring the actual target type.
         var altitude = Member(Required(vehicle, "Object"), "Altitude");
         var value = altitude == null ? null : Member(altitude, "Value");
-        var key = kind == "submarine" ? "depth_ft" : "altitude_ft";
-        contact[key] = value == null ? JValue.CreateNull() :
-            new JValue((float)Number(value) * (kind == "submarine" ? -1f : 1f));
+        contact[key] = BattleVerticalPosition.Read(kind, value);
     }
 }

@@ -604,6 +604,7 @@ internal static partial class BattleTests
         };
         public Reactive<Geo> Position { get; } = new(new Geo(31, 131));
         public Reactive<double> Heading { get; } = new(270);
+        public Reactive<float> Altitude { get; } = new(0);
         public double _velocityInKnots { get; } = 18;
     }
     private sealed class OwnWeapon

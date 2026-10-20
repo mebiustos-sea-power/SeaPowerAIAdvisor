@@ -59,6 +59,9 @@ internal sealed class BattleSituationReader
                     ["speed_knots"] = Number(Required(identity, "_velocityInKnots"))
                 });
                 var row = (JObject)units.Last!;
+                var verticalField = BattleVerticalPosition.FieldName(kind);
+                if (verticalField != null)
+                    row[verticalField] = BattleVerticalPosition.Read(kind, Required(Required(identity, "Altitude"), "Value"));
                 unitReferences.Add(((string)row["id"]!, Convert.ToInt32(Required(vehicle, "Id"), CultureInfo.InvariantCulture)));
                 identities.Add((identity, (string)row["id"]!));
                 movementUnits.Add((identity, (string)row["id"]!));
