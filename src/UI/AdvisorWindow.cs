@@ -46,7 +46,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     private bool diagnosticScrollPending;
 
     internal AdvisorWindow(FrameworkElement view, WindowHost host, Action<Action> guard, IAdvisorSource source, Func<string> replyLanguage, Action<string> warn, AdvisorOptionsStore options, AdvisorBackendRegistry backends,
-        IAdvisorTrackNavigation? tracks = null)
+        IAdvisorUnitNavigation? navigation = null)
     {
         this.view = view;
         this.host = host;
@@ -67,7 +67,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         ApplyTextResources();
         question = Named<TextBox>(content, "Question");
         transcriptScroll = Named<ScrollViewer>(content, "Transcript");
-        transcript = new AdvisorTranscriptView(Named<StackPanel>(content, "TranscriptMessages"), guard, RetryConsultation, ReassessContact, tracks);
+        transcript = new AdvisorTranscriptView(Named<StackPanel>(content, "TranscriptMessages"), guard, RetryConsultation, ReassessContact, navigation);
         status = Named<TextBlock>(content, "Status");
         diagnosticStatus = Named<TextBlock>(content, "DiagnosticStatus");
         diagnosticOutput = Named<TextBox>(content, "DiagnosticOutput");
@@ -575,7 +575,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         pendingScroll = null;
         diagnosticScrollPending = false;
         question.FontSize = AdvisorTypography.FontSize(options.Current.TextSize, 15);
-        transcript.Show(conversation, text, speakerName, empty ?? text["transcript.empty"], configurationNotice, options.Current.TextSize);
+        transcript.Show(conversation, text, speakerName, empty ?? text["transcript.empty"], configurationNotice, options.Current.TextSize, options.Current.LinkOwnUnits, options.Current.LinkContacts);
         UpdateShortcuts();
         if (updateStatus) status.Text = text["status.ready"];
     }

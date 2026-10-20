@@ -113,14 +113,14 @@ internal static class MarkdownTests
         check("Track links preserve question and Markdown content while targeting only known four-digit contacts", () =>
         {
             var known = new System.Collections.Generic.HashSet<int> { 7008, 7018 };
-            var tracks = new AdvisorTrackLinks(known.Contains);
+            var tracks = new AdvisorUnitLinks(known.Contains);
             var chat = new AdvisorConversation();
             const string question = "接触7008と7018。70080／17008／6999／7999。<Button />";
             const string answer = "## 接触 **7008**\n\n1. Track 7018と7008を確認。\n\n| 接触 | 評価 |\n| --- | --- |\n| 7018 | **7008** |\n\n`7008`\n\n```text\n 7008\n```";
             Require(chat.TryAdd(question, answer, out _), "The track consultation was rejected");
             var text = AdvisorText.Load("ja");
             var plain = XDocument.Parse(AdvisorTranscript.Render(chat, text, "Michael Reed", "empty")).Root!;
-            var rendered = XDocument.Parse(AdvisorTranscript.Render(chat, text, "Michael Reed", "empty", tracks: tracks)).Root!;
+            var rendered = XDocument.Parse(AdvisorTranscript.Render(chat, text, "Michael Reed", "empty", links: tracks)).Root!;
             Require(Visible(rendered) == Visible(plain), "Adding track actions changed visible text or code whitespace");
             var hyperlinks = rendered.Descendants(Ns + "Hyperlink").ToArray();
             Require(hyperlinks.Length == 9 && tracks.Links.Select(link => link.Name).Distinct().Count() == 9,
@@ -128,7 +128,7 @@ internal static class MarkdownTests
             foreach (var link in tracks.Links)
             {
                 var element = hyperlinks.Single(e => (string?)e.Attribute(XName.Get("Name", "http://schemas.microsoft.com/winfx/2006/xaml")) == link.Name);
-                Require(Visible(element) == link.Number.ToString() && element.Attribute("Foreground") == null &&
+                Require(Visible(element) == link.UnitId.ToString() && element.Attribute("Foreground") == null &&
                     (string?)element.Attribute("Style") == "{DynamicResource AdvisorTrackLinkStyle}",
                     "The displayed number/action target changed or a local text color prevented the shared hover style");
                 Require((string?)element.Attribute("TextDecorations") == "None" && element.Attribute("ToolTip") == null &&
@@ -147,18 +147,72 @@ internal static class MarkdownTests
             var known = true;
             var text = AdvisorText.Load("en");
             var chat = new AdvisorConversation();
-            var empty = AdvisorTranscript.Render(chat, text, "Michael Reed", "empty", tracks: new AdvisorTrackLinks(n => known && n == 7008));
+            var empty = AdvisorTranscript.Render(chat, text, "Michael Reed", "empty", links: new AdvisorUnitLinks(n => known && n == 7008));
             Require(Visible(XDocument.Parse(empty).Root!).Contains(text["transcript.track_navigation"]), "The initial track instructions were missing");
             var unsupported = AdvisorTranscript.Render(chat, text, "Michael Reed", "empty");
             Require(!Visible(XDocument.Parse(unsupported).Root!).Contains(text["transcript.track_navigation"]), "An unsupported mode advertised track navigation");
             Require(chat.TryAdd("Contact 7008", "**7008**", out _), "The known-track consultation was rejected");
-            var active = AdvisorTranscript.Render(chat, text, "Michael Reed", "empty", tracks: new AdvisorTrackLinks(n => known && n == 7008));
+            var active = AdvisorTranscript.Render(chat, text, "Michael Reed", "empty", links: new AdvisorUnitLinks(n => known && n == 7008));
             Require(!Visible(XDocument.Parse(active).Root!).Contains(text["transcript.track_navigation"]), "Initial instructions stayed above an active conversation");
             known = false;
             var refreshed = XDocument.Parse(AdvisorTranscript.Render(chat, text, "Michael Reed", "empty",
-                tracks: new AdvisorTrackLinks(n => known && n == 7008))).Root!;
+                links: new AdvisorUnitLinks(n => known && n == 7008))).Root!;
             Require(!refreshed.Descendants(Ns + "Hyperlink").Any() && Visible(refreshed) == Visible(XDocument.Parse(active).Root!),
                 "A missing contact stayed actionable or its message was removed");
+        });
+        check("Own-unit links resolve complete names and one-token omissions while preserving Markdown and original history", () =>
+        {
+            var units = new[] { (Id: 101, Name: "カリフォルニア CGN-36"), (Id: 102, Name: "South Carolina CGN-37"),
+                (Id: 103, Name: "K-64"), (Id: 104, Name: "Test (A)+ 42") };
+            var known = new System.Collections.Generic.HashSet<int>(units.Select(unit => unit.Id).Append(7008));
+            const string question = "カリフォルニアについて";
+            const string answer = "**カリフォルニア CGN-36**、カリフォルニア。South Carolina CGN-37とSouth Carolina。K-64。Test (A)+ 42とTest (A)+。CGN-36のみやSouthだけは対象外。7008。";
+            var chat = new AdvisorConversation(); Require(chat.TryAdd(question, answer, out _), "The fixture consultation was rejected");
+            var links = new AdvisorUnitLinks(known.Contains, units);
+            var plain = XDocument.Parse(AdvisorTranscript.Render(chat, AdvisorText.Load("ja"), "Michael Reed", "empty")).Root!;
+            var rendered = XDocument.Parse(AdvisorTranscript.Render(chat, AdvisorText.Load("ja"), "Michael Reed", "empty", links: links)).Root!;
+            Require(Visible(rendered) == Visible(plain), "Own-unit actions changed the displayed message");
+            Require(links.Links.Select(link => link.UnitId).SequenceEqual(new[] { 101, 101, 101, 102, 102, 103, 104, 104, 7008 }),
+                "A complete or shortened name resolved to the wrong unit, or an unsupported name fragment became actionable");
+            var targets = rendered.Descendants(Ns + "Hyperlink").ToArray();
+            Require(targets.Count(e => (string?)e.Attribute("Style") == "{DynamicResource AdvisorOwnUnitLinkStyle}") == 8 &&
+                (string?)targets.Last().Attribute("Style") == "{DynamicResource AdvisorTrackLinkStyle}",
+                "Own names and contact numbers did not receive their respective display styles");
+            Require(targets.All(e => e.Attribute("ToolTip") == null && e.Attribute("Cursor") == null &&
+                (string?)e.Attribute("TextDecorations") == "None") && !rendered.Descendants(Ns + "InlineUIContainer").Any(),
+                "Own-name links added an icon or intrusive decoration");
+            Require(chat.Exchanges.Single().Question == question && chat.Exchanges.Single().Answer == answer,
+                "Own-name links changed the copied or transmitted history");
+        });
+        check("Own-name matching prefers the longest name and leaves ambiguous, embedded and disappeared names inactive", () =>
+        {
+            var units = new[] { (1, "Falcon One"), (2, "Falcon Two"), (3, "South Carolina CGN-37"),
+                (4, "South Carolina CGN-38"), (5, "Alpha"), (6, "Alpha Bravo"), (7, "K-64"), (7, "K-64") };
+            var known = true;
+            const string message = "Falcon / Falcon One / Falcon Two / South Carolina / South Carolina CGN-37 / South Carolina CGN-38 / Alpha / Alpha Bravo / K-64 / XK-64 / K-640 / Falcon OneTwo";
+            var links = new AdvisorUnitLinks(_ => known, units);
+            var content = AdvisorMarkdown.Render(message);
+            links.Decorate(content);
+            Require(links.Links.Select(link => link.UnitId).SequenceEqual(new[] { 1, 2, 3, 4, 6, 7 }),
+                "An ambiguous alias became active, a complete name was truncated, or a name inside a longer word matched");
+            Require(Visible(content) == message, "Skipping ambiguous names changed the text");
+            known = false;
+            var missing = new AdvisorUnitLinks(_ => known, units);
+            Require(!missing.Decorate(AdvisorMarkdown.Render(message)).Descendants(Ns + "Hyperlink").Any(),
+                "A disappeared own unit remained actionable");
+        });
+        check("Own-unit and contact links can be independently hidden without changing conversation text", () =>
+        {
+            const string message = "カリフォルニア CGN-36、カリフォルニア、7008";
+            foreach (var own in new[] { false, true })
+                foreach (var contacts in new[] { false, true })
+                {
+                    var links = new AdvisorUnitLinks(_ => true, own ? new[] { (101, "カリフォルニア CGN-36") } : null, contacts);
+                    var result = links.Decorate(AdvisorMarkdown.Render(message));
+                    Require(Visible(result) == message && links.Links.Count(link => link.UnitId == 101) == (own ? 2 : 0) &&
+                        links.Links.Count(link => link.UnitId == 7008) == (contacts ? 1 : 0),
+                        "A display toggle changed text or also affected the other class of links");
+                }
         });
         check("The packaged netstandard Markdown parser renders advice without an external parser DLL", () =>
         {

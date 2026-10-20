@@ -112,6 +112,31 @@ internal static class OptionsTests
             }
             throw new InvalidOperationException("Expected options write failure");
         }));
+        check("Conversation link visibility defaults on and survives saves to other settings categories", () => InTemp(directory =>
+        {
+            var store = new AdvisorOptionsStore(Path.Combine(directory, "options.json"));
+            Require(store.Current.LinkOwnUnits && store.Current.LinkContacts && AdvisorOptions.Parse("{}").LinkOwnUnits &&
+                AdvisorOptions.Parse("{}").LinkContacts && !File.Exists(store.Path), "Existing installations lost default link visibility or reading created a file");
+            foreach (var own in new[] { false, true })
+                foreach (var contacts in new[] { false, true })
+                {
+                    store.SaveGeneral(AdvisorTextSize.Small, false, "Commander", own, contacts);
+                    store.SaveConsultation(5, 3, "");
+                    store.SaveInformation(AdvisorInformation.Default);
+                    store.SaveDeveloper(false, () => { });
+                    store.SaveGeneral(AdvisorTextSize.Standard, false, "Commander");
+                    var saved = new AdvisorOptionsStore(store.Path).Current;
+                    Require(saved.LinkOwnUnits == own && saved.LinkContacts == contacts,
+                        "Saving another category or reopening reset a link visibility choice");
+                }
+            foreach (var key in new[] { "link_own_units", "link_contacts" })
+                foreach (var invalid in new JToken[] { JValue.CreateNull(), new JValue(1), new JValue("false") })
+                {
+                    try { _ = AdvisorOptions.Parse(new JObject { [key] = invalid }.ToString()); }
+                    catch (AdvisorOptionsException error) when (error.Code == "options_invalid") { continue; }
+                    throw new InvalidOperationException("A malformed link preference was silently accepted");
+                }
+        }));
         check("Both game modes advertise and enforce configured retrieval rounds and retain one final answer request", () =>
         {
             var campaign = QueryTests.Capture(new SituationTests.Fixture(Assembly.LoadFrom(campaignPath)));

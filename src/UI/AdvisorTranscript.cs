@@ -8,7 +8,7 @@ namespace SeaPowerAIAdvisor;
 internal static class AdvisorTranscript
 {
     internal static string Render(AdvisorConversation conversation, AdvisorText text, string advisor, string empty,
-        AdvisorNotice? configurationNotice = null, AdvisorTextSize textSize = AdvisorTypography.DefaultSize, AdvisorTrackLinks? tracks = null)
+        AdvisorNotice? configurationNotice = null, AdvisorTextSize textSize = AdvisorTypography.DefaultSize, AdvisorUnitLinks? links = null)
     {
         var root = Element("StackPanel", new XAttribute(XNamespace.Xmlns + "x", "http://schemas.microsoft.com/winfx/2006/xaml"));
         var busy = conversation.Turns.Any(t => t.State == AdvisorTurnState.Waiting);
@@ -16,7 +16,7 @@ internal static class AdvisorTranscript
         if (conversation.Turns.Count == 0 && configurationNotice == null)
         {
             root.Add(Plain(empty));
-            if (tracks != null) root.Add(Plain(text["transcript.track_navigation"]));
+            if (links != null) root.Add(Plain(text["transcript.track_navigation"]));
         }
         for (var i = 0; i < conversation.Turns.Count; i++)
         {
@@ -25,7 +25,7 @@ internal static class AdvisorTranscript
             var copyTip = turn.Request.IsShortcut ? "transcript.copy_prompt_tip" : "transcript.copy_question_tip";
             var row = Element("StackPanel", new XAttribute("Margin", "0,0,0,20"),
                 Header(text["speaker.you"], "AdvisorPlayerNameBrush", "CopyQuestion" + i, text, copyTip, "0,0,0,6", copyCaption),
-                tracks?.Decorate(Plain(turn.Request.DisplayText)) ?? Plain(turn.Request.DisplayText));
+                links?.Decorate(Plain(turn.Request.DisplayText)) ?? Plain(turn.Request.DisplayText));
             if (turn.State == AdvisorTurnState.Waiting || turn.State == AdvisorTurnState.Answered)
             {
                 var header = Header(turn.AdvisorName.Length == 0 ? advisor : turn.AdvisorName, "AdvisorNameBrush",
@@ -37,7 +37,7 @@ internal static class AdvisorTranscript
             {
                 var exchange = turn.Exchange ?? throw new InvalidOperationException("The completed answer is missing.");
                 var answer = AdvisorMarkdown.Render(exchange.Answer);
-                row.Add(tracks?.Decorate(answer) ?? answer);
+                row.Add(links?.Decorate(answer) ?? answer);
                 if (BattleContactAssessment.CanReassess(turn))
                 {
                     var actions = Element("WrapPanel", new XAttribute("Margin", "0,6,0,0"));

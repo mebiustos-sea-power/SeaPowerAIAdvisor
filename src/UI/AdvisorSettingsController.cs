@@ -27,7 +27,7 @@ internal sealed class AdvisorSettingsController
     private readonly Action<string> warn;
     private readonly TextBox rounds, history, prompt, userName;
     private readonly ComboBox size;
-    private readonly CheckBox campaign, log, localApi;
+    private readonly CheckBox campaign, log, localApi, linkOwnUnits, linkContacts;
     private readonly TextBlock status, title, testStatus, testError, confirmationText;
     private readonly Button test, accept, cancelConfirmation, throwException;
     private Category? current;
@@ -54,6 +54,7 @@ internal sealed class AdvisorSettingsController
         userName = Named<TextBox>("UserName"); userName.MaxLength = AdvisorOptions.MaxUserNameLength;
         size = Named<ComboBox>("ConversationTextSize"); campaign = Named<CheckBox>("EnableCampaignAdvisor"); log = Named<CheckBox>("LogAiJson");
         localApi = Named<CheckBox>("EnableLocalApi");
+        linkOwnUnits = Named<CheckBox>("LinkOwnUnits"); linkContacts = Named<CheckBox>("LinkContacts");
         localConnections = new AdvisorLocalConnectionsView(Named<StackPanel>("LocalApiConnections"), Named<ComboBox>("LocalApiDefaultConnection"), text, guard);
         information = new AdvisorInformationView(Named<StackPanel>("InformationChoices"), guard);
         throwException = Named<Button>("ThrowTestException");
@@ -69,7 +70,7 @@ internal sealed class AdvisorSettingsController
         var buttons = new[] { "OpenGeneralCategory", "OpenProfileCategory", "OpenApiCategory", "OpenConsultationCategory", "OpenInformationCategory", "OpenDeveloperCategory" };
         for (var i = 0; i < buttons.Length; i++) { var category = (Category)i; Bind(buttons[i], () => OpenCategory(category)); }
         Bind("BackToSettings", BackToHome); Bind("BackToConversation", () => { Close(); back(); });
-        Bind("SaveGeneral", () => Save(() => options.SaveGeneral((AdvisorTextSize)size.SelectedIndex, campaign.IsChecked == true, userName.Text ?? "")));
+        Bind("SaveGeneral", () => Save(() => options.SaveGeneral((AdvisorTextSize)size.SelectedIndex, campaign.IsChecked == true, userName.Text ?? "", linkOwnUnits.IsChecked == true, linkContacts.IsChecked == true)));
         Bind("SaveConsultation", () => Save(() => options.SaveConsultation(Number(rounds, "query_rounds_invalid"), Number(history, "history_exchanges_invalid"), prompt.Text ?? "")));
         Bind("ResetInformation", () => { if (available) { information.Reset(AdvisorInformation.Default); Notice(""); } });
         Bind("SaveInformation", () => Save(() => options.SaveInformation(information.Value)));
@@ -124,7 +125,7 @@ internal sealed class AdvisorSettingsController
             else
             {
                 var saved = options.Read();
-                if (category == Category.General) { userName.Text = saved.UserName ?? text()["general.default_user_name"]; size.SelectedIndex = (int)saved.TextSize; campaign.IsChecked = saved.CampaignEnabled; userName.Focus(); }
+                if (category == Category.General) { userName.Text = saved.UserName ?? text()["general.default_user_name"]; size.SelectedIndex = (int)saved.TextSize; campaign.IsChecked = saved.CampaignEnabled; linkOwnUnits.IsChecked = saved.LinkOwnUnits; linkContacts.IsChecked = saved.LinkContacts; userName.Focus(); }
                 if (category == Category.Consultation) { rounds.Text = saved.MaxQueryRounds.ToString(CultureInfo.InvariantCulture); history.Text = saved.HistoryExchanges.ToString(CultureInfo.InvariantCulture); prompt.Text = saved.CommonPrompt; prompt.Focus(); }
                 if (category == Category.Information) { information.Reset(saved.Information); information.Focus(); }
             }
@@ -147,7 +148,7 @@ internal sealed class AdvisorSettingsController
     }
     private string Snapshot() => current switch
     {
-        Category.General => userName.Text + "\0" + size.SelectedIndex + ":" + campaign.IsChecked,
+        Category.General => userName.Text + "\0" + size.SelectedIndex + ":" + campaign.IsChecked + ":" + linkOwnUnits.IsChecked + ":" + linkContacts.IsChecked,
         Category.Consultation => rounds.Text + "\0" + history.Text + "\0" + prompt.Text,
         Category.Information => information.Value.Key,
         Category.Developer => log.IsChecked + ":" + localApi.IsChecked + ":" + localConnections.Value.Json().ToString(),

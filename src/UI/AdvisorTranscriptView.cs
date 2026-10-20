@@ -12,7 +12,7 @@ internal sealed class AdvisorTranscriptView
     private readonly Action<Action> guard;
     private readonly Action<AdvisorTurn> retry;
     private readonly Action<AdvisorTurn, ContactAssumption> reassess;
-    private readonly IAdvisorTrackNavigation? tracks;
+    private readonly IAdvisorUnitNavigation? navigation;
     private readonly List<Button> reassessmentButtons = new();
     private readonly Dictionary<AdvisorTurn, FrameworkElement> answerHeaders = new();
     private readonly Stopwatch clock = Stopwatch.StartNew();
@@ -35,15 +35,16 @@ internal sealed class AdvisorTranscriptView
     }
 
     internal AdvisorTranscriptView(StackPanel panel, Action<Action> guard, Action<AdvisorTurn> retry,
-        Action<AdvisorTurn, ContactAssumption> reassess, IAdvisorTrackNavigation? tracks = null)
-    { this.panel = panel; this.guard = guard; this.retry = retry; this.reassess = reassess; this.tracks = tracks; }
+        Action<AdvisorTurn, ContactAssumption> reassess, IAdvisorUnitNavigation? navigation = null)
+    { this.panel = panel; this.guard = guard; this.retry = retry; this.reassess = reassess; this.navigation = navigation; }
 
     internal void UpdateBusy(bool busy)
     { foreach (var button in reassessmentButtons) button.IsEnabled = !busy; }
 
-    internal void Show(AdvisorConversation conversation, AdvisorText text, string advisor, string empty, AdvisorNotice? notice, AdvisorTextSize textSize)
+    internal void Show(AdvisorConversation conversation, AdvisorText text, string advisor, string empty, AdvisorNotice? notice, AdvisorTextSize textSize, bool linkOwnUnits, bool linkContacts)
     {
-        var links = tracks == null ? null : new AdvisorTrackLinks(tracks.Contains);
+        var links = navigation == null || (!linkOwnUnits && !linkContacts) ? null :
+            new AdvisorUnitLinks(navigation.Contains, linkOwnUnits ? navigation.OwnUnits() : null, linkContacts);
         var markup = AdvisorTranscript.Render(conversation, text, advisor, empty, notice, textSize, links);
         var root = GUI.ParseXaml(markup) as StackPanel
             ?? throw new InvalidOperationException("The Markdown conversation view is not a StackPanel.");
@@ -51,9 +52,9 @@ internal sealed class AdvisorTranscriptView
             foreach (var item in links.Links)
             {
                 var link = root.FindName(item.Name) as Hyperlink
-                    ?? throw new InvalidOperationException("The conversation track link is missing.");
-                link.Click += (_, e) => { e.Handled = true; guard(() => tracks!.Focus(item.Number)); };
-                link.PreviewMouseRightButtonDown += (_, e) => { e.Handled = true; guard(() => tracks!.OpenMenu(item.Number)); };
+                    ?? throw new InvalidOperationException("The conversation unit link is missing.");
+                link.Click += (_, e) => { e.Handled = true; guard(() => navigation!.Focus(item.UnitId)); };
+                link.PreviewMouseRightButtonDown += (_, e) => { e.Handled = true; guard(() => navigation!.OpenMenu(item.UnitId)); };
             }
         waitingTurn = null; waitingText = null;
         copyButtons.Clear(); reassessmentButtons.Clear(); answerHeaders.Clear();
