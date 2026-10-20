@@ -4,6 +4,8 @@
   "more_detail": "Make your previous advice more specific: identify relevant units, locations and actions using current evidence. Recheck unsupported earlier claims.",
   "key_risks": "What should I do now to address the most urgent tactical threats? Give concrete actions in priority order, including attacks when justified. Include only essential execution conditions.",
   "radar_operations": "Evaluate our current radar use and recommend concrete changes where needed.",
+  "own_units": "List all own units, grouped by type.",
+  "contacts": "List observed hostile and unidentified contacts, grouped by affiliation.",
   "contact_assessment": "Assess the unidentified contact specified in contact_assessment. Compare its displayed identification candidates and observed features, retrieving candidate pages and relevant known contacts as needed. Give the most plausible type/class and affiliation with reasons and meaningful alternatives. Treat proximity and motion as clues, not proof; distinguish inference from confirmed information.",
   "contact_reassessment": "Reassess which candidate classes/types best explain Contact {0}, assuming it belongs to the {1} side. Use the supplied confirmed features and candidate pages, plus relevant known context. Keep this affiliation hypothetical, explain material conflicts, and focus on identification rather than generic threat or response advice.",
   "connection_tool_test": "Call connection_check, then reply only with the confirmation value returned by it.",

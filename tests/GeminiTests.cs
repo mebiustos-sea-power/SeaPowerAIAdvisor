@@ -283,7 +283,7 @@ internal static class GeminiTests
             {
                 var ui = AdvisorText.Load(language);
                 var chat = new AdvisorConversation();
-                foreach (var shortcut in new[] { AdvisorShortcut.NextSteps, AdvisorShortcut.MoreDetail, AdvisorShortcut.KeyRisks })
+                foreach (var shortcut in new[] { AdvisorShortcut.NextSteps, AdvisorShortcut.MoreDetail, AdvisorShortcut.KeyRisks, AdvisorShortcut.RadarOperations, AdvisorShortcut.OwnUnits, AdvisorShortcut.Contacts })
                 {
                     var request = shortcut.Prepare(ui[shortcut.LabelKey]);
                     var prior = chat.Exchanges.ToArray();
@@ -294,8 +294,9 @@ internal static class GeminiTests
                         Require((string?)input["question"] == request.Text && (string?)input["reply_language"] == language,
                             "The button caption or UI fallback locale replaced the actual question or reply language");
                         var history = input["prior_dialogue"]!.ToArray();
-                        Require(history.Length == prior.Length && history.Select((h, i) =>
-                            (string?)h["question"] == prior[i].Question && (string?)h["question"] != prior[i].DisplayQuestion).All(x => x),
+                        var expected = prior.TakeLast(AdvisorOptions.DefaultHistoryExchanges).ToArray();
+                        Require(history.Length == expected.Length && history.Select((h, i) =>
+                            (string?)h["question"] == expected[i].Question && (string?)h["question"] != expected[i].DisplayQuestion).All(x => x),
                             "Display-only captions entered Gemini history");
                         return Reply(new JObject { ["text"] = "Reply / 回答" });
                     });

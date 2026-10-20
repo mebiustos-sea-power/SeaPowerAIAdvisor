@@ -74,7 +74,7 @@ With the default, a selected-connection failure ends the consultation. When expl
 
 The selected/saved adviser and shared preferences are not modified. The answer and waiting transcript use Michael Reed; the profile sidebar keeps the user's selection. External system instructions and their temporary overrides, game data, language, user name and configured history are retained. Clear history explicitly when a comparison needs it. Acceptance and retained diagnostics include the effective `plain_advisor` flag. It does not affect later UI or local consultations unless requested again.
 
-Quick IDs are `key_risks`, `next_steps`, `radar_operations` and `more_detail`. They use the current request prompts and localized UI captions. `more_detail` requires an answered exchange and enabled conversation history. Questions use the normal 2,000-character limit.
+Quick IDs are `key_risks`, `next_steps`, `radar_operations`, `own_units`, `contacts` and `more_detail`. They use the current request prompts and localized UI captions. `more_detail` remains available through the API and requires an answered exchange and enabled conversation history. Questions use the normal 2,000-character limit.
 
 Prompt changes use this form; unknown IDs or invalid values reject the entire change:
 

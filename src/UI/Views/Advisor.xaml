@@ -48,10 +48,18 @@
           <TextBlock x:Name="Activity" Text="{DynamicResource Advisor.activity.idle}" TextWrapping="Wrap" TextAlignment="Center" FontSize="12" Margin="0,12,0,0" Opacity="0.8" />
           <StackPanel Margin="0,18,0,0">
             <TextBlock Text="{DynamicResource Advisor.quick.heading}" FontSize="12" TextAlignment="Center" Margin="0,0,0,8" Opacity="0.8" />
-            <Button x:Name="NextSteps" Content="{DynamicResource Advisor.preset.next_steps}" ToolTip="{DynamicResource Advisor.preset.next_steps_tip}" Height="34" Margin="0,0,0,8" />
-            <Button x:Name="KeyRisks" Content="{DynamicResource Advisor.preset.key_risks}" ToolTip="{DynamicResource Advisor.preset.key_risks_tip}" Height="34" Margin="0,0,0,8" />
-            <Button x:Name="RadarOperations" Content="{DynamicResource Advisor.preset.radar_operations}" ToolTip="{DynamicResource Advisor.preset.radar_operations_tip}" Height="34" Margin="0,0,0,8" />
-            <Button x:Name="MoreDetail" Content="{DynamicResource Advisor.preset.more_detail}" ToolTip="{DynamicResource Advisor.preset.more_detail_tip}" Height="34" IsEnabled="False" />
+            <Button x:Name="NextSteps" Content="{DynamicResource Advisor.preset.next_steps}" ToolTip="{DynamicResource Advisor.preset.next_steps_tip}" Height="32" Margin="0,0,0,4" />
+            <Button x:Name="KeyRisks" Content="{DynamicResource Advisor.preset.key_risks}" ToolTip="{DynamicResource Advisor.preset.key_risks_tip}" Height="32" Margin="0,0,0,4" />
+            <Button x:Name="RadarOperations" Content="{DynamicResource Advisor.preset.radar_operations}" ToolTip="{DynamicResource Advisor.preset.radar_operations_tip}" Height="32" Margin="0,0,0,4" />
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="4" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <Button x:Name="OwnUnits" Content="{DynamicResource Advisor.preset.own_units}" ToolTip="{DynamicResource Advisor.preset.own_units_tip}" Height="32" />
+              <Button x:Name="Contacts" Grid.Column="2" Content="{DynamicResource Advisor.preset.contacts}" ToolTip="{DynamicResource Advisor.preset.contacts_tip}" Height="32" />
+            </Grid>
           </StackPanel>
         </StackPanel>
       </ScrollViewer>

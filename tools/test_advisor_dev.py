@@ -120,6 +120,9 @@ class CliTests(unittest.TestCase):
             self.assertEqual(api.calls[-1][2], {"shortcut": "next_steps", "connection_id": "override-id", "allow_fallback": False})
             self.assertEqual(api.run("consult", "--question", "hello", "--allow-fallback", "--no-wait")[0], 0)
             self.assertTrue(api.calls[-1][2]["allow_fallback"])
+            for shortcut in ("own_units", "contacts"):
+                self.assertEqual(api.run("consult", "--shortcut", shortcut, "--no-wait")[0], 0)
+                self.assertEqual(api.calls[-1][2], {"shortcut": shortcut, "allow_fallback": False})
 
     def test_plain_adviser_is_controlled_by_flags_or_request_file(self):
         with MockApi() as api, tempfile.TemporaryDirectory() as temporary:

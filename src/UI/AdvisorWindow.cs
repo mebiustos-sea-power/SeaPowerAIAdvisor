@@ -95,7 +95,8 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
             (AdvisorShortcut.NextSteps, Named<Button>(content, "NextSteps")),
             (AdvisorShortcut.KeyRisks, Named<Button>(content, "KeyRisks")),
             (AdvisorShortcut.RadarOperations, Named<Button>(content, "RadarOperations")),
-            (AdvisorShortcut.MoreDetail, Named<Button>(content, "MoreDetail"))
+            (AdvisorShortcut.OwnUnits, Named<Button>(content, "OwnUnits")),
+            (AdvisorShortcut.Contacts, Named<Button>(content, "Contacts"))
         };
         foreach (var item in shortcuts)
             item.Button.Click += (_, _) => guard(() => ConsultShortcut(item.Shortcut, item.Button));
@@ -277,6 +278,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
             {
                 "next_steps" => AdvisorShortcut.NextSteps, "key_risks" => AdvisorShortcut.KeyRisks,
                 "radar_operations" => AdvisorShortcut.RadarOperations,
+                "own_units" => AdvisorShortcut.OwnUnits, "contacts" => AdvisorShortcut.Contacts,
                 "more_detail" => AdvisorShortcut.MoreDetail, _ => throw new AdvisorLocalApiException(400, "unknown_shortcut")
             };
             if (!preset.IsAvailable(false, conversation.Exchanges.Count, options.Current.HistoryExchanges))
