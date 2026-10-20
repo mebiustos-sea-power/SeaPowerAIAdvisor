@@ -373,7 +373,7 @@
   "settings.back_categories": "Back to categories",
   "settings.saved": "Saved.",
   "settings.delete_question": "Remove \"{0}\"? This takes effect immediately.",
-  "settings.discard_question": "Discard pending changes and go back? Changes already applied are kept.",
+  "settings.discard_question": "Discard pending changes and go back?",
   "settings.discard_action": "Discard changes",
   "settings.continue_editing": "Continue editing",
   "developer.diagnostics": "Diagnostics",

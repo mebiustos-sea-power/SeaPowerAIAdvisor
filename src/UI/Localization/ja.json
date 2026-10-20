@@ -373,7 +373,7 @@
   "settings.back_categories": "カテゴリに戻る",
   "settings.saved": "保存しました。",
   "settings.delete_question": "「{0}」を削除しますか？削除はすぐに反映されます。",
-  "settings.discard_question": "未反映の変更を破棄して戻りますか？反映済みの内容は維持されます。",
+  "settings.discard_question": "未反映の変更を破棄して戻りますか？",
   "settings.discard_action": "変更を破棄",
   "settings.continue_editing": "編集を続ける",
   "developer.diagnostics": "診断",
