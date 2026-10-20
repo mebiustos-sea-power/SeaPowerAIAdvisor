@@ -158,7 +158,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession, IAdvisorUnitRef
                 var briefing = new JObject { ["text"] = snapshot["mission_briefing"]!.DeepClone() };
                 if (snapshot["mission_briefing_source"] is JValue source)
                 {
-                    briefing["source"] = source.DeepClone();
+                    briefing["source"] = "mission_briefing";
                     if ((string?)source == "base_mission_xml") briefing["note"] = Prompts.Text("battle.json", "base_briefing_note");
                 }
                 return briefing;

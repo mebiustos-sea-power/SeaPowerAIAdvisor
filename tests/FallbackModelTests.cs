@@ -110,7 +110,7 @@ internal static class FallbackModelTests
         ["friendly_units"]=new JArray(),["unit_capabilities"]=new JArray(),
         ["observed_contacts"]=new JArray(new JObject { ["id"]="observed_contact_1",["posture"]="enemy",["kind"]="surface" }),
         ["contact_threat_references"]=new JArray(new JObject { ["id"]="observed_contact_1",["possible_weapon_reference_ids"]=new JArray("weapon_reference_1") }),
-        ["weapon_references"]=new JArray(new JObject { ["id"]="weapon_reference_1",["source"]="game_encyclopedia",["display_name"]="Frozen weapon",["maximum_launch_range_nm"]=70 }),["published_reports"]=new JArray(),["mission_briefing"]="Frozen briefing"
+        ["weapon_references"]=new JArray(new JObject { ["id"]="weapon_reference_1",["source"]="reference_specifications",["display_name"]="Frozen weapon",["maximum_launch_range_nm"]=70 }),["published_reports"]=new JArray(),["mission_briefing"]="Frozen briefing"
     }),"ja","Question",maxRounds:2);
     private static JObject Tool(string name,string signature,string? contactId=null)
     {

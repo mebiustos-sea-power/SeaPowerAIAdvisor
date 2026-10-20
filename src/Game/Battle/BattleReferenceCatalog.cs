@@ -34,16 +34,15 @@ internal sealed class BattleReferenceCatalog
     {
         if (registered.TryGetValue(key, out var saved)) return (string)saved["id"]!;
         var id = "weapon_reference_" + (registered.Count + 1);
-        var row = new JObject { ["id"] = id, ["reference_key"] = key, ["source"] = "game_encyclopedia" };
+        var row = new JObject { ["id"] = id, ["reference_key"] = key, ["source"] = "reference_specifications" };
         if (!ready || !weapons.TryGetValue(key, out var entry))
         {
-            row["status"] = ready ? "no_public_entry" : "encyclopedia_not_ready";
+            row["status"] = ready ? "no_public_entry" : "reference_unavailable";
             registered.Add(key, row);
             return id;
         }
         row["status"] = "available";
         row["display_name"] = (string)Required(entry, "DisplayName");
-        row["mod_source"] = (string?)Member(entry, "ModSource") ?? "";
         row["type"] = Code(Required(entry, "Type"));
         row["primary_target"] = Code(Required(entry, "TargetType"));
         row["secondary_target"] = (bool)Required(entry, "HasSecondaryTargetType") ? new JValue(Code(Required(entry, "SecondaryTargetType"))) : JValue.CreateNull();
@@ -67,12 +66,12 @@ internal sealed class BattleReferenceCatalog
     {
         var result = new JObject
         {
-            ["source"] = "game_encyclopedia", ["evidence_kind"] = "public_class_reference",
+            ["source"] = "reference_specifications", ["evidence_kind"] = "public_class_reference",
             ["actual_enemy_state_included"] = false,
             ["unknowns"] = new JArray("actual_loadout", "remaining_ammunition", "damage", "fuel", "readiness", "fire_control", "current_attack_feasibility")
         };
         if (observedClass == null) { result["status"] = "unidentified_class"; return result; }
-        if (!ready) { result["status"] = "encyclopedia_not_ready"; return result; }
+        if (!ready) { result["status"] = "reference_unavailable"; return result; }
         if (!classes.TryGetValue(observedClass, out var entries)) { result["status"] = "no_public_class_entry"; return result; }
         var eligible = entries.Where(e => InService(e, "ServiceEntryDate")).ToArray();
         if (eligible.Length == 0) { result["status"] = "no_public_variant_for_date"; return result; }

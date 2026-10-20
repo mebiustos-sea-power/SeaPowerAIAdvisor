@@ -42,7 +42,7 @@ internal static class CampaignGroundReader
                 ["aircraft_capacity"] = Nonnegative(Read<int>(b, "aircraftCapacity")),
                 ["has_shipyard"] = Read<bool>(b, "shipyard"),
                 ["garrison_strength"] = garrisons.Contains(id) ? new JValue(Nonnegative(garrisons[id]!)) : JValue.CreateNull(),
-                ["garrison_strength_meaning"] = "campaign_strength_not_a_count_of_tactical_units",
+                ["garrison_strength_meaning"] = "relative_combat_strength_rating",
                 ["stocks"] = new JObject
                 {
                     ["status"] = stock == null ? "not_recorded" : "known",
@@ -83,7 +83,7 @@ internal static class CampaignGroundReader
                 ["force_id"] = forceReference == null ? JValue.CreateNull() : new JValue(forceReference),
                 ["ship_id"] = shipReference == null ? JValue.CreateNull() : new JValue(shipReference),
                 ["embarked"] = shipId != 0,
-                ["strength_meaning"] = "campaign_strength_not_a_count_of_tactical_units"
+                ["strength_meaning"] = "relative_combat_strength_rating"
             });
         }
         return new CampaignGroundSnapshot(bases, ground);

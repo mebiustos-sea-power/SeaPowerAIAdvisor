@@ -86,10 +86,11 @@ internal static partial class BattleTests
             var session = new BattleQuerySession(fixture.Capture(xmlBriefing: "XMLの公開説明"), "ja", "任務を確認して");
             Require(!session.InitialInput().ToString().Contains("XMLの公開説明", StringComparison.Ordinal), "XML briefing bypassed on-demand retrieval");
             var briefing = session.Execute(Request(session, new JObject { ["query"] = "get_briefing" }));
-            Require((string?)briefing["results"]![0]!["data"]!["text"] == "公開済みの任務説明\n\nXMLの公開説明", "A briefing source was lost");
+            Require((string?)briefing["results"]![0]!["data"]!["text"] == "公開済みの任務説明\n\nXMLの公開説明" &&
+                (string?)briefing["results"]![0]!["data"]!["source"] == "mission_briefing", "The briefing text was lost or exposed its storage format");
             var restored = new BattleQuerySession(fixture.Capture(xmlBriefing: "復元した公開説明", briefingFromBase: true), "ja", "任務を確認して");
             var restoredData = restored.Execute(Request(restored, new JObject { ["query"] = "get_briefing" }))["results"]![0]!["data"]!;
-            Require((string?)restoredData["source"] == "base_mission_xml" && !string.IsNullOrEmpty((string?)restoredData["note"]),
+            Require((string?)restoredData["source"] == "mission_briefing" && !string.IsNullOrEmpty((string?)restoredData["note"]),
                 "The AI could not distinguish recovered mission-start briefing from current data");
             var off = new BattleQuerySession(fixture.Capture(xmlBriefing: "XMLの公開説明", briefingUnavailable: true), "ja", "任務を確認して",
                 information: AdvisorInformation.Default.With(InformationKind.BattleBriefing, false));
@@ -158,6 +159,10 @@ internal static partial class BattleTests
                 ((JArray)data["weapon_references"]!).Count == 1 &&
                 (double?)data["weapon_references"]![0]!["maximum_launch_range_nm"] == 70,
                 "Capabilities mixed current sources, lost damage or repeated a shared weapon definition");
+            Require((string?)data["weapon_references"]![0]!["source"] == "reference_specifications" &&
+                data["weapon_references"]![0]!["mod_source"] == null &&
+                !data.ToString().Contains("TEST_MOD_ORIGIN", StringComparison.Ordinal),
+                "Weapon evidence exposed its storage or mod origin instead of the reference specification");
             var fuel = session.Execute(Request(session, new JObject { ["query"] = "get_unit_capabilities", ["ids"] = new JArray("own_unit_1"), ["sections"] = new JArray("fuel") }))["results"]![0]!["data"]!;
             Require(fuel["units"]![0]!["weapons"] == null && fuel["units"]![0]!["damage"] == null &&
                 ((JArray)fuel["weapon_references"]!).Count == 0, "A fuel-only request returned unrelated details");
@@ -230,7 +235,8 @@ internal static partial class BattleTests
             var session = new BattleQuerySession(captured, "ja", "敵の脅威となる距離は？");
             var data = session.Execute(Request(session, new JObject { ["query"] = "get_contact_threats", ["ids"] = new JArray("observed_contact_1") }))["results"]![0]!["data"]!;
             var contact = data["contacts"]![0]!;
-            Require((string?)contact["class_display_name"] == "公開された艦級" &&
+            Require((string?)contact["source"] == "reference_specifications" &&
+                (string?)contact["class_display_name"] == "公開された艦級" &&
                 (bool?)contact["actual_enemy_state_included"] == false &&
                 ((JArray)contact["unknowns"]!).Values<string>().Contains("remaining_ammunition") &&
                 (string?)contact["observed_posture"] == "unknown" &&
@@ -256,7 +262,7 @@ internal static partial class BattleTests
                 "An unspecified encyclopedia range became a zero or an invented value");
             f.Ready = false;
             snapshot = f.Capture().Copy();
-            Require((string?)snapshot["contact_threat_references"]![0]!["status"] == "encyclopedia_not_ready" &&
+            Require((string?)snapshot["contact_threat_references"]![0]!["status"] == "reference_unavailable" &&
                 (int?)snapshot["unit_capabilities"]![0]!["weapons"]!["ammunition"]![0]!["remaining_count"] == 8,
                 "An unavailable reference library hid current own inventory");
             f.Own.AmmunitionAmountDictionary["test_missile"] = -1;
@@ -641,7 +647,7 @@ internal static partial class BattleTests
         public string IniRef { get; set; } = "test_missile";
         public int VariantIndex => 0;
         public string DisplayName => "公開ミサイル";
-        public string? ModSource => null;
+        public string ModSource => "TEST_MOD_ORIGIN";
         public string Type => "Missile";
         public string TargetType => "ASuW";
         public bool HasSecondaryTargetType => false;
