@@ -24,6 +24,7 @@ internal sealed class BattleIntegration
     private AdvisorHudButton? launcher;
     private AdvisorWindow? advisor;
     private BattleContactAssessments? contactAssessments;
+    private BattleMapNavigation? mapNavigation;
     private AdvisorErrorWindow? errorWindow;
     private Action? showError;
 
@@ -96,6 +97,7 @@ internal sealed class BattleIntegration
             var host = FindHost(current.RootControl) ?? throw new InvalidOperationException("The battle window host is unavailable.");
             contactAssessments ??= new BattleContactAssessments(GetAdvisor, () => options.Current.Information, guard);
             contactAssessments.Tick(current.RootControl, host);
+            mapNavigation?.Tick();
             advisor?.Tick();
             if (options.Current.DeveloperApiEnabled) Plugin.LocalApi?.Attach(this, "tactical_battle", GetAdvisor);
         }
@@ -108,9 +110,10 @@ internal sealed class BattleIntegration
     {
         if (view == null || model?.RootControl == null) throw new InvalidOperationException("The battle advisor view is unavailable.");
         var host = FindHost(model.RootControl) ?? throw new InvalidOperationException("The battle window host is unavailable.");
+        mapNavigation ??= new BattleMapNavigation(() => model?.Map);
         return advisor ??= new AdvisorWindow(view, host, guard, new BattleAdvisorSource(Capture), GameLanguage.Read, warn, options, backends,
             new BattleUnitNavigation(() => model?.Map, () => this.view), new BattleWeaponNavigation(() => this.view, guard),
-            new BattleMapNavigation(() => model?.Map));
+            mapNavigation);
     }
 
     private BattleSnapshot Capture()
@@ -220,7 +223,12 @@ internal sealed class BattleIntegration
         Plugin.LocalApi?.Detach(this);
         contactAssessments?.Suspend();
         var previous = advisor; advisor = null;
-        previous?.Stop();
+        try { previous?.Stop(); }
+        finally
+        {
+            var navigation = mapNavigation; mapNavigation = null;
+            navigation?.Dispose();
+        }
     }
 
     internal void Reset()
