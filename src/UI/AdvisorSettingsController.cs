@@ -56,7 +56,7 @@ internal sealed class AdvisorSettingsController
         localApi = Named<CheckBox>("EnableLocalApi");
         linkOwnUnits = Named<CheckBox>("LinkOwnUnits"); linkContacts = Named<CheckBox>("LinkContacts");
         localConnections = new AdvisorLocalConnectionsView(Named<StackPanel>("LocalApiConnections"), Named<ComboBox>("LocalApiDefaultConnection"), text, guard);
-        information = new AdvisorInformationView(Named<StackPanel>("InformationChoices"), guard);
+        information = new AdvisorInformationView(Named<StackPanel>("InformationChoices"), text(), guard);
         throwException = Named<Button>("ThrowTestException");
         test = Named<Button>("TestConnection"); testStatus = Named<TextBlock>("ConnectionTestStatus"); testError = Named<TextBlock>("ConnectionTestError");
         promptEditor = new AdvisorPromptSettingsView(content, text, guard, typing, changed, warn);

@@ -13,7 +13,7 @@ internal sealed class AdvisorInformationView
     private readonly List<(InformationGroup Group, CheckBox Box)> groups = new();
     private readonly List<(InformationKind Kind, CheckBox Box)> items = new();
     internal AdvisorInformation Value { get; private set; } = AdvisorInformation.Default;
-    internal AdvisorInformationView(StackPanel host, Action<Action> guard)
+    internal AdvisorInformationView(StackPanel host, AdvisorText text, Action<Action> guard)
     {
         this.host = host;
         var ns = (XNamespace)"http://schemas.microsoft.com/winfx/2006/xaml";
@@ -40,7 +40,11 @@ internal sealed class AdvisorInformationView
                 var depth = 1;
                 var parent = AdvisorInformation.Item(kind).Requires;
                 while (parent.HasValue) { depth++; parent = AdvisorInformation.Item(parent.Value).Requires; }
-                root.Add(Box("InformationItem" + kind, AdvisorInformation.Item(kind).TextKey, (20 * depth) + ",4,0,4", false));
+                var item = AdvisorInformation.Item(kind);
+                var box = Box("InformationItem" + kind, item.TextKey, (20 * depth) + ",4,0,4", false);
+                if (text.Contains(item.TextKey + "_tip"))
+                    box.SetAttributeValue("ToolTip", "{DynamicResource Advisor." + item.TextKey + "_tip}");
+                root.Add(box);
             }
         }
         var view = GUI.ParseXaml(root.ToString(SaveOptions.DisableFormatting)) as FrameworkElement
