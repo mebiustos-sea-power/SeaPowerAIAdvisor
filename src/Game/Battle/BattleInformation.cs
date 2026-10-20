@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json.Linq;
 
@@ -13,6 +14,7 @@ internal static class BattleInformation
         var ids = units.OfType<JObject>().Select(u => (string)u["id"]!).ToHashSet(System.StringComparer.Ordinal);
         foreach (var collection in new[] { "unit_capabilities", "friendly_bases" })
             foreach (var row in ((JArray)snapshot[collection]!).OfType<JObject>().Where(r => !ids.Contains((string)r["id"]!)).ToArray()) row.Remove();
+        FilterMovement(snapshot, ids, information.Allows(InformationKind.BattleMovementPlans));
         foreach (var collection in new[] { "hosted_air_units", "aviation_hosts" })
             foreach (var row in ((JArray)snapshot[collection]!).OfType<JObject>().Where(r =>
                 !information.Allows(InformationKind.BattleAviation) || !ids.Contains((string)r["host_unit_id"]!)).ToArray()) row.Remove();
@@ -63,4 +65,26 @@ internal static class BattleInformation
             "base" => information.Allows(InformationKind.BattleBases),
             _ => true
         });
+    private static void FilterMovement(JObject snapshot, HashSet<string> allowedIds, bool enabled)
+    {
+        var plans = (JArray)snapshot["movement_plans"]!;
+        var routes = (JArray)snapshot["movement_routes"]!;
+        if (!enabled) { plans.Clear(); routes.Clear(); return; }
+        foreach (var row in plans.OfType<JObject>().Where(p => !allowedIds.Contains((string)p["id"]!)).ToArray()) row.Remove();
+        foreach (var row in routes.OfType<JObject>().Where(p => !allowedIds.Contains((string)p["id"]!)).ToArray()) row.Remove();
+        foreach (var plan in plans.OfType<JObject>())
+        {
+            HideReference(plan, "formation_leader_id", allowedIds);
+            HideReference(plan, "route_unit_id", allowedIds);
+        }
+        foreach (var point in routes.OfType<JObject>().SelectMany(r => (JArray)r["waypoints"]!).OfType<JObject>())
+            foreach (var key in new[] { "relative_to_unit_id", "target_unit_id" })
+                if (HideReference(point, key, allowedIds)) point["position"] = JValue.CreateNull();
+    }
+    private static bool HideReference(JObject row, string key, HashSet<string> ids)
+    {
+        if (row[key]?.Type != JTokenType.String || ids.Contains((string)row[key]!)) return false;
+        row[key] = JValue.CreateNull();
+        return true;
+    }
 }

@@ -23,6 +23,7 @@
   "error_pagination_invalid": "An offset or limit is outside its allowed range.",
   "error_unsupported_argument": "Unsupported argument.",
   "catalog_friendly_units": "Own on-map identities, positions, heading and speed.",
+  "catalog_movement_plans": "Own formation leader/following/independent movement, by own-unit IDs. route_unit_id selects a shared route; routes are sent once per consultation. Waypoints are ordered remaining movement tasks; relative positions are snapshots. Empty waypoints means no queued movement points.",
   "catalog_friendly_launched_weapons": "Own launched missiles/torpedoes: motion, launcher ID, commanded target or position, and reported tracking. tracking_status is tracking, searching, inactive or unknown.",
   "catalog_friendly_ground_units": "Own ground combat units, SAM/AAA, radar and missile sites; IDs support capability queries.",
   "catalog_friendly_bases": "Own airbases, ports and installations. Observed opposing/neutral facilities are contacts.",

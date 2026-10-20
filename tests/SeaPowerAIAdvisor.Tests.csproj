@@ -29,6 +29,7 @@
     <Compile Include="..\src\Game\Battle\BattleInformation.cs" Link="BattleInformation.cs" />
     <Compile Include="..\src\Game\Battle\BattleSnapshot.cs" Link="BattleSnapshot.cs" />
     <Compile Include="..\src\Game\Battle\BattleQuerySession.cs" Link="BattleQuerySession.cs" />
+    <Compile Include="..\src\Game\Battle\BattleMovementReader.cs" Link="BattleMovementReader.cs" />
     <Compile Include="..\src\Game\Battle\BattleSituationReader.cs" Link="BattleSituationReader.cs" />
     <Compile Include="..\src\Game\Battle\BattleContactMotionReader.cs" Link="BattleContactMotionReader.cs" />
     <Compile Include="..\src\Game\Battle\BattleContactEvidenceReader.cs" Link="BattleContactEvidenceReader.cs" />

@@ -23,6 +23,7 @@ internal static partial class BattleTests
         });
         RunWeapons(check);
         RunSensors(check);
+        RunMovement(check);
         check("Battle capture excludes hidden objectives, future reports and actual enemy details", () =>
         {
             var f = new Fixture();
@@ -577,6 +578,11 @@ internal static partial class BattleTests
         public Reactive<string> Name { get; } = new("ミッドウェイ");
         public string _type { get; set; } = "Vessel";
         public Parameters _obp { get; set; } = new();
+        public MovementFormation? Formation { get; set; }
+        public bool IsFormationLeader => Formation?.LeaderStation?.UnitObject == this;
+        public bool FollowingFormation => Formation != null && !ActsIndependentlyInFormation.Value;
+        public Reactive<bool> ActsIndependentlyInFormation { get; } = new(false);
+        public object? _userRoot { get; set; }
         public bool isWeapon() => false;
         public bool _unlimitedFuel => false;
         public object? Compartments { get; set; } = new { IntegrityPercentage = 75.0, FloodingPercentage = 10.0 };

@@ -21,6 +21,7 @@ internal sealed class BattleSituationReader
         var contacts = new JArray();
         var launchedWeapons = new JArray();
         var identities = new List<(object Object, string Id)>();
+        var movementUnits = new List<(object Object, string Id)>();
         var ownWeapons = new List<(object Object, JObject Row)>();
         var weaponContacts = new List<(object MapUnit, JObject Row)>();
         var capabilities = new JArray();
@@ -55,6 +56,7 @@ internal sealed class BattleSituationReader
                 var row = (JObject)units.Last!;
                 unitReferences.Add(((string)row["id"]!, Convert.ToInt32(Required(vehicle, "Id"), CultureInfo.InvariantCulture)));
                 identities.Add((identity, (string)row["id"]!));
+                movementUnits.Add((identity, (string)row["id"]!));
                 capabilities.Add(knowledge.CaptureOwn(identity, (string)row["id"]!, (string)row["display_name"]!));
                 if (category == "base")
                 {
@@ -106,6 +108,7 @@ internal sealed class BattleSituationReader
             reference["destroyed"] = destroyed;
             threats.Add(reference);
         }
+        var movement = BattleMovementReader.Capture(movementUnits);
         foreach (var weapon in ownObjects.Where(IsWeapon))
         {
             var row = BattleWeaponReader.CaptureOwn(weapon, "own_weapon_" + (launchedWeapons.Count + 1).ToString(CultureInfo.InvariantCulture));
@@ -154,6 +157,8 @@ internal sealed class BattleSituationReader
             ["friendly_units"] = units,
             ["friendly_launched_weapons"] = launchedWeapons,
             ["unit_capabilities"] = capabilities,
+            ["movement_plans"] = movement.Plans,
+            ["movement_routes"] = movement.Routes,
             ["contact_threat_references"] = threats,
             ["friendly_bases"] = bases,
             ["hosted_air_units"] = aviation.Units,

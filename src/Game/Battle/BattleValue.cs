@@ -13,8 +13,13 @@ internal static class BattleValue
     {
         const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
         var type = value.GetType();
-        var property = type.GetProperty(name, flags);
-        if (property != null) return property.GetValue(value);
+        // NodeCanvas hides BBParameter.value with a typed property in BBParameter<T>.
+        // Resolve the most-derived declaration rather than asking reflection to choose between both.
+        for (var declaration = type; declaration != null; declaration = declaration.BaseType)
+        {
+            var property = declaration.GetProperty(name, flags | BindingFlags.DeclaredOnly);
+            if (property != null) return property.GetValue(value);
+        }
         var field = type.GetField(name, flags) ?? throw new MissingMemberException(type.FullName, name);
         return field.GetValue(value);
     }

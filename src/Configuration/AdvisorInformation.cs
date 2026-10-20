@@ -11,7 +11,7 @@ internal enum InformationKind
     CampaignForces, CampaignShips, CampaignFuel, CampaignAmmunition, CampaignDamage, CampaignAviation,
     CampaignContacts, CampaignBases, CampaignOrders, CampaignReports,
     BattleGroundUnits, BattleBases, BattleAviation, CampaignOwnBases, CampaignGroundUnits, BattleNeutralContacts, BattleDestroyedContacts,
-    BattleLaunchedWeapons, BattleWeaponContacts, BattleSensors, BattleSensorPerformance
+    BattleLaunchedWeapons, BattleWeaponContacts, BattleSensors, BattleSensorPerformance, BattleMovementPlans
 }
 
 internal sealed class InformationItem
@@ -40,6 +40,7 @@ internal sealed class AdvisorInformation
     internal static readonly IReadOnlyList<InformationItem> Items = Array.AsReadOnly(new[]
     {
         new InformationItem(InformationKind.BattleUnits, "battle_units", "basic"),
+        new InformationItem(InformationKind.BattleMovementPlans, "battle_movement_plans", "movement_plans", InformationKind.BattleUnits, defaultEnabled: false),
         new InformationItem(InformationKind.BattleFuel, "battle_fuel", "fuel", InformationKind.BattleUnits),
         new InformationItem(InformationKind.BattleDamage, "battle_damage", "damage", InformationKind.BattleUnits),
         new InformationItem(InformationKind.BattleWeapons, "battle_weapons", "weapons", InformationKind.BattleUnits),
@@ -71,7 +72,7 @@ internal sealed class AdvisorInformation
     });
     internal static readonly IReadOnlyList<InformationGroup> Groups = Array.AsReadOnly(new[]
     {
-        new InformationGroup(true, "battle_friendly", InformationKind.BattleUnits, InformationKind.BattleGroundUnits, InformationKind.BattleBases, InformationKind.BattleAviation, InformationKind.BattleFuel, InformationKind.BattleDamage, InformationKind.BattleWeapons, InformationKind.BattleSensors, InformationKind.BattleSensorPerformance, InformationKind.BattleLaunchedWeapons),
+        new InformationGroup(true, "battle_friendly", InformationKind.BattleUnits, InformationKind.BattleGroundUnits, InformationKind.BattleBases, InformationKind.BattleAviation, InformationKind.BattleMovementPlans, InformationKind.BattleFuel, InformationKind.BattleDamage, InformationKind.BattleWeapons, InformationKind.BattleSensors, InformationKind.BattleSensorPerformance, InformationKind.BattleLaunchedWeapons),
         new InformationGroup(true, "battle_intelligence", InformationKind.BattleContacts, InformationKind.BattleWeaponContacts, InformationKind.BattleNeutralContacts, InformationKind.BattleDestroyedContacts, InformationKind.BattleThreats, InformationKind.BattleBriefing, InformationKind.BattleReports),
         new InformationGroup(false, "campaign_friendly", InformationKind.CampaignForces, InformationKind.CampaignShips, InformationKind.CampaignFuel, InformationKind.CampaignAmmunition, InformationKind.CampaignDamage, InformationKind.CampaignAviation, InformationKind.CampaignOwnBases, InformationKind.CampaignGroundUnits),
         new InformationGroup(false, "campaign_intelligence", InformationKind.CampaignContacts, InformationKind.CampaignBases, InformationKind.CampaignOrders, InformationKind.CampaignReports)
@@ -175,6 +176,7 @@ internal sealed class AdvisorInformation
         "friendly_bases" => Allows(InformationKind.BattleBases),
         "hosted_air_units" or "aviation_tasks" => Allows(InformationKind.BattleAviation),
         "unit_capabilities" => BattleSections.Length > 0,
+        "movement_plans" => Allows(InformationKind.BattleMovementPlans),
         "friendly_launched_weapons" => Allows(InformationKind.BattleLaunchedWeapons),
         "observed_contacts" => Allows(InformationKind.BattleContacts),
         "public_class_threat_references" => Allows(InformationKind.BattleThreats),
@@ -186,6 +188,7 @@ internal sealed class AdvisorInformation
     {
         "catalog" => true,
         "list_units" or "get_units" => Allows(InformationKind.BattleUnits),
+        "get_movement_plans" => Allows(InformationKind.BattleMovementPlans),
         "list_launched_weapons" => Allows(InformationKind.BattleLaunchedWeapons),
         "list_ground_units" or "get_ground_units" => Allows(InformationKind.BattleGroundUnits),
         "list_bases" or "get_bases" => Allows(InformationKind.BattleBases),

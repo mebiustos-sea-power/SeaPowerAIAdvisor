@@ -10,7 +10,7 @@ namespace SeaPowerAIAdvisor;
 // Queries operate exclusively on the detached player view captured at consultation start.
 internal sealed class BattleQuerySession : IAdvisorQuerySession, IAdvisorUnitReferenceSource
 {
-    private static readonly string[] names = { "catalog", "list_units", "get_units", "list_contacts", "get_briefing", "list_reports", "get_reports", "get_unit_capabilities", "get_contact_threats", "list_ground_units", "get_ground_units", "list_bases", "get_bases", "list_air_units", "get_air_units", "list_air_tasks", "list_launched_weapons" };
+    private static readonly string[] names = { "catalog", "list_units", "get_units", "list_contacts", "get_briefing", "list_reports", "get_reports", "get_unit_capabilities", "get_contact_threats", "list_ground_units", "get_ground_units", "list_bases", "get_bases", "list_air_units", "get_air_units", "list_air_tasks", "list_launched_weapons", "get_movement_plans" };
     private readonly JObject snapshot;
     private readonly AdvisorInformation information;
     private readonly JObject initial;
@@ -24,6 +24,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession, IAdvisorUnitRef
     private int returnedBytes;
     private readonly HashSet<string> deliveredWeaponReferences = new(StringComparer.Ordinal);
     private readonly HashSet<string> deliveredSensorReferences = new(StringComparer.Ordinal);
+    private readonly HashSet<string> deliveredMovementRoutes = new(StringComparer.Ordinal);
 
     internal BattleQuerySession(BattleSnapshot situation, string language, string? question, int maxRounds = DefaultMaxRounds, AdvisorInformation? information = null, AdvisorPrompts? prompts = null, JObject? context = null)
     {
@@ -35,6 +36,8 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession, IAdvisorUnitRef
         snapshot = situation.Copy();
         snapshot["friendly_launched_weapons"] ??= new JArray();
         snapshot["sensor_references"] ??= new JArray();
+        snapshot["movement_plans"] ??= new JArray();
+        snapshot["movement_routes"] ??= new JArray();
         BattleInformation.Apply(snapshot, information);
         UnitReferences = situation.UnitReferences.Only(Rows("friendly_units").Select(row => (string)row["id"]!));
         if (context != null) assessment = new BattleContactAssessment(snapshot, context, information);
@@ -120,6 +123,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession, IAdvisorUnitRef
             }
             var delivered = DeduplicateReferences(results, "weapon_references", deliveredWeaponReferences);
             var sensorDelivered = DeduplicateReferences(results, "sensor_references", deliveredSensorReferences);
+            var movementDelivered = DeduplicateReferences(results, "routes", deliveredMovementRoutes);
             var response = Envelope("ok");
             response["results"] = results;
             var bytes = Bytes(response);
@@ -128,6 +132,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession, IAdvisorUnitRef
             returnedBytes += bytes;
             deliveredWeaponReferences.UnionWith(delivered);
             deliveredSensorReferences.UnionWith(sensorDelivered);
+            deliveredMovementRoutes.UnionWith(movementDelivered);
             return response;
         }
         catch (AdvisorQueryException error)
@@ -161,6 +166,16 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession, IAdvisorUnitRef
                 Allowed(query, "query", "offset", "limit");
                 return Page(query, new JArray(Rows("friendly_units").OfType<JObject>()
                     .Select(r => new JObject { ["id"] = r["id"]!.DeepClone(), ["display_name"] = r["display_name"]!.DeepClone(), ["kind"] = r["kind"]!.DeepClone() })));
+            case "get_movement_plans":
+                Allowed(query, "query", "ids");
+                var plans = SelectRows(query, "movement_plans");
+                var routeIds = plans.Select(p => (string?)p["route_unit_id"]).ToHashSet(StringComparer.Ordinal);
+                return new JObject
+                {
+                    ["units"] = plans,
+                    ["routes"] = new JArray(Rows("movement_routes").OfType<JObject>()
+                        .Where(r => routeIds.Contains((string)r["id"]!)).Select(r => r.DeepClone()))
+                };
             case "list_launched_weapons":
                 Allowed(query, "query", "offset", "limit"); return Page(query, Rows("friendly_launched_weapons"));
             case "list_ground_units":
@@ -361,6 +376,7 @@ internal sealed class BattleQuerySession : IAdvisorQuerySession, IAdvisorUnitRef
     private JObject RawCatalogue() => new()
     {
         ["friendly_units"] = new JObject { ["item_count"] = Rows("friendly_units").Count, ["list_query"] = "list_units", ["detail_query"] = "get_units", ["description"] = Prompts.Text("battle.json", "catalog_friendly_units") },
+        ["movement_plans"] = new JObject { ["item_count"] = Rows("movement_plans").Count, ["query"] = "get_movement_plans", ["description"] = Prompts.Text("battle.json", "catalog_movement_plans") },
         ["friendly_launched_weapons"] = new JObject { ["item_count"] = Rows("friendly_launched_weapons").Count, ["list_query"] = "list_launched_weapons", ["description"] = Prompts.Text("battle.json", "catalog_friendly_launched_weapons") },
         ["friendly_ground_units"] = new JObject { ["item_count"] = GroundUnits().Count, ["list_query"] = "list_ground_units", ["detail_query"] = "get_ground_units", ["description"] = Prompts.Text("battle.json", "catalog_friendly_ground_units") },
         ["friendly_bases"] = new JObject { ["item_count"] = Rows("friendly_bases").Count, ["list_query"] = "list_bases", ["detail_query"] = "get_bases", ["description"] = Prompts.Text("battle.json", "catalog_friendly_bases") },

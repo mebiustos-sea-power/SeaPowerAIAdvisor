@@ -40,6 +40,7 @@ internal sealed class AdvisorProgress
     private static string Topic(string query) => query switch
     {
         "catalog" => "catalog", "list_units" or "get_units" => "units", "get_unit_capabilities" => "capabilities",
+        "get_movement_plans" => "movement",
         "list_contacts" or "list_identification_candidates" => "contacts", "get_contact_threats" => "threats", "get_briefing" => "briefing",
         "list_reports" or "get_reports" => "reports", "list_forces" or "get_forces" => "forces",
         "list_ships" or "get_ships" => "ships", "list_air_units" or "get_air_units" or "list_air_flights" or "list_air_tasks" => "aviation",
