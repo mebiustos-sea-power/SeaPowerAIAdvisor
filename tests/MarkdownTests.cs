@@ -110,6 +110,56 @@ internal static class MarkdownTests
             Require(chat.Exchanges.Single().Question == question && chat.Exchanges.Single().Answer == answer,
                 "Changing the display size altered the saved AI conversation");
         });
+        check("Track links preserve question and Markdown content while targeting only known four-digit contacts", () =>
+        {
+            var known = new System.Collections.Generic.HashSet<int> { 7008, 7018 };
+            var tracks = new AdvisorTrackLinks(known.Contains);
+            var chat = new AdvisorConversation();
+            const string question = "接触7008と7018。70080／17008／6999／7999。<Button />";
+            const string answer = "## 接触 **7008**\n\n1. Track 7018と7008を確認。\n\n| 接触 | 評価 |\n| --- | --- |\n| 7018 | **7008** |\n\n`7008`\n\n```text\n 7008\n```";
+            Require(chat.TryAdd(question, answer, out _), "The track consultation was rejected");
+            var text = AdvisorText.Load("ja");
+            var plain = XDocument.Parse(AdvisorTranscript.Render(chat, text, "Michael Reed", "empty")).Root!;
+            var rendered = XDocument.Parse(AdvisorTranscript.Render(chat, text, "Michael Reed", "empty", tracks: tracks)).Root!;
+            Require(Visible(rendered) == Visible(plain), "Adding track actions changed visible text or code whitespace");
+            var hyperlinks = rendered.Descendants(Ns + "Hyperlink").ToArray();
+            Require(hyperlinks.Length == 9 && tracks.Links.Select(link => link.Name).Distinct().Count() == 9,
+                "Repeated tracks collided, a longer number became a track, or a track was missed");
+            foreach (var link in tracks.Links)
+            {
+                var element = hyperlinks.Single(e => (string?)e.Attribute(XName.Get("Name", "http://schemas.microsoft.com/winfx/2006/xaml")) == link.Name);
+                Require(Visible(element) == link.Number.ToString() && element.Attribute("Foreground") == null &&
+                    (string?)element.Attribute("Style") == "{DynamicResource AdvisorTrackLinkStyle}",
+                    "The displayed number/action target changed or a local text color prevented the shared hover style");
+                Require((string?)element.Attribute("TextDecorations") == "None" && element.Attribute("ToolTip") == null &&
+                    element.Attribute("NavigateUri") == null && element.Attribute("Cursor") == null,
+                    "A track acquired an underline, tooltip, cursor override or external navigation");
+            }
+            Require(!rendered.Descendants(Ns + "InlineUIContainer").Any(),
+                "Track decoration inserted an inline UI object that could overlap the number during hover");
+            Require(hyperlinks.Any(e => e.Ancestors(Ns + "Span").Any(a => (string?)a.Attribute("FontWeight") == "Bold")),
+                "Track decoration lost Markdown emphasis");
+            Require(chat.Exchanges.Single().Question == question && chat.Exchanges.Single().Answer == answer,
+                "Interactive display altered copied questions or AI history");
+        });
+        check("Track guidance is limited to empty supported conversations and disappeared contacts become plain text", () =>
+        {
+            var known = true;
+            var text = AdvisorText.Load("en");
+            var chat = new AdvisorConversation();
+            var empty = AdvisorTranscript.Render(chat, text, "Michael Reed", "empty", tracks: new AdvisorTrackLinks(n => known && n == 7008));
+            Require(Visible(XDocument.Parse(empty).Root!).Contains(text["transcript.track_navigation"]), "The initial track instructions were missing");
+            var unsupported = AdvisorTranscript.Render(chat, text, "Michael Reed", "empty");
+            Require(!Visible(XDocument.Parse(unsupported).Root!).Contains(text["transcript.track_navigation"]), "An unsupported mode advertised track navigation");
+            Require(chat.TryAdd("Contact 7008", "**7008**", out _), "The known-track consultation was rejected");
+            var active = AdvisorTranscript.Render(chat, text, "Michael Reed", "empty", tracks: new AdvisorTrackLinks(n => known && n == 7008));
+            Require(!Visible(XDocument.Parse(active).Root!).Contains(text["transcript.track_navigation"]), "Initial instructions stayed above an active conversation");
+            known = false;
+            var refreshed = XDocument.Parse(AdvisorTranscript.Render(chat, text, "Michael Reed", "empty",
+                tracks: new AdvisorTrackLinks(n => known && n == 7008))).Root!;
+            Require(!refreshed.Descendants(Ns + "Hyperlink").Any() && Visible(refreshed) == Visible(XDocument.Parse(active).Root!),
+                "A missing contact stayed actionable or its message was removed");
+        });
         check("The packaged netstandard Markdown parser renders advice without an external parser DLL", () =>
         {
             using var built = AssemblyDefinition.ReadAssembly(advisorPath);

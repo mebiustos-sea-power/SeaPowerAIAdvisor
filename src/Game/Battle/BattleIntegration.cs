@@ -108,7 +108,8 @@ internal sealed class BattleIntegration
     {
         if (view == null || model?.RootControl == null) throw new InvalidOperationException("The battle advisor view is unavailable.");
         var host = FindHost(model.RootControl) ?? throw new InvalidOperationException("The battle window host is unavailable.");
-        return advisor ??= new AdvisorWindow(view, host, guard, new BattleAdvisorSource(Capture), GameLanguage.Read, warn, options, backends);
+        return advisor ??= new AdvisorWindow(view, host, guard, new BattleAdvisorSource(Capture), GameLanguage.Read, warn, options, backends,
+            new BattleTrackNavigation(() => model?.Map, () => this.view));
     }
 
     private BattleSnapshot Capture()

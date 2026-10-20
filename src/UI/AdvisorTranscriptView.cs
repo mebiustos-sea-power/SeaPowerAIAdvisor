@@ -12,6 +12,7 @@ internal sealed class AdvisorTranscriptView
     private readonly Action<Action> guard;
     private readonly Action<AdvisorTurn> retry;
     private readonly Action<AdvisorTurn, ContactAssumption> reassess;
+    private readonly IAdvisorTrackNavigation? tracks;
     private readonly List<Button> reassessmentButtons = new();
     private readonly Dictionary<AdvisorTurn, FrameworkElement> answerHeaders = new();
     private readonly Stopwatch clock = Stopwatch.StartNew();
@@ -34,16 +35,26 @@ internal sealed class AdvisorTranscriptView
     }
 
     internal AdvisorTranscriptView(StackPanel panel, Action<Action> guard, Action<AdvisorTurn> retry,
-        Action<AdvisorTurn, ContactAssumption> reassess)
-    { this.panel = panel; this.guard = guard; this.retry = retry; this.reassess = reassess; }
+        Action<AdvisorTurn, ContactAssumption> reassess, IAdvisorTrackNavigation? tracks = null)
+    { this.panel = panel; this.guard = guard; this.retry = retry; this.reassess = reassess; this.tracks = tracks; }
 
     internal void UpdateBusy(bool busy)
     { foreach (var button in reassessmentButtons) button.IsEnabled = !busy; }
 
     internal void Show(AdvisorConversation conversation, AdvisorText text, string advisor, string empty, AdvisorNotice? notice, AdvisorTextSize textSize)
     {
-        var root = GUI.ParseXaml(AdvisorTranscript.Render(conversation, text, advisor, empty, notice, textSize)) as StackPanel
+        var links = tracks == null ? null : new AdvisorTrackLinks(tracks.Contains);
+        var markup = AdvisorTranscript.Render(conversation, text, advisor, empty, notice, textSize, links);
+        var root = GUI.ParseXaml(markup) as StackPanel
             ?? throw new InvalidOperationException("The Markdown conversation view is not a StackPanel.");
+        if (links != null)
+            foreach (var item in links.Links)
+            {
+                var link = root.FindName(item.Name) as Hyperlink
+                    ?? throw new InvalidOperationException("The conversation track link is missing.");
+                link.Click += (_, e) => { e.Handled = true; guard(() => tracks!.Focus(item.Number)); };
+                link.PreviewMouseRightButtonDown += (_, e) => { e.Handled = true; guard(() => tracks!.OpenMenu(item.Number)); };
+            }
         waitingTurn = null; waitingText = null;
         copyButtons.Clear(); reassessmentButtons.Clear(); answerHeaders.Clear();
         var now = clock.Elapsed.TotalSeconds;

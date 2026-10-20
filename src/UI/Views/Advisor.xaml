@@ -3,6 +3,16 @@
     <SolidColorBrush x:Key="AdvisorErrorBrush" Color="#FF9B8F" />
     <SolidColorBrush x:Key="AdvisorPlayerNameBrush" Color="#9BC7FF" />
     <SolidColorBrush x:Key="AdvisorNameBrush" Color="#E8D39A" />
+    <SolidColorBrush x:Key="AdvisorTrackNormalBrush" Color="#B9A883" />
+    <SolidColorBrush x:Key="AdvisorTrackHoverBrush" Color="#FFFFFF" />
+    <Style x:Key="AdvisorTrackLinkStyle" TargetType="{x:Type Hyperlink}">
+      <Setter Property="Foreground" Value="{StaticResource AdvisorTrackNormalBrush}" />
+      <Style.Triggers>
+        <Trigger Property="IsMouseOver" Value="True">
+          <Setter Property="Foreground" Value="{StaticResource AdvisorTrackHoverBrush}" />
+        </Trigger>
+      </Style.Triggers>
+    </Style>
   </Grid.Resources>
   <Grid x:Name="ConversationPane">
     <Grid.RowDefinitions>
@@ -45,7 +55,7 @@
       </Border>
     </Grid>
     <TextBlock Grid.Row="1" Text="{DynamicResource Advisor.question.label}" FontSize="13" Margin="0,10,0,5" />
-    <TextBox x:Name="Question" Grid.Row="2" AcceptsReturn="True" AcceptsTab="False" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" FontSize="15" Padding="8" ToolTip="{DynamicResource Advisor.question.tooltip}" />
+    <TextBox x:Name="Question" Grid.Row="2" AcceptsReturn="True" AcceptsTab="False" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" FontSize="15" Padding="8" />
     <Grid Grid.Row="3" Margin="0,10,0,0">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="Auto" />
