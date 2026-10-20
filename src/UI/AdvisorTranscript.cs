@@ -40,6 +40,7 @@ internal static class AdvisorTranscript
                 var answer = AdvisorMarkdown.Render(exchange.Answer, links == null ? null :
                     (id, label) => links.Reference(id, label, turn.UnitReferences),
                     weaponLinks == null ? null : weaponLinks.Reference);
+                weaponLinks?.Decorate(answer);
                 row.Add(links?.Decorate(answer) ?? answer);
                 if (BattleContactAssessment.CanReassess(turn))
                 {

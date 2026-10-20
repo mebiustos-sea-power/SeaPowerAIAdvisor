@@ -47,12 +47,12 @@ internal static class AdvisorMarkdown
                     yield return Paragraph(paragraph, compact, referenceLink);
                     break;
                 case CodeBlock code:
-                    yield return Element("Border", new XAttribute("Background", "#18212C"),
+                    yield return Literal(Element("Border", new XAttribute("Background", "#18212C"),
                         new XAttribute("Padding", "8"), new XAttribute("Margin", "0,0,0,10"),
                         Element("ScrollViewer", new XAttribute("HorizontalScrollBarVisibility", "Auto"),
                             new XAttribute("VerticalScrollBarVisibility", "Disabled"),
                             Element("TextBlock", new XAttribute("FontSize", "13"),
-                                new XAttribute("TextWrapping", "NoWrap"), Text("Text", code.Lines.ToString()))));
+                                new XAttribute("TextWrapping", "NoWrap"), Text("Text", code.Lines.ToString())))));
                     break;
                 case QuoteBlock quote:
                     yield return Element("Border", new XAttribute("BorderBrush", "#607080"),
@@ -101,7 +101,7 @@ internal static class AdvisorMarkdown
                     yield return Run(literal.Content.ToString());
                     break;
                 case CodeInline code:
-                    yield return Element("Span", new XAttribute("Foreground", "#E0C99F"), Run(code.Content));
+                    yield return Literal(Element("Span", new XAttribute("Foreground", "#E0C99F"), Run(code.Content)));
                     break;
                 case EmphasisInline emphasis:
                     yield return Element("Span", emphasis.DelimiterChar == '~'
@@ -125,12 +125,12 @@ internal static class AdvisorMarkdown
                     else
                     {
                         // External links and image references remain text; no URL is opened or image loaded.
-                        yield return label;
-                        if (!string.IsNullOrEmpty(link.Url)) yield return Run(" (" + link.Url + ")");
+                        yield return Literal(label);
+                        if (!string.IsNullOrEmpty(link.Url)) yield return Literal(Run(" (" + link.Url + ")"));
                     }
                     break;
                 case AutolinkInline link:
-                    yield return Run(link.Url);
+                    yield return Literal(Run(link.Url));
                     break;
                 case HtmlEntityInline entity:
                     yield return Run(entity.Transcoded.ToString());

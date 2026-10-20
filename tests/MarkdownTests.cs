@@ -323,6 +323,37 @@ internal static class MarkdownTests
             Require(!plain.Descendants(Ns + "Hyperlink").Any() && Visible(plain).Contains("[7008](weapon:mod_custom)") &&
                 Visible(plain).Contains("https://example.invalid"), "Literal text, an image or an external link acquired a weapon action");
         });
+        check("Unlinked weapon mentions reuse the first valid link in their own answer while preserving text and formatting", () =>
+        {
+            var chat = new AdvisorConversation();
+            const string first = "RGM-84C / [**RGM-84C**](weapon:harpoon) / **RGM-84C** / [RGM-84C](weapon:other) / RGM-84C / RGM-84C2 / RGM-84C-ER / [Mk-48 Mod 4](weapon:mk48) / Mk-48 Mod 4";
+            const string second = "RGM-84C / Mk-48 Mod 4";
+            chat.TryAdd("RGM-84C", first, out _); chat.TryAdd("RGM-84C", second, out _);
+            var weapons = new AdvisorWeaponLinks(key => key is "harpoon" or "other" or "mk48");
+            var rendered = XDocument.Parse(AdvisorTranscript.Render(chat, AdvisorText.Load("en"), "Michael Reed", "empty", weaponLinks: weapons)).Root!;
+            var targets = weapons.Links.ToDictionary(link => link.Name, link => link.ReferenceKey);
+            var anchors = rendered.Descendants(Ns + "Hyperlink").ToArray();
+            var x = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml");
+            Require(anchors.Select(link => targets[(string)link.Attribute(x + "Name")!]).SequenceEqual(new[]
+                { "harpoon", "harpoon", "harpoon", "other", "harpoon", "mk48", "mk48" }),
+                "A repeated weapon used the wrong target, or completion affected another answer, a question or a longer weapon name");
+            Require(anchors.Any(link => Visible(link) == "RGM-84C" && link.Ancestors(Ns + "Span").Any(span => (string?)span.Attribute("FontWeight") == "Bold")) &&
+                !anchors.Any(link => link.Descendants(Ns + "Hyperlink").Any()), "Completion removed emphasis or nested an existing link");
+            Require(chat.Exchanges[0].Answer == first && chat.Exchanges[1].Answer == second &&
+                Visible(rendered).Contains("RGM-84C / RGM-84C / RGM-84C / RGM-84C / RGM-84C / RGM-84C2 / RGM-84C-ER / Mk-48 Mod 4 / Mk-48 Mod 4"),
+                "Completion changed displayed text or the source used for copying and AI history");
+        });
+        check("Weapon completion leaves code, external references and explicit destinations untouched", () =>
+        {
+            const string answer = "[RGM-84C](weapon:missing) / [RGM-84C](weapon:harpoon) / `RGM-84C` / [RGM-84C](https://example.invalid/RGM-84C) / ![RGM-84C](https://example.invalid/RGM-84C) / <https://example.invalid/RGM-84C> / [RGM-84C](unit:missing) / RGM-84C\n\n```text\nRGM-84C\n```";
+            var chat = new AdvisorConversation(); chat.TryAdd("Assess", answer, out _);
+            var weapons = new AdvisorWeaponLinks(key => key == "harpoon");
+            var rendered = XDocument.Parse(AdvisorTranscript.Render(chat, AdvisorText.Load("en"), "Michael Reed", "empty", weaponLinks: weapons)).Root!;
+            Require(weapons.Links.Count == 2 && weapons.Links.All(link => link.ReferenceKey == "harpoon") &&
+                rendered.Descendants(Ns + "Hyperlink").Count() == 2, "Completion modified literal content or replaced an explicit destination");
+            Require(Visible(rendered).Contains("https://example.invalid/RGM-84C") && chat.Exchanges[0].Answer == answer,
+                "Completion rewrote an external URL or the original answer");
+        });
         check("The packaged netstandard Markdown parser renders advice without an external parser DLL", () =>
         {
             using var built = AssemblyDefinition.ReadAssembly(advisorPath);
