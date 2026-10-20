@@ -286,6 +286,43 @@ internal static class MarkdownTests
             Require(Visible(literal).Contains("[P-3C](unit:own_unit_1)") && !literal.Descendants(Ns + "Hyperlink").Any() &&
                 !literal.Descendants(Ns + "Image").Any(), "Literal code or external references acquired actions");
         });
+        check("Weapon links use stable public keys across replies while preserving formatted labels and original history", () =>
+        {
+            var chat = new AdvisorConversation();
+            const string first = "[**RIM-66E**](weapon:usn_rim-66e) / [7008](weapon:mod_custom)";
+            const string second = "[RIM-67B](weapon:usn_rim-67b) / [RIM-66E](weapon:usn_rim-66e) / 7008";
+            chat.TryAdd("First", first, out _); chat.TryAdd("Second", second, out _);
+            var weapons = new AdvisorWeaponLinks(key => key is "usn_rim-66e" or "usn_rim-67b" or "mod_custom");
+            var units = new AdvisorUnitLinks(id => id == 7008);
+            var rendered = XDocument.Parse(AdvisorTranscript.Render(chat, AdvisorText.Load("en"), "Michael Reed", "empty",
+                links: units, weaponLinks: weapons)).Root!;
+            Require(weapons.Links.Select(link => link.ReferenceKey).SequenceEqual(new[] { "usn_rim-66e", "mod_custom", "usn_rim-67b", "usn_rim-66e" }) &&
+                units.Links.Count == 1 && units.Links[0].UnitId == 7008, "A weapon key changed between replies or its label became a unit action");
+            var firstLink = rendered.Descendants(Ns + "Hyperlink").First();
+            Require(firstLink.Descendants(Ns + "Span").Any(span => (string?)span.Attribute("FontWeight") == "Bold") &&
+                !rendered.Descendants(Ns + "Hyperlink").Any(link => link.Descendants(Ns + "Hyperlink").Any()), "Weapon formatting or link boundaries changed");
+            Require(!Visible(rendered).Contains("weapon:") && chat.Exchanges[0].Answer == first && chat.Exchanges[1].Answer == second,
+                "Rendering exposed a key or changed the text used for copying and AI history");
+        });
+        check("Unavailable weapon references remain plain labels without unit fallback, and literal or external links stay unchanged", () =>
+        {
+            var chat = new AdvisorConversation();
+            const string answer = "[7008](weapon:missing) / [7008](weapon:) / [7008](weapon:weapon_reference_7) / 7008";
+            chat.TryAdd("Assess", answer, out _);
+            foreach (var enabled in new[] { false, true })
+            {
+                var units = new AdvisorUnitLinks(id => id == 7008);
+                var weapons = enabled ? new AdvisorWeaponLinks(_ => false) : null;
+                var rendered = XDocument.Parse(AdvisorTranscript.Render(chat, AdvisorText.Load("en"), "Michael Reed", "empty",
+                    links: units, weaponLinks: weapons)).Root!;
+                Require(units.Links.Count == 1 && !Visible(rendered).Contains("weapon:") &&
+                    Visible(rendered).Contains("7008 / 7008 / 7008 / 7008"), "An unavailable weapon was rebound to a unit or leaked its destination");
+            }
+            var plain = AdvisorMarkdown.Render("`[7008](weapon:mod_custom)` / [site](https://example.invalid) / ![image](weapon:mod_custom)",
+                weaponLink: new AdvisorWeaponLinks(_ => true).Reference);
+            Require(!plain.Descendants(Ns + "Hyperlink").Any() && Visible(plain).Contains("[7008](weapon:mod_custom)") &&
+                Visible(plain).Contains("https://example.invalid"), "Literal text, an image or an external link acquired a weapon action");
+        });
         check("The packaged netstandard Markdown parser renders advice without an external parser DLL", () =>
         {
             using var built = AssemblyDefinition.ReadAssembly(advisorPath);
@@ -304,7 +341,7 @@ internal static class MarkdownTests
                 };
                 var assembly = context.LoadFromAssemblyPath(Path.GetFullPath(advisorPath));
                 var method = assembly.GetType("SeaPowerAIAdvisor.AdvisorMarkdown", true)!.GetMethod("Render", BindingFlags.NonPublic | BindingFlags.Static)!;
-                var result = (XElement)method.Invoke(null, new object[] { "# Ready\n\n**Bundled** parser.", null! })!;
+                var result = (XElement)method.Invoke(null, new object[] { "# Ready\n\n**Bundled** parser.", null!, null! })!;
                 Require(Visible(result) == "ReadyBundled parser.", "The distributed parser could not render the actual advisor code");
             }
             finally { context.Unload(); }

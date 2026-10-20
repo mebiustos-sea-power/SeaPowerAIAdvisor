@@ -47,7 +47,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     private bool diagnosticScrollPending;
 
     internal AdvisorWindow(FrameworkElement view, WindowHost host, Action<Action> guard, IAdvisorSource source, Func<string> replyLanguage, Action<string> warn, AdvisorOptionsStore options, AdvisorBackendRegistry backends,
-        IAdvisorUnitNavigation? navigation = null)
+        IAdvisorUnitNavigation? navigation = null, IAdvisorWeaponNavigation? weapons = null)
     {
         this.view = view;
         this.host = host;
@@ -70,7 +70,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         transcriptScroll = Named<ScrollViewer>(content, "Transcript");
         unitNavigationHint = Named<TextBlock>(content, "UnitNavigationHint");
         canNavigateUnits = navigation != null;
-        transcript = new AdvisorTranscriptView(Named<StackPanel>(content, "TranscriptMessages"), guard, RetryConsultation, ReassessContact, navigation);
+        transcript = new AdvisorTranscriptView(Named<StackPanel>(content, "TranscriptMessages"), guard, RetryConsultation, ReassessContact, navigation, weapons);
         status = Named<TextBlock>(content, "Status");
         diagnosticStatus = Named<TextBlock>(content, "DiagnosticStatus");
         diagnosticOutput = Named<TextBox>(content, "DiagnosticOutput");

@@ -25,7 +25,11 @@ internal sealed class AdvisorPrompts
         var mode = tactical ? battle : campaign;
         result["evidence_policy"] = mode["evidence_policy"]!.DeepClone();
         result["retrieval"] = mode["retrieval"]!.DeepClone();
-        if (tactical) result["unit_links"] = battle["unit_links"]!.DeepClone();
+        if (tactical)
+        {
+            result["unit_links"] = battle["unit_links"]!.DeepClone();
+            result["weapon_links"] = battle["weapon_links"]!.DeepClone();
+        }
         return result;
     }
     internal string SystemInstruction(JToken instructions) => (string)common["system"]! + "\n" +
@@ -104,7 +108,7 @@ internal sealed class AdvisorPrompts
     internal static JObject ReadRequests(string directory) => Read(directory, "requests.json", RequestFields);
     private static readonly string[] BattleFields =
     {
-        "evidence_policy", "retrieval", "unit_links", "error_round_limit", "error_wrong_consultation", "error_briefing_unavailable", "base_briefing_note",
+        "evidence_policy", "retrieval", "unit_links", "weapon_links", "error_round_limit", "error_wrong_consultation", "error_briefing_unavailable", "base_briefing_note",
         "error_request_too_large", "error_requests_invalid", "error_query_name_invalid", "error_response_too_large",
         "error_payload_limit", "error_information_disabled", "error_contact_kind_invalid", "error_ids_invalid",
         "error_unknown_id", "error_unknown_query", "error_sections_invalid", "error_sections_disabled",

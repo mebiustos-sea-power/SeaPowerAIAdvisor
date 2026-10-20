@@ -7,6 +7,7 @@ namespace SeaPowerAIAdvisor;
 
 internal static class AdvisorMarkup
 {
+    internal sealed class LocalReference { }
     private static readonly XNamespace Ns = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
     internal static XElement Element(string name, params object[] content) => new(Ns + name, content);
     internal static XAttribute Text(string name, string value)

@@ -17,7 +17,6 @@ internal sealed class AdvisorUnitLinks
     private readonly Dictionary<string, HashSet<int>> ownNames = new(StringComparer.Ordinal);
     private readonly Regex mentions;
     private readonly bool linkOwnUnits;
-    private sealed class ExplicitReference { }
     private readonly List<(string Name, int UnitId)> links = new();
     internal IReadOnlyList<(string Name, int UnitId)> Links => links;
 
@@ -45,7 +44,7 @@ internal sealed class AdvisorUnitLinks
     internal XElement Reference(string id, XElement label, AdvisorUnitReferences references)
     {
         // An explicit destination must never be retargeted by the text-matching fallback.
-        label.AddAnnotation(new ExplicitReference());
+        label.AddAnnotation(new LocalReference());
         var target = references.Resolve(id);
         return linkOwnUnits && target.HasValue && known(target.Value) ? Link(target.Value, true, label) : label;
     }
@@ -53,7 +52,7 @@ internal sealed class AdvisorUnitLinks
     internal XElement Decorate(XElement content)
     {
         var fields = content.DescendantsAndSelf().Where(e => e.Name.LocalName is "Run" or "TextBlock")
-            .Where(e => !e.AncestorsAndSelf().Any(a => a.Name.LocalName == "Hyperlink" || a.Annotation<ExplicitReference>() != null))
+            .Where(e => !e.AncestorsAndSelf().Any(a => a.Name.LocalName == "Hyperlink" || a.Annotation<LocalReference>() != null))
             .Select(e => e.Attribute("Text")).Where(a => a != null).Cast<XAttribute>().ToArray();
         foreach (var field in fields)
         {

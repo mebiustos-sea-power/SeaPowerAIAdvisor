@@ -24,6 +24,9 @@ internal sealed class BattleReferenceCatalog
     }
     private static bool Public(object entry) => !(bool)Required(entry, "HiddenInEncyclopedia");
     private static string Key(object entry) => (string)Required(entry, "IniRef");
+    internal static object? FindPublicWeapon(IEnumerable<object> entries, string key) =>
+        entries.Where(Public).Where(entry => Key(entry) == key)
+            .OrderBy(entry => Convert.ToInt32(Required(entry, "VariantIndex"))).FirstOrDefault();
     internal string WeaponName(string key) => weapons.TryGetValue(key, out var entry) ? (string)Required(entry, "DisplayName") : key;
     internal JArray SnapshotWeapons() => new(registered.Values.Select(r => r.DeepClone()));
 

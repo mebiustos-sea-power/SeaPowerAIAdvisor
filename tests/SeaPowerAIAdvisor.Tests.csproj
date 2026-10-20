@@ -43,6 +43,7 @@
     <Compile Include="..\src\Advisor\AdvisorQuestion.cs" Link="AdvisorQuestion.cs" />
     <Compile Include="..\src\UI\AdvisorTranscript.cs" Link="AdvisorTranscript.cs" />
     <Compile Include="..\src\UI\AdvisorUnitLinks.cs" Link="AdvisorUnitLinks.cs" />
+    <Compile Include="..\src\UI\AdvisorWeaponLinks.cs" Link="AdvisorWeaponLinks.cs" />
     <Compile Include="..\src\UI\IAdvisorUnitNavigation.cs" Link="IAdvisorUnitNavigation.cs" />
     <Compile Include="..\src\UI\AdvisorTypography.cs" Link="AdvisorTypography.cs" />
     <EmbeddedResource Include="..\src\UI\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Localization.%(Filename).json" />

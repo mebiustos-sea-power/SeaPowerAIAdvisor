@@ -10,6 +10,17 @@ internal static partial class BattleTests
 {
     internal static void Run(Action<string, Action> check)
     {
+        check("Public weapon lookup respects exact mod keys, excludes hidden entries and uses the reference catalog's variant order", () =>
+        {
+            var hidden = new { IniRef = "mod_weapon", HiddenInEncyclopedia = true, VariantIndex = -1 };
+            var later = new { IniRef = "mod_weapon", HiddenInEncyclopedia = false, VariantIndex = 2 };
+            var first = new { IniRef = "mod_weapon", HiddenInEncyclopedia = false, VariantIndex = 0 };
+            var entries = new object[] { hidden, later, first };
+            Require(ReferenceEquals(BattleReferenceCatalog.FindPublicWeapon(entries, "mod_weapon"), first), "The lookup selected a hidden or different public variant");
+            Require(BattleReferenceCatalog.FindPublicWeapon(entries, "mod_weap") == null &&
+                BattleReferenceCatalog.FindPublicWeapon(new object[] { hidden }, "mod_weapon") == null,
+                "The lookup guessed a different key or exposed a hidden reference");
+        });
         RunWeapons(check);
         RunSensors(check);
         check("Battle capture excludes hidden objectives, future reports and actual enemy details", () =>

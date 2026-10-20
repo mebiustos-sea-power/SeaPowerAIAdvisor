@@ -13,6 +13,7 @@ internal sealed class AdvisorTranscriptView
     private readonly Action<AdvisorTurn> retry;
     private readonly Action<AdvisorTurn, ContactAssumption> reassess;
     private readonly IAdvisorUnitNavigation? navigation;
+    private readonly IAdvisorWeaponNavigation? weapons;
     private readonly List<Button> reassessmentButtons = new();
     private readonly Dictionary<AdvisorTurn, FrameworkElement> answerHeaders = new();
     private readonly Stopwatch clock = Stopwatch.StartNew();
@@ -35,8 +36,8 @@ internal sealed class AdvisorTranscriptView
     }
 
     internal AdvisorTranscriptView(StackPanel panel, Action<Action> guard, Action<AdvisorTurn> retry,
-        Action<AdvisorTurn, ContactAssumption> reassess, IAdvisorUnitNavigation? navigation = null)
-    { this.panel = panel; this.guard = guard; this.retry = retry; this.reassess = reassess; this.navigation = navigation; }
+        Action<AdvisorTurn, ContactAssumption> reassess, IAdvisorUnitNavigation? navigation = null, IAdvisorWeaponNavigation? weapons = null)
+    { this.panel = panel; this.guard = guard; this.retry = retry; this.reassess = reassess; this.navigation = navigation; this.weapons = weapons; }
 
     internal void UpdateBusy(bool busy)
     { foreach (var button in reassessmentButtons) button.IsEnabled = !busy; }
@@ -45,7 +46,8 @@ internal sealed class AdvisorTranscriptView
     {
         var links = navigation == null || (!linkOwnUnits && !linkContacts) ? null :
             new AdvisorUnitLinks(navigation.Contains, linkOwnUnits ? navigation.OwnUnits() : null, linkContacts, linkOwnUnits);
-        var markup = AdvisorTranscript.Render(conversation, text, advisor, empty, notice, textSize, links);
+        var weaponLinks = weapons == null ? null : new AdvisorWeaponLinks(weapons.Contains);
+        var markup = AdvisorTranscript.Render(conversation, text, advisor, empty, notice, textSize, links, weaponLinks);
         var root = GUI.ParseXaml(markup) as StackPanel
             ?? throw new InvalidOperationException("The Markdown conversation view is not a StackPanel.");
         if (links != null)
@@ -55,6 +57,14 @@ internal sealed class AdvisorTranscriptView
                     ?? throw new InvalidOperationException("The conversation unit link is missing.");
                 link.Click += (_, e) => { e.Handled = true; guard(() => navigation!.Focus(item.UnitId)); };
                 link.PreviewMouseRightButtonDown += (_, e) => { e.Handled = true; guard(() => navigation!.OpenMenu(item.UnitId)); };
+            }
+        if (weaponLinks != null)
+            foreach (var item in weaponLinks.Links)
+            {
+                var link = root.FindName(item.Name) as Hyperlink
+                    ?? throw new InvalidOperationException("The conversation weapon link is missing.");
+                link.Click += (_, e) => e.Handled = true;
+                link.PreviewMouseRightButtonDown += (_, e) => { e.Handled = true; guard(() => weapons!.OpenMenu(item.ReferenceKey)); };
             }
         waitingTurn = null; waitingText = null;
         copyButtons.Clear(); reassessmentButtons.Clear(); answerHeaders.Clear();
