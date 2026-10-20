@@ -25,6 +25,7 @@ internal static class PromptTests
             Rewrite(directory, "battle", value =>
             {
                 value["evidence_policy"] = "EXTERNAL_BATTLE_V1";
+                value["coordinate_links"] = "EXTERNAL_COORDINATE_LINKS";
                 value["tool_description"] = "EXTERNAL_BATTLE_TOOL";
                 value["catalog_observed_contacts"] = "EXTERNAL_CONTACT_DESCRIPTION";
                 value["error_wrong_consultation"] = "EXTERNAL_SESSION_ERROR";
@@ -40,6 +41,7 @@ internal static class PromptTests
                 var system = (string)body["system_instruction"]!;
                 Require(system.Contains("EXTERNAL_COMMON_V1", StringComparison.Ordinal) && system.Contains("EXTERNAL_TASK_V1", StringComparison.Ordinal) && system.Contains("EXTERNAL_REPLY_FORMAT", StringComparison.Ordinal) &&
                     system.Contains("EXTERNAL_ADVICE_POLICY", StringComparison.Ordinal) && system.Contains("EXTERNAL_BATTLE_V1", StringComparison.Ordinal) &&
+                    system.Contains("EXTERNAL_COORDINATE_LINKS", StringComparison.Ordinal) &&
                     !system.Contains("CONSUMER_MUTATION", StringComparison.Ordinal) &&
                     !system.Contains("EXTERNAL_COMMON_V2", StringComparison.Ordinal), "A reread, hardcoded policy or mutable consumer copy replaced the loaded instructions");
                 Require((string?)body["tools"]![0]!["description"] == "EXTERNAL_BATTLE_TOOL", "The tool description ignored its external resource");

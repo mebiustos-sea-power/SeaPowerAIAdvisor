@@ -372,7 +372,7 @@ internal static class MarkdownTests
                 };
                 var assembly = context.LoadFromAssemblyPath(Path.GetFullPath(advisorPath));
                 var method = assembly.GetType("SeaPowerAIAdvisor.AdvisorMarkdown", true)!.GetMethod("Render", BindingFlags.NonPublic | BindingFlags.Static)!;
-                var result = (XElement)method.Invoke(null, new object[] { "# Ready\n\n**Bundled** parser.", null!, null! })!;
+                var result = (XElement)method.Invoke(null, new object[] { "# Ready\n\n**Bundled** parser.", null!, null!, null! })!;
                 Require(Visible(result) == "ReadyBundled parser.", "The distributed parser could not render the actual advisor code");
             }
             finally { context.Unload(); }

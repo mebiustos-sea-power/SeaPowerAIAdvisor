@@ -20,12 +20,14 @@ internal static class AdvisorMarkdown
         .UseCjkFriendlyEmphasis().Build();
 
     internal static XElement Render(string markdown, Func<string, XElement, XElement>? unitLink = null,
-        Func<string, XElement, XElement>? weaponLink = null)
+        Func<string, XElement, XElement>? weaponLink = null, Func<string, XElement, XElement>? coordinateLink = null)
     {
         XElement Reference(string destination, XElement label) =>
             destination.StartsWith("unit:", StringComparison.OrdinalIgnoreCase)
                 ? unitLink?.Invoke(destination.Substring(5), label) ?? label
-                : weaponLink?.Invoke(destination.Substring(7), label) ?? label;
+                : destination.StartsWith("weapon:", StringComparison.OrdinalIgnoreCase)
+                    ? weaponLink?.Invoke(destination.Substring(7), label) ?? label
+                    : coordinateLink?.Invoke(destination.Substring(4), label) ?? label;
         var root = Element("StackPanel",
             new XAttribute(XNamespace.Xmlns + "x", "http://schemas.microsoft.com/winfx/2006/xaml"),
             new XAttribute("TextElement.FontSize", "14"), Blocks(Markdown.Parse(markdown, Pipeline), Reference));
@@ -116,7 +118,8 @@ internal static class AdvisorMarkdown
                     var label = Element("Span", Inlines(link, referenceLink));
                     if (!link.IsImage && link.Url != null &&
                         (link.Url.StartsWith("unit:", StringComparison.OrdinalIgnoreCase) ||
-                         link.Url.StartsWith("weapon:", StringComparison.OrdinalIgnoreCase)))
+                         link.Url.StartsWith("weapon:", StringComparison.OrdinalIgnoreCase) ||
+                         link.Url.StartsWith("map:", StringComparison.OrdinalIgnoreCase)))
                     {
                         // Unresolved local labels must not fall through to unit-name or track-number matching.
                         label.AddAnnotation(new LocalReference());

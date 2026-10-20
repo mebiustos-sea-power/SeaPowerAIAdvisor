@@ -9,7 +9,7 @@ internal static class AdvisorTranscript
 {
     internal static string Render(AdvisorConversation conversation, AdvisorText text, string advisor, string empty,
         AdvisorNotice? configurationNotice = null, AdvisorTextSize textSize = AdvisorTypography.DefaultSize, AdvisorUnitLinks? links = null,
-        AdvisorWeaponLinks? weaponLinks = null)
+        AdvisorWeaponLinks? weaponLinks = null, AdvisorCoordinateLinks? coordinateLinks = null)
     {
         var root = Element("StackPanel", new XAttribute(XNamespace.Xmlns + "x", "http://schemas.microsoft.com/winfx/2006/xaml"));
         var busy = conversation.Turns.Any(t => t.State == AdvisorTurnState.Waiting);
@@ -39,7 +39,8 @@ internal static class AdvisorTranscript
                 var exchange = turn.Exchange ?? throw new InvalidOperationException("The completed answer is missing.");
                 var answer = AdvisorMarkdown.Render(exchange.Answer, links == null ? null :
                     (id, label) => links.Reference(id, label, turn.UnitReferences),
-                    weaponLinks == null ? null : weaponLinks.Reference);
+                    weaponLinks == null ? null : weaponLinks.Reference,
+                    coordinateLinks == null ? null : coordinateLinks.Reference);
                 weaponLinks?.Decorate(answer);
                 row.Add(links?.Decorate(answer) ?? answer);
                 if (BattleContactAssessment.CanReassess(turn))

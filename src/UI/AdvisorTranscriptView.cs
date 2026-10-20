@@ -14,6 +14,7 @@ internal sealed class AdvisorTranscriptView
     private readonly Action<AdvisorTurn, ContactAssumption> reassess;
     private readonly IAdvisorUnitNavigation? navigation;
     private readonly IAdvisorWeaponNavigation? weapons;
+    private readonly IAdvisorMapNavigation? map;
     private readonly List<Button> reassessmentButtons = new();
     private readonly Dictionary<AdvisorTurn, FrameworkElement> answerHeaders = new();
     private readonly Stopwatch clock = Stopwatch.StartNew();
@@ -36,9 +37,9 @@ internal sealed class AdvisorTranscriptView
     }
 
     internal AdvisorTranscriptView(StackPanel panel, ScrollViewer scroll, Action<Action> guard, Action<AdvisorTurn> retry,
-        Action<AdvisorTurn, ContactAssumption> reassess, IAdvisorUnitNavigation? navigation = null, IAdvisorWeaponNavigation? weapons = null)
+        Action<AdvisorTurn, ContactAssumption> reassess, IAdvisorUnitNavigation? navigation = null, IAdvisorWeaponNavigation? weapons = null, IAdvisorMapNavigation? map = null)
     {
-        this.panel = panel; this.guard = guard; this.retry = retry; this.reassess = reassess; this.navigation = navigation; this.weapons = weapons;
+        this.panel = panel; this.guard = guard; this.retry = retry; this.reassess = reassess; this.navigation = navigation; this.weapons = weapons; this.map = map;
         panel.PreviewMouseWheel += (_, e) =>
         {
             if (e.Orientation != Orientation.Vertical) return;
@@ -56,7 +57,8 @@ internal sealed class AdvisorTranscriptView
         var links = navigation == null || (!linkOwnUnits && !linkContacts) ? null :
             new AdvisorUnitLinks(navigation.Contains, linkOwnUnits ? navigation.OwnUnits() : null, linkContacts, linkOwnUnits);
         var weaponLinks = weapons == null ? null : new AdvisorWeaponLinks(weapons.Contains);
-        var markup = AdvisorTranscript.Render(conversation, text, advisor, empty, notice, textSize, links, weaponLinks);
+        var coordinates = map == null ? null : new AdvisorCoordinateLinks();
+        var markup = AdvisorTranscript.Render(conversation, text, advisor, empty, notice, textSize, links, weaponLinks, coordinates);
         var root = GUI.ParseXaml(markup) as StackPanel
             ?? throw new InvalidOperationException("The Markdown conversation view is not a StackPanel.");
         if (links != null)
@@ -74,6 +76,13 @@ internal sealed class AdvisorTranscriptView
                     ?? throw new InvalidOperationException("The conversation weapon link is missing.");
                 link.Click += (_, e) => e.Handled = true;
                 link.PreviewMouseRightButtonDown += (_, e) => { e.Handled = true; guard(() => weapons!.OpenMenu(item.ReferenceKey)); };
+            }
+        if (coordinates != null)
+            foreach (var item in coordinates.Links)
+            {
+                var link = root.FindName(item.Name) as Hyperlink
+                    ?? throw new InvalidOperationException("The conversation coordinate link is missing.");
+                link.Click += (_, e) => { e.Handled = true; guard(() => map!.Focus(item.Latitude, item.Longitude)); };
             }
         waitingTurn = null; waitingText = null;
         copyButtons.Clear(); reassessmentButtons.Clear(); answerHeaders.Clear();
