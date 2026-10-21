@@ -25,15 +25,17 @@ internal sealed class CampaignAdvisorSource : IAdvisorSource
 internal interface IAdvisorOperationSource
 {
     IAdvisorOperationSession? CreateOperations(string owner, AdvisorPrompts prompts);
+    AdvisorOperations? Operations { get; }
 }
 
 internal sealed class BattleAdvisorSource : IAdvisorSource, IAdvisorOperationSource
 {
     private readonly Func<BattleSnapshot> capture;
-    private readonly Func<string, AdvisorPrompts, IAdvisorOperationSession?>? operations;
-    internal BattleAdvisorSource(Func<BattleSnapshot> capture, Func<string, AdvisorPrompts, IAdvisorOperationSession?>? operations = null)
+    private readonly Func<AdvisorOperationGateway?>? operations;
+    internal BattleAdvisorSource(Func<BattleSnapshot> capture, Func<AdvisorOperationGateway?>? operations = null)
     { this.capture = capture; this.operations = operations; }
-    public IAdvisorOperationSession? CreateOperations(string owner, AdvisorPrompts prompts) => operations?.Invoke(owner, prompts);
+    public IAdvisorOperationSession? CreateOperations(string owner, AdvisorPrompts prompts) => operations?.Invoke()?.CreateSession(owner, prompts);
+    public AdvisorOperations? Operations => operations?.Invoke()?.Operations;
     public IAdvisorQuerySession CreateSession(string language, string? question, int maxRounds = AdvisorQueryLimits.DefaultMaxRounds, AdvisorInformation? information = null, JObject? context = null) => new BattleQuerySession(capture(), language, question, maxRounds, information, context: context);
     public string Preview(AdvisorText text) => text["battle.diagnostic"] + "\n\n" + capture().Copy().ToString(Newtonsoft.Json.Formatting.Indented);
 }

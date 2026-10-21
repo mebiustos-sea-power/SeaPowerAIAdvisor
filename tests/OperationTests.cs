@@ -240,6 +240,9 @@ internal static class OperationTests
     }
     private sealed class FaultyOperation : IAdvisorOperation
     {
+        public bool RequiresApproval => false;
+        public void Validate(IReadOnlyList<AdvisorOperationOrder> orders) { }
+        public string DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => "Custom operation";
         public string Description => "Test failure";
         internal int Calls;
         public string Id => "extension.test";

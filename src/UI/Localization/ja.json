@@ -423,5 +423,16 @@
   "errorlog.test_hint": "詳細は「API接続 → APIエラー」で確認できます。",
   "errorlog.storage_failed": "エラーログを保存できませんでした。\n{0}",
   "errorlog.read_failed": "エラーの詳細を読み込めませんでした。\n{0}",
-  "progress.topic.operations": "操作カタログ"
+  "progress.topic.operations": "操作カタログ",
+  "operation.review": "提案を確認…",
+  "operation.registered": "登録済み",
+  "operation.partial": "一部登録済み",
+  "operation.cancelled": "提案は取消済み",
+  "operation.rejected": "未登録",
+  "operation.title": "提案の確認",
+  "operation.execute": "実行",
+  "operation.back": "戻る",
+  "operation.failure": "予約を登録できませんでした（{0}）。登録済み：{1} / {2}件。",
+  "operation.sonobuoy_summary": "{0}にソノブイ投下予約を{1}件追加します。",
+  "operation.sonobuoy_append": "既存の予約は残します。深度は現在のゲーム設定を使用します。"
 }

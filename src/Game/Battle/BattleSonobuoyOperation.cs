@@ -42,6 +42,7 @@ internal sealed class BattleSonobuoyOperation : IAdvisorOperation
         if (!allowed.Allows(InformationKind.BattleUnits) || !allowed.Allows(InformationKind.BattleWeapons))
             throw new AdvisorOperationException(403, "information_disabled");
     }
+    public bool RequiresApproval => true;
     public string Id => OperationId;
     public string Description => AdvisorPrompts.Current.Text("battle.json", "operation_sonobuoy_drop");
     public JObject Definition() => new()
@@ -77,7 +78,35 @@ internal sealed class BattleSonobuoyOperation : IAdvisorOperation
             };
         }));
     }
-    public JObject Execute(string target, JObject arguments)
+    public void Validate(IReadOnlyList<AdvisorOperationOrder> orders)
+    {
+        foreach (var order in orders) _ = Read(order.Target, order.Arguments);
+        foreach (var group in orders.GroupBy(o => (o.Target, Ammo: (string)o.Arguments["ammunition"]!)))
+        {
+            var data = Read(group.Key.Target, group.First().Arguments);
+            if (data.Unit.Ammunition().Single(a => a.Id == group.Key.Ammo).Available < group.Count())
+                throw new AdvisorOperationException(409, "no_available_sonobuoy");
+        }
+    }
+    public string DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language)
+    {
+        var text = AdvisorText.Load(language);
+        var current = units();
+        return string.Join("\n\n", orders.GroupBy(o => o.Target).Select(group =>
+        {
+            var unit = current.FirstOrDefault(u => "unit:" + u.Id.ToString(CultureInfo.InvariantCulture) == group.Key);
+            var summary = text.Format("operation.sonobuoy_summary", unit?.Name ?? group.Key, group.Count()) + "\n" + text["operation.sonobuoy_append"];
+            return summary + "\n\n" + string.Join("\n", group.Select((order, i) =>
+            {
+                var args = order.Arguments;
+                var ammo = unit?.Ammunition().FirstOrDefault(a => a.Id == (string?)args["ammunition"]);
+                return (i + 1).ToString(CultureInfo.InvariantCulture) + ". " + (ammo?.Name ?? (string)args["ammunition"]!) +
+                    " — " + ((double)args["latitude"]!).ToString("F5", CultureInfo.InvariantCulture) + ", " +
+                    ((double)args["longitude"]!).ToString("F5", CultureInfo.InvariantCulture);
+            }));
+        }));
+    }
+    private (IBattleSonobuoyUnit Unit, string Ammunition, double Latitude, double Longitude) Read(string target, JObject arguments)
     {
         CheckInformation();
         if (arguments.Properties().Any(p => p.Name is not ("latitude" or "longitude" or "ammunition" or "count" or "placement" or "depth")) ||
@@ -95,11 +124,16 @@ internal sealed class BattleSonobuoyOperation : IAdvisorOperation
             ?? throw new AdvisorOperationException(409, "sonobuoy_not_carried");
         if (ammo.Available < 1) throw new AdvisorOperationException(409, "no_available_sonobuoy");
         if (!ammo.SingleDrop) throw new AdvisorOperationException(409, "single_drop_unavailable");
+        return (unit, ammunition, latitude, longitude);
+    }
+    public JObject Execute(string target, JObject arguments)
+    {
+        var data = Read(target, arguments);
         // Ignore incoming depth choices; the player-controlled setting is read again at registration.
-        var effectiveDepth = unit.Depth;
-        unit.Append(ammunition, latitude, longitude);
-        return new JObject { ["target_ref"] = target, ["ammunition"] = ammunition, ["count"] = 1,
-            ["latitude"] = latitude, ["longitude"] = longitude, ["placement"] = "append", ["depth"] = effectiveDepth };
+        var effectiveDepth = data.Unit.Depth;
+        data.Unit.Append(data.Ammunition, data.Latitude, data.Longitude);
+        return new JObject { ["target_ref"] = target, ["ammunition"] = data.Ammunition, ["count"] = 1,
+            ["latitude"] = data.Latitude, ["longitude"] = data.Longitude, ["placement"] = "append", ["depth"] = effectiveDepth };
     }
     private static double Coordinate(JToken? value, double limit)
     {

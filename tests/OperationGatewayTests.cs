@@ -48,7 +48,9 @@ internal static class OperationGatewayTests
             Require(gateway.CreateSession("off", AdvisorPrompts.Current) == null, "Disabled WIP advertised an operation service");
             enabled = true;
             var answer = Finish(gateway, Task.Run(() => session.ExecuteAsync(Execute(operation.Id), CancellationToken.None)));
-            Require((string?)answer["status"] == "registered" && operation.Calls == 1 && operation.Thread == Environment.CurrentManagedThreadId,
+            Require((string?)answer["status"] == "proposed" && operation.Calls == 0, "AI bypassed staging");
+            service.FinishProposal("permission", true);
+            Require(operation.Calls == 1 && operation.Thread == Environment.CurrentManagedThreadId,
                 "Operation did not execute once on the game thread");
         });
         check("Cancelled sessions and retired battle gateways never register queued orders", () =>
@@ -85,7 +87,8 @@ internal static class OperationGatewayTests
             using var gateway = new AdvisorOperationGateway(service);
             var conversation = new AdvisorConversation(); var turn = conversation.Begin(new AdvisorQuestion("Schedule an order"));
             using (var first = gateway.CreateSession(turn.OperationId, AdvisorPrompts.Current)!)
-                Require((string?)Send(gateway, first, Execute(operation.Id))["status"] == "registered", "Initial registration failed");
+                Require((string?)Send(gateway, first, Execute(operation.Id))["status"] == "proposed", "Initial proposal failed");
+            service.FinishProposal(turn.OperationId, true);
             var owner = turn.OperationId; turn.Cancel(); conversation.Retry(turn);
             using var retry = gateway.CreateSession(turn.OperationId, AdvisorPrompts.Current)!;
             Require(turn.OperationId == owner && retry.History.Count == 1 && (string?)retry.History[0]?["response"]?["status"] == "registered",
@@ -97,12 +100,12 @@ internal static class OperationGatewayTests
         });
         check("Unexpected native errors propagate and cannot be hidden by replaying the same AI order ID", () =>
         {
-            var operation = new Operation("custom.test") { Fail = true }; using var gateway = new AdvisorOperationGateway(Registry(() => true, operation));
+            var operation = new Operation("custom.test") { Fail = true }; var service = Registry(() => true, operation);
+            using var gateway = new AdvisorOperationGateway(service);
             using var session = gateway.CreateSession("failure", AdvisorPrompts.Current)!;
             var work = session.ExecuteAsync(Execute(operation.Id), CancellationToken.None);
-            try { gateway.Pump(); throw new InvalidOperationException("Native failure was hidden"); }
-            catch (System.IO.IOException) { }
-            try { work.GetAwaiter().GetResult(); throw new InvalidOperationException("Worker failure was hidden"); }
+            Require((string?)Finish(gateway, work)["status"] == "proposed" && operation.Calls == 0, "A staged fault ran early");
+            try { service.FinishProposal("failure", true); throw new InvalidOperationException("Native failure was hidden"); }
             catch (System.IO.IOException) { }
             Require(Code(Send(gateway, session, Execute(operation.Id))) == "operation_outcome_unknown" && operation.Calls == 1,
                 "Unknown side effects were replayed");
@@ -133,6 +136,9 @@ internal static class OperationGatewayTests
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
     private sealed class Operation : IAdvisorOperation
     {
+        public bool RequiresApproval => false;
+        public void Validate(IReadOnlyList<AdvisorOperationOrder> orders) { }
+        public string DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => "Custom operation";
         public string Id { get; }
         public string Description => "Custom extension action";
         internal int Calls, Definitions, Thread;

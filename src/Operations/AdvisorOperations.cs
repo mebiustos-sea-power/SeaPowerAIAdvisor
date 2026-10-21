@@ -10,6 +10,9 @@ internal interface IAdvisorOperation
 {
     string Id { get; }
     string Description { get; }
+    bool RequiresApproval { get; }
+    void Validate(IReadOnlyList<AdvisorOperationOrder> orders);
+    string DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language);
     JObject Definition();
     JArray Candidates();
     JObject Execute(string target, JObject arguments);
@@ -34,12 +37,14 @@ internal sealed class AdvisorOperations
     private const int MaximumReceipts = 1024;
     private readonly Dictionary<string, IAdvisorOperation> operations = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Receipt> receipts = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, AdvisorOperationProposal> proposals = new(StringComparer.Ordinal);
     private readonly Func<bool> enabled;
+    private bool retired;
     private readonly int thread = System.Environment.CurrentManagedThreadId;
     internal string ScopeId { get; } = Guid.NewGuid().ToString("N");
     internal AdvisorOperations(Func<bool> enabled) => this.enabled = enabled;
 
-    internal bool Enabled { get { CheckThread(); return enabled(); } }
+    internal bool Enabled { get { CheckThread(); return !retired && enabled(); } }
 
     internal void Register(IAdvisorOperation operation)
     {
@@ -52,8 +57,8 @@ internal sealed class AdvisorOperations
     internal JObject Catalog()
     {
         CheckThread();
-        return new JObject { ["scope_id"] = ScopeId, ["enabled"] = enabled(),
-            ["operations"] = enabled() ? new JArray(operations.Values.Select(o => o.Definition().DeepClone())) : new JArray() };
+        return new JObject { ["scope_id"] = ScopeId, ["enabled"] = Enabled,
+            ["operations"] = Enabled ? new JArray(operations.Values.Select(Definition)) : new JArray() };
     }
     internal JArray PriorOrders(string owner)
     {
@@ -73,10 +78,10 @@ internal sealed class AdvisorOperations
         var matches = operations.Values.OrderBy(o => o.Id, StringComparer.Ordinal)
             .Where(o => search.Length == 0 || o.Id.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0 ||
                 o.Description.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0).ToArray();
-        return Page(new JArray(matches.Select(o => new JObject { ["id"] = o.Id, ["description"] = o.Description })), offset, limit, "operations");
+        return Page(new JArray(matches.Select(o => new JObject { ["id"] = o.Id, ["description"] = o.Description, ["requires_approval"] = o.RequiresApproval })), offset, limit, "operations");
     }
     internal JObject Describe(string id)
-    { CheckEnabled(); return new JObject { ["operation"] = Operation(id).Definition().DeepClone() }; }
+    { CheckEnabled(); return new JObject { ["operation"] = Definition(Operation(id)) }; }
     internal JObject CandidatePage(string id, string? target, int offset, int limit)
     {
         CheckEnabled();
@@ -95,23 +100,157 @@ internal sealed class AdvisorOperations
         CheckEnabled();
         return new JObject { ["scope_id"] = ScopeId, ["operation"] = id, ["candidates"] = Operation(id).Candidates().DeepClone() };
     }
+    private static JObject Definition(IAdvisorOperation operation)
+    {
+        var definition = (JObject)operation.Definition().DeepClone();
+        definition["requires_approval"] = operation.RequiresApproval;
+        return definition;
+    }
+    internal AdvisorOperationProposal? Proposal(string owner)
+    { CheckThread(); return proposals.TryGetValue(owner, out var proposal) ? proposal : null; }
+
+    internal void BeginProposal(string owner)
+    {
+        CheckEnabled();
+        if (Proposal(owner)?.State != AdvisorProposalState.Collecting)
+            proposals[owner] = new AdvisorOperationProposal(owner);
+    }
+    internal JObject Propose(string owner, JObject request)
+    {
+        CheckEnabled();
+        ValidateRequest(request);
+        var id = (string)request["request_id"]!;
+        if (receipts.TryGetValue(id, out var previous)) return Replay(previous, request);
+        var operation = Operation((string)request["operation"]!);
+        if (receipts.Count >= MaximumReceipts) throw new AdvisorOperationException(409, "operation_receipt_limit");
+        var proposal = Proposal(owner);
+        if (proposal == null || proposal.State != AdvisorProposalState.Collecting) throw new AdvisorOperationException(409, "proposal_closed");
+        var receipt = new Receipt(request);
+        receipts.Add(id, receipt);
+        var order = new AdvisorOperationOrder(request);
+        try
+        {
+            // Validate the combined demand, without reserving inventory or mutating game state.
+            operation.Validate(proposal.Orders.Where(o => o.OperationId == operation.Id).Concat(new[] { order }).ToArray());
+            proposal.Add(order);
+            proposal.RequiresApproval |= operation.RequiresApproval;
+            receipt.Result = new JObject { ["request_id"] = id, ["status"] = "proposed", ["registered"] = false,
+                ["requires_approval"] = operation.RequiresApproval };
+        }
+        catch (AdvisorOperationException error)
+        { receipt.Result = new JObject { ["request_id"] = id, ["status"] = "rejected", ["code"] = error.Code }; }
+        return (JObject)receipt.Result.DeepClone();
+    }
+    internal AdvisorOperationProposal? FinishProposal(string owner, bool success)
+    {
+        CheckThread();
+        var proposal = Proposal(owner);
+        if (proposal == null || proposal.State != AdvisorProposalState.Collecting) return proposal;
+        if (!success) { CancelProposal(proposal); return proposal; }
+        proposal.State = AdvisorProposalState.Pending;
+        if (proposal.Orders.Count == 0) proposal.State = AdvisorProposalState.Rejected;
+        else if (!proposal.RequiresApproval) Approve(proposal);
+        return proposal;
+    }
+    internal string DescribeProposal(AdvisorOperationProposal proposal, string language)
+    {
+        CheckThread(); RequireCurrent(proposal);
+        return string.Join("\n\n", proposal.Orders.GroupBy(o => o.OperationId)
+            .Select(group => Operation(group.Key).DescribeProposal(group.ToArray(), language)));
+    }
+    internal void Approve(AdvisorOperationProposal proposal)
+    {
+        CheckThread(); RequireCurrent(proposal);
+        if (proposal.State != AdvisorProposalState.Pending) return;
+        try
+        {
+            CheckEnabled();
+            foreach (var group in proposal.Orders.GroupBy(o => o.OperationId))
+                Operation(group.Key).Validate(group.ToArray());
+        }
+        catch (AdvisorOperationException error)
+        { RejectRemaining(proposal, error.Code); proposal.State = AdvisorProposalState.Rejected; return; }
+        // Preserve request order. Preflight is not a transaction: native side effects cannot be rolled back.
+        foreach (var order in proposal.Orders)
+        {
+            try
+            {
+                var data = Operation(order.OperationId).Execute(order.Target, order.Arguments);
+                receipts[order.Id].Result = new JObject { ["request_id"] = order.Id, ["status"] = "registered", ["data"] = data.DeepClone() };
+                proposal.RegisteredCount++;
+            }
+            catch (AdvisorOperationException error)
+            {
+                RejectRemaining(proposal, error.Code);
+                proposal.State = proposal.RegisteredCount == 0 ? AdvisorProposalState.Rejected : AdvisorProposalState.Partial;
+                return;
+            }
+            catch
+            {
+                RejectRemaining(proposal, "operation_outcome_unknown");
+                receipts[order.Id].Result = null;
+                proposal.State = AdvisorProposalState.Unknown;
+                proposal.ErrorCode = "operation_outcome_unknown";
+                throw;
+            }
+        }
+        proposal.State = AdvisorProposalState.Registered;
+    }
+    internal void DiscardProposalsExcept(IEnumerable<string> owners)
+    {
+        CheckThread();
+        var keep = new HashSet<string>(owners, StringComparer.Ordinal);
+        foreach (var owner in proposals.Keys.Where(id => !keep.Contains(id)).ToArray())
+        { CancelProposal(proposals[owner]); proposals.Remove(owner); }
+    }
+    internal void Retire()
+    {
+        CheckThread(); retired = true;
+        foreach (var proposal in proposals.Values) CancelProposal(proposal);
+    }
+    private void CancelProposal(AdvisorOperationProposal proposal)
+    {
+        if (proposal.State is not (AdvisorProposalState.Collecting or AdvisorProposalState.Pending)) return;
+        RejectRemaining(proposal, "proposal_cancelled", "cancelled");
+        proposal.State = AdvisorProposalState.Cancelled;
+    }
+    private void RejectRemaining(AdvisorOperationProposal proposal, string code, string status = "rejected")
+    {
+        proposal.ErrorCode = code;
+        foreach (var order in proposal.Orders.Skip(proposal.RegisteredCount))
+            receipts[order.Id].Result = new JObject { ["request_id"] = order.Id, ["status"] = status, ["code"] = code };
+    }
+    private void RequireCurrent(AdvisorOperationProposal proposal)
+    {
+        if (retired || !proposals.TryGetValue(proposal.Owner, out var current) || !ReferenceEquals(current, proposal))
+            throw new AdvisorOperationException(409, "operation_scope_changed");
+    }
+    private void ValidateRequest(JObject request)
+    {
+        if (request.Properties().Any(p => p.Name is not ("scope_id" or "request_id" or "operation" or "target_ref" or "arguments")) ||
+            request.Count != 5 || request["arguments"] is not JObject)
+            throw new AdvisorOperationException(400, "invalid_operation_request");
+        var scope = Text(request, "scope_id");
+        if (!Identifier(Text(request, "request_id"))) throw new AdvisorOperationException(400, "invalid_request_id");
+        _ = Text(request, "operation"); _ = Text(request, "target_ref");
+        if (scope != ScopeId) throw new AdvisorOperationException(409, "operation_scope_changed");
+    }
+    private static JObject Replay(Receipt receipt, JObject request)
+    {
+        if (!JToken.DeepEquals(receipt.Request, request)) throw new AdvisorOperationException(409, "request_id_conflict");
+        return receipt.Result == null ? throw new AdvisorOperationException(409, "operation_outcome_unknown") : (JObject)receipt.Result.DeepClone();
+    }
+
+    // Explicit developer API registration. This is not exposed through the AI operation gateway.
     internal JObject Execute(JObject request)
     {
         CheckEnabled();
-        if (request.Properties().Any(p => p.Name is not ("scope_id" or "request_id" or "operation" or "target_ref" or "arguments")) ||
-            request.Count != 5 || request["arguments"] is not JObject arguments)
-            throw new AdvisorOperationException(400, "invalid_operation_request");
-        var scope = Text(request, "scope_id");
-        var id = Text(request, "request_id");
-        var operationId = Text(request, "operation");
-        var target = Text(request, "target_ref");
-        if (!Identifier(id)) throw new AdvisorOperationException(400, "invalid_request_id");
-        if (scope != ScopeId) throw new AdvisorOperationException(409, "operation_scope_changed");
-        if (receipts.TryGetValue(id, out var previous))
-        {
-            if (!JToken.DeepEquals(previous.Request, request)) throw new AdvisorOperationException(409, "request_id_conflict");
-            return previous.Result == null ? throw new AdvisorOperationException(409, "operation_outcome_unknown") : (JObject)previous.Result.DeepClone();
-        }
+        ValidateRequest(request);
+        var id = (string)request["request_id"]!;
+        var operationId = (string)request["operation"]!;
+        var target = (string)request["target_ref"]!;
+        var arguments = (JObject)request["arguments"]!;
+        if (receipts.TryGetValue(id, out var previous)) return Replay(previous, request);
         var operation = Operation(operationId);
         if (receipts.Count >= MaximumReceipts) throw new AdvisorOperationException(409, "operation_receipt_limit");
         var receipt = new Receipt(request);
@@ -133,7 +272,7 @@ internal sealed class AdvisorOperations
     private void CheckEnabled()
     {
         CheckThread();
-        if (!enabled()) throw new AdvisorOperationException(403, "unit_operations_disabled");
+        if (retired || !enabled()) throw new AdvisorOperationException(403, "unit_operations_disabled");
     }
     private void CheckThread()
     {

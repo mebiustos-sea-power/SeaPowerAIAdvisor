@@ -32,9 +32,14 @@ internal sealed class AdvisorOperationGateway : IDisposable
     private readonly object gate = new();
     private bool disposed;
     private int queued;
+    internal AdvisorOperations Operations => operations;
     internal AdvisorOperationGateway(AdvisorOperations operations) => this.operations = operations;
-    internal IAdvisorOperationSession? CreateSession(string owner, AdvisorPrompts prompts) =>
-        operations.Enabled ? new Session(this, owner, prompts, operations.PriorOrders(owner)) : null;
+    internal IAdvisorOperationSession? CreateSession(string owner, AdvisorPrompts prompts)
+    {
+        if (!operations.Enabled) return null;
+        operations.BeginProposal(owner);
+        return new Session(this, owner, prompts, operations.PriorOrders(owner));
+    }
 
     internal void Pump()
     {
@@ -87,7 +92,7 @@ internal sealed class AdvisorOperationGateway : IDisposable
                 var id = Text(request, "request_id");
                 if (id.Length > 40 || request["arguments"] is not JObject args) throw new AdvisorOperationException(400, "invalid_operation_request");
                 // The host binds battle and owner identity. A repeated order ID reaches the same receipt.
-                return operations.Execute(new JObject { ["scope_id"] = operations.ScopeId, ["request_id"] = owner + "." + id,
+                return operations.Propose(owner, new JObject { ["scope_id"] = operations.ScopeId, ["request_id"] = owner + "." + id,
                     ["operation"] = Text(request, "operation_id"), ["target_ref"] = Text(request, "target_ref"), ["arguments"] = args.DeepClone() });
             default: throw new AdvisorOperationException(400, "unknown_operation_action");
         }
@@ -113,6 +118,7 @@ internal sealed class AdvisorOperationGateway : IDisposable
         lock (gate)
         {
             disposed = true;
+            operations.Retire();
             while (commands.TryDequeue(out var command))
             { Interlocked.Decrement(ref queued); command.Completion.TrySetResult(Error("operation_scope_changed")); }
         }

@@ -69,6 +69,13 @@ internal static class AdvisorTranscript
                 row.Add(waiting);
             }
             else row.Add(Plain(text["status.cancelled"]));
+            if (turn.Proposal is AdvisorOperationProposal proposal && proposal.Orders.Count > 0 && proposal.State != AdvisorProposalState.Collecting)
+            {
+                var review = Action("ReviewProposal" + i, text[proposal.CaptionKey], null);
+                review.Add(new XAttribute("Margin", "0,6,0,0"), new XAttribute("IsEnabled", !busy &&
+                    proposal.State is AdvisorProposalState.Pending or AdvisorProposalState.Partial or AdvisorProposalState.Rejected or AdvisorProposalState.Unknown));
+                row.Add(review);
+            }
             if (conversation.CanRetry(turn)) row.Add(Action("RetryTurn" + i, text["action.retry"], text["transcript.retry_tip"]));
             root.Add(row);
         }

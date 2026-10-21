@@ -131,6 +131,7 @@ internal sealed class AdvisorLocalApi
                 if (body.Count != 1 || body["scope_id"]?.Type != JTokenType.String || string.IsNullOrWhiteSpace((string?)body["scope_id"]))
                     throw new AdvisorLocalApiException(400, "invalid_reservation_request");
                 var status = Target().LocalStatus();
+                if ((bool?)status["proposal_review_open"] == true) throw new AdvisorLocalApiException(409, "proposal_review_open");
                 if ((bool?)status["busy"] == true) throw new AdvisorLocalApiException(409, "consultation_busy");
                 if ((bool?)status["settings_open"] == true) throw new AdvisorLocalApiException(409, "settings_open");
                 return new(200, service.Clear(unitId, (string)body["scope_id"]!));

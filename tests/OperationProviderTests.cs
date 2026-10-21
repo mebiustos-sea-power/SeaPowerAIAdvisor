@@ -10,7 +10,7 @@ internal static partial class ProviderTests
 {
     private static void RunOperations(Action<string, Action> check)
     {
-        check("The standard AI engine discovers operation metadata and schedules exactly one buoy through the game-thread service", () =>
+        check("The standard AI engine discovers operation metadata and proposes exactly one buoy until host approval", () =>
         {
             var unit = new OperationHelicopter(); var registry = SonobuoyRegistry(unit);
             using var gateway = new AdvisorOperationGateway(registry);
@@ -38,16 +38,19 @@ internal static partial class ProviderTests
                         (string?)result["candidates"]?[0]?["depth"] == "alternating", "Candidate position or user setting was unavailable");
                     return Task.FromResult(OperationReply("schedule", BuoyRequest()));
                 }
-                Require((string?)result["status"] == "registered" && (string?)result["data"]?["depth"] == "alternating", "AI was not given the registration result");
-                return Task.FromResult(new AdvisorReply("One buoy order registered.", Array.Empty<AdvisorToolCall>(), 1));
+                Require((string?)result["status"] == "proposed" && (bool?)result["registered"] == false && unit.Calls == 0,
+                    "AI was told an unapproved operation was registered");
+                return Task.FromResult(new AdvisorReply("One buoy order proposed.", Array.Empty<AdvisorToolCall>(), 1));
             });
             var context = AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations);
             var result = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(provider).ConsultAsync(context, CancellationToken.None)));
-            Require(result.Text == "One buoy order registered." && result.ApiRequests == 5 && unit.Calls == 1 && unit.Depth == "alternating" &&
+            Require(unit.Calls == 0, "AI bypassed approval");
+            var proposal = registry.FinishProposal("ai", true)!; registry.Approve(proposal);
+            Require(result.Text == "One buoy order proposed." && result.ApiRequests == 5 && unit.Calls == 1 && unit.Depth == "alternating" &&
                 unit.Thread == Environment.CurrentManagedThreadId && knowledge.Requests.Count == 0 && operations.History.Count == 4,
                 "AI execution bypassed the operation service, duplicated registration, changed depth or used the read-only query gateway");
         });
-        check("A single AI response can register eleven or forty orders in the requested sequence", () =>
+        check("A single AI response can propose eleven or forty orders and approval registers their sequence", () =>
         {
             foreach (var count in new[] { 11, 40 })
             {
@@ -59,21 +62,23 @@ internal static partial class ProviderTests
                 var provider = new FakeProvider("batch-model", (session, send, _, _) =>
                 {
                     if (send == 1) return Task.FromResult(Reply(calls));
-                    Require(session.Results.Count == count && session.Results.All(r => (string?)r.Data["status"] == "registered"),
+                    Require(session.Results.Count == count && session.Results.All(r => (string?)r.Data["status"] == "proposed"),
                         "Some valid requests were rejected or lost their results");
                     for (var i = 0; i < count; i++)
-                        Require(session.Results[i].Id == calls[i].Id && (double?)session.Results[i].Data["data"]?["latitude"] == unit.Latitudes[i],
-                            "Request, result and native registration order diverged");
+                        Require(session.Results[i].Id == calls[i].Id && unit.Calls == 0,
+                            "Request order changed or native registration ran before approval");
                     return Task.FromResult(new AdvisorReply("Registered", Array.Empty<AdvisorToolCall>(), 1));
                 });
                 var result = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(provider).ConsultAsync(
                     AdvisorContext.Create(new Knowledge(2), Array.Empty<ChatExchange>(), operations: operations), CancellationToken.None)));
-                Require(unit.Latitudes.SequenceEqual(Enumerable.Range(0, count).Select(i => 26.5 + i * 0.001)), "Native registration order changed");
+                Require(unit.Calls == 0, "A batch bypassed approval");
+                var proposal = registry.FinishProposal("batch", true)!; registry.Approve(proposal);
+                Require(unit.Latitudes.SequenceEqual(Enumerable.Range(0, count).Select(i => 26.5 + i * 0.001)), "Approval changed native order");
                 Require(result.ApiRequests == 2 && unit.Calls == count && operations.History.Count == count && unit.Depth == "alternating",
                     "The response was truncated, registration was duplicated, or the player's depth setting changed");
             }
         });
-        check("Forty-one calls are rejected before dispatch, preserving earlier orders and a specific user notice", () =>
+        check("Forty-one calls are rejected before dispatch, preserving earlier proposals and a specific user notice", () =>
         {
             foreach (var includeRead in new[] { false, true })
             {
@@ -95,7 +100,7 @@ internal static partial class ProviderTests
                 }
                 catch (AdvisorConnectionException error)
                 {
-                    Require(error.Code == "tool_call_limit" && unit.Calls == 1 && operations.History.Count == 1 && knowledge.Requests.Count == 0 &&
+                    Require(error.Code == "tool_call_limit" && unit.Calls == 0 && operations.History.Count == 1 && knowledge.Requests.Count == 0 &&
                         provider.Sessions.Single().Sends == 2 && provider.Sessions.Single().Disposed,
                         "The oversized response partially executed, removed an earlier order, or lost its error identity");
                     foreach (var language in new[] { "ja", "en" })
@@ -132,16 +137,19 @@ internal static partial class ProviderTests
         }));
         check("A provider handoff receives operation receipts and replaying an order cannot register it twice", () =>
         {
-            var unit = new OperationHelicopter(); using var gateway = new AdvisorOperationGateway(SonobuoyRegistry(unit));
+            var unit = new OperationHelicopter(); var registry = SonobuoyRegistry(unit);
+            using var gateway = new AdvisorOperationGateway(registry);
             using var operations = gateway.CreateSession("handoff", AdvisorPrompts.Current)!;
             var main = new FakeProvider("first", (_, n, _, _) => n == 1 ? Task.FromResult(OperationReply("first-order", BuoyRequest())) : throw new AdvisorConnectionException("rate_limited", 429));
             var sub = new FakeProvider("second", (s, n, _, _) =>
             {
-                Require(s.Continuation != null && (string?)s.Continuation.Operations[0]?["response"]?["status"] == "registered", "Handoff lost the existing order receipt");
+                Require(s.Continuation != null && (string?)s.Continuation.Operations[0]?["response"]?["status"] == "proposed", "Handoff lost the existing order receipt");
                 return Task.FromResult(n == 1 ? OperationReply("replay", BuoyRequest()) : new AdvisorReply("Existing reservation retained.", Array.Empty<AdvisorToolCall>(), 1));
             });
             var context = AdvisorContext.Create(new Knowledge(4), Array.Empty<ChatExchange>(), operations: operations);
             var answer = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(main, sub).ConsultAsync(context, CancellationToken.None)));
+            Require(unit.Calls == 0, "A fallback bypassed approval");
+            var proposal = registry.FinishProposal("handoff", true)!; registry.Approve(proposal);
             Require(answer.Text == "Existing reservation retained." && unit.Calls == 1 && operations.History.Count == 2, "A connection handoff duplicated the order");
         });
         check("Gemini, Ollama, OpenRouter and NanoGPT carry separate read and operation tools without eager operation definitions", () => Async(async () =>
@@ -167,10 +175,11 @@ internal static partial class ProviderTests
             Require(old.OperationToolJson == null && new Api.RetrievalHistory("[]", 0, 1).OperationsJson == "[]", "Legacy public constructors changed behavior");
             await Task.CompletedTask;
         }));
-        check("An independent external consultation can discover and execute through the optional host operation service", () =>
+        check("An independent external consultation discovers and proposes through the same host approval boundary", () =>
         {
             var external = IndependentClient(); using var host = new PublicHost(external);
-            var unit = new OperationHelicopter(); using var gateway = new AdvisorOperationGateway(SonobuoyRegistry(unit));
+            var unit = new OperationHelicopter(); var registry = SonobuoyRegistry(unit);
+            using var gateway = new AdvisorOperationGateway(registry);
             using var operations = gateway.CreateSession("independent", AdvisorPrompts.Current)!;
             external.Consult = async (_, _, context, token) =>
             {
@@ -178,12 +187,14 @@ internal static partial class ProviderTests
                 var list = JObject.Parse(await context.Operations!.ExecuteAsync("{\"action\":\"list\"}", token));
                 Require(list["operations"]!.Count() == 1, "Independent catalog lookup failed");
                 var result = JObject.Parse(await context.Operations.ExecuteAsync(BuoyRequest().ToString(), token));
-                return new Api.AdvisorAnswer((string?)result["status"] == "registered" ? "Independent registration" : "Failed");
+                return new Api.AdvisorAnswer((string?)result["status"] == "proposed" ? "Independent registration" : "Failed");
             };
             var setup = AdvisorServices.Prepare(ExtensionDraft(external));
             var context = AdvisorContext.Create(new Knowledge(1), Array.Empty<ChatExchange>(), operations: operations);
             var result = OperationGatewayTests.Finish(gateway, Task.Run(() => AdvisorConsultation.RunAsync(setup, context,
                 "unused-operation-log", new AdvisorQuestion("Schedule one buoy"), CancellationToken.None)));
+            Require(unit.Calls == 0, "An independent backend bypassed approval");
+            var proposal = registry.FinishProposal("independent", true)!; registry.Approve(proposal);
             Require(result.Text == "Independent registration" && unit.Calls == 1, "A custom workflow was forced through the standard engine or lost its order");
         });
         check("Local consultation diagnostics retain operation requests and receipts without changing them", () =>
@@ -196,7 +207,7 @@ internal static partial class ProviderTests
             request["request_id"] = "mutated"; turn.Complete("Registered"); run.Finish();
             var snapshot = run.Snapshot();
             Require(snapshot["input"]?["operation_tool"] != null && (string?)snapshot["operations"]?[0]?["request"]?["request_id"] == "buoy-1" &&
-                (string?)snapshot["operations"]?[0]?["response"]?["status"] == "registered", "Operation evidence was lost or aliased");
+                (string?)snapshot["operations"]?[0]?["response"]?["status"] == "proposed", "Operation evidence was lost or aliased");
         });
     }
     private static AdvisorToolCall BuoyCall(int index)

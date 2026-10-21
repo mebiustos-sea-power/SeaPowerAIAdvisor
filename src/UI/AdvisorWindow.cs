@@ -30,6 +30,8 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     private readonly TextBox question, diagnosticOutput;
     private readonly ScrollViewer transcriptScroll;
     private readonly AdvisorTranscriptView transcript;
+    private readonly AdvisorOperationReview operationReview;
+    private AdvisorOperations? OperationService => (source as IAdvisorOperationSource)?.Operations;
     private readonly TextBlock advisorName, advisorRole, activity, portraitError, status, diagnosticStatus, unitNavigationHint;
     private readonly IAdvisorUnitNavigation? navigation;
     private readonly Image portraitImage;
@@ -72,7 +74,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         transcriptScroll = Named<ScrollViewer>(content, "Transcript");
         unitNavigationHint = Named<TextBlock>(content, "UnitNavigationHint");
         this.navigation = navigation;
-        transcript = new AdvisorTranscriptView(Named<StackPanel>(content, "TranscriptMessages"), transcriptScroll, guard, RetryConsultation, ReassessContact, InsertUnit, navigation, weapons, map);
+        transcript = new AdvisorTranscriptView(Named<StackPanel>(content, "TranscriptMessages"), transcriptScroll, guard, RetryConsultation, ReassessContact, InsertUnit, navigation, weapons, map, ReviewProposal);
         status = Named<TextBlock>(content, "Status");
         diagnosticStatus = Named<TextBlock>(content, "DiagnosticStatus");
         diagnosticOutput = Named<TextBox>(content, "DiagnosticOutput");
@@ -143,6 +145,8 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
                 conversation.UseInformationPolicy(options.Current.Information.Key);
                 RefreshConfigurationNotice(); ShowConversation(false);
             }, ReturnToConversation, warn);
+        operationReview = new AdvisorOperationReview(content, conversationPane, () => OperationService,
+            () => text, guard, () => ShowConversation(false));
         Named<Button>(content, "Settings").Click += (_, _) => guard(settings.Open);
         try
         {
@@ -155,7 +159,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
 
     internal bool IsOpen => host.Windows.Contains(window);
     internal string DisplayName => appliedProfile?.DisplayName ?? speakerName;
-    internal bool CanConsult => active == null && conversationPane.Visibility == Visibility.Visible;
+    internal bool CanConsult => active == null && !operationReview.IsOpen && conversationPane.Visibility == Visibility.Visible;
 
     internal void ConsultContext(string promptKey, string caption, Newtonsoft.Json.Linq.JObject context)
     {
@@ -213,7 +217,10 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     internal void Stop()
     {
         var job = active; active = null;
-        if (pendingTurn?.State == AdvisorTurnState.Waiting) pendingTurn.Cancel();
+        if (pendingTurn?.State == AdvisorTurnState.Waiting)
+        { FinishProposal(pendingTurn, false); pendingTurn.Cancel(); }
+        OperationService?.DiscardProposalsExcept(Array.Empty<string>());
+        operationReview.Close();
         pendingTurn = null; FinishRecording();
         try { job?.Dispose(); }
         finally
@@ -239,6 +246,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
 
     private void OnWindowClosed()
     {
+        operationReview.Close();
         CancelActive();
         ReleaseInput();
         settings.Close();
@@ -328,7 +336,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
 
     JObject IAdvisorLocalTarget.LocalStatus() => new()
     {
-        ["busy"] = active != null, ["settings_open"] = conversationPane.Visibility != Visibility.Visible,
+        ["proposal_review_open"] = operationReview.IsOpen, ["busy"] = active != null, ["settings_open"] = conversationPane.Visibility != Visibility.Visible,
         ["advisor_name"] = DisplayName, ["answered_exchanges"] = conversation.Exchanges.Count
     };
     AdvisorLocalRun IAdvisorLocalTarget.LocalConsult(string? message, string? shortcut, bool allowFallback, AdvisorBackendSetup execution, bool plainAdvisor)
@@ -363,6 +371,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     void IAdvisorLocalTarget.LocalCancel() { guard(CancelActive); }
     private void RequireLocalReady()
     {
+        if (operationReview.IsOpen) throw new AdvisorLocalApiException(409, "proposal_review_open");
         if (active != null) throw new AdvisorLocalApiException(409, "consultation_in_progress");
         if (conversationPane.Visibility != Visibility.Visible) throw new AdvisorLocalApiException(409, "settings_open");
     }
@@ -394,7 +403,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
 
     private void StartConsultation(AdvisorQuestion request, AdvisorTurn? retry = null, AdvisorLocalRun? recording = null, AdvisorBackendSetup? prepared = null)
     {
-        if (active != null || conversationPane.Visibility != Visibility.Visible) return;
+        if (active != null || operationReview.IsOpen || conversationPane.Visibility != Visibility.Visible) return;
         if (QuestionInputController.IsComposing)
         {
             status.Text = text["status.ime"];
@@ -507,6 +516,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         }
         if (completion.IsCancelled)
         {
+            FinishProposal(turn, false);
             turn.Cancel();
             ShowConversation(false);
             status.Text = text["status.cancelled"];
@@ -520,6 +530,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         {
             var result = completion.Result ?? throw new InvalidOperationException("The completed consultation has no result.");
             localRun?.Complete(result, turn.Progress?.ConnectionName ?? pendingConnectionName);
+            FinishProposal(turn, true);
             turn.Complete(result.Text);
             ShowConversation(false);
             var connection = AdvisorProgress.FormatConnection(turn.Progress?.ConnectionName ?? pendingConnectionName,
@@ -538,6 +549,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
 
     private void FailTurn(AdvisorTurn turn, AdvisorNotice error)
     {
+        FinishProposal(turn, false);
         turn.Fail(error);
         FinishRecording();
         pendingTurn = null;
@@ -570,6 +582,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         var turn = pendingTurn ?? throw new InvalidOperationException("The pending turn is missing.");
         pendingTurn = null;
         job.Dispose();
+        FinishProposal(turn, false);
         turn.Cancel();
         FinishRecording();
         SetBusy(false);
@@ -648,8 +661,18 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         }
     }
 
+    private void FinishProposal(AdvisorTurn turn, bool success) =>
+        turn.Proposal = OperationService?.FinishProposal(turn.OperationId, success);
+
+    private void ReviewProposal(AdvisorTurn turn)
+    {
+        if (!CanConsult || turn.Proposal == null) return;
+        operationReview.Show(turn.Proposal);
+    }
+
     private void ShowConversation(bool updateStatus = true, string? empty = null)
     {
+        OperationService?.DiscardProposalsExcept(conversation.Turns.Select(turn => turn.OperationId));
         pendingScroll = null;
         diagnosticScrollPending = false;
         question.FontSize = AdvisorTypography.FontSize(options.Current.TextSize, 15);
@@ -666,6 +689,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     {
         questionInput.Reset();
         CancelActive();
+        operationReview.Close();
         conversation.Clear();
         pendingScroll = null;
         diagnosticScrollPending = false;

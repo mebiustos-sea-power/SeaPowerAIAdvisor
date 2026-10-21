@@ -13,6 +13,7 @@ internal sealed class AdvisorTranscriptView
     private readonly Action<AdvisorTurn> retry;
     private readonly Action<AdvisorTurn, ContactAssumption> reassess;
     private readonly Action<int> insertUnit;
+    private readonly Action<AdvisorTurn>? reviewProposal;
     private readonly IAdvisorUnitNavigation? navigation;
     private readonly IAdvisorWeaponNavigation? weapons;
     private readonly IAdvisorMapNavigation? map;
@@ -38,8 +39,9 @@ internal sealed class AdvisorTranscriptView
     }
 
     internal AdvisorTranscriptView(StackPanel panel, ScrollViewer scroll, Action<Action> guard, Action<AdvisorTurn> retry,
-        Action<AdvisorTurn, ContactAssumption> reassess, Action<int> insertUnit, IAdvisorUnitNavigation? navigation = null, IAdvisorWeaponNavigation? weapons = null, IAdvisorMapNavigation? map = null)
+        Action<AdvisorTurn, ContactAssumption> reassess, Action<int> insertUnit, IAdvisorUnitNavigation? navigation = null, IAdvisorWeaponNavigation? weapons = null, IAdvisorMapNavigation? map = null, Action<AdvisorTurn>? reviewProposal = null)
     {
+        this.reviewProposal = reviewProposal;
         this.panel = panel; this.guard = guard; this.retry = retry; this.reassess = reassess; this.insertUnit = insertUnit; this.navigation = navigation; this.weapons = weapons; this.map = map;
         panel.PreviewMouseWheel += (_, e) =>
         {
@@ -121,6 +123,14 @@ internal sealed class AdvisorTranscriptView
                     reassessmentButtons.Add(button);
                     button.Click += (_, _) => guard(() => { if (button.IsEnabled) reassess(turn, assumption); });
                 }
+            if (turn.Proposal is AdvisorOperationProposal proposal && proposal.Orders.Count > 0 && proposal.State != AdvisorProposalState.Collecting)
+            {
+                var button = root.FindName("ReviewProposal" + i) as Button
+                    ?? throw new InvalidOperationException("The proposal review button is missing.");
+                if (proposal.State is AdvisorProposalState.Pending or AdvisorProposalState.Partial or AdvisorProposalState.Rejected or AdvisorProposalState.Unknown)
+                    reassessmentButtons.Add(button);
+                button.Click += (_, _) => guard(() => { if (button.IsEnabled) reviewProposal?.Invoke(turn); });
+            }
             if (conversation.CanRetry(turn))
             {
                 var button = root.FindName("RetryTurn" + i) as Button

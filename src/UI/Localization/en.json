@@ -423,5 +423,16 @@
   "errorlog.test_hint": "For details, see API connections → API errors.",
   "errorlog.storage_failed": "Could not save the error log.\n{0}",
   "errorlog.read_failed": "Could not read the error details.\n{0}",
-  "progress.topic.operations": "operation catalog"
+  "progress.topic.operations": "operation catalog",
+  "operation.review": "Review proposal…",
+  "operation.registered": "Registered",
+  "operation.partial": "Partially registered",
+  "operation.cancelled": "Proposal cancelled",
+  "operation.rejected": "Not registered",
+  "operation.title": "Review proposal",
+  "operation.execute": "Execute",
+  "operation.back": "Back",
+  "operation.failure": "Registration failed ({0}). Registered: {1} / {2}.",
+  "operation.sonobuoy_summary": "Add {1} sonobuoy drop reservations for {0}.",
+  "operation.sonobuoy_append": "Existing reservations will be preserved. The current in-game depth setting will be used."
 }
