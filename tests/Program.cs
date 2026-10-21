@@ -18,6 +18,7 @@ internal static class Program
             RuntimeTests.Run(Check);
             LocalApiTests.Run(Check);
             OperationTests.Run(Check);
+            ReservationTests.Run(Check);
             OperationGatewayTests.Run(Check);
             BattleTests.Run(Check);
             InformationTests.Run(Check);
@@ -135,6 +136,7 @@ internal static class Program
         SettingsOperationsTests.Run(Check);
         LocalApiTests.Run(Check);
         OperationTests.Run(Check);
+        ReservationTests.Run(Check);
         OperationGatewayTests.Run(Check);
         OptionsTests.Run(args[0], Check);
         InformationTests.Run(Check);

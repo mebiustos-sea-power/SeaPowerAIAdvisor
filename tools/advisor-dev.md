@@ -43,6 +43,8 @@ Each command has its own `--help`:
 | `operations list` | Read the WIP operation catalog and current battle scope. |
 | `operations candidates OPERATION` | Read current own-unit candidates and available ammunition. |
 | `operations execute --request-file FILE` | Submit one explicit reservation request without AI; preserves the supplied scope and request ID. |
+| `reservations list --unit-id ID` | Inspect this own unit’s current native reservations in queue order. |
+| `reservations clear --unit-id ID --scope-id SCOPE` | Remove all queued reservations of this unit, including manual orders. |
 
 All commands except `consult` accept `--output FILE` to save the response as UTF-8 JSON. `prompts get --id` saves raw UTF-8 text, preserving leading/trailing newlines. `consult --output DIRECTORY` creates a **new** result directory; an existing directory is rejected before any HTTP operation. Without `--quiet`, responses also go to stdout. Errors go to stderr and return nonzero. A failed/cancelled consultation also returns nonzero while preserving its result JSON.
 
@@ -57,6 +59,13 @@ python3 tools/advisor_dev.py operations execute --request-file artifacts/order.j
 ```
 
 The request file must explicitly contain its current `scope_id`, `request_id`, operation, target and arguments. Sonobuoy candidates and registration results report the player-controlled `depth` (`above_layer`, `below_layer`, or `alternating`). The first release does not advertise depth control and ignores any supplied `arguments.depth`, preserving a player's setting change while the AI is responding. The tool does not generate new identities, rebind stale targets, or retry a POST. A `registered` result only acknowledges a native reservation; it does not wait for the helicopter or sonobuoy.
+
+For repeated paused-game trials, `reservations list` returns the numeric unit ID, current battle scope, order sequence and sonobuoy coordinates/ammunition/count. Use that scope explicitly with `reservations clear` to reset the unit before the next consultation. Clearing uses the game's native removal method and verifies the queue is empty; it does not undo consumed ammunition or deployment already underway. Both commands require WIP order scheduling. Clear is rejected while a consultation or settings editing is active, never retries automatically and does not infer a different battle scope. These are developer commands, not AI-advertised operations.
+
+```sh
+python3 tools/advisor_dev.py reservations list --unit-id 1029 --output /tmp/queue.json
+python3 tools/advisor_dev.py reservations clear --unit-id 1029 --scope-id <scope_id_from_queue>
+```
 
 ## Questions, connection and recording
 

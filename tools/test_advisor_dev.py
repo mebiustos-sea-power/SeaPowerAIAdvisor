@@ -52,6 +52,14 @@ class MockApi:
                         value = {"scope_id": "loaded-game", "enabled": True, "operations": []}
                 elif self.path == "/v1/operations/seapower.schedule_sonobuoy_drop/candidates":
                     value = {"scope_id": "loaded-game", "candidates": [{"target_ref": "unit:42"}]}
+                elif self.path == "/v1/units/42/reservations":
+                    value = {"scope_id": "loaded-game", "unit_id": 42, "count": 2,
+                             "reservations": [{"sequence": 1, "ammunition": "custom_buoy", "count": 1}, {"sequence": 2, "kind": "waypoint"}]}
+                elif self.path == "/v1/units/42/reservations/clear":
+                    if api.disconnect_post:
+                        self.close_connection = True
+                        return
+                    value = {"scope_id": "loaded-game", "unit_id": 42, "removed_count": 2, "count": 0, "reservations": []}
                 elif self.path == "/v1/prompts/reset":
                     api.fields["common.json:system"] = "Original\n日本語"
                     value = {"reset": True}
@@ -114,6 +122,22 @@ class CliTests(unittest.TestCase):
             self.assertEqual(api.run("operations", "execute", "--request-file", path)[0], 1)
             self.assertEqual(len(api.calls), 1, "A lost acknowledgement retried an order")
             self.assertEqual(api.calls[0][:3], ("POST", "/v1/operations", body))
+
+    def test_reservations_select_explicit_unit_and_scope_and_never_retry_clear(self):
+        with MockApi() as api, tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "reservations.json"
+            self.assertEqual(api.run("reservations", "list", "--unit-id", "42", "--output", output)[0], 0)
+            self.assertEqual(json.loads(output.read_text(encoding="utf-8"))["count"], 2)
+            self.assertEqual(api.calls[-1][:3], ("GET", "/v1/units/42/reservations", None))
+            self.assertEqual(api.run("reservations", "clear", "--unit-id", "42", "--scope-id", "loaded-game")[0], 0)
+            self.assertEqual(api.calls[-1][:3], ("POST", "/v1/units/42/reservations/clear", {"scope_id": "loaded-game"}))
+            api.calls.clear()
+            self.assertEqual(api.run("reservations", "list", "--unit-id", "-1")[0], 1)
+            self.assertEqual(api.calls, [])
+            api.disconnect_post = True
+            self.assertEqual(api.run("reservations", "clear", "--unit-id", "42", "--scope-id", "loaded-game")[0], 1)
+            self.assertEqual(len(api.calls), 1, "A lost acknowledgement retried the reservation reset")
+            self.assertEqual(api.calls[0][:3], ("POST", "/v1/units/42/reservations/clear", {"scope_id": "loaded-game"}))
 
     def test_consult_sends_once_preserves_unicode_and_records_effective_result(self):
         with MockApi() as api, tempfile.TemporaryDirectory() as temporary:

@@ -27,6 +27,7 @@ internal sealed class BattleIntegration
     private AdvisorWindow? advisor;
     private AdvisorOperations? operations;
     private AdvisorOperationGateway? operationGateway;
+    private AdvisorUnitReservations? reservations;
     private BattleContactAssessments? contactAssessments;
     private BattleMapNavigation? mapNavigation;
     private AdvisorErrorWindow? errorWindow;
@@ -108,7 +109,7 @@ internal sealed class BattleIntegration
             advisor?.Tick();
             if (options.Current.DeveloperApiEnabled)
             {
-                Plugin.LocalApi?.Attach(this, "tactical_battle", GetAdvisor, operations);
+                Plugin.LocalApi?.Attach(this, "tactical_battle", GetAdvisor, operations, reservations);
             }
         }
         if (showError != null) runtime.NotifyFailure(showError);
@@ -133,23 +134,27 @@ internal sealed class BattleIntegration
             operations = new AdvisorOperations(() => options.Current.UnitOperationsEnabled);
             operations.Register(new BattleSonobuoyOperation(OperationUnits, () => options.Current.Information));
             operationGateway = new AdvisorOperationGateway(operations);
+            reservations = new AdvisorUnitReservations(operations, () => OperationObjects()
+                .Select(unit => (IAdvisorReservationUnit)new BattleReservationUnit(unit)).ToArray());
         }
         return operationGateway;
     }
     private void ClearOperations()
     {
-        operationGateway?.Dispose(); operationGateway = null; operations = null;
+        operationGateway?.Dispose(); operationGateway = null; operations = null; reservations = null;
     }
 
-    private IReadOnlyList<IBattleSonobuoyUnit> OperationUnits()
+    private IReadOnlyList<IBattleSonobuoyUnit> OperationUnits() => OperationObjects().OfType<Helicopter>()
+        .Select(unit => (IBattleSonobuoyUnit)new BattleSonobuoyUnit(unit)).ToArray();
+
+    private IReadOnlyList<ObjectBase> OperationObjects()
     {
         if (runtime.Failed || model == null || !ReferenceEquals(model.RootControl, uiRoot) ||
             !SceneCreator.InstanceExists(false) || !ReferenceEquals(mission, SceneCreator.Instance) ||
             !SceneCreator.Instance.IsLoadingDone || !ReferenceEquals(player, Globals._playerTaskforce))
             throw new AdvisorOperationException(409, "battle_unavailable");
-        return Globals._playerTaskforce.TaskforceObjects.OfType<Helicopter>()
-            .Where(unit => unit != null && !unit.IsDestroyed)
-            .Select(unit => (IBattleSonobuoyUnit)new BattleSonobuoyUnit(unit)).ToArray();
+        return Globals._playerTaskforce.TaskforceObjects.OfType<ObjectBase>()
+            .Where(unit => unit != null && !unit.IsDestroyed).ToArray();
     }
 
     private BattleSnapshot Capture()

@@ -175,6 +175,26 @@ WIP OFF rejects new registrations, including already queued local-API requests. 
 
 These operation contracts are an internal prototype, separate from the public provider-extension SDK. There is no operation-progress monitor, completion callback or automatic follow-up consultation.
 
+## Inspect and clear native reservations (developer only)
+
+These endpoints inspect the current native queue of a player-controllable own unit. The WIP order option must be enabled. They are separate from the AI operation catalog and do not call an AI provider or change the selected map unit.
+
+| Method | Path | Result |
+| --- | --- | --- |
+| GET | `/v1/units/{unit_id}/reservations` | Current battle `scope_id`, unit identity, `count` and ordered `reservations`. |
+| POST | `/v1/units/{unit_id}/reservations/clear` | Remove every queued reservation of this unit, including manual orders; return `removed_count`, remaining `count` and queue. |
+
+`unit_id` is the game's numeric unit ID, as supplied by a badge or operation candidate, rather than a consultation-local `own_unit_N`. For a reset, send exactly `{"scope_id":"<scope from the current reservation list>"}`. A stale battle scope is rejected. A missing/uncontrollable unit, disabled WIP, active consultation or open settings also rejects the reset; no confirmation dialog or automatic retry is used.
+
+Each reservation includes its `sequence`, native `task_type`, `kind` and applicable `position`. Attack/sonobuoy reservations also include `ammunition`, `count` and `attack_position`. Other task kinds remain in the list. Relative waypoints and destinations calculated at execution time have a null position rather than an invented geographic point. Full native objects are not serialized.
+
+The reset uses the game's `RemoveWaypoints()` path and verifies the queue is empty. It does not restore consumed ammunition or undo already launched/deployed weapons, and it is not a general cancellation of firing work already handed off by a reservation. Use a paused game with unexecuted reservations for repeatable prompt experiments. Existing AI request receipts remain registration history; use a new consultation for a new trial.
+
+```sh
+python3 tools/advisor_dev.py reservations list --unit-id 1029 --output /tmp/hobby-reservations.json
+python3 tools/advisor_dev.py reservations clear --unit-id 1029 --scope-id <scope_id_from_list>
+```
+
 ## Results and limitations
 
 The consultation response states are `waiting`, `answered`, `failed` and `cancelled`. `progress` contains the latest reported stage, request/round counts, query names, model, connection name and fallback flag. On success, `answer` contains the original Markdown. `result` contains the reported model, connection, request/round counts, query names and nullable `reported_total_tokens`.

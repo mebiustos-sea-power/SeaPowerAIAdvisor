@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -30,7 +31,7 @@ internal sealed class AdvisorLocalResponse
     internal static AdvisorLocalResponse Error(int status, string code) => new(status, new JObject { ["error"] = code });
 }
 
-// HTTP workers enqueue detached commands; only Pump on the game thread may call targets, change prompts or register orders.
+// HTTP workers enqueue detached commands; only Pump on the game thread may call targets, change prompts or change native reservations.
 internal sealed class AdvisorLocalApi
 {
     private sealed class Command
@@ -54,14 +55,15 @@ internal sealed class AdvisorLocalApi
     private Func<IAdvisorLocalTarget>? target;
     private AdvisorLocalRun? last;
     private AdvisorOperations? operations;
+    private AdvisorUnitReservations? reservations;
     internal AdvisorLocalApi(Func<AdvisorPromptOverrides> prompts, Action<Exception> unexpected,
         Func<JObject> connections, Func<string, bool, AdvisorBackendSetup> prepareConnection)
     { this.prompts = prompts; this.unexpected = unexpected; this.connections = connections; this.prepareConnection = prepareConnection; }
     internal JObject ConnectionInfo() => connections();
-    internal void Attach(object owner, string mode, Func<IAdvisorLocalTarget> target, AdvisorOperations? operations = null)
-    { this.owner = owner; this.mode = mode; this.target = target; this.operations = operations; }
+    internal void Attach(object owner, string mode, Func<IAdvisorLocalTarget> target, AdvisorOperations? operations = null, AdvisorUnitReservations? reservations = null)
+    { this.owner = owner; this.mode = mode; this.target = target; this.operations = operations; this.reservations = reservations; }
     internal void Detach(object owner)
-    { if (ReferenceEquals(this.owner, owner)) { this.owner = null; target = null; operations = null; mode = ""; } }
+    { if (ReferenceEquals(this.owner, owner)) { this.owner = null; target = null; operations = null; reservations = null; mode = ""; } }
     internal void Enable() { lock (gate) enabled = true; }
     internal void Disable()
     {
@@ -115,6 +117,25 @@ internal sealed class AdvisorLocalApi
         if ((method == "PATCH" && path == "/v1/prompts" || method == "POST" && path == "/v1/prompts/reset") &&
             (bool?)target?.Invoke().LocalStatus()["settings_open"] == true)
             throw new AdvisorLocalApiException(409, "settings_open");
+        if (path.StartsWith("/v1/units/", StringComparison.Ordinal))
+        {
+            var parts = path.Substring("/v1/units/".Length).Split('/');
+            var read = method == "GET" && parts.Length == 2 && parts[1] == "reservations";
+            var clear = method == "POST" && parts.Length == 3 && parts[1] == "reservations" && parts[2] == "clear";
+            if (read || clear)
+            {
+                if (!int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out var unitId) || unitId <= 0)
+                    throw new AdvisorLocalApiException(400, "invalid_unit_id");
+                var service = reservations ?? throw new AdvisorLocalApiException(409, "reservations_unavailable");
+                if (read) { Empty(body); return new(200, service.Read(unitId)); }
+                if (body.Count != 1 || body["scope_id"]?.Type != JTokenType.String || string.IsNullOrWhiteSpace((string?)body["scope_id"]))
+                    throw new AdvisorLocalApiException(400, "invalid_reservation_request");
+                var status = Target().LocalStatus();
+                if ((bool?)status["busy"] == true) throw new AdvisorLocalApiException(409, "consultation_busy");
+                if ((bool?)status["settings_open"] == true) throw new AdvisorLocalApiException(409, "settings_open");
+                return new(200, service.Clear(unitId, (string)body["scope_id"]!));
+            }
+        }
         if (method == "GET" && path == "/v1/operations") return new(200, Operations().Catalog());
         if (method == "GET" && path.StartsWith("/v1/operations/", StringComparison.Ordinal) && path.EndsWith("/candidates", StringComparison.Ordinal) && path.Length > "/v1/operations/".Length + "/candidates".Length)
         {

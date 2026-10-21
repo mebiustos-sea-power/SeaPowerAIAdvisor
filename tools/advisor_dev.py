@@ -339,6 +339,12 @@ def parser():
     add_output(operations.add_parser("list"))
     candidates = operations.add_parser("candidates"); candidates.add_argument("operation"); add_output(candidates)
     execute = operations.add_parser("execute"); execute.add_argument("--request-file", required=True); add_output(execute)
+    reservations = commands.add_parser("reservations").add_subparsers(dest="reservation_command", required=True)
+    for name in ("list", "clear"):
+        command = reservations.add_parser(name)
+        command.add_argument("--unit-id", type=int, required=True, help="The game's numeric unit_id.")
+        if name == "clear": command.add_argument("--scope-id", required=True, help="Use scope_id from a current reservation list; manual reservations are also removed.")
+        add_output(command)
     prompts = commands.add_parser("prompts").add_subparsers(dest="prompt_command", required=True)
     get = prompts.add_parser("get"); get.add_argument("--id", help="Return one field's original text."); add_output(get)
     put = prompts.add_parser("set"); put.add_argument("--id")
@@ -405,6 +411,14 @@ def main(argv=None):
                     raise ToolError("The operation request must be a JSON object.")
                 # Preserve scope and request IDs. Never retry or silently rebind an order to another loaded game.
                 value = client.request("POST", "/v1/operations", body)
+        elif args.command == "reservations":
+            if args.unit_id <= 0: raise ToolError("unit-id must be a positive integer.")
+            path = "/v1/units/" + str(args.unit_id) + "/reservations"
+            if args.reservation_command == "list":
+                value = client.request("GET", path)
+            else:
+                # Never infer a new battle scope or retry a destructive reset after a lost response.
+                value = client.request("POST", path + "/clear", {"scope_id": args.scope_id})
         elif args.command == "prompts":
             if args.prompt_command == "get":
                 value = client.request("GET", "/v1/prompts")
