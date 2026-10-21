@@ -4,16 +4,20 @@
 
 An in-game operations adviser for **Sea Power: Naval Combat in the Missile Age**. Ask what to do next, discuss tactical risks, or request a more detailed assessment while playing. The adviser uses player-known game information and does not issue game commands or offer unsolicited advice.
 
-[Download releases](https://gitlab.com/mebiustos-sea-power/SeaPowerAIAdvisor/-/releases) · [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3821064016) · [Report an issue](https://gitlab.com/mebiustos-sea-power/SeaPowerAIAdvisor/-/issues)
+[Download releases](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/releases) · [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3821064016) · [Report an issue](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/issues)
 
 ## Features
 
 - **Gemini, Ollama, OpenRouter and NanoGPT connections.** Register named connections and choose a main connection and an optional sub connection. Duplicate a connection to reuse its settings with another model.
-- **On-demand tactical advice.** Ask your own question or use **Next steps**, **Key risks**, **Radar operations** and **More detail**.
+- **On-demand tactical advice.** Ask your own question or use **Next steps**, **Key risks**, **Radar operations**, **Own units** and **Contacts**.
 - **Unidentified-contact assessments.** Open an unidentified contact’s information window and click the **[adviser name]’s assessment** button. The adviser evaluates its displayed candidates, confirmed features and relevant known contacts. Buttons below the reply let you reassess assuming a friendly or enemy affiliation.
-- **Player-known information only.** Friendly capabilities, sensor operating states and specifications, launched missiles and torpedoes with player-visible target information, aircraft and bases, observed contacts and detection methods, mission briefing, objectives and published reports are available as needed. Hidden enemy state is not supplied.
+- **Player-known information only.** Friendly capabilities, sensor operating states and specifications, launched missiles and torpedoes with player-visible target information, aircraft and bases, applicable altitude/depth, movement plans, observed contacts and detection methods, mission briefing, objectives and published reports are available as needed. Hidden enemy state is not supplied.
 - **Custom advisers.** Register portraits, names and personality/tone preferences. The displayed title is cosmetic. Shared preferences and your name can also be configured.
-- **Readable conversations.** Markdown replies, configurable conversation text size, progress updates and copying of messages. Left-click a linked unit name or contact number to select and center it on the map; right-click to open the game's standard menu for that unit. Friendly-unit and contact links can be enabled separately in settings.
+- **Readable conversations.** Markdown replies, configurable conversation text size, progress updates and copying of messages. Mouse-wheel scrolling also works over tables in conversation history.
+- **Unit-specific questions.** Use **Insert selected unit** or **Ctrl+left-click** a unit link in conversation history to add a removable target badge to your message. Copied questions include the unit references.
+- **Unit navigation.** Left-click a linked unit name or contact number to select and center it on the map; right-click to open the game's standard menu for that unit. Friendly-unit and contact links can be enabled separately in settings.
+- **Weapon references.** Right-click a weapon link in an answer and choose **Weapon Reference** from the menu to open the game's reference window.
+- **Coordinate links.** Left-click a position link to center the map on that location and display a marker for approximately three seconds.
 
 The English and Japanese UI follows the game language, with English as the fallback. The AI is separately instructed to answer in the game's selected language.
 
@@ -24,7 +28,7 @@ Requires Sea Power and a working [Anchor Chain installation](https://steamcommun
 Choose one installation method for AI Advisor:
 
 - **Workshop:** subscribe to the [AI Advisor item](https://steamcommunity.com/sharedfiles/filedetails/?id=3821064016).
-- **Manual:** download `SeaPowerAIAdvisor-vX.Y.Z.zip` from a [release](https://gitlab.com/mebiustos-sea-power/SeaPowerAIAdvisor/-/releases) and extract the included `SeaPowerAIAdvisor` folder into `Sea Power_Data/StreamingAssets/`. Use the attached distribution ZIP, rather than GitLab's generated source archive.
+- **Manual:** download `SeaPowerAIAdvisor-vX.Y.Z.zip` from a [release](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/releases) and extract the included `SeaPowerAIAdvisor` folder into `Sea Power_Data/StreamingAssets/`. Use the attached distribution ZIP, rather than GitHub's generated source archives.
 
 Enable AI Advisor in the game's Mod Manager, then completely restart Sea Power. Use either the Workshop copy or the manual copy to avoid loading duplicate installations. Keep the package's DLLs and `Prompts` folder together when updating.
 
@@ -61,7 +65,7 @@ The request timeout is configurable per connection and also applies to connectio
 
 ## Information, token usage and response time
 
-The adviser first receives objectives, a situation overview and a catalog of information it can request. It then chooses which details to retrieve, can combine requests, and may ask for further details before answering. **One question can therefore generate several API requests.** Settings let you choose information categories, the retrieval-round limit and how many previous exchanges are included. Data for AI includes a button to restore its default selections. Sensor operating states are enabled by default; detailed sensor specifications are disabled by default.
+The adviser first receives objectives, a situation overview and a catalog of information it can request. It then chooses which details to retrieve, can combine requests, and may ask for further details before answering. **One question can therefore generate several API requests.** Settings let you choose information categories, the retrieval-round limit and how many previous exchanges are included. Data for AI includes a button to restore its default selections. Movement-plan retrieval and sensor operating states are enabled by default; detailed sensor specifications are disabled by default. Movement plans include formation leaders’ routes, formation-following relationships and routes for independently operating units. Existing saved information selections are preserved.
 
 This avoids sending every available detail at the start, but it does **not** guarantee low token usage or lower cost than a single larger request. Large situations, unit capabilities and conversation context can still consume many tokens; earlier context may also be processed during later requests. Retrieval and model processing can make replies take time. Displayed usage depends on the provider's reporting and is not a billing statement.
 
@@ -75,7 +79,7 @@ For provider failures, open **Settings → API connections → API errors**. The
 
 Full request/response JSON logging is a separate developer option, **off by default**. When enabled, it writes to `%USERPROFILE%/AppData/LocalLow/Triassic Games/Sea Power/SeaPowerAIAdvisor/logs/ai-communication.jsonl`. Declared API secrets are redacted, but logs can contain conversation and game information; review them before sharing.
 
-Bug reports are welcome through [GitLab issues](https://gitlab.com/mebiustos-sea-power/SeaPowerAIAdvisor/-/issues) or the Workshop comments. Include the mod version, provider/model, what you expected, what happened, and relevant error details. Never include an API key.
+Bug reports are welcome through [GitHub issues](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/issues) or the Workshop comments. Include the mod version, provider/model, what you expected, what happened, and relevant error details. Never include an API key.
 
 ## For developers
 
