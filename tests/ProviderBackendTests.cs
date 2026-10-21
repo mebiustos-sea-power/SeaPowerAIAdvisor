@@ -40,7 +40,7 @@ internal static partial class ProviderTests
             var result = await AdvisorConsultation.RunAsync(setup,
                 AdvisorContext.Create(knowledge, new[] { new ChatExchange("Earlier", "Answer") }, progress: events.Add, userName: "Commander"),
                 "unused-custom-log", new AdvisorQuestion("Question"), CancellationToken.None);
-            Require(result.Text == "Custom answer" && result.ApiRequests == 4 && result.QueryRounds == 2 && result.TotalTokens == null &&
+            Require(result.Completed && result.Text == "Custom answer" && result.ApiRequests == 4 && result.QueryRounds == 2 && result.TotalTokens == null &&
                 backend.Disposed && events.Count == 4 && events.Last().Model == "custom-model",
                 "The host imposed standard API rounds, trusted fabricated retrieval counts, lost progress or leaked the backend");
         }));
@@ -151,7 +151,7 @@ internal static partial class ProviderTests
     private static AdvisorBackendSetup Setup(CustomBackend backend) =>
         new(new AdvisorTraceOptions(false, "custom-wire", "custom-model"), _ => new AdvisorBackendHandle(backend));
     private static Task<AdviceResult> RunPrepared(AdvisorBackendSetup setup, CancellationToken cancellation = default) =>
-        AdvisorConsultation.RunAsync(setup, AdvisorContext.Create(new Knowledge(1), Array.Empty<ChatExchange>()),
+        AdvisorConsultation.RunAsync(setup, AdvisorContext.Create(new Knowledge(2), Array.Empty<ChatExchange>()),
             "unused-backend-log", new AdvisorQuestion("Question"), cancellation);
     private sealed class CustomBackend : IAdvisorBackend, IDisposable
     {

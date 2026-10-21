@@ -63,7 +63,7 @@ internal sealed class AdvisorLocalRun
             },
             ["result"] = result == null ? null : new JObject
             {
-                ["connection_name"] = connection, ["model"] = result.Model,
+                ["connection_name"] = connection, ["model"] = result.Model, ["completion_reason"] = result.CompletionCode,
                 ["api_requests"] = result.ApiRequests, ["query_rounds"] = result.QueryRounds,
                 ["reported_total_tokens"] = result.TotalTokens, ["queries"] = new JArray(result.Queries)
             },

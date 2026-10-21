@@ -68,8 +68,14 @@ internal static class AdvisorTranscript
                 waiting.Add(new XAttribute(XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml") + "Name", "ProgressTurn" + i));
                 row.Add(waiting);
             }
+            else if (turn.State == AdvisorTurnState.Incomplete)
+            {
+                row.Add(Plain(text[turn.CompletionReason == AdvisorCompletionReason.PayloadLimit
+                    ? "transcript.payload_limit" : "transcript.round_limit"]));
+                if (turn.Proposal?.Orders.Count > 0) row.Add(Plain(text["transcript.proposal_expired"]));
+            }
             else row.Add(Plain(text["status.cancelled"]));
-            if (turn.Proposal is AdvisorOperationProposal proposal && proposal.Orders.Count > 0 && proposal.State != AdvisorProposalState.Collecting)
+            if (turn.State != AdvisorTurnState.Incomplete && turn.Proposal is AdvisorOperationProposal proposal && proposal.Orders.Count > 0 && proposal.State != AdvisorProposalState.Collecting)
             {
                 var review = Action("ReviewProposal" + i, text[proposal.CaptionKey], null);
                 review.Add(new XAttribute("Margin", "0,6,0,0"), new XAttribute("IsEnabled", !busy &&

@@ -61,7 +61,7 @@ internal sealed class AdvisorExtensionBackend : IAdvisorBackend
         AdviceResult Complete(AdviceResult answer, bool fallback) => new(answer.Text,
             Math.Max(transport.RequestCount, answer.ApiRequests), knowledge.RoundsUsed,
             fallback ? null : answer.TotalTokens, knowledge.Queries(), answer.Model.Length == 0
-                ? (fallback ? subService!.Model(sub!) : mainService.Model(main)) : answer.Model);
+                ? (fallback ? subService!.Model(sub!) : mainService.Model(main)) : answer.Model, answer.CompletionReason);
     }
 
     private sealed class KnowledgeLedger : IAdvisorQuerySession, IDisposable

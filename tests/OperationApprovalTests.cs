@@ -42,7 +42,7 @@ internal static class OperationApprovalTests
             var service = Buoys(new Helicopter()); var chat = new AdvisorConversation();
             var turn = chat.Begin(new AdvisorQuestion("Place buoys")); service.BeginProposal(turn.OperationId);
             for (var i = 0; i < 12; i++) service.Propose(turn.OperationId, Request(service, turn.OperationId, i));
-            turn.Proposal = service.FinishProposal(turn.OperationId, true); turn.Complete("Original AI answer");
+            turn.Finish(new AdviceResult("Original AI answer", 2, 0, null), service);
             var text = AdvisorText.Load("en");
             XElement Button() => XDocument.Parse(AdvisorTranscript.Render(chat, text, "Adviser", "empty"))
                 .Descendants().Single(e => (string?)e.Attribute(XName.Get("Name", "http://schemas.microsoft.com/winfx/2006/xaml")) == "ReviewProposal0");
@@ -56,6 +56,40 @@ internal static class OperationApprovalTests
             Require((string?)Button().Attribute("Content") == text["operation.registered"] &&
                 (string?)Button().Attribute("IsEnabled") == "false" && turn.Exchange!.Answer == "Original AI answer",
                 "Approval added another answer, modified the AI text or left a repeated-execution button active");
+        });
+        check("Incomplete turns expire every unapproved operation without affecting earlier registrations or offering approval", () =>
+        {
+            foreach (var approval in new[] { true, false })
+            foreach (var reason in new[] { AdvisorCompletionReason.RoundLimit, AdvisorCompletionReason.PayloadLimit })
+            {
+                var log = new List<string>(); var service = new AdvisorOperations(() => true);
+                var operation = new Extension("custom.limit", approval, log); service.Register(operation);
+                service.BeginProposal("earlier"); service.Propose("earlier", Request(service, "earlier", 0, operation.Id));
+                var previous = service.FinishProposal("earlier", true)!;
+                if (approval) service.Approve(previous);
+                var chat = new AdvisorConversation(); var turn = chat.Begin(new AdvisorQuestion("New plan"));
+                var run = new AdvisorLocalRun(); run.Attach(turn); service.BeginProposal(turn.OperationId);
+                service.Propose(turn.OperationId, Request(service, turn.OperationId, 1, operation.Id));
+                var result = new AdviceResult("", 3, 1, 42, model: "model", completionReason: reason);
+                run.Complete(result, "Connection"); turn.Finish(result, service); run.Finish();
+                service.Approve(turn.Proposal!);
+                Require(turn.State == AdvisorTurnState.Incomplete && turn.Proposal!.State == AdvisorProposalState.Cancelled &&
+                    turn.Exchange == null && chat.Exchanges.Count == 0 && !chat.CanRetry(turn) &&
+                    previous.State == AdvisorProposalState.Registered && log.SequenceEqual(new[] { "custom.limit:0" }),
+                    "An incomplete turn auto-executed, could be approved, entered history or changed earlier reservations");
+                foreach (var language in new[] { "en", "ja" })
+                {
+                    var text = AdvisorText.Load(language); var markup = AdvisorTranscript.Render(chat, text, "Officer", "empty");
+                    Require(markup.Contains(text[reason == AdvisorCompletionReason.PayloadLimit ? "transcript.payload_limit" : "transcript.round_limit"], StringComparison.Ordinal) &&
+                        markup.Contains(text["transcript.proposal_expired"], StringComparison.Ordinal) &&
+                        !markup.Contains("ReviewProposal", StringComparison.Ordinal) && !markup.Contains("CopyAnswer", StringComparison.Ordinal),
+                        "Incomplete history offered a partial plan or misreported its termination");
+                }
+                chat.Clear(); var saved = run.Snapshot();
+                Require((string?)saved["state"] == "incomplete" && (string?)saved["answer"] == null &&
+                    (string?)saved["result"]?["completion_reason"] == result.CompletionCode && (long?)saved["result"]?["reported_total_tokens"] == 42,
+                    "Developer diagnostics lost the incomplete outcome or changed with history clearing");
+            }
         });
         check("Mixed operations are held together, use their own summaries and retain original execution order", () =>
         {

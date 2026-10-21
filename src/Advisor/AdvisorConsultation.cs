@@ -27,7 +27,7 @@ internal static class AdvisorConsultation
         cancellation.ThrowIfCancellationRequested();
         var result = await backend.ConsultAsync(context, cancellation).ConfigureAwait(false);
         cancellation.ThrowIfCancellationRequested();
-        return new AdviceResult(result.Text, result.ApiRequests, context.Knowledge.RoundsUsed, result.TotalTokens, result.Queries, result.Model);
+        return new AdviceResult(result.Text, result.ApiRequests, context.Knowledge.RoundsUsed, result.TotalTokens, result.Queries, result.Model, result.CompletionReason);
     }
 
     internal static async Task<AdviceResult> RunAsync(Func<Task<AdviceResult>> consult, AdvisorTrace? trace, CancellationToken cancellation)
@@ -36,7 +36,7 @@ internal static class AdvisorConsultation
         {
             var result = await consult().ConfigureAwait(false);
             cancellation.ThrowIfCancellationRequested();
-            trace?.Finish("completed", result);
+            trace?.Finish(result.Completed ? "completed" : "incomplete", result);
             return result;
         }
         catch (OperationCanceledException)

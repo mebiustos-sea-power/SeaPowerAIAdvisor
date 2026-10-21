@@ -139,7 +139,7 @@ internal static class OptionsTests
                     throw new InvalidOperationException("A malformed link preference was silently accepted");
                 }
         }));
-        check("Both game modes advertise and enforce configured retrieval rounds and retain one final answer request", () =>
+        check("Both game modes enforce configured retrieval rounds without an extra final answer request", () =>
         {
             var campaign = QueryTests.Capture(new SituationTests.Fixture(Assembly.LoadFrom(campaignPath)));
             var battle = new BattleSnapshot(new JObject
@@ -158,7 +158,7 @@ internal static class OptionsTests
                 var transport = new RoundTransport(limit);
                 var settings = AdvisorSettings.Parse("{\"api_key\":\"mock_round_settings\"}");
                 var result = new GeminiAdvisor(transport).ConsultAsync(session, settings, Array.Empty<ChatExchange>(), CancellationToken.None).GetAwaiter().GetResult();
-                Require(result.QueryRounds == limit && result.ApiRequests == limit + 1 && transport.Calls == limit + 1 && session.MaxRounds == limit,
+                Require(!result.Completed && result.QueryRounds == limit && result.ApiRequests == limit && transport.Calls == limit && session.MaxRounds == limit,
                     "A fixed five-round or six-request limit overrode the configured consultation");
                 var rejected = session.Execute(new JObject { ["consultation_id"] = session.Id,
                     ["requests"] = new JArray(new JObject { ["query"] = "catalog" }) });
@@ -177,11 +177,10 @@ internal static class OptionsTests
             Calls++;
             if (Calls == 1)
                 Require((int?)InteractionFixture.Initial(body)["query_limits"]?["max_rounds"] == limit, "The AI was told a different limit from the adapter");
-            var querying = Calls <= limit;
-            Require((string?)body["generation_config"]!["tool_choice"] == (querying ? "auto" : "none"),
-                "Tools were disabled too early or remained enabled for the final answer");
-            var part = querying ? new JObject { ["functionCall"] = new JObject { ["name"] = "query_situation",
-                ["args"] = new JObject { ["requests"] = new JArray(new JObject { ["query"] = "catalog" }) } } } : new JObject { ["text"] = "回答" };
+            Require(Calls <= limit && (string?)body["generation_config"]!["tool_choice"] == "auto",
+                "The configured limit allowed an extra generation or forced tools off");
+            var part = new JObject { ["functionCall"] = new JObject { ["name"] = "query_situation",
+                ["args"] = new JObject { ["requests"] = new JArray(new JObject { ["query"] = "catalog" }) } } };
             return Task.FromResult(InteractionFixture.Reply(part));
         }
     }

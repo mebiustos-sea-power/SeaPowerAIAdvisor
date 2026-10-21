@@ -142,18 +142,15 @@ internal static partial class ProviderTests
             };
             var draft = ExtensionDraft(external); var sub = new AdvisorApiConfiguration("sub", "Gemini sub", "mock_public_sub_key", "gemini-sub");
             draft.Put(new AdvisorApiConfigurationDraft(sub)); draft.SubId = sub.Id;
-            var sends = 0; var handler = new BackendHttpHandler(async (request, token) =>
+            var sends = 0; var handler = new BackendHttpHandler((request, token) =>
             {
-                if (++sends == 1) return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) { Content = new StringContent("busy") };
-                var body = JObject.Parse(await request.Content!.ReadAsStringAsync(token)); var input = InteractionFixture.Initial(body);
-                Require(body["previous_interaction_id"] == null && (int?)input["continuation"]?["query_rounds_used"] == 1 &&
-                    input["continuation"]!["completed_retrievals"]!.Count() == 1 && input.ToString().Contains("Public briefing", StringComparison.Ordinal) &&
-                    (string?)body["generation_config"]?["tool_choice"] == "none", "Independent handoff lost facts or reset the exhausted budget");
-                return JsonResponse(InteractionFixture.Reply(new JObject { ["text"] = "Gemini recovered" }));
+                Require(++sends == 1, "An exhausted fallback budget sent an additional model request");
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) { Content = new StringContent("busy") });
             });
             var answer = await AdvisorConsultation.RunAsync(AdvisorServices.Prepare(draft, transportFactory: trace => new AdvisorHttpTransport(handler, trace)),
                 AdvisorContext.Create(new Knowledge(1), Array.Empty<ChatExchange>()), "unused-public-log", new AdvisorQuestion("Question"), CancellationToken.None);
-            Require(answer.Text == "Gemini recovered" && answer.ApiRequests == 2 && answer.QueryRounds == 1 && answer.TotalTokens == null && disposed,
+            Require(!answer.Completed && answer.CompletionReason == AdvisorCompletionReason.RoundLimit && answer.Model == "gemini-sub" &&
+                answer.ApiRequests == 1 && sends == 1 && answer.QueryRounds == 1 && answer.TotalTokens == null && disposed,
                 "Independent fallback changed request counts, asserted unknown usage, or leaked its execution");
         }));
         check("Gemini-to-independent handoff excludes private interaction state and continues without repeating retrieval", () => Async(async () =>
@@ -161,7 +158,7 @@ internal static partial class ProviderTests
             var external = IndependentClient(); using var host = new PublicHost(external);
             external.Consult = async (configuration, services, context, token) =>
             {
-                Require(configuration.IsSubConnection && context.Continuation.RoundsUsed == 1 && context.Continuation.MaxRounds == 1 &&
+                Require(configuration.IsSubConnection && context.Continuation.RoundsUsed == 1 && context.Continuation.MaxRounds == 2 &&
                     JArray.Parse(context.Continuation.RetrievalsJson).Count == 1 && context.Continuation.RetrievalsJson.Contains("Public briefing", StringComparison.Ordinal) &&
                     !context.Input.DataJson.Contains("PRIVATE_INTERACTION", StringComparison.Ordinal) && !context.Input.DataJson.Contains("mock_public_main", StringComparison.Ordinal),
                     "Gemini credentials/private state crossed into an independent continuation");
@@ -184,7 +181,7 @@ internal static partial class ProviderTests
                 Require(request.RequestUri!.Host == "fixture.invalid" && !request.Headers.Contains("x-goog-api-key"), "Gemini authentication entered the external connection");
                 _ = await request.Content!.ReadAsStringAsync(token); return JsonResponse(new JObject { ["ok"] = true });
             });
-            var knowledge = new Knowledge(1); var updates = new List<AdvisorProgress>();
+            var knowledge = new Knowledge(2); var updates = new List<AdvisorProgress>();
             var answer = await AdvisorConsultation.RunAsync(AdvisorServices.Prepare(draft, transportFactory: trace => new AdvisorHttpTransport(handler, trace)),
                 AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), progress: updates.Add), "unused-public-log", new AdvisorQuestion("Question"), CancellationToken.None);
             Require(answer.Text == "Independent recovered" && answer.ApiRequests == 3 && knowledge.Requests.Count == 1 && answer.TotalTokens == null && updates.Last().ApiRequest == 3 && updates.Last().UsingFallback,

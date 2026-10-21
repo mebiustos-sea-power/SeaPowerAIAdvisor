@@ -26,11 +26,11 @@ internal sealed class AdvisorEngine : IAdvisorBackend
     {
         var session = context.Knowledge;
         var tool = context.Input.Tool;
-        var maxApiRequests = Math.Max(1, session.MaxRounds - (continuation == null ? 0 : session.RoundsUsed) + 1);
+        var maxExchanges = Math.Max(0, session.MaxRounds - (continuation == null ? 0 : session.RoundsUsed));
         var bytesSent = 0;
         long totalTokens = 0;
         var usageKnown = true;
-        var toolsAllowed = true;
+        AdvisorCompletionReason? limit = null;
         var queriesUsed = new List<string>();
         var lastQueries = Array.Empty<string>();
         var lastApiRequest = 0;
@@ -43,17 +43,18 @@ internal sealed class AdvisorEngine : IAdvisorBackend
                 session.MaxRounds, lastQueries, true, sub!.Model));
         }, continuation);
         var knownQueries = ((JArray)tool["parameters"]!["properties"]!["requests"]!["items"]!["properties"]!["query"]!["enum"]!).Values<string>().ToHashSet(StringComparer.Ordinal);
-        for (var api = 1; api <= maxApiRequests; api++)
+        for (var api = 0; api < maxExchanges; api++)
         {
             cancellation.ThrowIfCancellationRequested();
-            var allow = toolsAllowed && session.RoundsUsed < session.MaxRounds && api < maxApiRequests;
-            var reply = await connection.GenerateAsync(allow, new AdvisorContinuation(retrievals, session.RoundsUsed, session.MaxRounds, context.Operations?.History), cancellation,
+            if (limit.HasValue || session.RoundsUsed >= session.MaxRounds)
+                return Result("", limit ?? AdvisorCompletionReason.RoundLimit);
+            var reply = await connection.GenerateAsync(true, new AdvisorContinuation(retrievals, session.RoundsUsed, session.MaxRounds, context.Operations?.History), cancellation,
                 (requestNumber, fallback, model, size) =>
                 {
                     if (size > MaxTotalRequestBytes - bytesSent) throw new AdvisorConnectionException("request_budget");
                     bytesSent += size;
                     lastApiRequest = requestNumber;
-                    context.Progress?.Invoke(new AdvisorProgress(allow ? AdvisorStage.Waiting : AdvisorStage.FinalAnswer,
+                    context.Progress?.Invoke(new AdvisorProgress(AdvisorStage.Waiting,
                         requestNumber, session.RoundsUsed, session.MaxRounds, lastQueries, fallback, model));
                 }).ConfigureAwait(false);
             cancellation.ThrowIfCancellationRequested();
@@ -61,9 +62,11 @@ internal sealed class AdvisorEngine : IAdvisorBackend
             else usageKnown = false;
             var calls = reply.Calls;
             if (calls.Count == 0)
-                return new AdviceResult(reply.Text, connection.ApiRequests, session.RoundsUsed,
-                    usageKnown ? totalTokens : (long?)null, queriesUsed, connection.Model);
-            if (!allow) throw new AdvisorConnectionException("unexpected_function_call");
+            {
+                context.Progress?.Invoke(new AdvisorProgress(AdvisorStage.FinalAnswer, connection.ApiRequests, session.RoundsUsed,
+                    session.MaxRounds, lastQueries, connection.UsingFallback, connection.Model));
+                return Result(reply.Text, AdvisorCompletionReason.Completed);
+            }
             if (calls.Count > MaxToolCallsPerResponse) throw new AdvisorConnectionException("tool_call_limit");
             if (calls.Any(call => string.IsNullOrWhiteSpace(call.Id) || (call.Name != (string?)tool["name"] && (context.Operations == null || call.Name != (string?)context.Input.OperationTool?["name"]))) ||
                 calls.Select(call => call.Id).Distinct(StringComparer.Ordinal).Count() != calls.Count)
@@ -84,7 +87,8 @@ internal sealed class AdvisorEngine : IAdvisorBackend
                 queriesUsed.AddRange(pendingQueries);
                 foreach (var resultItem in SplitResults(queryCalls, result)) results.Add(resultItem.Id, resultItem);
                 var errorCode = (string?)result["error"]?["code"];
-                if (errorCode == "payload_limit" || errorCode == "round_limit") toolsAllowed = false;
+                if (errorCode == "payload_limit") limit = AdvisorCompletionReason.PayloadLimit;
+                else if (errorCode == "round_limit") limit = AdvisorCompletionReason.RoundLimit;
             }
             foreach (var call in calls.Where(c => c.Name != (string?)tool["name"]))
             {
@@ -98,7 +102,11 @@ internal sealed class AdvisorEngine : IAdvisorBackend
             }
             connection.AcceptResults(calls.Select(c => results[c.Id]).ToArray());
         }
-        throw new AdvisorConnectionException("request_limit");
+        cancellation.ThrowIfCancellationRequested();
+        return Result("", limit ?? AdvisorCompletionReason.RoundLimit);
+
+        AdviceResult Result(string answer, AdvisorCompletionReason reason) => new(answer, connection.ApiRequests,
+            session.RoundsUsed, usageKnown ? totalTokens : (long?)null, queriesUsed, connection.Model, reason);
     }
 
     private static IReadOnlyList<AdvisorToolResult> SplitResults(IReadOnlyList<AdvisorToolCall> calls, JObject result)

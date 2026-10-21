@@ -89,9 +89,9 @@ internal static partial class ProviderTests
                 await Task.CompletedTask;
             });
         }));
-        check("Ollama batches independent calls, returns correlated results, preserves thinking and stops tools at the retrieval limit", () => Async(async () =>
+        check("Ollama batches independent calls and preserves correlated results and thinking within the exchange budget", () => Async(async () =>
         {
-            var sent = new List<JObject>(); var events = new List<AdvisorProgress>(); var knowledge = new Knowledge(1);
+            var sent = new List<JObject>(); var events = new List<AdvisorProgress>(); var knowledge = new Knowledge(2);
             var handler = new BackendHttpHandler(async (request, token) =>
             {
                 var body = JObject.Parse(await request.Content!.ReadAsStringAsync(token)); sent.Add(body);
@@ -108,10 +108,10 @@ internal static partial class ProviderTests
                     return JsonResponse(LocalReply("", "PRIVATE_THINKING", LocalCall("catalog"), LocalCall("get_briefing")));
                 }
                 var messages = (JArray)body["messages"]!; var toolResults = messages.OfType<JObject>().Where(m => (string?)m["role"] == "tool").ToArray();
-                Require(body["tools"] == null && (string?)messages[2]!["thinking"] == "PRIVATE_THINKING" && toolResults.Length == 2 &&
+                Require(body["tools"] != null && (string?)messages[2]!["thinking"] == "PRIVATE_THINKING" && toolResults.Length == 2 &&
                     (string?)JObject.Parse((string)toolResults[0]["content"]!)["results"]![0]!["query"] == "catalog" &&
                     (string?)JObject.Parse((string)toolResults[1]["content"]!)["results"]![0]!["query"] == "get_briefing",
-                    "Ollama tool results, thinking history or final-answer tool restriction were lost");
+                    "Ollama tool results, thinking history or remaining tool availability were lost");
                 return JsonResponse(LocalReply("Local advice"));
             });
             var setup = AdvisorServices.Prepare(LocalDraft(), transportFactory: trace => new AdvisorHttpTransport(handler, trace));
@@ -123,7 +123,7 @@ internal static partial class ProviderTests
         }));
         check("Local provider retrieval cannot bypass a disabled knowledge category", () => Async(async () =>
         {
-            var sends = 0; var knowledge = new Knowledge(1, AdvisorInformation.Default.With(InformationKind.BattleBriefing, false));
+            var sends = 0; var knowledge = new Knowledge(2, AdvisorInformation.Default.With(InformationKind.BattleBriefing, false));
             var handler = new BackendHttpHandler(async (request, token) =>
             {
                 var body = JObject.Parse(await request.Content!.ReadAsStringAsync(token));
@@ -158,7 +158,7 @@ internal static partial class ProviderTests
                     "Gemini-specific state or credentials crossed to Ollama");
                 var input = JObject.Parse((string)body["messages"]![1]!["content"]!);
                 Require((int?)input["continuation"]?["query_rounds_used"] == 1 && input["continuation"]!["completed_retrievals"]!.Count() == 1 &&
-                    input.ToString().Contains("Public briefing", StringComparison.Ordinal) && body["tools"] == null,
+                    input.ToString().Contains("Public briefing", StringComparison.Ordinal) && body["tools"] != null,
                     "Cross-provider recovery re-fetched data, reset limits or lost evidence");
                 return JsonResponse(LocalReply("Recovered locally"));
             });
@@ -180,7 +180,7 @@ internal static partial class ProviderTests
                     "Cross-provider fallback used another provider's session or authentication");
                 var input = JObject.Parse((string)body["input"]![0]!["content"]![0]!["text"]!);
                 Require((int?)input["continuation"]?["query_rounds_used"] == 1 && input.ToString().Contains("Public briefing", StringComparison.Ordinal) &&
-                    (string?)body["generation_config"]?["tool_choice"] == "none", "Gemini did not inherit evidence and the exhausted limit");
+                    (string?)body["generation_config"]?["tool_choice"] == "auto", "Gemini did not inherit evidence and the remaining limit");
                 return JsonResponse(InteractionFixture.Reply(new JObject { ["text"] = "Recovered remotely" }));
             });
             var result = await RunPrepared(AdvisorServices.Prepare(draft, transportFactory: trace => new AdvisorHttpTransport(handler, trace)));

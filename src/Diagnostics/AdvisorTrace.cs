@@ -67,7 +67,7 @@ internal sealed class AdvisorTrace : IDisposable
     internal void Finish(string outcome, AdviceResult? result = null, string? errorCode = null, int? status = null, string? errorType = null) =>
         Write("consultation_finished", new JObject
         {
-            ["outcome"] = outcome, ["error_code"] = errorCode, ["http_status"] = status, ["error_type"] = errorType,
+            ["outcome"] = outcome, ["completion_reason"] = result?.CompletionCode, ["error_code"] = errorCode, ["http_status"] = status, ["error_type"] = errorType,
             ["model"] = result?.Model, ["api_requests"] = result?.ApiRequests, ["query_rounds"] = result?.QueryRounds, ["total_tokens"] = result?.TotalTokens
         });
 

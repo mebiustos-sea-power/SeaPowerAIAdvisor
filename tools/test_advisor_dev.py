@@ -222,6 +222,17 @@ class CliTests(unittest.TestCase):
             self.assertEqual(len([c for c in api.calls if c[:2] == ("POST", "/v1/consultations")]), 1)
             self.assertFalse(any(c[1].endswith("/cancel") for c in api.calls))
 
+    def test_incomplete_consultation_is_saved_without_resending_or_an_answer(self):
+        with MockApi() as api, tempfile.TemporaryDirectory() as temporary:
+            api.states = ["waiting", "incomplete"]
+            output = Path(temporary) / "trial"
+            code, raw, error = api.run("consult", "--question", "q", "--poll-interval", ".001", "--output", output)
+            self.assertEqual(code, 1); self.assertEqual(error, "")
+            self.assertEqual(json.loads(raw), tool.load(output / "result.json"))
+            self.assertEqual(tool.load(output / "result.json")["state"], "incomplete")
+            self.assertFalse((output / "answer.md").exists())
+            self.assertEqual(len([c for c in api.calls if c[0] == "POST"]), 1)
+
     def test_provider_failure_stays_in_result_and_returns_nonzero(self):
         with MockApi() as api, tempfile.TemporaryDirectory() as temporary:
             api.states = ["failed"]

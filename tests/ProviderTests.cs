@@ -21,6 +21,7 @@ internal static partial class ProviderTests
         RunRequestTimeouts(check);
         RunExtensions(check);
         RunOperations(check);
+        RunCompletion(check);
         check("A provider without Gemini wire types uses the shared engine and receives correctly mapped parallel results", () => Async(async () =>
         {
             var knowledge = new Knowledge(2);
@@ -68,33 +69,32 @@ internal static partial class ProviderTests
                     (string?)s.Continuation.Retrievals[0]!["response"]!["status"] == "ok" &&
                     !s.Input.Data.ToString().Contains("PRIVATE_PROVIDER_STATE", StringComparison.Ordinal),
                     "Handoff lost evidence, reset query limits, or copied private provider state");
-                if (n == 1) return Task.FromResult(Reply(Call("next", "get_briefing")));
-                Require(!allowed, "The fallback provider regained an exhausted retrieval budget");
-                return Task.FromResult(new AdvisorReply("Recovered", Array.Empty<AdvisorToolCall>(), 7));
+                Require(n == 1 && allowed, "The fallback provider was called after the shared limit");
+                return Task.FromResult(Reply(Call("next", "get_briefing")));
             });
             var result = await new AdvisorEngine(main, sub).ConsultAsync(AdvisorContext.Create(knowledge,
                 Array.Empty<ChatExchange>(), progress: events.Add), CancellationToken.None);
-            Require(result.ApiRequests == 4 && result.QueryRounds == 2 && result.Model == sub.Model && result.TotalTokens == null &&
-                events.Count(e => e.Stage == AdvisorStage.SwitchingKey) == 1 && events.Last().Stage == AdvisorStage.FinalAnswer &&
+            Require(!result.Completed && result.CompletionReason == AdvisorCompletionReason.RoundLimit && result.ApiRequests == 3 &&
+                result.QueryRounds == 2 && result.Model == sub.Model && result.TotalTokens == null &&
+                events.Count(e => e.Stage == AdvisorStage.SwitchingKey) == 1 && sub.Sessions.Single().Sends == 1 &&
                 main.Sessions.Single().Disposed && sub.Sessions.Single().Disposed,
                 "Cross-provider fallback changed actual attempts, usage uncertainty, progress, or session cleanup");
         }));
-        check("The shared engine rejects requests beyond the knowledge round limit for independent providers", () => Async(async () =>
+        check("The shared engine stops at the knowledge limit without another model request or fallback", () => Async(async () =>
         {
             var knowledge = new Knowledge(1);
             var provider = new FakeProvider("independent", (s, n, allowed, token) =>
             {
-                if (n == 2) Require(!allowed, "Final generation still allowed knowledge queries");
+                Require(n == 1 && allowed, "A tools-disabled or extra request was sent");
                 return Task.FromResult(Reply(Call("call-" + n, "catalog")));
             });
-            try { await new AdvisorEngine(provider).ConsultAsync(AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>()), CancellationToken.None); }
-            catch (AdvisorConnectionException error)
-            {
-                Require(error.Code == "unexpected_function_call" && knowledge.RoundsUsed == 1 &&
-                    provider.Sessions.Single().Sends == 2 && provider.Sessions.Single().Disposed, "An independent provider bypassed the host's round limit");
-                return;
-            }
-            throw new InvalidOperationException("A tool call after the final generation was accepted");
+            var fallback = new FakeProvider("unused", (_, _, _, _) => throw new Exception("Limit triggered fallback"));
+            var result = await new AdvisorEngine(provider, fallback).ConsultAsync(
+                AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>()), CancellationToken.None);
+            Require(!result.Completed && result.CompletionReason == AdvisorCompletionReason.RoundLimit && result.Text == "" &&
+                result.TotalTokens == 7 && result.ApiRequests == 1 && knowledge.RoundsUsed == 1 &&
+                provider.Sessions.Single().Sends == 1 && provider.Sessions.Single().Disposed && fallback.Sessions.Count == 0,
+                "A limit was treated as success, retried, or lost its usage accounting");
         }));
         check("The shared request byte budget is checked before an independent provider sends any data", () => Async(async () =>
         {

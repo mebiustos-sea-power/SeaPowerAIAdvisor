@@ -48,7 +48,7 @@ internal static partial class ProviderTests
         {
             foreach (var includeBriefing in new[] { true, false })
             {
-                var sends = 0; var knowledge = new Knowledge(1, AdvisorInformation.Default.With(InformationKind.BattleBriefing, includeBriefing));
+                var sends = 0; var knowledge = new Knowledge(2, AdvisorInformation.Default.With(InformationKind.BattleBriefing, includeBriefing));
                 var handler = new BackendHttpHandler(async (request, token) =>
                 {
                     var body = JObject.Parse(await request.Content!.ReadAsStringAsync(token));
@@ -63,7 +63,7 @@ internal static partial class ProviderTests
                         return JsonResponse(reply);
                     }
                     var messages = (JArray)body["messages"]!;
-                    Require((string?)body["tool_choice"] == "none" && messages.Count == 5 &&
+                    Require((string?)body["tool_choice"] == "auto" && messages.Count == 5 &&
                         (string?)messages[2]!["reasoning_content"] == "PRIVATE_NANO_CONTEXT" &&
                         (string?)messages[3]!["tool_call_id"] == "catalog-call" && (string?)messages[4]!["tool_call_id"] == "briefing-call",
                         "NanoGPT lost tool correlation/reasoning or exceeded its retrieval limit");
@@ -158,7 +158,7 @@ internal static partial class ProviderTests
                 CheckNanoRequest(request, body);
                 var data = JObject.Parse((string)body["messages"]![1]!["content"]!);
                 Require((int?)data["continuation"]?["query_rounds_used"] == 1 && data["continuation"]!["completed_retrievals"]!.Count() == 1 &&
-                    data.ToString().Contains("Public briefing", StringComparison.Ordinal) && (string?)body["tool_choice"] == "none" &&
+                    data.ToString().Contains("Public briefing", StringComparison.Ordinal) && (string?)body["tool_choice"] == "auto" &&
                     !body.ToString().Contains("PRIVATE_OLD_PROVIDER", StringComparison.Ordinal) && !body.ToString().Contains("old-provider-call", StringComparison.Ordinal),
                     "Fallback lost evidence, reset the query budget or copied private provider history");
                 return JsonResponse(NanoReply("Recovered"));

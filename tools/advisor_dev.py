@@ -246,7 +246,7 @@ def wait_result(client, identifier, args, record=lambda value: None, progress_fi
                 print(json.dumps(progress, ensure_ascii=False), file=sys.stderr, flush=True)
             previous = progress
         state = value.get("state")
-        if state not in ("starting", "waiting", "answered", "failed", "cancelled"):
+        if state not in ("starting", "waiting", "answered", "incomplete", "failed", "cancelled"):
             raise ToolError("Unknown consultation state: " + str(state))
         if state not in ("starting", "waiting"):
             return value
@@ -266,7 +266,7 @@ def print_result(value, args):
 
 
 def result_exit(value):
-    return 1 if value.get("state") in ("failed", "cancelled") else 0
+    return 1 if value.get("state") in ("incomplete", "failed", "cancelled") else 0
 
 
 def consult(client, args):

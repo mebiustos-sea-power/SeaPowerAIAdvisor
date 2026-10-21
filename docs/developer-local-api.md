@@ -199,7 +199,9 @@ python3 tools/advisor_dev.py reservations clear --unit-id 1029 --scope-id <scope
 
 ## Results and limitations
 
-The consultation response states are `waiting`, `answered`, `failed` and `cancelled`. `progress` contains the latest reported stage, request/round counts, query names, model, connection name and fallback flag. On success, `answer` contains the original Markdown. `result` contains the reported model, connection, request/round counts, query names and nullable `reported_total_tokens`.
+The consultation response states are `waiting`, `answered`, `incomplete`, `failed` and `cancelled`. `progress` contains the latest reported stage, request/round counts, query names, model, connection name and fallback flag. On success, `answer` contains the original Markdown. `result` contains the reported model, connection, request/round counts, query names and nullable `reported_total_tokens`.
+
+An `incomplete` result has no final `answer`. The standard engine stops without an additional tools-disabled request when its exchange or information-size budget is exhausted. `result.completion_reason` is `round_limit` or `payload_limit` (`completed` for normal answers). Unapproved proposals from that consultation expire; previously registered game orders remain. Limits do not trigger an automatic retry or fallback. Independent backends retain their own communication workflow.
 
 `input` captures the provider-independent effective data, system instructions and query tool definition. `retrievals` records the ordered gateway requests and returned data, or a query error code. These are the same detached, player-known snapshots used by the normal workflow; custom backends still choose how to communicate. This is not a raw HTTP transcript and does not record private model reasoning. Provider failure codes and HTTP status are included in `error`; the existing **API errors** page remains the place for provider response details. Token reporting is provider-supplied, not `countTokens` or a billing guarantee. A backend that does not report usage produces `null`.
 

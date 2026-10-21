@@ -123,7 +123,7 @@ internal sealed class AdvisorTranscriptView
                     reassessmentButtons.Add(button);
                     button.Click += (_, _) => guard(() => { if (button.IsEnabled) reassess(turn, assumption); });
                 }
-            if (turn.Proposal is AdvisorOperationProposal proposal && proposal.Orders.Count > 0 && proposal.State != AdvisorProposalState.Collecting)
+            if (turn.State != AdvisorTurnState.Incomplete && turn.Proposal is AdvisorOperationProposal proposal && proposal.Orders.Count > 0 && proposal.State != AdvisorProposalState.Collecting)
             {
                 var button = root.FindName("ReviewProposal" + i) as Button
                     ?? throw new InvalidOperationException("The proposal review button is missing.");

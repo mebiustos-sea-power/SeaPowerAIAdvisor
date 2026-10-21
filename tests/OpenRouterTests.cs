@@ -41,7 +41,7 @@ internal static partial class ProviderTests
         {
             foreach (var includeBriefing in new[] { true, false })
             {
-                var sends = 0; var knowledge = new Knowledge(1, AdvisorInformation.Default.With(InformationKind.BattleBriefing, includeBriefing));
+                var sends = 0; var knowledge = new Knowledge(2, AdvisorInformation.Default.With(InformationKind.BattleBriefing, includeBriefing));
                 var handler = new BackendHttpHandler(async (request, token) =>
                 {
                     var body = JObject.Parse(await request.Content!.ReadAsStringAsync(token));
@@ -62,10 +62,10 @@ internal static partial class ProviderTests
                         return JsonResponse(response);
                     }
                     var messages = (JArray)body["messages"]!;
-                    Require((string?)body["tool_choice"] == "none" && messages.Count == 5 &&
+                    Require((string?)body["tool_choice"] == "auto" && messages.Count == 5 &&
                         messages[2]!["reasoning_details"]!.ToString().Contains("PRIVATE_ROUTER_SIGNATURE", StringComparison.Ordinal) &&
                         (string?)messages[3]!["tool_call_id"] == "c1" && (string?)messages[4]!["tool_call_id"] == "c2",
-                        "Continuation lost reasoning/call IDs or enabled tools after the query budget");
+                        "Continuation lost reasoning/call IDs or disabled tools before the query budget");
                     var catalog = JObject.Parse((string)messages[3]!["content"]!);
                     var denied = JObject.Parse((string)messages[4]!["content"]!);
                     if (includeBriefing)
@@ -115,7 +115,7 @@ internal static partial class ProviderTests
                     if (routerFirst) Require(request.Headers.GetValues("x-goog-api-key").Single() == "mock_gemini_secret" &&
                         !request.Headers.Contains("Authorization") && body["previous_interaction_id"] == null, "Router authentication/session leaked to Gemini");
                     else Require(request.Headers.Authorization?.Parameter == "mock_router_secret" && !request.Headers.Contains("x-goog-api-key") &&
-                        (string?)body["tool_choice"] == "none", "Gemini state leaked to OpenRouter or the query allowance reset");
+                        (string?)body["tool_choice"] == "auto", "Gemini state leaked to OpenRouter or the query allowance reset");
                     return routerFirst ? JsonResponse(InteractionFixture.Reply(new JObject { ["text"] = "Recovered" })) : JsonResponse(RouterReply("Recovered"));
                 });
                 var answer = await RunPrepared(AdvisorServices.Prepare(draft, transportFactory: trace => new AdvisorHttpTransport(handler, trace)));

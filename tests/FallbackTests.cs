@@ -39,7 +39,7 @@ internal static class FallbackTests
         check("A mid-consultation switch starts a new server conversation with evidence and keeps subsequent retrievals on fallback", () => Async(async () =>
         {
             var keys = new List<string>(); var bodies = new List<string>(); var events = new List<AdvisorProgress>();
-            var switches = 0; var session = Session(2);
+            var switches = 0; var session = Session(3);
             string? primaryId = null, backupId = null;
             using var transport = new GeminiTransport(new Handler(async (request, token) =>
             {
@@ -68,7 +68,7 @@ internal static class FallbackTests
                 }
                 var current = JObject.Parse(bodies.Last());
                 if (call == 4)
-                    Require((string?)current["generation_config"]!["tool_choice"] == "none" &&
+                    Require((string?)current["generation_config"]!["tool_choice"] == "auto" &&
                         (string?)current["previous_interaction_id"] == backupId, "Failover reset the limit or lost the backup conversation");
                 else Require(current["previous_interaction_id"] == null && InteractionFixture.Initial(current)["continuation"] == null,
                     "A new consultation inherited an earlier server conversation or fallback context");

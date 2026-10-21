@@ -73,7 +73,7 @@ internal static class FallbackModelTests
                         var continuation = (JObject)input["continuation"]!;
                         Require(body["previous_interaction_id"] == null && (string?)body["input"]![0]!["type"] == "user_input" &&
                             !json.Contains("PRIMARY_SIGNATURE",StringComparison.Ordinal) &&
-                            (int)continuation["query_rounds_used"]! == 1 && (int)continuation["remaining_query_rounds"]! == 1 &&
+                            (int)continuation["query_rounds_used"]! == 1 && (int)continuation["remaining_query_rounds"]! == 2 &&
                             continuation["completed_retrievals"]!.Count() == 1 && continuation.ToString().Contains("Frozen weapon",StringComparison.Ordinal) && session.RoundsUsed == 1,
                             "A different model received foreign context, lost evidence or reset retrieval limits");
                         carried = continuation["completed_retrievals"]![0]!["response"]!["results"]![0]!["data"]!.DeepClone();
@@ -85,7 +85,7 @@ internal static class FallbackModelTests
                     default:
                         Require((string?)body["previous_interaction_id"] == backupId &&
                             !json.Contains("PRIMARY_SIGNATURE",StringComparison.Ordinal) && !json.Contains("BACKUP_SIGNATURE",StringComparison.Ordinal) &&
-                            (string?)body["generation_config"]!["tool_choice"] == "none", "Later backup calls lost their server context or exceeded the limit");
+                            (string?)body["generation_config"]!["tool_choice"] == "auto", "Later backup calls lost their server context or exceeded the limit");
                         var latest = InteractionFixture.Result(body)["results"]![0]!["data"]!;
                         Require(carried!["weapon_references"]!.Count() == 1 && !latest["weapon_references"]!.HasValues &&
                             (string?)latest["contacts"]![0]!["possible_weapon_reference_ids"]![0] == (string?)carried["weapon_references"]![0]!["id"],
@@ -111,7 +111,7 @@ internal static class FallbackModelTests
         ["observed_contacts"]=new JArray(new JObject { ["id"]="observed_contact_1",["posture"]="enemy",["kind"]="surface" }),
         ["contact_threat_references"]=new JArray(new JObject { ["id"]="observed_contact_1",["possible_weapon_reference_ids"]=new JArray("weapon_reference_1") }),
         ["weapon_references"]=new JArray(new JObject { ["id"]="weapon_reference_1",["source"]="reference_specifications",["display_name"]="Frozen weapon",["maximum_launch_range_nm"]=70 }),["published_reports"]=new JArray(),["mission_briefing"]="Frozen briefing"
-    }),"ja","Question",maxRounds:2);
+    }),"ja","Question",maxRounds:3);
     private static JObject Tool(string name,string signature,string? contactId=null)
     {
         var query=new JObject { ["query"]=name };

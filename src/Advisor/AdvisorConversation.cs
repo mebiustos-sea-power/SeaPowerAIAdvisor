@@ -14,7 +14,7 @@ internal sealed class ChatExchange
     { Question = question; Answer = answer; DisplayQuestion = displayQuestion ?? question; AdvisorName = advisorName; }
 }
 
-internal enum AdvisorTurnState { Waiting, Answered, Failed, Cancelled }
+internal enum AdvisorTurnState { Waiting, Answered, Incomplete, Failed, Cancelled }
 
 internal sealed class AdvisorTurn
 {
@@ -28,12 +28,24 @@ internal sealed class AdvisorTurn
     internal void UpdateProgress(AdvisorProgress value) { RequireWaiting(); Progress = value; }
     internal AdvisorTurnState State { get; private set; } = AdvisorTurnState.Waiting;
     internal ChatExchange? Exchange { get; private set; }
+    internal AdvisorCompletionReason CompletionReason { get; private set; }
     internal AdvisorNotice? Error { get; private set; }
     internal AdvisorUnitReferences UnitReferences { get; private set; } = AdvisorUnitReferences.Empty;
     internal void SetUnitReferences(AdvisorUnitReferences references)
     { RequireWaiting(); UnitReferences = references; }
     internal AdvisorTurn(AdvisorQuestion request, int contextGeneration, string advisorName, string advisorId)
     { Request = request; ContextGeneration = contextGeneration; AdvisorName = advisorName; AdvisorId = advisorId; }
+
+    // Finalization runs on the game thread, including invalidation of partial operation plans.
+    internal void Finish(AdviceResult result, AdvisorOperations? operations)
+    {
+        RequireWaiting();
+        if (result.Completed && string.IsNullOrWhiteSpace(result.Text)) throw new ArgumentException("The answer is empty.");
+        Proposal = operations?.FinishProposal(OperationId, result.Completed);
+        CompletionReason = result.CompletionReason;
+        if (result.Completed) Complete(result.Text);
+        else State = AdvisorTurnState.Incomplete;
+    }
 
     internal void Complete(string answer)
     {

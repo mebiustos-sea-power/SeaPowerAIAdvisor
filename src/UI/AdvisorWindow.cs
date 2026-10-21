@@ -530,12 +530,11 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         {
             var result = completion.Result ?? throw new InvalidOperationException("The completed consultation has no result.");
             localRun?.Complete(result, turn.Progress?.ConnectionName ?? pendingConnectionName);
-            FinishProposal(turn, true);
-            turn.Complete(result.Text);
+            turn.Finish(result, OperationService);
             ShowConversation(false);
             var connection = AdvisorProgress.FormatConnection(turn.Progress?.ConnectionName ?? pendingConnectionName,
                 result.Model.Length > 0 ? result.Model : turn.Progress?.Model ?? "", text);
-            status.Text = text.Format("status.completed", connection, result.QueryRounds, result.ApiRequests,
+            status.Text = text.Format(result.Completed ? "status.completed" : "status.incomplete", connection, result.QueryRounds, result.ApiRequests,
                 result.TotalTokens.HasValue ? text.Format("status.token_count", result.TotalTokens.Value) : text["status.tokens_unknown"]);
         }
         FinishRecording();

@@ -13,7 +13,7 @@ internal static class ProgressTests
     {
         check("Progress follows real API calls and batched retrievals through the final answer without leaking private profiles", () => Async(async () =>
         {
-            var session = Session(2); var events = new List<AdvisorProgress>();
+            var session = Session(3); var events = new List<AdvisorProgress>();
             var profile = new AdvisorProfile(new[] {
                 new AdvisorPersona("alice-id", "Alice", "PRIVATE_ROLE", "PRIVATE_IMAGE.png", "Active style"),
                 new AdvisorPersona("bob-id", "PRIVATE_NAME", "PRIVATE_ROLE", "PRIVATE_IMAGE.png", "PRIVATE_STYLE")
@@ -33,14 +33,14 @@ internal static class ProgressTests
                     "Inactive registrations, role, image path or private identity leaked to Gemini");
                 if (call == 1) return Reply(Call("catalog"));
                 if (call == 2) return Reply(Call("list_units", "get_briefing"));
-                Require((string?)body["generation_config"]!["tool_choice"] == "none", "Final answer allowed more retrievals");
+                Require((string?)body["generation_config"]!["tool_choice"] == "auto", "The final answer was forced by disabling retrievals");
                 return Reply(new JObject { ["text"] = "Answer" });
             });
             var answer = await new GeminiAdvisor(transport).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None,
                 profile: profile, progress: p => events.Add(p));
             Require(answer.ApiRequests == 3 && answer.QueryRounds == 2 && events.Select(e => e.Stage).SequenceEqual(new[] {
-                AdvisorStage.Waiting, AdvisorStage.Retrieving, AdvisorStage.Waiting, AdvisorStage.Retrieving, AdvisorStage.FinalAnswer }) &&
-                events[1].Rounds == 1 && events[3].Rounds == 2 && events.All(e => e.MaxRounds == 2) &&
+                AdvisorStage.Waiting, AdvisorStage.Retrieving, AdvisorStage.Waiting, AdvisorStage.Retrieving, AdvisorStage.Waiting, AdvisorStage.FinalAnswer }) &&
+                events[1].Rounds == 1 && events[3].Rounds == 2 && events.All(e => e.MaxRounds == 3) &&
                 events[4].Queries.SequenceEqual(new[] { "list_units", "get_briefing" }), "Progress phases differ from the performed requests");
             foreach (var language in new[] { "en", "ja", "fr" })
             {
@@ -56,8 +56,8 @@ internal static class ProgressTests
             var events = new List<AdvisorProgress>();
             var session = Session(1);
             var transport = new Fake((call, body, token) => call == 1 ? Reply(Call("PRIVATE_UNKNOWN_QUERY")) : Reply(new JObject { ["text"] = "Insufficient data" }));
-            await new GeminiAdvisor(transport).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None, progress: events.Add);
-            Require(events.Last().Stage == AdvisorStage.FinalAnswer && events.Last().Queries.Count == 0 &&
+            var incomplete = await new GeminiAdvisor(transport).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None, progress: events.Add);
+            Require(!incomplete.Completed && events.All(p => p.Stage != AdvisorStage.FinalAnswer) &&
                 events.All(p => !p.Queries.Contains("PRIVATE_UNKNOWN_QUERY")), "Rejected queries were reported as acquired data or leaked model arguments");
             using var cancelled = new CancellationTokenSource(); events.Clear(); session = Session(1);
             transport = new Fake((call, body, token) => { cancelled.Cancel(); return Reply(Call("catalog")); });

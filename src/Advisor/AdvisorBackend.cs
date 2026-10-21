@@ -13,16 +13,28 @@ internal interface IAdvisorBackend
     Task<AdviceResult> ConsultAsync(AdvisorContext context, CancellationToken cancellation);
 }
 
+internal enum AdvisorCompletionReason { Completed, RoundLimit, PayloadLimit }
+
 internal sealed class AdviceResult
 {
+    internal AdvisorCompletionReason CompletionReason { get; }
+    internal bool Completed => CompletionReason == AdvisorCompletionReason.Completed;
+    internal string CompletionCode => CompletionReason switch
+    {
+        AdvisorCompletionReason.Completed => "completed",
+        AdvisorCompletionReason.RoundLimit => "round_limit",
+        AdvisorCompletionReason.PayloadLimit => "payload_limit",
+        _ => throw new InvalidOperationException("Unknown consultation completion reason.")
+    };
     internal string Text { get; }
     internal int ApiRequests { get; }
     internal int QueryRounds { get; }
     internal long? TotalTokens { get; }
     internal string Model { get; }
     internal IReadOnlyList<string> Queries { get; }
-    internal AdviceResult(string text, int apiRequests, int queryRounds, long? totalTokens, IEnumerable<string>? queries = null, string model = "")
-    { Text = text; ApiRequests = apiRequests; QueryRounds = queryRounds; TotalTokens = totalTokens; Model = model; Queries = Array.AsReadOnly((queries ?? Array.Empty<string>()).ToArray()); }
+    internal AdviceResult(string text, int apiRequests, int queryRounds, long? totalTokens, IEnumerable<string>? queries = null, string model = "",
+        AdvisorCompletionReason completionReason = AdvisorCompletionReason.Completed)
+    { CompletionReason = completionReason; Text = text; ApiRequests = apiRequests; QueryRounds = queryRounds; TotalTokens = totalTokens; Model = model; Queries = Array.AsReadOnly((queries ?? Array.Empty<string>()).ToArray()); }
 }
 
 // Preparing validates configuration without opening a connection or writing a consultation log.

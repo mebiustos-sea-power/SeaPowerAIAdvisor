@@ -46,7 +46,7 @@ Each command has its own `--help`:
 | `reservations list --unit-id ID` | Inspect this own unit’s current native reservations in queue order. |
 | `reservations clear --unit-id ID --scope-id SCOPE` | Remove all queued reservations of this unit, including manual orders. |
 
-All commands except `consult` accept `--output FILE` to save the response as UTF-8 JSON. `prompts get --id` saves raw UTF-8 text, preserving leading/trailing newlines. `consult --output DIRECTORY` creates a **new** result directory; an existing directory is rejected before any HTTP operation. Without `--quiet`, responses also go to stdout. Errors go to stderr and return nonzero. A failed/cancelled consultation also returns nonzero while preserving its result JSON.
+All commands except `consult` accept `--output FILE` to save the response as UTF-8 JSON. `prompts get --id` saves raw UTF-8 text, preserving leading/trailing newlines. `consult --output DIRECTORY` creates a **new** result directory; an existing directory is rejected before any HTTP operation. Without `--quiet`, responses also go to stdout. Errors go to stderr and return nonzero. An incomplete/failed/cancelled consultation also returns nonzero while preserving its result JSON.
 
 ## WIP operation trial
 
