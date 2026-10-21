@@ -47,6 +47,89 @@ internal static partial class ProviderTests
                 unit.Thread == Environment.CurrentManagedThreadId && knowledge.Requests.Count == 0 && operations.History.Count == 4,
                 "AI execution bypassed the operation service, duplicated registration, changed depth or used the read-only query gateway");
         });
+        check("A single AI response can register eleven or forty orders in the requested sequence", () =>
+        {
+            foreach (var count in new[] { 11, 40 })
+            {
+                var unit = new OperationHelicopter { Inventory = count };
+                var registry = SonobuoyRegistry(unit);
+                using var gateway = new AdvisorOperationGateway(registry);
+                using var operations = gateway.CreateSession("batch", AdvisorPrompts.Current)!;
+                var calls = Enumerable.Range(0, count).Select(BuoyCall).ToArray();
+                var provider = new FakeProvider("batch-model", (session, send, _, _) =>
+                {
+                    if (send == 1) return Task.FromResult(Reply(calls));
+                    Require(session.Results.Count == count && session.Results.All(r => (string?)r.Data["status"] == "registered"),
+                        "Some valid requests were rejected or lost their results");
+                    for (var i = 0; i < count; i++)
+                        Require(session.Results[i].Id == calls[i].Id && (double?)session.Results[i].Data["data"]?["latitude"] == unit.Latitudes[i],
+                            "Request, result and native registration order diverged");
+                    return Task.FromResult(new AdvisorReply("Registered", Array.Empty<AdvisorToolCall>(), 1));
+                });
+                var result = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(provider).ConsultAsync(
+                    AdvisorContext.Create(new Knowledge(2), Array.Empty<ChatExchange>(), operations: operations), CancellationToken.None)));
+                Require(unit.Latitudes.SequenceEqual(Enumerable.Range(0, count).Select(i => 26.5 + i * 0.001)), "Native registration order changed");
+                Require(result.ApiRequests == 2 && unit.Calls == count && operations.History.Count == count && unit.Depth == "alternating",
+                    "The response was truncated, registration was duplicated, or the player's depth setting changed");
+            }
+        });
+        check("Forty-one calls are rejected before dispatch, preserving earlier orders and a specific user notice", () =>
+        {
+            foreach (var includeRead in new[] { false, true })
+            {
+                var unit = new OperationHelicopter { Inventory = 50 };
+                using var gateway = new AdvisorOperationGateway(SonobuoyRegistry(unit));
+                using var operations = gateway.CreateSession("overflow", AdvisorPrompts.Current)!;
+                var knowledge = new Knowledge(3);
+                var provider = new FakeProvider("overflow-model", (_, send, _, _) =>
+                {
+                    if (send == 1) return Task.FromResult(Reply(BuoyCall(0)));
+                    var calls = Enumerable.Range(1, includeRead ? 40 : 41).Select(BuoyCall);
+                    if (includeRead) calls = calls.Prepend(Call("read", "catalog"));
+                    return Task.FromResult(Reply(calls.ToArray()));
+                });
+                try
+                {
+                    _ = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(provider).ConsultAsync(
+                        AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations), CancellationToken.None)));
+                }
+                catch (AdvisorConnectionException error)
+                {
+                    Require(error.Code == "tool_call_limit" && unit.Calls == 1 && operations.History.Count == 1 && knowledge.Requests.Count == 0 &&
+                        provider.Sessions.Single().Sends == 2 && provider.Sessions.Single().Disposed,
+                        "The oversized response partially executed, removed an earlier order, or lost its error identity");
+                    foreach (var language in new[] { "ja", "en" })
+                    {
+                        var notice = AdvisorNotice.Connection(error);
+                        var message = notice.Message(AdvisorText.Load(language));
+                        Require(notice.TextKey == "connection.tool_call_limit" && message.Contains("40", StringComparison.Ordinal) &&
+                            message.Contains(error.Code, StringComparison.Ordinal) && !message.Contains("{0}", StringComparison.Ordinal),
+                            "The limit was hidden behind a generic error or could not be displayed");
+                    }
+                    continue;
+                }
+                throw new InvalidOperationException("An oversized response was accepted");
+            }
+        });
+        check("The forty-call response limit does not expand the eight-query retrieval batch", () => Async(async () =>
+        {
+            foreach (var count in new[] { 8, 9 })
+            {
+                var knowledge = new Knowledge(2);
+                var provider = new FakeProvider("read-model", (session, send, _, _) =>
+                {
+                    if (send == 1) return Task.FromResult(Reply(Enumerable.Range(0, count).Select(i => Call("read-" + i, "catalog")).ToArray()));
+                    Require(session.Results.Count == count && session.Results.All(r =>
+                        (string?)r.Data["status"] == (count == 8 ? "ok" : "error")), "Retrieval batch validation changed");
+                    if (count == 9) Require(session.Results.All(r => (string?)r.Data["error"]?["code"] == "invalid_arguments"),
+                        "Oversized information retrieval bypassed the knowledge gateway");
+                    return Task.FromResult(new AdvisorReply("Read result handled", Array.Empty<AdvisorToolCall>(), 1));
+                });
+                var result = await new AdvisorEngine(provider).ConsultAsync(AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>()), CancellationToken.None);
+                Require(result.ApiRequests == 2 && knowledge.Requests.Count == 1 && knowledge.RoundsUsed == 1,
+                    "Retrieval rejection changed round accounting or terminated as a tool-call overflow");
+            }
+        }));
         check("A provider handoff receives operation receipts and replaying an order cannot register it twice", () =>
         {
             var unit = new OperationHelicopter(); using var gateway = new AdvisorOperationGateway(SonobuoyRegistry(unit));
@@ -116,6 +199,12 @@ internal static partial class ProviderTests
                 (string?)snapshot["operations"]?[0]?["response"]?["status"] == "registered", "Operation evidence was lost or aliased");
         });
     }
+    private static AdvisorToolCall BuoyCall(int index)
+    {
+        var request = BuoyRequest(); request["request_id"] = "buoy-" + index;
+        request["arguments"]!["latitude"] = 26.5 + index * 0.001;
+        return new AdvisorToolCall("schedule-" + index, "game_operations", request);
+    }
     private static AdvisorReply OperationReply(string id, JObject args) => Reply(new AdvisorToolCall(id, "game_operations", args));
     private static JObject BuoyRequest() => new()
     {
@@ -131,8 +220,9 @@ internal static partial class ProviderTests
         public string? UnavailableReason => null;
         public string Depth => "alternating";
         public JObject Position => new() { ["latitude_deg"] = 26.5, ["longitude_deg"] = 127.5 };
-        internal int Calls, Thread;
-        public System.Collections.Generic.IReadOnlyList<BattleSonobuoyAmmo> Ammunition() => new[] { new BattleSonobuoyAmmo("extra_mod_buoy", "Extra buoy", 4, 4 - Calls, true) };
-        public void Append(string ammunition, double latitude, double longitude) { Calls++; Thread = Environment.CurrentManagedThreadId; }
+        internal int Calls, Thread, Inventory = 4;
+        internal readonly System.Collections.Generic.List<double> Latitudes = new();
+        public System.Collections.Generic.IReadOnlyList<BattleSonobuoyAmmo> Ammunition() => new[] { new BattleSonobuoyAmmo("extra_mod_buoy", "Extra buoy", Inventory, Inventory - Calls, true) };
+        public void Append(string ammunition, double latitude, double longitude) { Latitudes.Add(latitude); Calls++; Thread = Environment.CurrentManagedThreadId; }
     }
 }

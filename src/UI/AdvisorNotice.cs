@@ -35,6 +35,7 @@ internal sealed class AdvisorNotice
             "output_limit" => "output_limit",
             "response_blocked" or "generation_failed" => "response_blocked",
             "request_budget" or "request_limit" => "request_budget",
+            "tool_call_limit" => "tool_call_limit",
             _ => "unknown"
         };
         return new AdvisorNotice("connection." + key, error.Code, error.HttpStatus, error.UsingFallback, error.HasDetails);
@@ -44,7 +45,7 @@ internal sealed class AdvisorNotice
     internal static AdvisorNotice Situation(string code) => new("situation.error." + code, code);
     internal static AdvisorNotice Prompts(AdvisorPromptException error) => new("prompts.error." + error.Code, error.Code);
     internal static AdvisorNotice Unexpected() => new("connection.unknown", "unexpected_error");
-    internal string Message(AdvisorText text, bool inSettings = false) => (usingFallback ? text["connection.fallback_failed"] + " " : "") + text[TextKey] + " [" + Code +
+    internal string Message(AdvisorText text, bool inSettings = false) => (usingFallback ? text["connection.fallback_failed"] + " " : "") + (Code == "tool_call_limit" ? text.Format(TextKey, AdvisorEngine.MaxToolCallsPerResponse) : text[TextKey]) + " [" + Code +
         (HttpStatus.HasValue ? " / HTTP " + HttpStatus : "") + "]" +
         (hasDetails ? "\n" + text[inSettings ? "errorlog.test_hint" : "errorlog.hint"] : "");
 }

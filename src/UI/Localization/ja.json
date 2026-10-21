@@ -93,6 +93,7 @@
   "connection.output_limit": "AIの出力上限に達しました。質問を絞るかmax_output_tokensを調整してください。",
   "connection.response_blocked": "AIが回答を完了できませんでした。",
   "connection.request_budget": "相談の通信上限に達しました。質問を絞るか会話を消去してください。",
+  "connection.tool_call_limit": "一度に受け付けられる要求数の上限（{0}件）を超えました。",
   "connection.unknown": "AIの回答を処理できませんでした。再度相談してください。",
   "situation.error.fog_disabled": "戦場の霧が無効のため、状況の取得を停止しました。",
   "situation.error.campaign_unavailable": "キャンペーン画面の状況を取得できません。画面を開き直してください。",

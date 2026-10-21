@@ -11,6 +11,7 @@ namespace SeaPowerAIAdvisor;
 internal sealed class AdvisorEngine : IAdvisorBackend
 {
     internal const int MaxTotalRequestBytes = 1_000_000;
+    internal const int MaxToolCallsPerResponse = 40;
     private readonly IAdvisorProvider main;
     private readonly IAdvisorProvider? sub;
     private readonly Action<AdvisorConnectionException>? switched;
@@ -62,7 +63,8 @@ internal sealed class AdvisorEngine : IAdvisorBackend
             if (calls.Count == 0)
                 return new AdviceResult(reply.Text, connection.ApiRequests, session.RoundsUsed,
                     usageKnown ? totalTokens : (long?)null, queriesUsed, connection.Model);
-            if (!allow || calls.Count > AdvisorQueryLimits.MaxQueriesPerRound) throw new AdvisorConnectionException("unexpected_function_call");
+            if (!allow) throw new AdvisorConnectionException("unexpected_function_call");
+            if (calls.Count > MaxToolCallsPerResponse) throw new AdvisorConnectionException("tool_call_limit");
             if (calls.Any(call => string.IsNullOrWhiteSpace(call.Id) || (call.Name != (string?)tool["name"] && (context.Operations == null || call.Name != (string?)context.Input.OperationTool?["name"]))) ||
                 calls.Select(call => call.Id).Distinct(StringComparer.Ordinal).Count() != calls.Count)
                 throw new AdvisorConnectionException("invalid_function_call");
