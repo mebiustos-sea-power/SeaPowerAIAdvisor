@@ -40,8 +40,23 @@ Each command has its own `--help`:
 | `consult` | Submit exactly one consultation and normally wait for its result. |
 | `result ID [--wait]` | Fetch or continue waiting for an existing consultation; never submit it again. |
 | `cancel` | Explicitly cancel active consultation work. |
+| `operations list` | Read the WIP operation catalog and current battle scope. |
+| `operations candidates OPERATION` | Read current own-unit candidates and available ammunition. |
+| `operations execute --request-file FILE` | Submit one explicit reservation request without AI; preserves the supplied scope and request ID. |
 
 All commands except `consult` accept `--output FILE` to save the response as UTF-8 JSON. `prompts get --id` saves raw UTF-8 text, preserving leading/trailing newlines. `consult --output DIRECTORY` creates a **new** result directory; an existing directory is rejected before any HTTP operation. Without `--quiet`, responses also go to stdout. Errors go to stderr and return nonzero. A failed/cancelled consultation also returns nonzero while preserving its result JSON.
+
+## WIP operation trial
+
+Operation commands require **Settings → WIP (experimental) → Enable unit order scheduling**, as well as the local API switch. They need no AI connection and make no provider requests. See [native-order trial](../docs/developer-local-api.md#wip-native-order-trial-no-ai) for the request format, limitations and confirmation procedure.
+
+```sh
+python3 tools/advisor_dev.py operations list
+python3 tools/advisor_dev.py operations candidates seapower.schedule_sonobuoy_drop --output artifacts/candidates.json
+python3 tools/advisor_dev.py operations execute --request-file artifacts/order.json --output artifacts/order-result.json
+```
+
+The request file must explicitly contain its current `scope_id`, `request_id`, operation, target and arguments. Sonobuoy candidates and registration results report the player-controlled `depth` (`above_layer`, `below_layer`, or `alternating`). The first release does not advertise depth control and ignores any supplied `arguments.depth`, preserving a player's setting change while the AI is responding. The tool does not generate new identities, rebind stale targets, or retry a POST. A `registered` result only acknowledges a native reservation; it does not wait for the helicopter or sonobuoy.
 
 ## Questions, connection and recording
 

@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Collections.Generic;
+using System.Linq;
 using System.Xml;
 using Noesis;
 using SeaPower;
@@ -23,6 +25,7 @@ internal sealed class BattleIntegration
     private object? player;
     private AdvisorHudButton? launcher;
     private AdvisorWindow? advisor;
+    private AdvisorOperations? operations;
     private BattleContactAssessments? contactAssessments;
     private BattleMapNavigation? mapNavigation;
     private AdvisorErrorWindow? errorWindow;
@@ -34,9 +37,10 @@ internal sealed class BattleIntegration
     internal void Tick(MainGameViewModel current)
     {
         Plugin.LocalApi?.Detach(this);
-        if (current.RootControl == null) return;
+        if (current.RootControl == null) { operations = null; return; }
         if (!runtime.Failed && (!SceneCreator.InstanceExists(false) ||
-            !SceneCreator.Instance.IsLoadingDone || Globals._playerTaskforce == null)) return;
+            !SceneCreator.Instance.IsLoadingDone || Globals._playerTaskforce == null))
+        { operations = null; return; }
         var root = ReferenceEquals(model, current) && ReferenceEquals(uiRoot, current.RootControl) ? view : FindView(current.RootControl);
         if (root == null || root.ActualWidth <= 0 || root.ActualHeight <= 0) return;
         var currentMission = runtime.Failed ? mission : SceneCreator.Instance;
@@ -99,7 +103,15 @@ internal sealed class BattleIntegration
             contactAssessments.Tick(current.RootControl, host);
             mapNavigation?.Tick();
             advisor?.Tick();
-            if (options.Current.DeveloperApiEnabled) Plugin.LocalApi?.Attach(this, "tactical_battle", GetAdvisor);
+            if (options.Current.DeveloperApiEnabled)
+            {
+                if (operations == null)
+                {
+                    operations = new AdvisorOperations(() => options.Current.UnitOperationsEnabled);
+                    operations.Register(new BattleSonobuoyOperation(OperationUnits));
+                }
+                Plugin.LocalApi?.Attach(this, "tactical_battle", GetAdvisor, operations);
+            }
         }
         if (showError != null) runtime.NotifyFailure(showError);
         errorWindow?.Tick();
@@ -114,6 +126,17 @@ internal sealed class BattleIntegration
         return advisor ??= new AdvisorWindow(view, host, guard, new BattleAdvisorSource(Capture), GameLanguage.Read, warn, options, backends,
             new BattleUnitNavigation(() => model?.Map, () => this.view), new BattleWeaponNavigation(() => this.view, guard),
             mapNavigation);
+    }
+
+    private IReadOnlyList<IBattleSonobuoyUnit> OperationUnits()
+    {
+        if (runtime.Failed || model == null || !ReferenceEquals(model.RootControl, uiRoot) ||
+            !SceneCreator.InstanceExists(false) || !ReferenceEquals(mission, SceneCreator.Instance) ||
+            !SceneCreator.Instance.IsLoadingDone || !ReferenceEquals(player, Globals._playerTaskforce))
+            throw new AdvisorOperationException(409, "battle_unavailable");
+        return Globals._playerTaskforce.TaskforceObjects.OfType<Helicopter>()
+            .Where(unit => unit != null && !unit.IsDestroyed)
+            .Select(unit => (IBattleSonobuoyUnit)new BattleSonobuoyUnit(unit)).ToArray();
     }
 
     private BattleSnapshot Capture()
@@ -238,7 +261,7 @@ internal sealed class BattleIntegration
         {
             var previous = launcher; var report = errorWindow;
             var contacts = contactAssessments; contactAssessments = null;
-            advisor = null; errorWindow = null; showError = null; launcher = null; model = null; view = null; uiRoot = null; mission = null; player = null;
+            advisor = null; operations = null; errorWindow = null; showError = null; launcher = null; model = null; view = null; uiRoot = null; mission = null; player = null;
             try { contacts?.Dispose(); }
             finally
             {

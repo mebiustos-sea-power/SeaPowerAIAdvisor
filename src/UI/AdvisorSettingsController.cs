@@ -9,7 +9,7 @@ namespace SeaPowerAIAdvisor;
 // Navigation owns no global draft. Each page saves through its own persistence boundary.
 internal sealed class AdvisorSettingsController
 {
-    private enum Category { General, Profile, Api, Consultation, Information, Developer }
+    private enum Category { General, Profile, Api, Consultation, Information, Developer, Wip }
     private readonly FrameworkElement content, pane, home, page, chat, confirmation;
     private readonly FrameworkElement[] pages;
     private readonly Func<AdvisorText> text;
@@ -27,7 +27,7 @@ internal sealed class AdvisorSettingsController
     private readonly Action<string> warn;
     private readonly TextBox rounds, history, prompt, userName;
     private readonly ComboBox size;
-    private readonly CheckBox campaign, log, localApi, linkOwnUnits, linkContacts;
+    private readonly CheckBox campaign, log, localApi, linkOwnUnits, linkContacts, unitOperations;
     private readonly TextBlock status, title, testStatus, testError, confirmationText;
     private readonly Button test, accept, cancelConfirmation, throwException;
     private Category? current;
@@ -54,6 +54,7 @@ internal sealed class AdvisorSettingsController
         userName = Named<TextBox>("UserName"); userName.MaxLength = AdvisorOptions.MaxUserNameLength;
         size = Named<ComboBox>("ConversationTextSize"); campaign = Named<CheckBox>("EnableCampaignAdvisor"); log = Named<CheckBox>("LogAiJson");
         localApi = Named<CheckBox>("EnableLocalApi");
+        unitOperations = Named<CheckBox>("EnableUnitOperations");
         linkOwnUnits = Named<CheckBox>("LinkOwnUnits"); linkContacts = Named<CheckBox>("LinkContacts");
         localConnections = new AdvisorLocalConnectionsView(Named<StackPanel>("LocalApiConnections"), Named<ComboBox>("LocalApiDefaultConnection"), text, guard);
         information = new AdvisorInformationView(Named<StackPanel>("InformationChoices"), text(), guard);
@@ -65,15 +66,16 @@ internal sealed class AdvisorSettingsController
         api = new AdvisorApiSettingsView(content, apiStore, text, guard, typing, ApiChanged, Saved, () => Notice(text()["profile.ime"], true), ApiError, ConfirmDelete);
         profiles = new AdvisorProfileSettingsView(content, profileDirectory, text, defaultPortrait, guard, typing,
             profile => { profileSaved(profile); Saved(); }, () => Notice(""), ProfileError, ConfirmDelete, warn);
-        pages = new[] { "GeneralCategory", "ProfileCategory", "ApiCategory", "ConsultationCategory", "InformationCategory", "DeveloperCategory" }
+        pages = new[] { "GeneralCategory", "ProfileCategory", "ApiCategory", "ConsultationCategory", "InformationCategory", "DeveloperCategory", "WipCategory" }
             .Select(Named<FrameworkElement>).ToArray();
-        var buttons = new[] { "OpenGeneralCategory", "OpenProfileCategory", "OpenApiCategory", "OpenConsultationCategory", "OpenInformationCategory", "OpenDeveloperCategory" };
+        var buttons = new[] { "OpenGeneralCategory", "OpenProfileCategory", "OpenApiCategory", "OpenConsultationCategory", "OpenInformationCategory", "OpenDeveloperCategory", "OpenWipCategory" };
         for (var i = 0; i < buttons.Length; i++) { var category = (Category)i; Bind(buttons[i], () => OpenCategory(category)); }
         Bind("BackToSettings", BackToHome); Bind("BackToConversation", () => { Close(); back(); });
         Bind("SaveGeneral", () => Save(() => options.SaveGeneral((AdvisorTextSize)size.SelectedIndex, campaign.IsChecked == true, userName.Text ?? "", linkOwnUnits.IsChecked == true, linkContacts.IsChecked == true)));
         Bind("SaveConsultation", () => Save(() => options.SaveConsultation(Number(rounds, "query_rounds_invalid"), Number(history, "history_exchanges_invalid"), prompt.Text ?? "")));
         Bind("ResetInformation", () => { if (available) { information.Reset(AdvisorInformation.Default); Notice(""); } });
         Bind("SaveInformation", () => Save(() => options.SaveInformation(information.Value)));
+        Bind("SaveWip", () => Save(() => options.SaveWip(unitOperations.IsChecked == true)));
         void SaveDeveloper() => Save(() => options.SaveDeveloper(localApi.IsChecked == true,
             () => apiStore.SaveLogging(log.IsChecked == true), localConnections.Value));
         Bind("SaveDeveloper", SaveDeveloper); Bind("SaveLocalApi", SaveDeveloper);
@@ -105,7 +107,7 @@ internal sealed class AdvisorSettingsController
         releaseInput(); current = category; available = false; Notice(""); ClearTest();
         home.Visibility = Visibility.Collapsed; page.Visibility = Visibility.Visible;
         for (var i = 0; i < pages.Length; i++) { pages[i].Visibility = i == (int)category ? Visibility.Visible : Visibility.Collapsed; pages[i].IsEnabled = true; }
-        title.Text = text()[new[] { "general.tab", "profile.tab", "settings.api_category", "ai.consultation", "information.tab", "diagnostics.heading" }[(int)category]];
+        title.Text = text()[new[] { "general.tab", "profile.tab", "settings.api_category", "ai.consultation", "information.tab", "diagnostics.heading", "wip.category" }[(int)category]];
         try
         {
             if (category == Category.Profile) { Named<TabControl>("ProfileCategory").SelectedIndex = 0; profiles.Open(); profiles.Focus(); }
@@ -128,6 +130,7 @@ internal sealed class AdvisorSettingsController
                 if (category == Category.General) { userName.Text = saved.UserName ?? text()["general.default_user_name"]; size.SelectedIndex = (int)saved.TextSize; campaign.IsChecked = saved.CampaignEnabled; linkOwnUnits.IsChecked = saved.LinkOwnUnits; linkContacts.IsChecked = saved.LinkContacts; userName.Focus(); }
                 if (category == Category.Consultation) { rounds.Text = saved.MaxQueryRounds.ToString(CultureInfo.InvariantCulture); history.Text = saved.HistoryExchanges.ToString(CultureInfo.InvariantCulture); prompt.Text = saved.CommonPrompt; prompt.Focus(); }
                 if (category == Category.Information) { information.Reset(saved.Information); information.Focus(); }
+                if (category == Category.Wip) { unitOperations.IsChecked = saved.UnitOperationsEnabled; unitOperations.Focus(); }
             }
             available = true; baseline = Snapshot(); UpdateBusy();
         }
@@ -151,6 +154,7 @@ internal sealed class AdvisorSettingsController
         Category.General => userName.Text + "\0" + size.SelectedIndex + ":" + campaign.IsChecked + ":" + linkOwnUnits.IsChecked + ":" + linkContacts.IsChecked,
         Category.Consultation => rounds.Text + "\0" + history.Text + "\0" + prompt.Text,
         Category.Information => information.Value.Key,
+        Category.Wip => unitOperations.IsChecked.ToString(),
         Category.Developer => log.IsChecked + ":" + localApi.IsChecked + ":" + localConnections.Value.Json().ToString(),
         _ => ""
     };

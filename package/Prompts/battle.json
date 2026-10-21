@@ -47,5 +47,6 @@
   "tool_offset": "Zero-based offset for list queries only.",
   "tool_limit": "Page size for list queries only.",
   "host_count_semantics": "Host occupancy, unassigned inventory, squadrons, tasks and airborne units overlap or describe different states. Do not add them into a fleet total.",
-  "sensor_reference_delivery": "Reuse earlier sensor_references IDs; definitions are sent once per consultation. Instrumented limits do not guarantee detection."
+  "sensor_reference_delivery": "Reuse earlier sensor_references IDs; definitions are sent once per consultation. Instrumented limits do not guarantee detection.",
+  "operation_sonobuoy_drop": "Append an order for one airborne friendly helicopter to travel to a position and drop one sonobuoy using its current depth setting."
 }

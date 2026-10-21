@@ -30,7 +30,7 @@ internal sealed class AdvisorLocalResponse
     internal static AdvisorLocalResponse Error(int status, string code) => new(status, new JObject { ["error"] = code });
 }
 
-// HTTP workers enqueue detached commands; only Pump on the game thread may call a target or change prompts.
+// HTTP workers enqueue detached commands; only Pump on the game thread may call targets, change prompts or register orders.
 internal sealed class AdvisorLocalApi
 {
     private sealed class Command
@@ -53,14 +53,15 @@ internal sealed class AdvisorLocalApi
     private string mode = "";
     private Func<IAdvisorLocalTarget>? target;
     private AdvisorLocalRun? last;
+    private AdvisorOperations? operations;
     internal AdvisorLocalApi(Func<AdvisorPromptOverrides> prompts, Action<Exception> unexpected,
         Func<JObject> connections, Func<string, bool, AdvisorBackendSetup> prepareConnection)
     { this.prompts = prompts; this.unexpected = unexpected; this.connections = connections; this.prepareConnection = prepareConnection; }
     internal JObject ConnectionInfo() => connections();
-    internal void Attach(object owner, string mode, Func<IAdvisorLocalTarget> target)
-    { this.owner = owner; this.mode = mode; this.target = target; }
+    internal void Attach(object owner, string mode, Func<IAdvisorLocalTarget> target, AdvisorOperations? operations = null)
+    { this.owner = owner; this.mode = mode; this.target = target; this.operations = operations; }
     internal void Detach(object owner)
-    { if (ReferenceEquals(this.owner, owner)) { this.owner = null; target = null; mode = ""; } }
+    { if (ReferenceEquals(this.owner, owner)) { this.owner = null; target = null; operations = null; mode = ""; } }
     internal void Enable() { lock (gate) enabled = true; }
     internal void Disable()
     {
@@ -99,6 +100,7 @@ internal sealed class AdvisorLocalApi
                     : DateTime.UtcNow >= command.Deadline ? AdvisorLocalResponse.Error(503, "game_thread_unavailable")
                     : Dispatch(command.Method, command.Path, command.Body);
             }
+            catch (AdvisorOperationException error) { result = AdvisorLocalResponse.Error(error.Status, error.Code); }
             catch (AdvisorLocalApiException error) { result = AdvisorLocalResponse.Error(error.Status, error.Code); }
             catch (AdvisorConnectionException error) { result = AdvisorLocalResponse.Error(400, error.Code); }
             catch (AdvisorOptionsException error) { result = AdvisorLocalResponse.Error(400, error.Code); }
@@ -113,6 +115,17 @@ internal sealed class AdvisorLocalApi
         if ((method == "PATCH" && path == "/v1/prompts" || method == "POST" && path == "/v1/prompts/reset") &&
             (bool?)target?.Invoke().LocalStatus()["settings_open"] == true)
             throw new AdvisorLocalApiException(409, "settings_open");
+        if (method == "GET" && path == "/v1/operations") return new(200, Operations().Catalog());
+        if (method == "GET" && path.StartsWith("/v1/operations/", StringComparison.Ordinal) && path.EndsWith("/candidates", StringComparison.Ordinal) && path.Length > "/v1/operations/".Length + "/candidates".Length)
+        {
+            var id = path.Substring("/v1/operations/".Length, path.Length - "/v1/operations/".Length - "/candidates".Length);
+            return new(200, Operations().Candidates(id));
+        }
+        if (method == "POST" && path == "/v1/operations")
+        {
+            var result = Operations().Execute(body);
+            return new((string?)result["status"] == "registered" ? 200 : 409, result);
+        }
         if (method == "GET" && path == "/v1/connections") return new(200, ConnectionInfo());
         if (method == "GET" && path == "/v1/status")
             return new(200, new JObject { ["enabled"] = true, ["mode"] = mode, ["advisor"] = target?.Invoke().LocalStatus(), ["last_consultation_id"] = last?.Id });
@@ -159,6 +172,7 @@ internal sealed class AdvisorLocalApi
         }
         return AdvisorLocalResponse.Error(404, "unknown_endpoint");
     }
+    private AdvisorOperations Operations() => operations ?? throw new AdvisorLocalApiException(409, "operations_unavailable");
     private AdvisorLocalResponse PromptState()
     {
         var state = prompts();

@@ -42,6 +42,16 @@ class MockApi:
                     value = {"enabled": True, "advisor": {"busy": api.busy, "settings_open": False}, "last_consultation_id": "test-job"}
                 elif self.path == "/v1/connections":
                     value = {"default_connection_id": "local-test", "connections": [{"id": "local-test", "name": "試験接続"}]}
+                elif self.path == "/v1/operations":
+                    if self.command == "POST":
+                        if api.disconnect_post:
+                            self.close_connection = True
+                            return
+                        value = {"request_id": body["request_id"], "status": "registered"}
+                    else:
+                        value = {"scope_id": "loaded-game", "enabled": True, "operations": []}
+                elif self.path == "/v1/operations/seapower.schedule_sonobuoy_drop/candidates":
+                    value = {"scope_id": "loaded-game", "candidates": [{"target_ref": "unit:42"}]}
                 elif self.path == "/v1/prompts/reset":
                     api.fields["common.json:system"] = "Original\n日本語"
                     value = {"reset": True}
@@ -90,6 +100,21 @@ class MockApi:
 
 
 class CliTests(unittest.TestCase):
+    def test_operations_use_supplied_scope_and_request_id_without_consultation_or_retries(self):
+        with MockApi() as api, tempfile.TemporaryDirectory() as temporary:
+            self.assertEqual(api.run("operations", "list")[0], 0)
+            self.assertEqual(api.run("operations", "candidates", "seapower.schedule_sonobuoy_drop")[0], 0)
+            path = Path(temporary) / "order.json"
+            body = {"scope_id": "loaded-game", "request_id": "one-reservation", "operation": "seapower.schedule_sonobuoy_drop",
+                    "target_ref": "unit:42", "arguments": {"latitude": 26.5, "longitude": 127.5, "ammunition": "custom_buoy", "depth": "above_layer"}}
+            path.write_text(tool.encode(body), encoding="utf-8")
+            self.assertEqual(api.run("operations", "execute", "--request-file", path)[0], 0)
+            self.assertEqual(api.calls[-1][:3], ("POST", "/v1/operations", body))
+            api.calls.clear(); api.disconnect_post = True
+            self.assertEqual(api.run("operations", "execute", "--request-file", path)[0], 1)
+            self.assertEqual(len(api.calls), 1, "A lost acknowledgement retried an order")
+            self.assertEqual(api.calls[0][:3], ("POST", "/v1/operations", body))
+
     def test_consult_sends_once_preserves_unicode_and_records_effective_result(self):
         with MockApi() as api, tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary); question = root / "question.txt"

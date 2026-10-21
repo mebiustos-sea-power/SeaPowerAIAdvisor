@@ -335,6 +335,10 @@ def parser():
     commands = root.add_subparsers(dest="command", required=True)
     for name in ("discover", "status", "connections", "cancel"):
         add_output(commands.add_parser(name))
+    operations = commands.add_parser("operations").add_subparsers(dest="operation_command", required=True)
+    add_output(operations.add_parser("list"))
+    candidates = operations.add_parser("candidates"); candidates.add_argument("operation"); add_output(candidates)
+    execute = operations.add_parser("execute"); execute.add_argument("--request-file", required=True); add_output(execute)
     prompts = commands.add_parser("prompts").add_subparsers(dest="prompt_command", required=True)
     get = prompts.add_parser("get"); get.add_argument("--id", help="Return one field's original text."); add_output(get)
     put = prompts.add_parser("set"); put.add_argument("--id")
@@ -390,6 +394,17 @@ def main(argv=None):
                 value = client.request("GET", consultation_path(args.id))
             if args.answer_file and isinstance(value.get("answer"), str):
                 write_text(args.answer_file, value["answer"])
+        elif args.command == "operations":
+            if args.operation_command == "list":
+                value = client.request("GET", "/v1/operations")
+            elif args.operation_command == "candidates":
+                value = client.request("GET", "/v1/operations/" + urllib.parse.quote(args.operation, safe="") + "/candidates")
+            else:
+                body = load(args.request_file)
+                if not isinstance(body, dict):
+                    raise ToolError("The operation request must be a JSON object.")
+                # Preserve scope and request IDs. Never retry or silently rebind an order to another loaded game.
+                value = client.request("POST", "/v1/operations", body)
         elif args.command == "prompts":
             if args.prompt_command == "get":
                 value = client.request("GET", "/v1/prompts")

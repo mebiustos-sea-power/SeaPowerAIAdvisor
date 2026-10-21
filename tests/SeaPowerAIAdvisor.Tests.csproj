@@ -13,6 +13,8 @@
     <Compile Include="..\src\Development\AdvisorLocalConnections.cs" Link="AdvisorLocalConnections.cs" />
     <Compile Include="..\src\Development\AdvisorLocalDiscovery.cs" Link="AdvisorLocalDiscovery.cs" />
     <Compile Include="..\src\Development\AdvisorLocalApi.cs" Link="AdvisorLocalApi.cs" />
+    <Compile Include="..\src\Operations\AdvisorOperations.cs" Link="AdvisorOperations.cs" />
+    <Compile Include="..\src\Game\Battle\BattleSonobuoyOperation.cs" Link="BattleSonobuoyOperation.cs" />
     <Compile Include="..\src\Development\AdvisorLocalRun.cs" Link="AdvisorLocalRun.cs" />
     <Compile Include="..\src\Development\AdvisorLocalServer.cs" Link="AdvisorLocalServer.cs" />
     <Compile Include="..\src\UI\AdvisorMarkup.cs" Link="AdvisorMarkup.cs" />

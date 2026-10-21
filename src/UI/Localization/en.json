@@ -1,4 +1,7 @@
 {
+  "wip.category": "WIP (experimental)",
+  "wip.unit_operations": "Enable unit order scheduling",
+  "wip.unit_operations_note": "Currently available for testing through the developer local API. Turning this off keeps orders already scheduled in the game.",
   "failure.restart": "Restart advisor",
   "developer.throw_exception": "Throw test exception",
   "developer.throw_exception_note": "Clears the conversation and discards unsaved edits.",

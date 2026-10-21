@@ -1,6 +1,6 @@
 # Developer local API
 
-The local API drives the same conversation, selected connections, adviser, information policy and consultation workflow as the in-game UI. It is intended for prompt experiments against a loaded game situation. It does not select units, issue orders, load saves or expose API credentials.
+The local API drives the same conversation, selected connections, adviser, information policy and consultation workflow as the in-game UI. It is a temporary investigation interface for experiments against a loaded game situation, not a stable public integration contract. Its consultation endpoints do not select units, issue orders, load saves or expose API credentials. A separate WIP operation endpoint can register the experimental native orders described below.
 
 ## Command-line tool
 
@@ -39,6 +39,9 @@ All responses are JSON. These endpoints are experimental and separate from the p
 | GET | `/v1/prompts` | All editable prompt fields, using the same `file.json:key` IDs as the temporary prompt editor. |
 | PATCH | `/v1/prompts` | Merge supplied text into the temporary prompt overrides. |
 | POST | `/v1/prompts/reset` | Restore the prompt bundle loaded at startup. |
+| GET | `/v1/operations` | Current battle scope and WIP operation catalog; empty when scheduling is disabled. |
+| GET | `/v1/operations/{operation}/candidates` | Current player-owned candidates and ammunition availability for an operation. |
+| POST | `/v1/operations` | Register a WIP operation without calling an AI provider. |
 
 Question bodies specify exactly one of `question` and `shortcut`:
 
@@ -112,6 +115,57 @@ Invoke-RestMethod "$base/v1/prompts" -Method Patch -Headers $headers -ContentTyp
 ```
 
 These consultation requests use the configured provider and can incur the same charges as clicking a consultation in game. Reading status, prompts and completed results makes no AI request.
+
+## WIP native-order trial (no AI)
+
+Enable **Settings → WIP (experimental) → Enable unit order scheduling** and save. The developer local API must also be enabled. No AI connection, API key, or developer default connection is needed for these operation endpoints. Normal consultations do not yet advertise or invoke operations.
+
+The current operation is `seapower.schedule_sonobuoy_drop`: append one native travel-and-drop reservation for one friendly airborne helicopter. It does not replace existing waypoints or expand the request to other formation members. The trial rejects a unit following formation or carrying a conflicting active order rather than changing that control state. Candidates expose `available`, `unavailable_reason`, the helicopter's current `depth`, and each sonobuoy's internal `id`, `remaining_count`, `available_count` and `single_drop_supported`.
+
+From the repository root:
+
+```sh
+python3 tools/advisor_dev.py operations list
+python3 tools/advisor_dev.py operations candidates seapower.schedule_sonobuoy_drop --output artifacts/sonobuoy-candidates.json
+```
+
+Use the returned `scope_id`, a candidate's `target_ref`, and its actual ammunition `id` in a UTF-8 request file. Choose the destination explicitly. For example, `artifacts/sonobuoy-request.json`:
+
+```json
+{
+  "scope_id": "COPY_FROM_CURRENT_CANDIDATES",
+  "request_id": "sonobuoy-trial-001",
+  "operation": "seapower.schedule_sonobuoy_drop",
+  "target_ref": "unit:REPLACE_WITH_CANDIDATE_ID",
+  "arguments": {
+    "latitude": 26.5,
+    "longitude": 127.5,
+    "ammunition": "REPLACE_WITH_CARRIED_AMMUNITION_ID",
+    "count": 1,
+    "placement": "append"
+  }
+}
+```
+
+```sh
+python3 tools/advisor_dev.py operations execute --request-file artifacts/sonobuoy-request.json --output artifacts/sonobuoy-result.json
+```
+
+Candidate and registration-result `depth` is read-only information: `above_layer`, `below_layer`, or `alternating` (the game's Intermittent setting). The first release always uses the player-controlled game setting. A supplied `arguments.depth` is ignored without changing the setting or rejecting an otherwise valid reservation, and is not advertised as an operation parameter. The host reads the current setting again when registering the order; a player's change while the AI is responding is preserved. Other unsupported arguments and invalid reservation data are still rejected.
+
+The result reports the setting observed at registration, not a depth fixed to that reservation. The game uses the helicopter-wide setting at the actual drop, including a later UI change. Identical request replays return the original receipt without modifying current settings. The native bridge contains no depth-setting write or execution hook.
+
+The short operation description uses `battle.json:operation_sonobuoy_drop` in the existing prompt bundle. It belongs to the operation catalog; normal consultations do not receive additional system instructions. A depth-control parameter can be added later as an explicit extension; none is active in the first release.
+
+`count` and `placement` may be omitted; they default to `1` and `append`. Other counts or replacement are not supported. Coordinates are decimal degrees, latitude −90…90 and longitude −180…180. The game controls approach, altitude adjustments and release tolerance; the reservation does not promise an exact stationary release at that point. Launchers configured to drop batches are rejected for this one-round trial.
+
+A successful response has `status: "registered"`. It acknowledges registration, not travel, release or deployment completion. Inspect the game's waypoint display and observe movement/drop in the actual game. The MOD does not monitor or announce completion.
+
+Keep the same request file/ID when checking a lost acknowledgement: an identical repeated request returns the retained result without registering again. Reusing an ID with changed arguments returns `request_id_conflict`. A new intended operation requires a new ID. A changed battle scope returns `operation_scope_changed`; fetch new candidates after loading a save or mission. The CLI never automatically retries or substitutes a new scope. Receipts live in memory for the loaded battle, with a limit of 1,024; the host rejects further new requests instead of evicting receipts and permitting duplicate orders.
+
+WIP OFF rejects new registrations, including already queued local-API requests. It preserves orders registered in the game. A condition rejection returns HTTP 409 with `status: "rejected"` and a reason `code`; disabled scheduling returns HTTP 403 (`unit_operations_disabled`). Unexpected implementation errors are logged through the local API's existing error path. Their request IDs remain unresolved (`operation_outcome_unknown` on retry) because an exception does not prove that no order was registered. Inspect the game before deliberately submitting a replacement request.
+
+These operation contracts are an internal prototype, separate from the public provider-extension SDK. There is no operation-progress monitor, completion callback or automatic follow-up consultation.
 
 ## Results and limitations
 

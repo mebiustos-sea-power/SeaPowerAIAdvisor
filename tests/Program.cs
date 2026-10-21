@@ -17,6 +17,7 @@ internal static class Program
             BattleBriefingTests.Run(Check);
             RuntimeTests.Run(Check);
             LocalApiTests.Run(Check);
+            OperationTests.Run(Check);
             BattleTests.Run(Check);
             InformationTests.Run(Check);
             PromptTests.Run(Check);
@@ -132,6 +133,7 @@ internal static class Program
         ProfileTests.Run(args[1], Check);
         SettingsOperationsTests.Run(Check);
         LocalApiTests.Run(Check);
+        OperationTests.Run(Check);
         OptionsTests.Run(args[0], Check);
         InformationTests.Run(Check);
         InformationTests.RunCampaign(args[0], Check);

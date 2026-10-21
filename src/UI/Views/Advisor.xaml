@@ -126,6 +126,7 @@
           <RowDefinition Height="Auto" />
           <RowDefinition Height="Auto" />
           <RowDefinition Height="Auto" />
+          <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <Button x:Name="OpenGeneralCategory" Grid.Row="0" Grid.Column="0" Content="{DynamicResource Advisor.general.tab}" Height="64" Margin="4" FontSize="15" />
         <Button x:Name="OpenProfileCategory" Grid.Row="0" Grid.Column="1" Content="{DynamicResource Advisor.profile.tab}" Height="64" Margin="4" FontSize="15" />
@@ -133,6 +134,7 @@
         <Button x:Name="OpenConsultationCategory" Grid.Row="1" Grid.Column="1" Content="{DynamicResource Advisor.ai.consultation}" Height="64" Margin="4" FontSize="15" />
         <Button x:Name="OpenInformationCategory" Grid.Row="2" Grid.Column="0" Content="{DynamicResource Advisor.information.tab}" Height="64" Margin="4" FontSize="15" />
         <Button x:Name="OpenDeveloperCategory" Grid.Row="2" Grid.Column="1" Content="{DynamicResource Advisor.diagnostics.heading}" Height="64" Margin="4" FontSize="15" />
+        <Button x:Name="OpenWipCategory" Grid.Row="3" Grid.Column="0" Content="{DynamicResource Advisor.wip.category}" Height="64" Margin="4" FontSize="15" />
       </Grid>
       <Button x:Name="BackToConversation" Grid.Row="2" Content="{DynamicResource Advisor.settings.back_chat}" Height="30" Padding="12,0" HorizontalAlignment="Right" Margin="0,12,0,0" />
     </Grid>
@@ -338,6 +340,19 @@
             <Button x:Name="ResetInformation" Content="{DynamicResource Advisor.information.restore_defaults}" HorizontalAlignment="Left" Height="30" Padding="12,0" />
             <Button x:Name="SaveInformation" Content="{DynamicResource Advisor.settings.save_form}" HorizontalAlignment="Right" Height="30" Padding="12,0" />
           </Grid>
+        </Grid>
+        <Grid x:Name="WipCategory" Visibility="Collapsed">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="0,8,8,0">
+              <CheckBox x:Name="EnableUnitOperations" Content="{DynamicResource Advisor.wip.unit_operations}" Margin="0,0,0,8" />
+              <TextBlock Text="{DynamicResource Advisor.wip.unit_operations_note}" FontSize="12" TextWrapping="Wrap" />
+            </StackPanel>
+          </ScrollViewer>
+          <Button x:Name="SaveWip" Grid.Row="1" Content="{DynamicResource Advisor.settings.save_form}" HorizontalAlignment="Right" Height="30" Padding="12,0" Margin="0,10,0,0" />
         </Grid>
         <TabControl x:Name="DeveloperCategory" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
           <TabItem Header="{DynamicResource Advisor.developer.diagnostics}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
