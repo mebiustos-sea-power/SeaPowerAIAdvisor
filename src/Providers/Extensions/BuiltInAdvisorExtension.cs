@@ -39,8 +39,8 @@ internal sealed class BuiltInAdvisorExtension : Api.IStandardAdvisorExtension, A
     {
         var provider = Service.Open(Configuration(connection), Options(connection), connection.IsSubConnection, RequireServices(services));
         return new Session(provider.Start(new AdvisorProviderInput(AdvisorExtensionBridge.Object(input.DataJson), input.SystemInstruction,
-            AdvisorExtensionBridge.Object(input.ToolJson)), continuation == null ? null : new AdvisorContinuation(
-                JArray.Parse(continuation.RetrievalsJson), continuation.RoundsUsed, continuation.MaxRounds)));
+            AdvisorExtensionBridge.Object(input.ToolJson), input.OperationToolJson == null ? null : AdvisorExtensionBridge.Object(input.OperationToolJson)), continuation == null ? null : new AdvisorContinuation(
+                JArray.Parse(continuation.RetrievalsJson), continuation.RoundsUsed, continuation.MaxRounds, JArray.Parse(continuation.OperationsJson))));
     }
     private static AdvisorHttpTransport RequireServices(Api.IAdvisorConnectionServices services) =>
         services is AdvisorExtensionServices host ? host.Transport : throw new InvalidOperationException("Built-in adapter requires host connection services.");

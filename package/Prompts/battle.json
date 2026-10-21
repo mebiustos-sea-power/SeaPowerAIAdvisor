@@ -48,5 +48,9 @@
   "tool_limit": "Page size for list queries only.",
   "host_count_semantics": "Host occupancy, unassigned inventory, squadrons, tasks and airborne units overlap or describe different states. Do not add them into a fleet total.",
   "sensor_reference_delivery": "Reuse earlier sensor_references IDs; definitions are sent once per consultation. Instrumented limits do not guarantee detection.",
-  "operation_sonobuoy_drop": "Append an order for one airborne friendly helicopter to travel to a position and drop one sonobuoy using its current depth setting."
+  "operation_sonobuoy_drop": "Append an order for one airborne friendly helicopter to travel to a position and drop one sonobuoy using its current depth setting.",
+  "operation_tool_description": "Browse the operation catalog with list and describe; inspect live candidates with candidates. For user-requested orders, execute with operation_id, candidate target_ref, request_id and arguments. Registration is not completion.",
+  "operation_search": "Optional text matched against operation IDs and descriptions; omit to browse.",
+  "operation_target_ref": "Candidate target_ref; unit:N uses the game's unit_id.",
+  "operation_request_id": "Unique order ID of letters, digits, dots, underscores or hyphens. Reuse it when retrying the same order."
 }

@@ -19,7 +19,7 @@ internal sealed class OllamaProvider : IAdvisorProvider
     public IAdvisorProviderSession Start(AdvisorProviderInput input, AdvisorContinuation? continuation) =>
         new Session(this, input, continuation);
 
-    internal static JObject Request(AdvisorApiConfiguration configuration, AdvisorConnectionOptions options, JArray messages, JObject? tool = null)
+    internal static JObject Request(AdvisorApiConfiguration configuration, AdvisorConnectionOptions options, JArray messages, JObject? tool = null, JObject? operationTool = null)
     {
         var request = new JObject
         {
@@ -31,6 +31,12 @@ internal sealed class OllamaProvider : IAdvisorProvider
             ["type"] = "function", ["function"] = new JObject { ["name"] = tool["name"]!.DeepClone(),
                 ["description"] = tool["description"]!.DeepClone(), ["parameters"] = tool["parameters"]!.DeepClone() }
         });
+        if (operationTool != null)
+        {
+            var tools = request["tools"] as JArray ?? new JArray();
+            tools.Add(new JObject { ["type"] = "function", ["function"] = operationTool.DeepClone() });
+            request["tools"] = tools;
+        }
         return request;
     }
     internal static AdvisorReply Read(JObject response, int sequence)
@@ -67,18 +73,19 @@ internal sealed class OllamaProvider : IAdvisorProvider
     {
         private readonly OllamaProvider owner;
         private readonly JObject tool;
+        private readonly JObject? operationTool;
         private readonly JArray messages;
         private IReadOnlyList<AdvisorToolCall> pending = Array.Empty<AdvisorToolCall>();
         private int sequence;
         internal Session(OllamaProvider owner, AdvisorProviderInput input, AdvisorContinuation? continuation)
         {
-            this.owner = owner; tool = input.Tool;
+            this.owner = owner; tool = input.Tool; operationTool = input.OperationTool;
             var data = (JObject)input.Data.DeepClone();
             if (continuation != null) data["continuation"] = new JObject
             {
                 ["reason"] = "fallback_connection_changed", ["query_rounds_used"] = continuation.RoundsUsed,
                 ["remaining_query_rounds"] = Math.Max(0, continuation.MaxRounds - continuation.RoundsUsed),
-                ["completed_retrievals"] = continuation.Retrievals.DeepClone()
+                ["completed_retrievals"] = continuation.Retrievals.DeepClone(), ["completed_operations"] = continuation.Operations.DeepClone()
             };
             messages = new JArray(new JObject { ["role"] = "system", ["content"] = input.SystemInstruction },
                 new JObject { ["role"] = "user", ["content"] = data.ToString(Formatting.None) });
@@ -86,7 +93,7 @@ internal sealed class OllamaProvider : IAdvisorProvider
         public AdvisorProviderRequest Prepare(bool allowTools)
         {
             if (pending.Count != 0) throw new InvalidOperationException("Ollama tool results have not been accepted.");
-            var body = Request(owner.configuration, owner.options, messages, allowTools ? tool : null);
+            var body = Request(owner.configuration, owner.options, messages, allowTools ? tool : null, allowTools ? operationTool : null);
             return new AdvisorProviderRequest(AdvisorQueryLimits.Bytes(body), async cancellation =>
             {
                 var response = await owner.transport.SendAsync(OllamaService.Endpoint(owner.configuration.Settings), body,

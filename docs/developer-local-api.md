@@ -1,6 +1,6 @@
 # Developer local API
 
-The local API drives the same conversation, selected connections, adviser, information policy and consultation workflow as the in-game UI. It is a temporary investigation interface for experiments against a loaded game situation, not a stable public integration contract. Its consultation endpoints do not select units, issue orders, load saves or expose API credentials. A separate WIP operation endpoint can register the experimental native orders described below.
+The local API drives the same conversation, selected connections, adviser, information policy and consultation workflow as the in-game UI. It is a temporary investigation interface for experiments against a loaded game situation, not a stable public integration contract. Consultations can request supported native orders when the separate WIP unit-scheduling option is enabled. They do not select map units, load saves or expose API credentials. The direct WIP operation endpoint below exercises the same reservation service without an AI provider.
 
 ## Command-line tool
 
@@ -33,7 +33,7 @@ All responses are JSON. These endpoints are experimental and separate from the p
 | GET | `/v1/connections` | Allowed connection IDs, names, providers, models and the developer default. |
 | GET | `/v1/status` | Current mode, adviser availability, busy/settings state and last consultation ID. |
 | POST | `/v1/consultations` | Start one question or quick consultation; returns HTTP 202 and an ID. |
-| GET | `/v1/consultations/{id}` | Read progress, final answer, errors and captured input/retrievals. |
+| GET | `/v1/consultations/{id}` | Read progress, final answer, errors and captured input/retrievals/operations. |
 | POST | `/v1/consultations/cancel` | Cancel active work through the same UI path. |
 | POST | `/v1/conversation/clear` | Clear the current UI conversation when idle. |
 | GET | `/v1/prompts` | All editable prompt fields, using the same `file.json:key` IDs as the temporary prompt editor. |
@@ -116,11 +116,19 @@ Invoke-RestMethod "$base/v1/prompts" -Method Patch -Headers $headers -ContentTyp
 
 These consultation requests use the configured provider and can incur the same charges as clicking a consultation in game. Reading status, prompts and completed results makes no AI request.
 
+## AI-driven WIP reservations
+
+With **Settings → WIP (experimental) → Enable unit order scheduling** enabled, normal consultations and developer-API consultations receive the fixed `game_operations` tool. This switch applies to both paths; enabling the developer listener is not required for in-game AI operations. The tool discovers paged operation summaries (`list`), selected argument definitions (`describe`) and current candidates (`candidates`) on demand, then accepts explicit reservation requests (`execute`). Individual operation definitions are not included in the initial input.
+
+The retained consultation result includes `input.operation_tool` and an `operations` array with request/response pairs. These are separate from read-only snapshot `retrievals`. Operation candidates and validation use live game-thread state. Sonobuoy scheduling requires own-unit basic information and ammunition information to remain enabled in Data for AI; otherwise it returns `information_disabled`. Setting WIP off, cancelling or leaving the battle blocks unregistered queued work. A successful registration remains a game-owned order; it is not a deployment-completion report.
+
+Use a capability question such as “What game operations can you perform?” to check discovery without issuing an order. For a controlled execution test, explicitly name an airborne helicopter and coordinates and request one sonobuoy reservation. Normal connection selection and the API's explicit fallback policy still apply.
+
 ## WIP native-order trial (no AI)
 
 Enable **Settings → WIP (experimental) → Enable unit order scheduling** and save. The developer local API must also be enabled. No AI connection, API key, or developer default connection is needed for these operation endpoints. Normal consultations do not yet advertise or invoke operations.
 
-The current operation is `seapower.schedule_sonobuoy_drop`: append one native travel-and-drop reservation for one friendly airborne helicopter. It does not replace existing waypoints or expand the request to other formation members. The trial rejects a unit following formation or carrying a conflicting active order rather than changing that control state. Candidates expose `available`, `unavailable_reason`, the helicopter's current `depth`, and each sonobuoy's internal `id`, `remaining_count`, `available_count` and `single_drop_supported`.
+The current operation is `seapower.schedule_sonobuoy_drop`: append one native travel-and-drop reservation for one friendly airborne helicopter. It does not replace existing waypoints or expand the request to other formation members. The trial rejects a unit following formation or carrying a conflicting active order rather than changing that control state. Candidates expose `available`, `unavailable_reason`, the helicopter's current `position` and `depth`, and each sonobuoy's internal `id`, `remaining_count`, `available_count` and `single_drop_supported`.
 
 From the repository root:
 

@@ -26,6 +26,7 @@ internal sealed class BattleIntegration
     private AdvisorHudButton? launcher;
     private AdvisorWindow? advisor;
     private AdvisorOperations? operations;
+    private AdvisorOperationGateway? operationGateway;
     private BattleContactAssessments? contactAssessments;
     private BattleMapNavigation? mapNavigation;
     private AdvisorErrorWindow? errorWindow;
@@ -37,10 +38,10 @@ internal sealed class BattleIntegration
     internal void Tick(MainGameViewModel current)
     {
         Plugin.LocalApi?.Detach(this);
-        if (current.RootControl == null) { operations = null; return; }
+        if (current.RootControl == null) { ClearOperations(); return; }
         if (!runtime.Failed && (!SceneCreator.InstanceExists(false) ||
             !SceneCreator.Instance.IsLoadingDone || Globals._playerTaskforce == null))
-        { operations = null; return; }
+        { ClearOperations(); return; }
         var root = ReferenceEquals(model, current) && ReferenceEquals(uiRoot, current.RootControl) ? view : FindView(current.RootControl);
         if (root == null || root.ActualWidth <= 0 || root.ActualHeight <= 0) return;
         var currentMission = runtime.Failed ? mission : SceneCreator.Instance;
@@ -102,14 +103,11 @@ internal sealed class BattleIntegration
             contactAssessments ??= new BattleContactAssessments(GetAdvisor, () => options.Current.Information, guard);
             contactAssessments.Tick(current.RootControl, host);
             mapNavigation?.Tick();
+            if (options.Current.UnitOperationsEnabled || options.Current.DeveloperApiEnabled) EnsureOperations();
+            operationGateway?.Pump();
             advisor?.Tick();
             if (options.Current.DeveloperApiEnabled)
             {
-                if (operations == null)
-                {
-                    operations = new AdvisorOperations(() => options.Current.UnitOperationsEnabled);
-                    operations.Register(new BattleSonobuoyOperation(OperationUnits));
-                }
                 Plugin.LocalApi?.Attach(this, "tactical_battle", GetAdvisor, operations);
             }
         }
@@ -123,9 +121,24 @@ internal sealed class BattleIntegration
         if (view == null || model?.RootControl == null) throw new InvalidOperationException("The battle advisor view is unavailable.");
         var host = FindHost(model.RootControl) ?? throw new InvalidOperationException("The battle window host is unavailable.");
         mapNavigation ??= new BattleMapNavigation(() => model?.Map);
-        return advisor ??= new AdvisorWindow(view, host, guard, new BattleAdvisorSource(Capture), GameLanguage.Read, warn, options, backends,
+        return advisor ??= new AdvisorWindow(view, host, guard, new BattleAdvisorSource(Capture, (id, prompts) => EnsureOperations().CreateSession(id, prompts)), GameLanguage.Read, warn, options, backends,
             new BattleUnitNavigation(() => model?.Map, () => this.view), new BattleWeaponNavigation(() => this.view, guard),
             mapNavigation);
+    }
+
+    private AdvisorOperationGateway EnsureOperations()
+    {
+        if (operationGateway == null)
+        {
+            operations = new AdvisorOperations(() => options.Current.UnitOperationsEnabled);
+            operations.Register(new BattleSonobuoyOperation(OperationUnits, () => options.Current.Information));
+            operationGateway = new AdvisorOperationGateway(operations);
+        }
+        return operationGateway;
+    }
+    private void ClearOperations()
+    {
+        operationGateway?.Dispose(); operationGateway = null; operations = null;
     }
 
     private IReadOnlyList<IBattleSonobuoyUnit> OperationUnits()
@@ -244,6 +257,7 @@ internal sealed class BattleIntegration
     internal void Stop()
     {
         Plugin.LocalApi?.Detach(this);
+        ClearOperations();
         contactAssessments?.Suspend();
         var previous = advisor; advisor = null;
         try { previous?.Stop(); }

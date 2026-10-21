@@ -11,8 +11,11 @@ public sealed class ConsultationInput
     public string DataJson { get; }
     public string SystemInstruction { get; }
     public string ToolJson { get; }
+    public string? OperationToolJson { get; }
     public ConsultationInput(string dataJson, string systemInstruction, string toolJson)
-    { DataJson = dataJson; SystemInstruction = systemInstruction; ToolJson = toolJson; }
+        : this(dataJson, systemInstruction, toolJson, null) { }
+    public ConsultationInput(string dataJson, string systemInstruction, string toolJson, string? operationToolJson)
+    { DataJson = dataJson; SystemInstruction = systemInstruction; ToolJson = toolJson; OperationToolJson = operationToolJson; }
 }
 
 // Contains only executed queries/results. Provider conversation IDs and thinking are excluded.
@@ -21,8 +24,11 @@ public sealed class RetrievalHistory
     public string RetrievalsJson { get; }
     public int RoundsUsed { get; }
     public int MaxRounds { get; }
+    public string OperationsJson { get; }
     public RetrievalHistory(string retrievalsJson, int roundsUsed, int maxRounds)
-    { RetrievalsJson = retrievalsJson; RoundsUsed = roundsUsed; MaxRounds = maxRounds; }
+        : this(retrievalsJson, roundsUsed, maxRounds, "[]") { }
+    public RetrievalHistory(string retrievalsJson, int roundsUsed, int maxRounds, string operationsJson)
+    { RetrievalsJson = retrievalsJson; RoundsUsed = roundsUsed; MaxRounds = maxRounds; OperationsJson = operationsJson; }
 }
 
 public interface IAdvisorKnowledge
@@ -50,10 +56,13 @@ public sealed class ConsultationContext
     public ConsultationInput Input { get; }
     public IAdvisorKnowledge Knowledge { get; }
     public RetrievalHistory Continuation { get; }
+    public IAdvisorOperations? Operations { get; }
     private readonly Action<AdvisorProgressUpdate> progress;
     public ConsultationContext(ConsultationInput input, IAdvisorKnowledge knowledge, RetrievalHistory continuation,
-        Action<AdvisorProgressUpdate> progress)
-    { Input = input; Knowledge = knowledge; Continuation = continuation; this.progress = progress; }
+        Action<AdvisorProgressUpdate> progress) : this(input, knowledge, continuation, progress, null) { }
+    public ConsultationContext(ConsultationInput input, IAdvisorKnowledge knowledge, RetrievalHistory continuation,
+        Action<AdvisorProgressUpdate> progress, IAdvisorOperations? operations)
+    { Input = input; Knowledge = knowledge; Continuation = continuation; this.progress = progress; Operations = operations; }
     public void ReportProgress(AdvisorProgressUpdate update) => progress(update);
 }
 

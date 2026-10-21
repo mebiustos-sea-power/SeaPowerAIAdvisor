@@ -426,23 +426,26 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
             IAdvisorQuerySession session = source.CreateSession(replyLanguage(), request.Text, options.Current.MaxQueryRounds, options.Current.Information, request.Context);
             turn.SetUnitReferences(session is IAdvisorUnitReferenceSource references ? references.UnitReferences : AdvisorUnitReferences.Empty);
             if (recording != null) session = recording.Observe(session);
+            var operationSession = (source as IAdvisorOperationSource)?.CreateOperations(turn.OperationId, session.Prompts);
+            if (recording != null && operationSession != null) operationSession = recording.Observe(operationSession);
             var historyLimit = options.Current.HistoryExchanges;
             pendingTurn = turn;
             pendingConnectionName = execution.ConnectionName;
             var logDirectory = AdvisorTrace.DirectoryIn(UnityEngine.Application.persistentDataPath);
             var sharedPrompt = recording?.CommonPromptFor(options.Current.CommonPrompt) ?? options.Current.CommonPrompt;
             var userName = options.Current.UserName ?? throw new InvalidOperationException("The user name has not been initialized.");
-            active = new AdvisorJob((cancellation, progress) =>
+            active = new AdvisorJob(async (cancellation, progress) =>
             {
+                using var operationScope = operationSession;
                 var connectionName = execution.ConnectionName;
                 var context = AdvisorContext.Create(session, history, advisorProfile, sharedPrompt, update =>
                 {
                     if (update.UsingFallback) connectionName = execution.SubConnectionName;
                     progress(new AdvisorProgress(update.Stage, update.ApiRequest, update.Rounds, update.MaxRounds,
                         update.Queries, update.UsingFallback, update.Model, connectionName));
-                }, historyLimit, userName);
+                }, historyLimit, userName, operationScope);
                 recording?.CaptureInput(context.Input);
-                return AdvisorConsultation.RunAsync(execution, context, logDirectory, request, cancellation);
+                return await AdvisorConsultation.RunAsync(execution, context, logDirectory, request, cancellation).ConfigureAwait(false);
             }, warn);
             SetBusy(true);
             status.Text = text["status.consulting"];

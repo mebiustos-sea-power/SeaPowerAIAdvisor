@@ -19,6 +19,7 @@ internal enum AdvisorTurnState { Waiting, Answered, Failed, Cancelled }
 internal sealed class AdvisorTurn
 {
     internal AdvisorQuestion Request { get; }
+    internal string OperationId { get; } = Guid.NewGuid().ToString("N");
     internal int ContextGeneration { get; private set; }
     internal string AdvisorName { get; private set; }
     internal string AdvisorId { get; private set; }

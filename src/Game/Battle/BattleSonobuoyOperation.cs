@@ -12,6 +12,7 @@ internal interface IBattleSonobuoyUnit
     string Name { get; }
     string? UnavailableReason { get; }
     string Depth { get; }
+    JObject Position { get; }
     IReadOnlyList<BattleSonobuoyAmmo> Ammunition();
     void Append(string ammunition, double latitude, double longitude);
 }
@@ -32,11 +33,20 @@ internal sealed class BattleSonobuoyOperation : IAdvisorOperation
 {
     internal const string OperationId = "seapower.schedule_sonobuoy_drop";
     private readonly Func<IReadOnlyList<IBattleSonobuoyUnit>> units;
-    internal BattleSonobuoyOperation(Func<IReadOnlyList<IBattleSonobuoyUnit>> units) => this.units = units;
+    private readonly Func<AdvisorInformation> information;
+    internal BattleSonobuoyOperation(Func<IReadOnlyList<IBattleSonobuoyUnit>> units, Func<AdvisorInformation>? information = null)
+    { this.units = units; this.information = information ?? (() => AdvisorInformation.Default); }
+    private void CheckInformation()
+    {
+        var allowed = information();
+        if (!allowed.Allows(InformationKind.BattleUnits) || !allowed.Allows(InformationKind.BattleWeapons))
+            throw new AdvisorOperationException(403, "information_disabled");
+    }
     public string Id => OperationId;
+    public string Description => AdvisorPrompts.Current.Text("battle.json", "operation_sonobuoy_drop");
     public JObject Definition() => new()
     {
-        ["id"] = Id, ["description"] = AdvisorPrompts.Current.Text("battle.json", "operation_sonobuoy_drop"),
+        ["id"] = Id, ["description"] = Description,
         ["parameters"] = new JObject
         {
             ["type"] = "object", ["additionalProperties"] = false,
@@ -51,20 +61,25 @@ internal sealed class BattleSonobuoyOperation : IAdvisorOperation
             }
         }
     };
-    public JArray Candidates() => new(units().Select(unit =>
+    public JArray Candidates()
     {
-        var ammunition = unit.Ammunition();
-        var reason = unit.UnavailableReason ?? (ammunition.Any(a => a.Available > 0 && a.SingleDrop) ? null : "no_available_sonobuoy");
-        return new JObject
+        CheckInformation();
+        return new JArray(units().Select(unit =>
         {
-            ["target_ref"] = "unit:" + unit.Id.ToString(CultureInfo.InvariantCulture), ["display_name"] = unit.Name,
-            ["available"] = reason == null, ["unavailable_reason"] = reason, ["depth"] = unit.Depth,
-            ["ammunition"] = new JArray(ammunition.Select(a => new JObject { ["id"] = a.Id, ["display_name"] = a.Name,
-                ["remaining_count"] = a.Remaining, ["available_count"] = a.Available, ["single_drop_supported"] = a.SingleDrop }))
-        };
-    }));
+            var ammunition = unit.Ammunition();
+            var reason = unit.UnavailableReason ?? (ammunition.Any(a => a.Available > 0 && a.SingleDrop) ? null : "no_available_sonobuoy");
+            return new JObject
+            {
+                ["target_ref"] = "unit:" + unit.Id.ToString(CultureInfo.InvariantCulture), ["display_name"] = unit.Name,
+                ["available"] = reason == null, ["unavailable_reason"] = reason, ["depth"] = unit.Depth, ["position"] = unit.Position.DeepClone(),
+                ["ammunition"] = new JArray(ammunition.Select(a => new JObject { ["id"] = a.Id, ["display_name"] = a.Name,
+                    ["remaining_count"] = a.Remaining, ["available_count"] = a.Available, ["single_drop_supported"] = a.SingleDrop }))
+            };
+        }));
+    }
     public JObject Execute(string target, JObject arguments)
     {
+        CheckInformation();
         if (arguments.Properties().Any(p => p.Name is not ("latitude" or "longitude" or "ammunition" or "count" or "placement" or "depth")) ||
             arguments["ammunition"]?.Type != JTokenType.String || string.IsNullOrWhiteSpace((string?)arguments["ammunition"]) ||
             (arguments["count"] != null && (arguments["count"]!.Type != JTokenType.Integer || arguments["count"]!.ToString() != "1")) ||

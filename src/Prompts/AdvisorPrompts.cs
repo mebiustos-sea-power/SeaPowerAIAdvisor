@@ -120,7 +120,7 @@ internal sealed class AdvisorPrompts
         "tool_host_ids", "tool_air_unit_ids", "tool_kind", "tool_sections",
         "tool_offset", "tool_limit", "host_count_semantics",
         "catalog_identification_candidates", "catalog_friendly_launched_weapons", "catalog_movement_plans",
-        "operation_sonobuoy_drop",
+        "operation_sonobuoy_drop", "operation_tool_description", "operation_search", "operation_target_ref", "operation_request_id",
     };
     private static readonly string[] CampaignFields =
     {

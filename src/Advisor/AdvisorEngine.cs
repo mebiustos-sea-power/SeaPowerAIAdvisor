@@ -46,7 +46,7 @@ internal sealed class AdvisorEngine : IAdvisorBackend
         {
             cancellation.ThrowIfCancellationRequested();
             var allow = toolsAllowed && session.RoundsUsed < session.MaxRounds && api < maxApiRequests;
-            var reply = await connection.GenerateAsync(allow, new AdvisorContinuation(retrievals, session.RoundsUsed, session.MaxRounds), cancellation,
+            var reply = await connection.GenerateAsync(allow, new AdvisorContinuation(retrievals, session.RoundsUsed, session.MaxRounds, context.Operations?.History), cancellation,
                 (requestNumber, fallback, model, size) =>
                 {
                     if (size > MaxTotalRequestBytes - bytesSent) throw new AdvisorConnectionException("request_budget");
@@ -63,26 +63,38 @@ internal sealed class AdvisorEngine : IAdvisorBackend
                 return new AdviceResult(reply.Text, connection.ApiRequests, session.RoundsUsed,
                     usageKnown ? totalTokens : (long?)null, queriesUsed, connection.Model);
             if (!allow || calls.Count > AdvisorQueryLimits.MaxQueriesPerRound) throw new AdvisorConnectionException("unexpected_function_call");
-            if (calls.Any(call => string.IsNullOrWhiteSpace(call.Id) || call.Name != (string?)tool["name"]) ||
+            if (calls.Any(call => string.IsNullOrWhiteSpace(call.Id) || (call.Name != (string?)tool["name"] && (context.Operations == null || call.Name != (string?)context.Input.OperationTool?["name"]))) ||
                 calls.Select(call => call.Id).Distinct(StringComparer.Ordinal).Count() != calls.Count)
                 throw new AdvisorConnectionException("invalid_function_call");
-            var combined = Combine(session, calls);
-            var pendingQueries = (combined["requests"] as JArray ?? new JArray()).OfType<JObject>().Select(q =>
-                q["query"]?.Type == JTokenType.String && knownQueries.Contains((string?)q["query"]) ? (string)q["query"]! : "unknown_query").ToArray();
-            context.Progress?.Invoke(new AdvisorProgress(AdvisorStage.Retrieving, connection.ApiRequests, session.RoundsUsed + 1,
-                session.MaxRounds, pendingQueries, connection.UsingFallback, connection.Model));
-            var result = session.Execute(combined);
-            retrievals.Add(new JObject { ["request"] = combined.DeepClone(), ["response"] = result.DeepClone() });
-            lastQueries = (string?)result["status"] == "ok" ? pendingQueries : Array.Empty<string>();
-            if (combined["requests"] is JArray requested)
-                foreach (var query in requested.OfType<JObject>())
-                {
-                    var name = (string?)query["query"];
-                    queriesUsed.Add(name != null && knownQueries.Contains(name) ? name : "unknown_query");
-                }
-            connection.AcceptResults(SplitResults(calls, result));
-            var errorCode = (string?)result["error"]?["code"];
-            if (errorCode == "payload_limit" || errorCode == "round_limit") toolsAllowed = false;
+            var queryCalls = calls.Where(c => c.Name == (string?)tool["name"]).ToArray();
+            var results = new Dictionary<string, AdvisorToolResult>(StringComparer.Ordinal);
+            lastQueries = Array.Empty<string>();
+            if (queryCalls.Length > 0)
+            {
+                var combined = Combine(session, queryCalls);
+                var pendingQueries = (combined["requests"] as JArray ?? new JArray()).OfType<JObject>().Select(q =>
+                    q["query"]?.Type == JTokenType.String && knownQueries.Contains((string?)q["query"]) ? (string)q["query"]! : "unknown_query").ToArray();
+                context.Progress?.Invoke(new AdvisorProgress(AdvisorStage.Retrieving, connection.ApiRequests, session.RoundsUsed + 1,
+                    session.MaxRounds, pendingQueries, connection.UsingFallback, connection.Model));
+                var result = session.Execute(combined);
+                retrievals.Add(new JObject { ["request"] = combined.DeepClone(), ["response"] = result.DeepClone() });
+                lastQueries = (string?)result["status"] == "ok" ? pendingQueries : Array.Empty<string>();
+                queriesUsed.AddRange(pendingQueries);
+                foreach (var resultItem in SplitResults(queryCalls, result)) results.Add(resultItem.Id, resultItem);
+                var errorCode = (string?)result["error"]?["code"];
+                if (errorCode == "payload_limit" || errorCode == "round_limit") toolsAllowed = false;
+            }
+            foreach (var call in calls.Where(c => c.Name != (string?)tool["name"]))
+            {
+                context.Progress?.Invoke(new AdvisorProgress(AdvisorStage.Retrieving, connection.ApiRequests, session.RoundsUsed,
+                    session.MaxRounds, new[] { AdvisorOperationGateway.ToolName }, connection.UsingFallback, connection.Model));
+                var result = await context.Operations!.ExecuteAsync(call.Arguments, cancellation).ConfigureAwait(false);
+                cancellation.ThrowIfCancellationRequested();
+                results.Add(call.Id, new AdvisorToolResult(call, result));
+                queriesUsed.Add(AdvisorOperationGateway.ToolName);
+                lastQueries = lastQueries.Concat(new[] { AdvisorOperationGateway.ToolName }).ToArray();
+            }
+            connection.AcceptResults(calls.Select(c => results[c.Id]).ToArray());
         }
         throw new AdvisorConnectionException("request_limit");
     }

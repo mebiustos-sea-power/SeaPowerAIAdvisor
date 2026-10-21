@@ -1,7 +1,7 @@
 {
   "wip.category": "WIP（試験的機能）",
   "wip.unit_operations": "ユニット操作の予約を有効にする",
-  "wip.unit_operations_note": "現在は開発用ローカルAPIから予約登録を試せます。OFFに戻しても、登録済みの予約は維持されます。",
+  "wip.unit_operations_note": "現在は、発艦済みヘリのソノブイ投下予約にのみ対応しています。",
   "failure.restart": "アドバイザーを再起動",
   "developer.throw_exception": "例外を発生させる",
   "developer.throw_exception_note": "会話履歴と編集中の設定は破棄されます。",
@@ -421,5 +421,6 @@
   "errorlog.hint": "詳細は「設定 → API接続 → APIエラー」で確認できます。",
   "errorlog.test_hint": "詳細は「API接続 → APIエラー」で確認できます。",
   "errorlog.storage_failed": "エラーログを保存できませんでした。\n{0}",
-  "errorlog.read_failed": "エラーの詳細を読み込めませんでした。\n{0}"
+  "errorlog.read_failed": "エラーの詳細を読み込めませんでした。\n{0}",
+  "progress.topic.operations": "操作カタログ"
 }

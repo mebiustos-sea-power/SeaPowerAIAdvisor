@@ -17,7 +17,7 @@ internal sealed class GeminiInteraction
     { Id = id; Calls = calls; Text = text; TotalTokens = totalTokens; }
 
     internal static JObject Request(AdvisorSettings settings, JArray input, string? previous = null,
-        string? system = null, JObject? tool = null, bool allowTools = false, bool store = true)
+        string? system = null, JObject? tool = null, bool allowTools = false, bool store = true, JObject? operationTool = null)
     {
         var body = new JObject
         {
@@ -35,6 +35,13 @@ internal sealed class GeminiInteraction
             ["type"] = "function", ["name"] = tool["name"]!.DeepClone(),
             ["description"] = tool["description"]!.DeepClone(), ["parameters"] = tool["parameters"]!.DeepClone()
         });
+        if (operationTool != null)
+        {
+            var tools = body["tools"] as JArray ?? new JArray();
+            tools.Add(new JObject { ["type"] = "function", ["name"] = operationTool["name"]!.DeepClone(),
+                ["description"] = operationTool["description"]!.DeepClone(), ["parameters"] = operationTool["parameters"]!.DeepClone() });
+            body["tools"] = tools;
+        }
         return body;
     }
 

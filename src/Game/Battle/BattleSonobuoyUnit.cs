@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Newtonsoft.Json.Linq;
 using SeaPower;
 
 namespace SeaPowerAIAdvisor;
@@ -12,6 +13,7 @@ internal sealed class BattleSonobuoyUnit : IBattleSonobuoyUnit
     internal BattleSonobuoyUnit(Helicopter unit) => this.unit = unit;
     public int Id => unit.Id;
     public string Name => unit.Name.Value;
+    public JObject Position => AdvisorInputBuilder.Position(new MapPosition(unit.Position.Value.Latitude, unit.Position.Value.Longitude));
     public string Depth => unit.SonoDeployState.Value switch
     {
         Bomb.SonobuoyDeployState.AboveLayer => "above_layer",

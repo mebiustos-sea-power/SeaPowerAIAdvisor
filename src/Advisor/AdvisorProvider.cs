@@ -35,9 +35,10 @@ internal sealed class AdvisorProviderInput
     internal JObject Data { get; }
     internal string SystemInstruction { get; }
     internal JObject Tool { get; }
-    internal AdvisorProviderInput(JObject data, string systemInstruction, JObject tool)
-    { Data = (JObject)data.DeepClone(); SystemInstruction = systemInstruction; Tool = (JObject)tool.DeepClone(); }
-    internal AdvisorProviderInput Copy() => new(Data, SystemInstruction, Tool);
+    internal JObject? OperationTool { get; }
+    internal AdvisorProviderInput(JObject data, string systemInstruction, JObject tool, JObject? operationTool = null)
+    { Data = (JObject)data.DeepClone(); SystemInstruction = systemInstruction; Tool = (JObject)tool.DeepClone(); OperationTool = (JObject?)operationTool?.DeepClone(); }
+    internal AdvisorProviderInput Copy() => new(Data, SystemInstruction, Tool, OperationTool);
 }
 
 // Only host-executed query requests/results cross a connection boundary; provider IDs/signatures do not.
@@ -46,8 +47,9 @@ internal sealed class AdvisorContinuation
     internal JArray Retrievals { get; }
     internal int RoundsUsed { get; }
     internal int MaxRounds { get; }
-    internal AdvisorContinuation(JArray retrievals, int roundsUsed, int maxRounds)
-    { Retrievals = (JArray)retrievals.DeepClone(); RoundsUsed = roundsUsed; MaxRounds = maxRounds; }
+    internal JArray Operations { get; }
+    internal AdvisorContinuation(JArray retrievals, int roundsUsed, int maxRounds, JArray? operations = null)
+    { Retrievals = (JArray)retrievals.DeepClone(); RoundsUsed = roundsUsed; MaxRounds = maxRounds; Operations = (JArray?)operations?.DeepClone() ?? new JArray(); }
 }
 
 internal sealed class AdvisorToolCall

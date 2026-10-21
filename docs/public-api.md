@@ -68,7 +68,7 @@ Implement `IStandardAdvisorExtension.OpenSession` and return `IAdvisorSession`.
 
 1. `ConsultationInput` separates data, system instruction and tool-schema JSON. Reformat them for the API as needed.
 2. `Prepare(allowTools)` returns a `ProviderRequest` containing its UTF-8 byte count and deferred send callback. Preparing must not perform I/O. The host checks the sending budget before invoking it.
-3. Return final text or `ToolCall` objects normalized to the supplied host tool name and query schema. AI-facing names or wire formats may differ.
+3. Return final text or `ToolCall` objects normalized to the supplied host tool names and schemas. AI-facing names or wire formats may differ.
 4. `AcceptResults` receives matching call IDs/names and result JSON. The adapter owns API history, signatures, continuation IDs and thinking.
 5. Dispose session-owned resources; do not dispose shared connection services.
 
@@ -90,6 +90,18 @@ The host supplies the current identity and preserves information selection, targ
 `ReportProgress` accepts a fixed phase, request count and query names. The host derives retrieval counts from actual usage, masks unknown topic names and labels the active connection. Do not submit model text, entity identifiers or thinking as progress.
 
 Return `AdvisorAnswer`. The host uses actual knowledge-round counts. Leave token usage null when unknown. Honor the cancellation token and dispose owned resources. Cancellation is not a request to switch connections.
+
+## Operation catalog and execution (WIP)
+
+These additions are available in the current development build; the published v0.16.0 does not include them.
+
+The host can additionally supply `ConsultationInput.OperationToolJson` when WIP unit scheduling is enabled for the battle. It describes a fixed discovery/execution tool, not every registered operation. Standard adapters may expose this second tool and normalize its calls/results alongside the existing read-only `ToolJson`. Adapters that do not use it retain their existing read-only behavior.
+
+Independent consultations receive an optional `ConsultationContext.Operations` (`IAdvisorOperations`). If non-null, call `ExecuteAsync(requestJson, cancellation)` with the same `action` envelope described by `OperationToolJson`. The host queues detached requests and dispatches on the game thread. No HTTP loop or standard-engine request sequence is required. The service is separate from `IAdvisorKnowledge`: reading snapshot knowledge never schedules orders.
+
+Actions are `list` (optional ID/description search and paging), `describe` (one `operation_id`), `candidates` (live candidates, optional `target_ref` filter and paging), and `execute` (`operation_id`, candidate `target_ref`, `request_id`, `arguments`). Read selected definitions before constructing their arguments. Reuse a request ID only to replay the same order. The host binds battle/turn identity, rechecks WIP and current applicability, rejects stale or cancelled work, and returns registration receipts. Registration does not mean the game has completed movement or deployment. The initial operation supports one airborne helicopter traveling to coordinates and dropping one sonobuoy while preserving the player's depth setting.
+
+`RetrievalHistory.OperationsJson` contains executed operation requests/results for a connection handoff. Preserve that evidence so a fallback does not blindly schedule an order again. Existing constructors and required provider interfaces remain available; the optional additions do not require old adapters to implement new members. This is a provider-facing service, not yet a public registration SDK for third-party game operations.
 
 ## HTTP, diagnostics and errors
 

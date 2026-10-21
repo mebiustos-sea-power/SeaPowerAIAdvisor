@@ -20,6 +20,7 @@ internal static partial class ProviderTests
         RunErrorHistory(check);
         RunRequestTimeouts(check);
         RunExtensions(check);
+        RunOperations(check);
         check("A provider without Gemini wire types uses the shared engine and receives correctly mapped parallel results", () => Async(async () =>
         {
             var knowledge = new Knowledge(2);

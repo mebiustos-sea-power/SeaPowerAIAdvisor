@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 
 namespace SeaPowerAIAdvisor;
@@ -8,6 +10,7 @@ internal sealed class AdvisorLocalRun
 {
     private readonly object gate = new();
     private readonly JArray retrievals = new();
+    private readonly JArray operations = new();
     private JObject? input;
     private AdvisorTurn? turn;
     private AdviceResult? result;
@@ -28,15 +31,16 @@ internal sealed class AdvisorLocalRun
     internal void Complete(AdviceResult value, string connectionName) { result = value; connection = connectionName; }
     internal void CaptureInput(AdvisorProviderInput value)
     {
-        lock (gate) if (finished == null) input = new JObject { ["data"] = value.Data.DeepClone(), ["system_instruction"] = value.SystemInstruction, ["tool"] = value.Tool.DeepClone() };
+        lock (gate) if (finished == null) input = new JObject { ["data"] = value.Data.DeepClone(), ["system_instruction"] = value.SystemInstruction, ["tool"] = value.Tool.DeepClone(), ["operation_tool"] = value.OperationTool?.DeepClone() };
     }
+    internal IAdvisorOperationSession Observe(IAdvisorOperationSession session) => new RecordingOperations(session, this);
     internal IAdvisorQuerySession Observe(IAdvisorQuerySession session) => new RecordingSession(session, this);
     internal void Finish()
     {
         lock (gate)
         {
             finished ??= Snapshot(); turn = null;
-            input = null; retrievals.Clear();
+            input = null; retrievals.Clear(); operations.Clear();
         }
     }
     internal JObject Snapshot()
@@ -63,8 +67,30 @@ internal sealed class AdvisorLocalRun
                 ["api_requests"] = result.ApiRequests, ["query_rounds"] = result.QueryRounds,
                 ["reported_total_tokens"] = result.TotalTokens, ["queries"] = new JArray(result.Queries)
             },
-            ["input"] = input?.DeepClone(), ["retrievals"] = retrievals.DeepClone()
+            ["input"] = input?.DeepClone(), ["retrievals"] = retrievals.DeepClone(), ["operations"] = operations.DeepClone()
         };
+    }
+
+    private sealed class RecordingOperations : IAdvisorOperationSession
+    {
+        private readonly IAdvisorOperationSession inner;
+        private readonly AdvisorLocalRun run;
+        internal RecordingOperations(IAdvisorOperationSession inner, AdvisorLocalRun run) { this.inner = inner; this.run = run; }
+        public JObject Tool => inner.Tool;
+        public JArray History => inner.History;
+        public async Task<JObject> ExecuteAsync(JObject request, CancellationToken cancellation)
+        {
+            var entry = new JObject { ["time_utc"] = DateTime.UtcNow.ToString("O"), ["request"] = request.DeepClone() };
+            try
+            {
+                var response = await inner.ExecuteAsync(request, cancellation).ConfigureAwait(false);
+                entry["response"] = response.DeepClone(); return response;
+            }
+            catch (OperationCanceledException) { entry["error_code"] = "cancelled"; throw; }
+            catch { entry["error_code"] = "unexpected_error"; throw; }
+            finally { lock (run.gate) if (run.finished == null) run.operations.Add(entry); }
+        }
+        public void Dispose() => inner.Dispose();
     }
 
     private sealed class RecordingSession : IAdvisorQuerySession

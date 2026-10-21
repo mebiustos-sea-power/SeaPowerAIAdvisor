@@ -22,10 +22,18 @@ internal sealed class CampaignAdvisorSource : IAdvisorSource
     public string Preview(AdvisorText text) => SituationFormatter.Format(capture(), text);
 }
 
-internal sealed class BattleAdvisorSource : IAdvisorSource
+internal interface IAdvisorOperationSource
+{
+    IAdvisorOperationSession? CreateOperations(string owner, AdvisorPrompts prompts);
+}
+
+internal sealed class BattleAdvisorSource : IAdvisorSource, IAdvisorOperationSource
 {
     private readonly Func<BattleSnapshot> capture;
-    internal BattleAdvisorSource(Func<BattleSnapshot> capture) { this.capture = capture; }
+    private readonly Func<string, AdvisorPrompts, IAdvisorOperationSession?>? operations;
+    internal BattleAdvisorSource(Func<BattleSnapshot> capture, Func<string, AdvisorPrompts, IAdvisorOperationSession?>? operations = null)
+    { this.capture = capture; this.operations = operations; }
+    public IAdvisorOperationSession? CreateOperations(string owner, AdvisorPrompts prompts) => operations?.Invoke(owner, prompts);
     public IAdvisorQuerySession CreateSession(string language, string? question, int maxRounds = AdvisorQueryLimits.DefaultMaxRounds, AdvisorInformation? information = null, JObject? context = null) => new BattleQuerySession(capture(), language, question, maxRounds, information, context: context);
     public string Preview(AdvisorText text) => text["battle.diagnostic"] + "\n\n" + capture().Copy().ToString(Newtonsoft.Json.Formatting.Indented);
 }

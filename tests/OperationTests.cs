@@ -83,6 +83,22 @@ internal static class OperationTests
             }).GetAwaiter().GetResult();
             Require(offThread, "A background worker accessed game operations directly");
         });
+        check("Sonobuoy discovery and registration cannot bypass disabled own-unit or ammunition disclosure", () =>
+        {
+            var unit = new Unit(); var information = AdvisorInformation.Default;
+            var operations = new AdvisorOperations(() => true);
+            operations.Register(new BattleSonobuoyOperation(() => new IBattleSonobuoyUnit[] { unit }, () => information));
+            foreach (var kind in new[] { InformationKind.BattleUnits, InformationKind.BattleWeapons })
+            {
+                information = AdvisorInformation.Default.With(kind, false);
+                Expect(() => operations.Candidates(BattleSonobuoyOperation.OperationId), "information_disabled");
+                Require((string?)operations.Execute(Request(operations, "blocked-" + kind))["code"] == "information_disabled" && unit.Calls == 0,
+                    "Operation bypassed excluded data or registered while information was disabled");
+            }
+            information = AdvisorInformation.Default;
+            Require(operations.Candidates(BattleSonobuoyOperation.OperationId)["candidates"]!.Any() &&
+                (string?)operations.Execute(Request(operations, "enabled"))["status"] == "registered", "Restoring information did not restore the operation");
+        });
         check("Sonobuoy registration appends one native order with an unfamiliar ammunition key and preserves prior orders", () =>
         {
             var unit = new Unit(); var operations = Service(() => true, unit);
@@ -212,6 +228,7 @@ internal static class OperationTests
         public string Name => "Test helicopter";
         public string? UnavailableReason { get; set; }
         public string Depth { get; set; } = "alternating";
+        public JObject Position => new() { ["latitude_deg"] = 26.5, ["longitude_deg"] = 127.5 };
         internal int Calls, Available = 2;
         internal bool SingleDrop = true;
         internal string? LastAmmo;
@@ -223,6 +240,7 @@ internal static class OperationTests
     }
     private sealed class FaultyOperation : IAdvisorOperation
     {
+        public string Description => "Test failure";
         internal int Calls;
         public string Id => "extension.test";
         public JObject Definition() => new() { ["id"] = Id };

@@ -24,7 +24,7 @@ internal abstract class ChatCompletionProvider : IAdvisorProvider
     { this.transport = transport; this.configuration = configuration; this.options = options; this.fallback = fallback; }
     public IAdvisorProviderSession Start(AdvisorProviderInput input, AdvisorContinuation? continuation) => new Session(this, input, continuation);
 
-    internal JObject Request(JArray messages, JObject tool, JToken choice)
+    internal JObject Request(JArray messages, JObject tool, JToken choice, JObject? operationTool = null)
     {
         var body = new JObject
         {
@@ -33,6 +33,7 @@ internal abstract class ChatCompletionProvider : IAdvisorProvider
             ["tools"] = new JArray(new JObject { ["type"] = "function", ["function"] = tool.DeepClone() }),
             ["tool_choice"] = choice.DeepClone()
         };
+        if (operationTool != null) ((JArray)body["tools"]!).Add(new JObject { ["type"] = "function", ["function"] = operationTool.DeepClone() });
         ConfigureRequest(body);
         return body;
     }
@@ -113,17 +114,18 @@ internal abstract class ChatCompletionProvider : IAdvisorProvider
     {
         private readonly ChatCompletionProvider owner;
         private readonly JObject tool;
+        private readonly JObject? operationTool;
         private readonly JArray messages;
         private IReadOnlyList<AdvisorToolCall> pending = Array.Empty<AdvisorToolCall>();
         internal Session(ChatCompletionProvider owner, AdvisorProviderInput input, AdvisorContinuation? continuation)
         {
-            this.owner = owner; tool = input.Tool;
+            this.owner = owner; tool = input.Tool; operationTool = input.OperationTool;
             var data = (JObject)input.Data.DeepClone();
             if (continuation != null) data["continuation"] = new JObject
             {
                 ["reason"] = "fallback_connection_changed", ["query_rounds_used"] = continuation.RoundsUsed,
                 ["remaining_query_rounds"] = Math.Max(0, continuation.MaxRounds - continuation.RoundsUsed),
-                ["completed_retrievals"] = continuation.Retrievals.DeepClone()
+                ["completed_retrievals"] = continuation.Retrievals.DeepClone(), ["completed_operations"] = continuation.Operations.DeepClone()
             };
             messages = new JArray(new JObject { ["role"] = "system", ["content"] = input.SystemInstruction },
                 new JObject { ["role"] = "user", ["content"] = data.ToString(Formatting.None) });
@@ -131,7 +133,7 @@ internal abstract class ChatCompletionProvider : IAdvisorProvider
         public AdvisorProviderRequest Prepare(bool allowTools)
         {
             if (pending.Count != 0) throw new InvalidOperationException("Chat-completion tool results have not been accepted.");
-            var body = owner.Request(messages, tool, new JValue(allowTools ? "auto" : "none"));
+            var body = owner.Request(messages, tool, new JValue(allowTools ? "auto" : "none"), operationTool);
             return new AdvisorProviderRequest(AdvisorQueryLimits.Bytes(body), async cancellation =>
             {
                 var response = await owner.SendAsync(body, cancellation).ConfigureAwait(false);

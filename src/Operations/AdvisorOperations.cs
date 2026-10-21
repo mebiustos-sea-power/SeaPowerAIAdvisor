@@ -9,6 +9,7 @@ namespace SeaPowerAIAdvisor;
 internal interface IAdvisorOperation
 {
     string Id { get; }
+    string Description { get; }
     JObject Definition();
     JArray Candidates();
     JObject Execute(string target, JObject arguments);
@@ -38,6 +39,8 @@ internal sealed class AdvisorOperations
     internal string ScopeId { get; } = Guid.NewGuid().ToString("N");
     internal AdvisorOperations(Func<bool> enabled) => this.enabled = enabled;
 
+    internal bool Enabled { get { CheckThread(); return enabled(); } }
+
     internal void Register(IAdvisorOperation operation)
     {
         CheckThread();
@@ -52,6 +55,41 @@ internal sealed class AdvisorOperations
         return new JObject { ["scope_id"] = ScopeId, ["enabled"] = enabled(),
             ["operations"] = enabled() ? new JArray(operations.Values.Select(o => o.Definition().DeepClone())) : new JArray() };
     }
+    internal JArray PriorOrders(string owner)
+    {
+        CheckThread();
+        var prefix = owner + ".";
+        return new JArray(receipts.Where(p => p.Key.StartsWith(prefix, StringComparison.Ordinal)).Select(p => new JObject
+        {
+            ["request"] = new JObject { ["action"] = "execute", ["operation_id"] = p.Value.Request["operation"]!.DeepClone(),
+                ["target_ref"] = p.Value.Request["target_ref"]!.DeepClone(), ["request_id"] = p.Key.Substring(prefix.Length),
+                ["arguments"] = p.Value.Request["arguments"]!.DeepClone() },
+            ["response"] = p.Value.Result?.DeepClone() ?? new JObject { ["status"] = "unknown", ["code"] = "operation_outcome_unknown" }
+        }));
+    }
+    internal JObject Discover(string search, int offset, int limit)
+    {
+        CheckEnabled();
+        var matches = operations.Values.OrderBy(o => o.Id, StringComparer.Ordinal)
+            .Where(o => search.Length == 0 || o.Id.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                o.Description.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0).ToArray();
+        return Page(new JArray(matches.Select(o => new JObject { ["id"] = o.Id, ["description"] = o.Description })), offset, limit, "operations");
+    }
+    internal JObject Describe(string id)
+    { CheckEnabled(); return new JObject { ["operation"] = Operation(id).Definition().DeepClone() }; }
+    internal JObject CandidatePage(string id, string? target, int offset, int limit)
+    {
+        CheckEnabled();
+        var rows = Operation(id).Candidates();
+        if (target != null) rows = new JArray(rows.Where(c => (string?)c["target_ref"] == target));
+        return Page(rows, offset, limit, "candidates");
+    }
+    private static JObject Page(JArray rows, int offset, int limit, string field) => new()
+    {
+        [field] = new JArray(rows.Skip(offset).Take(limit).Select(r => r.DeepClone())),
+        ["total_count"] = rows.Count, ["offset"] = offset, ["limit"] = limit,
+        ["has_more"] = (long)offset + limit < rows.Count, ["captured_at_utc"] = DateTime.UtcNow.ToString("O")
+    };
     internal JObject Candidates(string id)
     {
         CheckEnabled();

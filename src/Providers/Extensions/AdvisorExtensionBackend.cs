@@ -28,11 +28,11 @@ internal sealed class AdvisorExtensionBackend : IAdvisorBackend
     {
         var switchedToSub = false;
         using var knowledge = new KnowledgeLedger(context.Knowledge);
-        var detached = new AdvisorContext(knowledge, context.Input.Copy(), context.Progress);
+        var detached = new AdvisorContext(knowledge, context.Input.Copy(), context.Progress, context.Operations);
         async Task<AdviceResult> Run(AdvisorService service, AdvisorApiConfiguration configuration, bool fallback)
         {
             cancellation.ThrowIfCancellationRequested();
-            var continuation = knowledge.Continuation();
+            var continuation = knowledge.Continuation(context.Operations?.History);
             var backend = service.Independent
                 ? service.OpenIndependent(configuration, options, fallback, transport, continuation)
                 : new AdvisorEngine(service.Open(configuration, options, fallback, transport), continuation: fallback ? continuation : null);
@@ -86,7 +86,7 @@ internal sealed class AdvisorExtensionBackend : IAdvisorBackend
                 return result;
             }
         }
-        internal AdvisorContinuation Continuation() { lock (sync) return new(retrievals, RoundsUsed, MaxRounds); }
+        internal AdvisorContinuation Continuation(JArray? operations) { lock (sync) return new(retrievals, RoundsUsed, MaxRounds, operations); }
         internal IReadOnlyList<string> Queries()
         { lock (sync) return retrievals.OfType<JObject>().SelectMany(r => (r["request"]?["requests"] as JArray ?? new JArray()).OfType<JObject>()).Select(q => (string?)q["query"] ?? "unknown_query").ToArray(); }
         public void Dispose() { lock (sync) disposed = true; }

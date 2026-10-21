@@ -21,26 +21,27 @@ internal sealed class GeminiProvider : IAdvisorProvider
         private readonly AdvisorSettings settings;
         private readonly string system;
         private readonly JObject tool;
+        private readonly JObject? operationTool;
         private JArray input;
         private string? previous;
 
         internal Session(IGeminiTransport transport, AdvisorSettings settings, AdvisorProviderInput initial, AdvisorContinuation? continuation)
         {
-            this.transport = transport; this.settings = settings; system = initial.SystemInstruction; tool = initial.Tool;
+            this.transport = transport; this.settings = settings; system = initial.SystemInstruction; tool = initial.Tool; operationTool = initial.OperationTool;
             var data = (JObject)initial.Data.DeepClone();
             if (continuation != null)
                 data["continuation"] = new JObject
                 {
                     ["reason"] = "fallback_connection_changed", ["query_rounds_used"] = continuation.RoundsUsed,
                     ["remaining_query_rounds"] = Math.Max(0, continuation.MaxRounds - continuation.RoundsUsed),
-                    ["completed_retrievals"] = continuation.Retrievals.DeepClone()
+                    ["completed_retrievals"] = continuation.Retrievals.DeepClone(), ["completed_operations"] = continuation.Operations.DeepClone()
                 };
             input = GeminiInteraction.UserInput(data);
         }
 
         public AdvisorProviderRequest Prepare(bool allowTools)
         {
-            var body = GeminiInteraction.Request(settings, input, previous, system, tool, allowTools);
+            var body = GeminiInteraction.Request(settings, input, previous, system, tool, allowTools, operationTool: operationTool);
             return new AdvisorProviderRequest(AdvisorQueryLimits.Bytes(body), async cancellation =>
             {
                 var response = await transport.GenerateAsync(settings, body, cancellation).ConfigureAwait(false);

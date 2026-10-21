@@ -93,7 +93,7 @@ The same option can be supplied as `"plain_advisor": true` in a request file. `-
 
 Explicit connection/fallback/plain-adviser flags override their fields in the file. The tool uses registered game connections; it does not read API-key settings or authenticate directly with providers.
 
-Result directories contain `request.json`, `status-before.json`, `accepted.json`, `latest.json`, changed `progress.jsonl` entries, the complete `result.json`, and `answer.md` when answered. Explicit history clearing also saves `clear-response.json`; operational failures save `error.txt`. The final JSON retains the API's captured effective input, retrievals, progress and reported usage without rewriting their content.
+Result directories contain `request.json`, `status-before.json`, `accepted.json`, `latest.json`, changed `progress.jsonl` entries, the complete `result.json` (including separate operation request/receipt records when WIP is used), and `answer.md` when answered. Explicit history clearing also saves `clear-response.json`; operational failures save `error.txt`. The final JSON retains the API's captured effective input, retrievals, progress and reported usage without rewriting their content.
 
 By default, polling runs every 0.8 seconds with no overall wait deadline. Configure `--poll-interval SECONDS`, optional `--wait-timeout SECONDS`, and `--progress` to print changed progress to stderr. `--answer-only` prints only the final Markdown reply.
 

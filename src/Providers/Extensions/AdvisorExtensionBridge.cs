@@ -29,8 +29,8 @@ internal static class AdvisorExtensionBridge
         }
         catch (JsonException) { throw new Api.AdvisorException(errorCode); }
     }
-    internal static Api.ConsultationInput Input(AdvisorProviderInput input) => new(Json(input.Data), input.SystemInstruction, Json(input.Tool));
-    internal static Api.RetrievalHistory? History(AdvisorContinuation? value) => value == null ? null : new(Json(value.Retrievals), value.RoundsUsed, value.MaxRounds);
+    internal static Api.ConsultationInput Input(AdvisorProviderInput input) => new(Json(input.Data), input.SystemInstruction, Json(input.Tool), input.OperationTool == null ? null : Json(input.OperationTool));
+    internal static Api.RetrievalHistory? History(AdvisorContinuation? value) => value == null ? null : new(Json(value.Retrievals), value.RoundsUsed, value.MaxRounds, Json(value.Operations));
     internal static Api.ConnectionSettings Configuration(AdvisorService service, AdvisorApiConfiguration configuration,
         AdvisorConnectionOptions options, bool fallback) => new(configuration.Id, configuration.Name, configuration.Provider,
         Json(configuration.Settings), service.Model(configuration), configuration.RequestTimeoutSeconds, options.MaxOutputTokens, fallback);
@@ -203,11 +203,19 @@ internal sealed class ExternalAdvisorService : AdvisorService
                         Api.AdvisorPhase.SwitchingConnection => AdvisorStage.SwitchingKey, _ => AdvisorStage.Waiting };
                     context.Progress?.Invoke(new AdvisorProgress(phase, Math.Max(progress.ApiRequests, requestCount()), context.Knowledge.RoundsUsed,
                         context.Knowledge.MaxRounds, progress.Queries.Select(q => known.Contains(q) ? q : "unknown_query"), settings.IsSubConnection, settings.Model));
-                });
+                }, context.Operations == null ? null : new Operations(context.Operations));
             var answer = await AdvisorExtensionBridge.InvokeAsync(() => execution.ConsultAsync(input, cancellation)).ConfigureAwait(false);
             cancellation.ThrowIfCancellationRequested(); return AdvisorExtensionBridge.Answer(answer);
         }
         public void Dispose() => execution.Dispose();
+    }
+    private sealed class Operations : Api.IAdvisorOperations
+    {
+        private readonly IAdvisorOperationSession session;
+        internal Operations(IAdvisorOperationSession session) => this.session = session;
+        public async Task<string> ExecuteAsync(string requestJson, CancellationToken cancellation) =>
+            AdvisorExtensionBridge.Json(await session.ExecuteAsync(AdvisorExtensionBridge.Object(requestJson,
+                "invalid_operation_request", AdvisorQueryLimits.MaxRequestBytes), cancellation).ConfigureAwait(false));
     }
     private sealed class Knowledge : Api.IAdvisorKnowledge
     {
