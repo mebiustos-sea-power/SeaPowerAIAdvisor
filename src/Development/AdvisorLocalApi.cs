@@ -191,7 +191,7 @@ internal sealed class AdvisorLocalApi
                 if (suppliedDelivery.Type != JTokenType.String) throw new AdvisorLocalApiException(400, "invalid_situation_delivery");
                 delivery = (string?)suppliedDelivery switch
                 {
-                    "on_demand" => AdvisorSituationDelivery.OnDemand, "upfront" => AdvisorSituationDelivery.Upfront,
+                    "on_demand" => AdvisorSituationDelivery.OnDemand, "upfront" => AdvisorSituationDelivery.Upfront, "on_request" => AdvisorSituationDelivery.OnRequest,
                     _ => throw new AdvisorLocalApiException(400, "invalid_situation_delivery")
                 };
             }

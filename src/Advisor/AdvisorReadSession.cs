@@ -16,6 +16,9 @@ internal sealed class AdvisorReadSession
     private readonly HashSet<string> knownQueries;
     private readonly AdvisorProviderInput original;
     private int returnedBytes, initialBytes;
+    private JObject? snapshot;
+    private bool snapshotSupplied;
+    internal const string SnapshotQuery = "get_situation";
     private AdvisorSituationDelivery delivery;
     internal AdvisorProviderInput Input { get; private set; }
     internal bool AllowsSituationReads => delivery == AdvisorSituationDelivery.OnDemand;
@@ -24,16 +27,17 @@ internal sealed class AdvisorReadSession
     {
         this.knowledge = knowledge; this.operations = operations; original = Input = input;
         var snapshotTool = (JObject)knowledge.InitialInput()["query_tool"]!;
-        knownQueries = AdvisorRequestShape.Values((JObject)snapshotTool["parameters"]!["properties"]!["requests"]!["items"]!, "query").ToHashSet(StringComparer.Ordinal);
+        knownQueries = AdvisorRequestShape.Values((JObject)snapshotTool["parameters"]!["properties"]!["requests"]!["items"]!, "query").Append(SnapshotQuery).ToHashSet(StringComparer.Ordinal);
     }
 
     internal AdvisorProviderInput Prepare(AdvisorSituationDelivery mode, IReadOnlyList<JObject> tools)
     {
-        if (mode is not (AdvisorSituationDelivery.OnDemand or AdvisorSituationDelivery.Upfront))
+        if (mode is not (AdvisorSituationDelivery.OnDemand or AdvisorSituationDelivery.Upfront or AdvisorSituationDelivery.OnRequest))
             throw new AdvisorConnectionException("settings_invalid");
         var input = new AdvisorProviderInput(original.Data, original.SystemInstruction, tools);
         int size;
         if (mode == AdvisorSituationDelivery.Upfront) input = AdvisorSituationInput.Upfront(knowledge, input, out size);
+        else if (mode == AdvisorSituationDelivery.OnRequest) input = AdvisorSituationInput.OnRequest(knowledge, input, out size);
         else
         {
             var initial = knowledge.InitialInput();
@@ -64,6 +68,7 @@ internal sealed class AdvisorReadSession
         if (Bytes(request) > MaxRequestBytes) return Error("request_too_large");
         if (returnedBytes >= MaxTotalBytes) return Error("payload_limit");
         var results = new JObject?[batch.Count];
+        int? snapshotIndex = null;
         var queries = new JArray();
         var positions = new List<int>();
         for (var i = 0; i < batch.Count; i++)
@@ -76,6 +81,20 @@ internal sealed class AdvisorReadSession
             {
                 case "situation":
                     if (delivery == AdvisorSituationDelivery.Upfront) results[i] = ItemError(i, "situation_already_supplied");
+                    else if (delivery == AdvisorSituationDelivery.OnRequest)
+                    {
+                        if (args.Properties().Any(p => p.Name != "query") || args["query"]?.Type != JTokenType.String || (string?)args["query"] != SnapshotQuery)
+                            results[i] = ItemError(i, "invalid_read_request");
+                        else if (snapshotSupplied || snapshotIndex.HasValue)
+                            results[i] = new JObject { ["index"] = i, ["query"] = SnapshotQuery, ["status"] = "ok",
+                                ["data"] = new JObject { ["status"] = "already_supplied" } };
+                        else
+                        {
+                            snapshot ??= AdvisorSituationInput.Snapshot(knowledge);
+                            results[i] = new JObject { ["index"] = i, ["query"] = SnapshotQuery, ["status"] = "ok", ["data"] = snapshot.DeepClone() };
+                            snapshotIndex = i;
+                        }
+                    }
                     else { queries.Add(args); positions.Add(i); }
                     break;
                 case "operation":
@@ -118,12 +137,24 @@ internal sealed class AdvisorReadSession
         var bytes = Bytes(response);
         if (queries.Count == 0)
         {
-            if (bytes > MaxResponseBytes) return Error("response_too_large");
+            // A full snapshot uses the existing total-data ceiling. Ordinary read responses retain their smaller ceiling.
+            if (bytes > (snapshotIndex.HasValue ? MaxTotalBytes : MaxResponseBytes)) return Error(snapshotIndex.HasValue ? "payload_limit" : "response_too_large");
             if (bytes > MaxTotalBytes - returnedBytes) return Error("payload_limit");
         }
         else if (bytes > MaxResponseBytes || bytes > MaxTotalBytes - returnedBytes)
             throw new InvalidOperationException("Read response exceeded its reserved budget.");
+        cancellation.ThrowIfCancellationRequested();
         returnedBytes += bytes;
+        if (snapshotIndex.HasValue)
+        {
+            var readRequest = new JObject { ["consultation_id"] = knowledge.Id,
+                ["requests"] = new JArray(new JObject { ["query"] = SnapshotQuery }) };
+            var row = (JObject)results[snapshotIndex.Value]!.DeepClone(); row["index"] = 0;
+            var readResponse = Envelope("ok"); readResponse["results"] = new JArray(row);
+            if (knowledge is IAdvisorSnapshotReadObserver observer) observer.RecordSnapshotRead(readRequest, readResponse);
+            situationRead?.Invoke(readRequest, readResponse);
+            snapshotSupplied = true;
+        }
         return response;
     }
     private JObject ItemError(int index, string code)

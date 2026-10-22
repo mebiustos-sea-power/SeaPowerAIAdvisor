@@ -15,17 +15,17 @@ internal sealed class AdvisorToolSession
     private readonly IAdvisorOperationSession? operations;
     private IReadOnlyDictionary<string, AdvisorToolBinding> bindings = new Dictionary<string, AdvisorToolBinding>();
     internal AdvisorReadSession Reads { get; }
+    internal bool Prepared { get; private set; }
     internal AdvisorToolSession(IAdvisorQuerySession knowledge, IAdvisorOperationSession? operations, AdvisorProviderInput input)
     {
         this.knowledge = knowledge; this.operations = operations;
         Reads = new AdvisorReadSession(knowledge, operations, input);
-        Prepare(AdvisorSituationDelivery.OnDemand);
     }
     internal AdvisorProviderInput Prepare(AdvisorSituationDelivery mode, bool legacy = false)
     {
         var snapshotTool = (JObject)knowledge.InitialInput()["query_tool"]!;
         var tools = new List<AdvisorToolBinding>();
-        if (legacy) tools.AddRange(AdvisorLegacyTools.Create(snapshotTool, operations, knowledge.Prompts, mode == AdvisorSituationDelivery.OnDemand));
+        if (legacy) tools.AddRange(AdvisorLegacyTools.Create(snapshotTool, operations, knowledge.Prompts, mode == AdvisorSituationDelivery.OnDemand, mode == AdvisorSituationDelivery.OnRequest));
         else
         {
             if (mode == AdvisorSituationDelivery.OnDemand)
@@ -34,10 +34,19 @@ internal sealed class AdvisorToolSession
                 snapshotTool["description"] = knowledge.Prompts.Text("common.json", "situation_tool_description");
                 tools.Add(new AdvisorToolBinding(snapshotTool, SituationRequests));
             }
+            if (mode == AdvisorSituationDelivery.OnRequest)
+            {
+                var definition = new JObject { ["name"] = AdvisorReadSession.SnapshotQuery,
+                    ["description"] = knowledge.Prompts.Text("common.json", "snapshot_tool_description"),
+                    ["parameters"] = new JObject { ["type"] = "object", ["additionalProperties"] = false, ["properties"] = new JObject() } };
+                tools.Add(new AdvisorToolBinding(definition, args => args.Count == 0
+                    ? new JArray(new JObject { ["source"] = "situation", ["query"] = AdvisorReadSession.SnapshotQuery }) : null));
+            }
             if (operations != null) tools.AddRange(AdvisorOperationTools.Create(operations, knowledge.Prompts));
         }
         var input = Reads.Prepare(mode, tools.Select(t => t.Definition).ToArray());
         bindings = tools.ToDictionary(t => t.Name, StringComparer.Ordinal);
+        Prepared = true;
         return input;
     }
     private static JArray? SituationRequests(JObject args)
@@ -54,6 +63,7 @@ internal sealed class AdvisorToolSession
         Action<string[], bool> progress, Action<JObject, JObject> situationRead)
     {
         cancellation.ThrowIfCancellationRequested();
+        if (!Prepared) Prepare(AdvisorSituationDelivery.OnDemand);
         if (calls.Count > MaxCallsPerResponse) throw new AdvisorConnectionException("tool_call_limit");
         if (calls.Any(c => string.IsNullOrWhiteSpace(c.Id) || !bindings.ContainsKey(c.Name)) ||
             calls.Select(c => c.Id).Distinct(StringComparer.Ordinal).Count() != calls.Count)

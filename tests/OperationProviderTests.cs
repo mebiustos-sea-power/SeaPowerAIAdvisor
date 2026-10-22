@@ -12,7 +12,7 @@ internal static partial class ProviderTests
     {
         check("The standard AI engine discovers operation metadata and proposes exactly one buoy until host approval", () =>
         {
-            foreach (var delivery in new[] { AdvisorSituationDelivery.OnDemand, AdvisorSituationDelivery.Upfront })
+            foreach (var delivery in new[] { AdvisorSituationDelivery.OnDemand, AdvisorSituationDelivery.Upfront, AdvisorSituationDelivery.OnRequest })
             {
                 var unit = new OperationHelicopter(); var registry = SonobuoyRegistry(unit);
                 using var gateway = new AdvisorOperationGateway(registry);

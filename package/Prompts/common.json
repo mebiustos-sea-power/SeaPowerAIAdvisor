@@ -16,5 +16,7 @@
   "read_tool_description": "Batch independent reads in requests using source and the matching query or action. Results match request indexes. Situation data is captured at consultation start.",
   "upfront_retrieval_policy": "Enabled situation data is supplied in situation_data at consultation start. Base advice on it; use operation lookups when needed for execution.",
   "operation_read_tool_description": "Read operation catalogs, definitions and live candidates in requests. Results match request indexes.",
-  "situation_tool_description": "Retrieve situation data captured at consultation start. Batch independent queries in requests; results match request indexes."
+  "situation_tool_description": "Retrieve situation data captured at consultation start. Batch independent queries in requests; results match request indexes.",
+  "on_request_retrieval_policy": "Retrieve the full situation before situation-dependent advice; other messages need no situation data.",
+  "snapshot_tool_description": "Get all enabled situation data captured at consultation start. Returns data once per consultation; later calls report already_supplied."
 }

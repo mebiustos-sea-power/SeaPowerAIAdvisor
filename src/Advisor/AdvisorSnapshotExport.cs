@@ -11,6 +11,12 @@ internal interface IAdvisorSnapshotSource
     JArray ExportSituation();
 }
 
+// Host wrappers observe successful full reads without replaying them through the partial-query gateway.
+internal interface IAdvisorSnapshotReadObserver
+{
+    void RecordSnapshotRead(JObject request, JObject response);
+}
+
 // Materialize the same permission-filtered projections used by on-demand reads.
 // Query-sized chunks are an internal detail; this never consumes the consultation's read budget.
 internal sealed class AdvisorSnapshotExport

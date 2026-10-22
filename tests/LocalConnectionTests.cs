@@ -73,7 +73,7 @@ internal static partial class LocalApiTests
             }
             var denied = Send(api, "POST", "/v1/consultations", new JObject { ["question"] = "Question", ["connection_id"] = "normal", ["situation_delivery"] = "upfront" });
             Require(denied.Status == 403 && prepared == 0 && !target.Called, "A delivery override bypassed the allowlist");
-            foreach (var choice in new[] { "on_demand", "upfront", null })
+            foreach (var choice in new[] { "on_demand", "upfront", "on_request", null })
             {
                 var body = new JObject { ["shortcut"] = "key_risks" };
                 if (choice != null) body["situation_delivery"] = choice;

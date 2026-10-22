@@ -448,5 +448,7 @@
   "connection.situation_upfront": "最初にまとめて送信",
   "connection.situation_delivery_hint": "許可したゲーム内情報を、AIにどのように提供するかを選択します。",
   "connection.situation_payload_limit": "一括送信する戦況データが情報量の上限を超えています。「AIに渡す情報」を減らすか、オンデマンド方式を選んでください。",
-  "connection.situation_delivery_unavailable": "この相談処理は戦況データの一括送信に対応していません。"
+  "connection.situation_delivery_unavailable": "この相談処理は戦況データの一括提供に対応していません。",
+  "connection.situation_on_request": "要求時にまとめて送信",
+  "progress.topic.situation": "戦況全体"
 }

@@ -10,7 +10,7 @@ namespace SeaPowerAIAdvisor;
 internal sealed class AdvisorApiSettingsView
 {
     private static readonly AdvisorSituationDelivery[] deliveryChoices =
-        { AdvisorSituationDelivery.Upfront, AdvisorSituationDelivery.OnDemand };
+        { AdvisorSituationDelivery.Upfront, AdvisorSituationDelivery.OnDemand, AdvisorSituationDelivery.OnRequest };
     private readonly ComboBox main, sub, selector, provider, delivery;
     private readonly FrameworkElement deliveryPanel;
     private readonly TextBox name, timeout;
@@ -102,8 +102,7 @@ internal sealed class AdvisorApiSettingsView
         {
             delivery.Items.Clear();
             foreach (var choice in deliveryChoices)
-                delivery.Items.Add(new ComboBoxItem { Content = text()[choice == AdvisorSituationDelivery.Upfront
-                    ? "connection.situation_upfront" : "connection.situation_on_demand"] });
+                delivery.Items.Add(new ComboBoxItem { Content = text()["connection.situation_" + choice.Code()] });
             delivery.SelectedIndex = Array.IndexOf(deliveryChoices, editor?.SituationDelivery ?? AdvisorSituationDelivery.OnDemand);
         }
         finally { updating = wasUpdating; }

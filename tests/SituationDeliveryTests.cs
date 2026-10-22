@@ -19,16 +19,20 @@ internal static partial class ProviderTests
                 var store = new AdvisorApiSettingsStore(path, () => "API");
                 var draft = NanoDraft();
                 Require(draft.Main.SituationDelivery == AdvisorSituationDelivery.OnDemand, "Existing connection changed delivery");
-                draft.Main.SituationDelivery = AdvisorSituationDelivery.Upfront;
-                AdvisorSettings.WriteBytes(path, draft.Data());
-                var saved = File.ReadAllBytes(path);
-                var copy = store.Read().Duplicate(draft.MainId!); store.SaveEntry(copy, true);
-                Require(store.Read().Find(copy.Id)!.SituationDelivery == AdvisorSituationDelivery.Upfront &&
-                    store.Read().Main.SituationDelivery == AdvisorSituationDelivery.Upfront, "Save/duplicate lost the connection policy");
-                var pending = store.Read().Main; pending.SituationDelivery = AdvisorSituationDelivery.OnDemand;
-                Require(store.Read().Main.SituationDelivery == AdvisorSituationDelivery.Upfront, "Unsaved mode leaked");
-                store.SaveLogging(true);
-                Require(store.Read().Main.SituationDelivery == AdvisorSituationDelivery.Upfront, "Another setting erased delivery");
+                byte[] saved = Array.Empty<byte>();
+                foreach (var mode in new[] { AdvisorSituationDelivery.Upfront, AdvisorSituationDelivery.OnRequest })
+                {
+                    draft.Main.SituationDelivery = mode;
+                    AdvisorSettings.WriteBytes(path, draft.Data());
+                    saved = File.ReadAllBytes(path);
+                    var copy = store.Read().Duplicate(draft.MainId!); store.SaveEntry(copy, true);
+                    Require(store.Read().Find(copy.Id)!.SituationDelivery == mode && store.Read().Main.SituationDelivery == mode,
+                        "Save/duplicate lost the connection policy");
+                    var pending = store.Read().Main; pending.SituationDelivery = AdvisorSituationDelivery.OnDemand;
+                    Require(store.Read().Main.SituationDelivery == mode, "Unsaved mode leaked");
+                    store.SaveLogging(true);
+                    Require(store.Read().Main.SituationDelivery == mode, "Another setting erased delivery");
+                }
                 var legacy = JObject.Parse(System.Text.Encoding.UTF8.GetString(saved));
                 ((JObject)legacy["api_configurations"]![0]!).Remove("situation_delivery");
                 Require(AdvisorApiLibrary.Read(legacy).Configurations[0].SituationDelivery == AdvisorSituationDelivery.OnDemand,
@@ -175,29 +179,31 @@ internal static partial class ProviderTests
             Require(answer.Completed && answer.ApiRequests == 2 && answer.QueryRounds == 1 && answer.TotalTokens == null,
                 "Mixed workflow switching reset counters or asserted known usage");
         }));
-        check("Built-in provider wires omit unused tools for upfront answers and preserve registered models and transport endpoints", () => Async(async () =>
+        check("Built-in provider wires retain delivery choices, omit automatic data when requested and preserve models and endpoints", () => Async(async () =>
         {
             foreach (var provider in new[] { "nanogpt", "openrouter", "gemini", "ollama" })
+            foreach (var mode in new[] { AdvisorSituationDelivery.Upfront, AdvisorSituationDelivery.OnRequest })
             {
                 var service = AdvisorServiceCatalog.BuiltIn.Require(provider);
                 var values = service.Defaults(); if (values["api_key"] != null) values["api_key"] = "mock_delivery_key";
-                var configuration = new AdvisorApiConfiguration(provider, provider, provider, values, situationDelivery: AdvisorSituationDelivery.Upfront);
+                var configuration = new AdvisorApiConfiguration(provider, provider, provider, values, situationDelivery: mode);
                 var settings = new AdvisorSettingsDraft(new JObject()); settings.Put(new AdvisorApiConfigurationDraft(configuration)); settings.MainId = configuration.Id;
                 var sends = 0;
                 var handler = new BackendHttpHandler(async (request, token) =>
                 {
                     var body = JObject.Parse(await request.Content!.ReadAsStringAsync(token)); sends++;
-                    Require(body["tools"] == null && (string?)body["model"] == configuration.Model,
+                    Require((body["tools"] == null) == (mode == AdvisorSituationDelivery.Upfront) && (string?)body["model"] == configuration.Model,
                         "An unused tool was sent or delivery changed the configured model: " + provider);
                     if (provider == "gemini")
                     {
-                        Require(body["generation_config"]?["tool_choice"] == null, "Gemini sent a choice without tools");
+                        Require((body["generation_config"]?["tool_choice"] == null) == (mode == AdvisorSituationDelivery.Upfront), "Gemini sent a choice without tools");
                         return JsonResponse(new JObject { ["id"] = "upfront-1", ["status"] = "completed", ["steps"] = new JArray(new JObject { ["type"] = "model_output", ["content"] = new JArray(new JObject { ["type"] = "text", ["text"] = "Full answer" }) }) });
                     }
                     if (provider == "ollama") return JsonResponse(new JObject { ["done"] = true, ["message"] = new JObject { ["role"] = "assistant", ["content"] = "Full answer" } });
-                    Require(body["tool_choice"] == null, "Chat provider sent a choice with no tools");
+                    Require((body["tool_choice"] == null) == (mode == AdvisorSituationDelivery.Upfront), "Chat provider sent a choice with no tools");
                     var data = JObject.Parse((string)body["messages"]![1]!["content"]!);
-                    Require(data["situation_data"] != null && data["knowledge_catalog"] == null, "Saved mode did not reach the actual chat request");
+                    Require((data["situation_data"] != null) == (mode == AdvisorSituationDelivery.Upfront) && data["knowledge_catalog"] == null &&
+                        (data["situation"] == null) == (mode == AdvisorSituationDelivery.OnRequest), "Saved mode did not reach the actual chat request");
                     return JsonResponse(NanoReply("Full answer"));
                 });
                 var setup = AdvisorServices.Prepare(settings, transportFactory: trace => new AdvisorHttpTransport(handler, trace));

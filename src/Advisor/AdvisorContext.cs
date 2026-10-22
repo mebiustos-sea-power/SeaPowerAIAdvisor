@@ -14,7 +14,10 @@ internal sealed class AdvisorContext
     internal IAdvisorOperationSession? Operations { get; }
     private AdvisorToolSession? tools;
     internal AdvisorToolSession Tools => tools ??= new AdvisorToolSession(Knowledge, Operations, Input);
-    internal AdvisorReadSession Reads => Tools.Reads;
+    internal AdvisorReadSession Reads
+    {
+        get { var value = Tools; if (!value.Prepared) value.Prepare(AdvisorSituationDelivery.OnDemand); return value.Reads; }
+    }
     private readonly Action<AdvisorProviderInput>? preparedInput;
     internal AdvisorProviderInput PrepareStandardInput(AdvisorSituationDelivery mode = AdvisorSituationDelivery.OnDemand, bool legacy = false)
     { var input = Tools.Prepare(mode, legacy); preparedInput?.Invoke(input); return input; }

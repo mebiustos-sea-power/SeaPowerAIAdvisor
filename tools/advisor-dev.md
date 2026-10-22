@@ -161,11 +161,12 @@ ADVISOR_TEST_POWERSHELL='/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershe
 
 ## Compare situation delivery
 
-Use `consult --situation-delivery on_demand` or `consult --situation-delivery upfront` for a single consultation. Omitting the flag uses the selected connection's saved choice. Request files accept the same `situation_delivery` strings; an explicit flag takes precedence. The selected connection's credentials, model and Data for AI restrictions are preserved, and no saved setting is modified. Fallback remains off unless explicitly enabled, and any allowed fallback keeps its own delivery choice. Invalid file values are rejected before API access or history clearing.
+Use `consult --situation-delivery on_demand`, `consult --situation-delivery upfront` or `consult --situation-delivery on_request` for a single consultation. Omitting the flag uses the selected connection's saved choice. Request files accept the same `situation_delivery` strings; an explicit flag takes precedence. The selected connection's credentials, model and Data for AI restrictions are preserved, and no saved setting is modified. Fallback remains off unless explicitly enabled, and any allowed fallback keeps its own delivery choice. Invalid file values are rejected before API access or history clearing.
 
 ```sh
 python tools/advisor_dev.py consult --shortcut key_risks --situation-delivery upfront --no-fallback --plain-advisor --clear-history --output results/upfront
 python tools/advisor_dev.py consult --shortcut key_risks --situation-delivery on_demand --no-fallback --plain-advisor --clear-history --output results/on-demand
+python tools/advisor_dev.py consult --shortcut key_risks --situation-delivery on_request --no-fallback --plain-advisor --clear-history --output results/on-request
 ```
 
 Use the same save, connection/model and information selections for a comparison. `connections`/`discover` show saved delivery modes, while `accepted.json` records the requested consultation's effective choice; verify actual input in `result.json`. Each command starts a real consultation, so run it only when authorized.

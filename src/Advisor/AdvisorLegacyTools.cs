@@ -9,11 +9,19 @@ internal static class AdvisorLegacyTools
 {
     internal const string ReadName = "query_game";
     internal static IEnumerable<AdvisorToolBinding> Create(JObject snapshotTool, IAdvisorOperationSession? operations,
-        AdvisorPrompts prompts, bool situationReads)
+        AdvisorPrompts prompts, bool situationReads, bool fullSnapshot = false)
     {
         var tool = (JObject)snapshotTool.DeepClone(); tool["name"] = ReadName;
         tool["description"] = prompts.Text("common.json", situationReads ? "read_tool_description" : "operation_read_tool_description");
         var variants = new JArray();
+        if (fullSnapshot)
+        {
+            tool["description"] = prompts.Text("common.json", "snapshot_tool_description") +
+                (operations == null ? "" : " " + prompts.Text("common.json", "operation_read_tool_description"));
+            variants.Add(WithSource(new JObject { ["type"] = "object", ["additionalProperties"] = false,
+                ["required"] = new JArray("query"), ["properties"] = new JObject {
+                    ["query"] = new JObject { ["type"] = "string", ["enum"] = new JArray(AdvisorReadSession.SnapshotQuery) } } }, "situation"));
+        }
         if (situationReads)
             foreach (var schema in AdvisorRequestShape.Variants((JObject)tool["parameters"]!["properties"]!["requests"]!["items"]!))
                 variants.Add(WithSource(schema, "situation"));

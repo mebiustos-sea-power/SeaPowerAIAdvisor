@@ -54,7 +54,7 @@ internal static partial class ProviderTests
                 var saved = NanoDraft(); var path = System.IO.Path.Combine(directory, "settings.json");
                 AdvisorSettings.WriteBytes(path, saved.Data()); var original = System.IO.File.ReadAllBytes(path);
                 var policy = new AdvisorLocalConnections(new[] { "nano" }, "nano");
-                foreach (var choice in new AdvisorSituationDelivery?[] { AdvisorSituationDelivery.Upfront, AdvisorSituationDelivery.OnDemand, null })
+                foreach (var choice in new AdvisorSituationDelivery?[] { AdvisorSituationDelivery.Upfront, AdvisorSituationDelivery.OnDemand, AdvisorSituationDelivery.OnRequest, null })
                 {
                     var draft = AdvisorSettings.Edit(path); policy.Select(draft, "nano", false, situationDelivery: choice);
                     var expected = choice ?? AdvisorSituationDelivery.OnDemand;

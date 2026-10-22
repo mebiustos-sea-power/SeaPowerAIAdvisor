@@ -202,8 +202,8 @@ def consultation_request(args):
         raise ToolError("model must be a nonempty model ID of at most 200 characters without control characters.")
     if args.situation_delivery is not None:
         body["situation_delivery"] = args.situation_delivery
-    if "situation_delivery" in body and body["situation_delivery"] not in ("on_demand", "upfront"):
-        raise ToolError("situation_delivery must be on_demand or upfront.")
+    if "situation_delivery" in body and body["situation_delivery"] not in ("on_demand", "upfront", "on_request"):
+        raise ToolError("situation_delivery must be on_demand, upfront or on_request.")
     if args.allow_fallback is not None:
         body["allow_fallback"] = args.allow_fallback
     if args.plain_advisor is not None:
@@ -372,7 +372,7 @@ def parser():
     question.add_argument("--request-file", help="Full consultation request JSON.")
     request.add_argument("--connection-id", help="Omit to use the developer default.")
     request.add_argument("--model", help="Override this consultation model when permitted in Local API settings; saved connections are unchanged.")
-    request.add_argument("--situation-delivery", choices=("on_demand", "upfront"),
+    request.add_argument("--situation-delivery", choices=("on_demand", "upfront", "on_request"),
                          help="Override situation delivery for this consultation; omit to use the saved connection setting.")
     fallback = request.add_mutually_exclusive_group()
     fallback.add_argument("--allow-fallback", dest="allow_fallback", action="store_true")

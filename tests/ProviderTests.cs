@@ -15,6 +15,7 @@ internal static partial class ProviderTests
         RunUnifiedReads(check);
         RunSplitTools(check);
         RunSituationDelivery(check);
+        RunRequestedSituation(check);
         RunLocalFallbackPolicy(check);
         RunLocalConnections(check);
         RunOllama(check);

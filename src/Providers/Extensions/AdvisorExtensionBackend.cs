@@ -64,7 +64,7 @@ internal sealed class AdvisorExtensionBackend : IAdvisorBackend
                 ? (fallback ? subService!.Model(sub!) : mainService.Model(main)) : answer.Model, answer.CompletionReason);
     }
 
-    private sealed class KnowledgeLedger : IAdvisorSnapshotSource, IAdvisorQuerySession, IDisposable
+    private sealed class KnowledgeLedger : IAdvisorSnapshotSource, IAdvisorSnapshotReadObserver, IAdvisorQuerySession, IDisposable
     {
         private readonly IAdvisorQuerySession inner;
         private readonly object sync = new();
@@ -77,6 +77,15 @@ internal sealed class AdvisorExtensionBackend : IAdvisorBackend
         public AdvisorPrompts Prompts => inner.Prompts;
         public JObject InitialInput() => inner.InitialInput();
         public JArray ExportSituation() => AdvisorSnapshotExport.From(inner);
+        public void RecordSnapshotRead(JObject request, JObject response)
+        {
+            lock (sync)
+            {
+                if (disposed) throw new ObjectDisposedException(nameof(KnowledgeLedger));
+                if (inner is IAdvisorSnapshotReadObserver observer) observer.RecordSnapshotRead(request, response);
+                retrievals.Add(new JObject { ["request"] = request.DeepClone(), ["response"] = response.DeepClone() });
+            }
+        }
         public JObject Execute(JObject request)
         {
             lock (sync)

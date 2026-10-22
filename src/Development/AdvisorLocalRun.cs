@@ -94,7 +94,7 @@ internal sealed class AdvisorLocalRun
         public void Dispose() => inner.Dispose();
     }
 
-    private sealed class RecordingSession : IAdvisorSnapshotSource, IAdvisorQuerySession
+    private sealed class RecordingSession : IAdvisorSnapshotSource, IAdvisorSnapshotReadObserver, IAdvisorQuerySession
     {
         private readonly IAdvisorQuerySession inner;
         private readonly AdvisorLocalRun run;
@@ -105,6 +105,12 @@ internal sealed class AdvisorLocalRun
         public AdvisorPrompts Prompts => inner.Prompts;
         public JObject InitialInput() => inner.InitialInput();
         public JArray ExportSituation() => AdvisorSnapshotExport.From(inner);
+        public void RecordSnapshotRead(JObject request, JObject response)
+        {
+            if (inner is IAdvisorSnapshotReadObserver observer) observer.RecordSnapshotRead(request, response);
+            var entry = new JObject { ["time_utc"] = DateTime.UtcNow.ToString("O"), ["request"] = request.DeepClone(), ["response"] = response.DeepClone() };
+            lock (run.gate) if (run.finished == null) run.retrievals.Add(entry);
+        }
         public JObject Execute(JObject request)
         {
             var entry = new JObject { ["time_utc"] = DateTime.UtcNow.ToString("O"), ["request"] = request.DeepClone() };

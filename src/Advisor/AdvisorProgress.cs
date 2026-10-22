@@ -39,7 +39,7 @@ internal sealed class AdvisorProgress
 
     private static string Topic(string query) => query switch
     {
-        "catalog" => "catalog", "list_units" or "get_units" => "units", "get_unit_capabilities" => "capabilities",
+        AdvisorReadSession.SnapshotQuery => "situation", "catalog" => "catalog", "list_units" or "get_units" => "units", "get_unit_capabilities" => "capabilities",
         "get_movement_plans" => "movement",
         AdvisorOperationGateway.ToolName => "operations",
         "list_contacts" or "list_identification_candidates" => "contacts", "get_contact_threats" => "threats", "get_briefing" => "briefing",

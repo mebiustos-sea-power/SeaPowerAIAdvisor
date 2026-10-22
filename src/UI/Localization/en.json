@@ -448,5 +448,7 @@
   "connection.situation_upfront": "Send all at the start",
   "connection.situation_delivery_hint": "Choose how permitted game information is provided to the AI.",
   "connection.situation_payload_limit": "The upfront situation data exceeds the information budget. Reduce Data for AI or select on-demand delivery.",
-  "connection.situation_delivery_unavailable": "This consultation workflow does not support upfront situation delivery."
+  "connection.situation_delivery_unavailable": "This consultation workflow does not support full situation delivery.",
+  "connection.situation_on_request": "Send all when requested",
+  "progress.topic.situation": "the tactical situation"
 }

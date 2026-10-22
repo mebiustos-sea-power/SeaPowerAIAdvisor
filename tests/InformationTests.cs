@@ -60,15 +60,22 @@ internal static partial class InformationTests
     {
         RunGroundCampaign(campaignPath, check);
         var snapshot = QueryTests.Capture(new SituationTests.Fixture(Assembly.LoadFrom(campaignPath)));
-        check("Upfront campaign data reuses permission-filtered ship, fleet and public-base projections without consuming rounds", () =>
+        check("Full campaign delivery reuses permission-filtered ship, fleet and public-base projections without consuming partial-read rounds", () =>
         {
             var policy = AdvisorInformation.All.With(CampaignFuel, false).With(CampaignDamage, false).With(CampaignAmmunition, false);
-            var session = new AdvisorQuerySession(snapshot, "ja", "Compare", information: policy);
-            var input = AdvisorContext.Create(session, Array.Empty<ChatExchange>()).PrepareStandardInput(AdvisorSituationDelivery.Upfront);
-            var rows = (JArray)input.Data["situation_data"]!;
-            Require(rows.Where(r => (string?)r["query"] == "get_ships").Sum(r => r["data"]!.Count()) == snapshot.Forces.Sum(f => f.Ships.Count) &&
-                rows.Where(r => (string?)r["query"] == "get_ships").SelectMany(r => r["data"]!).All(ship => ship["fuel"] == null && ship["ammunition"] == null && ship["damage_fraction"] == null) && session.RoundsUsed == 0,
-                "Upfront campaign data dropped ships, leaked excluded status, or consumed read rounds");
+            foreach (var mode in new[] { AdvisorSituationDelivery.Upfront, AdvisorSituationDelivery.OnRequest })
+            {
+                var session = new AdvisorQuerySession(snapshot, "ja", "Compare", information: policy);
+                var context = AdvisorContext.Create(session, Array.Empty<ChatExchange>());
+                var input = context.PrepareStandardInput(mode);
+                var rows = mode == AdvisorSituationDelivery.Upfront ? (JArray)input.Data["situation_data"]! :
+                    (JArray)context.Reads.ExecuteAsync(new JObject { ["requests"] = new JArray(new JObject {
+                        ["source"] = "situation", ["query"] = "get_situation" }) }, System.Threading.CancellationToken.None)
+                        .GetAwaiter().GetResult()["results"]![0]!["data"]!["situation_data"]!;
+                Require(rows.Where(r => (string?)r["query"] == "get_ships").Sum(r => r["data"]!.Count()) == snapshot.Forces.Sum(f => f.Ships.Count) &&
+                    rows.Where(r => (string?)r["query"] == "get_ships").SelectMany(r => r["data"]!).All(ship => ship["fuel"] == null && ship["ammunition"] == null && ship["damage_fraction"] == null) && session.RoundsUsed == 0,
+                    "Upfront campaign data dropped ships, leaked excluded status, or consumed read rounds");
+            }
             var disabled = AdvisorInformation.All;
             foreach (var item in AdvisorInformation.Items) disabled = disabled.With(item.Kind, false);
             var limited = new AdvisorQuerySession(snapshot, "ja", "Limited", information: disabled).ExportSituation();
