@@ -95,7 +95,7 @@ internal static partial class BattleTests
                 var request = BattleContactAssessment.Reassess(turn, assumption, "Reassess " + code);
                 var session = new BattleAdvisorSource(() => f.Capture()).CreateSession("en", request.Text, context: request.Context);
                 var focus = session.InitialInput()["contact_assessment"]!;
-                Require((int?)focus["contact"]!["track_number"] == 7 && (string?)focus["assumed_affiliation"] == code &&
+                Require(!request.AllowOperations && (int?)focus["contact"]!["track_number"] == 7 && (string?)focus["assumed_affiliation"] == code &&
                     (string?)focus["contact"]!["posture"] == "unknown" && (bool?)focus["contact"]!["identified"] == false &&
                     JToken.DeepEquals(request.Context!["evidence"], evidence) &&
                     request.Text.Contains("Contact 7", StringComparison.Ordinal) && request.Text.Contains(code, StringComparison.Ordinal),

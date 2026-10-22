@@ -19,8 +19,9 @@ internal sealed class AdvisorLocalRun
     private JObject? finished;
     internal bool AllowFallback { get; }
     internal bool PlainAdvisor { get; }
-    internal AdvisorLocalRun(bool allowFallback = false, bool plainAdvisor = false)
-    { AllowFallback = allowFallback; PlainAdvisor = plainAdvisor; }
+    internal bool AllowOperations { get; }
+    internal AdvisorLocalRun(bool allowFallback = false, bool plainAdvisor = false, bool allowOperations = true)
+    { AllowFallback = allowFallback; PlainAdvisor = plainAdvisor; AllowOperations = allowOperations; }
     internal AdvisorProfile? ProfileFor(AdvisorProfile? selected) => PlainAdvisor
         ? new AdvisorProfile(Array.Empty<AdvisorPersona>(), null, true, "") : selected;
     internal string CommonPromptFor(string configured) => PlainAdvisor ? "" : configured;
@@ -50,7 +51,7 @@ internal sealed class AdvisorLocalRun
         var progress = turn?.Progress;
         lock (gate) return new JObject
         {
-            ["id"] = Id, ["started_utc"] = started, ["allow_fallback"] = AllowFallback, ["plain_advisor"] = PlainAdvisor,
+            ["id"] = Id, ["started_utc"] = started, ["allow_fallback"] = AllowFallback, ["plain_advisor"] = PlainAdvisor, ["allow_operations"] = AllowOperations,
             ["state"] = turn?.State.ToString().ToLowerInvariant() ?? "starting",
             ["question"] = turn?.Request.Text, ["display_question"] = turn?.Request.DisplayText,
             ["advisor_name"] = turn?.AdvisorName, ["answer"] = turn?.Exchange?.Answer,

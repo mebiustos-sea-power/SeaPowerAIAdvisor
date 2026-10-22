@@ -213,6 +213,24 @@ class CliTests(unittest.TestCase):
             self.assertEqual(api.run("consult", "--question", "q", "--model", "vendor/test", "--no-wait")[0], 1)
             self.assertEqual(len([c for c in api.calls if c[:2] == ("POST", "/v1/consultations")]), 1)
 
+    def test_operation_permission_flags_and_files_do_not_change_later_defaults(self):
+        with MockApi() as api, tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "request.json"
+            path.write_text(tool.encode({"shortcut": "key_risks", "allow_operations": True}))
+            self.assertEqual(api.run("consult", "--request-file", path, "--no-operations", "--no-wait")[0], 0)
+            self.assertIs(api.calls[-1][2]["allow_operations"], False)
+            self.assertEqual(api.run("consult", "--request-file", path, "--no-wait")[0], 0)
+            self.assertIs(api.calls[-1][2]["allow_operations"], True)
+            self.assertEqual(api.run("consult", "--shortcut", "key_risks", "--allow-operations", "--no-wait")[0], 0)
+            self.assertIs(api.calls[-1][2]["allow_operations"], True)
+            self.assertEqual(api.run("consult", "--question", "q", "--no-wait")[0], 0)
+            self.assertNotIn("allow_operations", api.calls[-1][2])
+            api.calls.clear()
+            for value in (None, 0, "true", {}, []):
+                path.write_text(tool.encode({"question": "q", "allow_operations": value}))
+                self.assertEqual(api.run("consult", "--request-file", path, "--clear-history")[0], 1)
+                self.assertEqual(api.calls, [], "Invalid permission accessed the API or cleared history")
+
     def test_plain_adviser_is_controlled_by_flags_or_request_file(self):
         with MockApi() as api, tempfile.TemporaryDirectory() as temporary:
             self.assertEqual(api.run("consult", "--question", "q", "--plain-advisor", "--no-wait")[0], 0)

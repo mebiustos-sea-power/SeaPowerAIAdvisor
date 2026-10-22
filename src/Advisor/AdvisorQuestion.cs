@@ -13,18 +13,22 @@ internal sealed class AdvisorQuestion
     internal IReadOnlyList<(int Id, string Name)> Units { get; }
     internal string DisplayBody => Units.Count == 0 ? DisplayText : draftText;
     internal bool IsShortcut { get; }
+    internal bool AllowOperations { get; }
     private readonly JObject? context;
     private readonly string draftText;
     internal bool HasContext => context != null;
     internal JObject? Context => context == null ? null : (JObject)context.DeepClone();
-    internal AdvisorQuestion(string text) : this(text, text, false) { }
+    internal AdvisorQuestion(string text, bool allowOperations = true) : this(text, text, false, allowOperations: allowOperations) { }
     internal AdvisorQuestion(string text, string caption, bool shortcut, JObject? context = null, string? draftText = null,
-        IEnumerable<(int Id, string Name)>? units = null)
+        IEnumerable<(int Id, string Name)>? units = null, bool allowOperations = true)
     {
-        Text = text; DisplayText = caption; IsShortcut = shortcut;
+        Text = text; DisplayText = caption; IsShortcut = shortcut; AllowOperations = allowOperations;
         this.context = context == null ? null : (JObject)context.DeepClone(); this.draftText = draftText ?? text;
         Units = Array.AsReadOnly((units ?? Array.Empty<(int, string)>()).ToArray());
     }
+
+    internal AdvisorQuestion WithOperations(bool allowed) => allowed == AllowOperations ? this :
+        new(Text, DisplayText, IsShortcut, context, draftText, Units, allowed);
 
     internal bool ConsumesDraft(string draft) => !IsShortcut && draft == draftText;
 }
@@ -47,11 +51,15 @@ internal sealed class AdvisorShortcut
     internal string LabelKey { get; }
     private string PromptKey { get; }
     private bool RequiresHistory { get; }
-    private AdvisorShortcut(string key, string prompt, bool history = false)
-    { LabelKey = key; PromptKey = prompt; RequiresHistory = history; }
+    internal bool AllowOperations { get; }
+    internal AdvisorShortcut(string key, string prompt, bool history = false, bool allowOperations = false)
+    { LabelKey = key; PromptKey = prompt; RequiresHistory = history; AllowOperations = allowOperations; }
+
+    internal static AdvisorShortcut? Find(string id) => new[] { NextSteps, KeyRisks, RadarOperations, OwnUnits, Contacts, MoreDetail }
+        .FirstOrDefault(shortcut => shortcut.PromptKey == id);
 
     internal bool IsAvailable(bool busy, int exchangeCount, int historyExchanges = AdvisorOptions.DefaultHistoryExchanges) =>
         !busy && (!RequiresHistory || (exchangeCount > 0 && historyExchanges > 0));
     internal AdvisorQuestion Prepare(string caption, AdvisorPrompts? prompts = null) =>
-        new((prompts ?? AdvisorPrompts.Current).Text("requests.json", PromptKey), caption, true);
+        new((prompts ?? AdvisorPrompts.Current).Text("requests.json", PromptKey), caption, true, allowOperations: AllowOperations);
 }

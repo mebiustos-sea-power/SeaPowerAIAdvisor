@@ -78,6 +78,13 @@ Choose exactly one of `--question TEXT`, `--question-file FILE`, `--shortcut ID`
 
 Omitting `--connection-id` uses the saved **developer default**, not the normal main assignment. Fallback defaults to **false**; use `--allow-fallback` to permit it explicitly or `--no-fallback` to override a request file. History is preserved unless `--clear-history` is supplied. Each `consult` starts one consultation; its internal provider requests remain controlled by the MOD.
 
+Use `--no-operations` to disable operation lookup/proposal tools for one consultation, or `--allow-operations` to permit them. Permission still requires WIP scheduling and retains approval; it never forces execution. With neither flag, the request file's `allow_operations` boolean applies if present, otherwise built-in advice/list shortcuts default to OFF and typed questions default to permission. An explicit flag overrides the file. Invalid file values are rejected before history clearing or API access. The accepted/result JSON records the resolved policy.
+
+```sh
+python3 tools/advisor_dev.py consult --shortcut key_risks --no-operations --no-fallback --output artifacts/prompt-tests/advice-only
+python3 tools/advisor_dev.py consult --question "Plan a sonobuoy screen" --allow-operations --no-fallback --output artifacts/prompt-tests/operation
+```
+
 Use `--model MODEL_ID` for a per-consultation model override after enabling **Allow connection model override** in the Local API settings. The selected connection supplies credentials and its other settings; neither its registered model nor the normal/default connection selections change. The option requires an allowed connection, leaves an allowed fallback's model unchanged, and never enables fallback itself. Omitting it uses the saved model. `--model` overrides a request file's `model` value; that field is also accepted directly in JSON. `discover` and `connections` report `allow_model_override` without credentials.
 
 ```sh

@@ -79,6 +79,14 @@ The selected connection's credentials, endpoint and other settings are reused in
 
 With the default, a selected-connection failure ends the consultation. When explicitly allowed, fallback uses the saved sub connection only if it is also permitted for the local API and differs from the selected connection. The saved main/sub assignments remain unchanged. UI-initiated consultations keep their normal fallback behavior. The accepted response and retained result include the effective `allow_fallback` value. A custom consultation backend that cannot honor a no-fallback policy is rejected before execution.
 
+`allow_operations` is an optional boolean for that consultation. Omit it to follow the request's default: built-in advice/list shortcuts disable operations, while typed questions permit them. Set it explicitly to override that request's choice:
+
+```json
+{"shortcut":"key_risks","allow_operations":false,"allow_fallback":false}
+```
+
+`false` withholds all operation lookup/proposal tools and the host operation service from standard, legacy and independent backends. Situation retrieval and written advice remain available. `true` permits operation tools only when WIP scheduling and the game source allow them; it does not force a command or bypass approval. The accepted response and retained result report the resolved `allow_operations` policy, which is preserved on retry and fallback and is not saved as a global preference. Null/non-boolean values return HTTP 400 `invalid_operation_policy` before execution. Existing direct developer operation/reservation endpoints retain their separate WIP rules.
+
 `plain_advisor` is an optional boolean, default **false**. Set it to true to use **Michael Reed with empty personality/tone and empty user-configured Common instructions for this consultation only**:
 
 ```json

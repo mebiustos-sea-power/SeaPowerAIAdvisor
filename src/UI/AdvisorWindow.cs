@@ -168,7 +168,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         questionInput.Reset();
         try
         {
-            StartConsultation(new AdvisorQuestion(AdvisorPrompts.Current.Text("requests.json", promptKey), caption, true, context));
+            StartConsultation(new AdvisorQuestion(AdvisorPrompts.Current.Text("requests.json", promptKey), caption, true, context, allowOperations: false));
         }
         catch (AdvisorPromptException error)
         {
@@ -340,20 +340,14 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         ["proposal_review_open"] = operationReview.IsOpen, ["busy"] = active != null, ["settings_open"] = conversationPane.Visibility != Visibility.Visible,
         ["advisor_name"] = DisplayName, ["answered_exchanges"] = conversation.Exchanges.Count
     };
-    AdvisorLocalRun IAdvisorLocalTarget.LocalConsult(string? message, string? shortcut, bool allowFallback, AdvisorBackendSetup execution, bool plainAdvisor)
+    AdvisorLocalRun IAdvisorLocalTarget.LocalConsult(string? message, string? shortcut, bool allowFallback, AdvisorBackendSetup execution, bool plainAdvisor, bool? allowOperations)
     {
         RequireLocalReady();
         if (QuestionInputController.IsComposing) throw new AdvisorLocalApiException(409, "input_composing");
         AdvisorQuestion request;
         if (shortcut != null)
         {
-            var preset = shortcut switch
-            {
-                "next_steps" => AdvisorShortcut.NextSteps, "key_risks" => AdvisorShortcut.KeyRisks,
-                "radar_operations" => AdvisorShortcut.RadarOperations,
-                "own_units" => AdvisorShortcut.OwnUnits, "contacts" => AdvisorShortcut.Contacts,
-                "more_detail" => AdvisorShortcut.MoreDetail, _ => throw new AdvisorLocalApiException(400, "unknown_shortcut")
-            };
+            var preset = AdvisorShortcut.Find(shortcut) ?? throw new AdvisorLocalApiException(400, "unknown_shortcut");
             if (!preset.IsAvailable(false, conversation.Exchanges.Count, options.Current.HistoryExchanges))
                 throw new AdvisorLocalApiException(409, "shortcut_unavailable");
             request = preset.Prepare(text[preset.LabelKey]);
@@ -363,7 +357,8 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
             if (!AdvisorConversation.Validate(message, out var error)) throw new AdvisorLocalApiException(400, error);
             request = new AdvisorQuestion(message!);
         }
-        var run = new AdvisorLocalRun(allowFallback, plainAdvisor);
+        if (allowOperations.HasValue) request = request.WithOperations(allowOperations.Value);
+        var run = new AdvisorLocalRun(allowFallback, plainAdvisor, request.AllowOperations);
         guard(() => { if (!IsOpen) Toggle(); StartConsultation(request, recording: run, prepared: execution); });
         if (!run.Attached) throw new AdvisorLocalApiException(409, "advisor_unavailable");
         return run;
@@ -438,7 +433,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
             var operationReferences = session is IAdvisorOperationReferenceSource operationSource
                 ? operationSource.OperationReferences : new AdvisorOperationReferences(turn.UnitReferences);
             if (recording != null) session = recording.Observe(session);
-            var operationSession = (source as IAdvisorOperationSource)?.CreateOperations(turn.OperationId, session.Prompts, operationReferences);
+            var operationSession = AdvisorConsultation.CreateOperations(request, source, turn.OperationId, session.Prompts, operationReferences);
             if (recording != null && operationSession != null) operationSession = recording.Observe(operationSession);
             var historyLimit = options.Current.HistoryExchanges;
             pendingTurn = turn;

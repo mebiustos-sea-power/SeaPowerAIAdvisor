@@ -7,6 +7,11 @@ namespace SeaPowerAIAdvisor;
 // Owns consultation lifecycle and outcomes; retrieval strategy and API round trips belong to the selected backend.
 internal static class AdvisorConsultation
 {
+    // Operation access belongs to the accepted request, before any standard or independent backend is opened.
+    internal static IAdvisorOperationSession? CreateOperations(AdvisorQuestion question, IAdvisorSource source, string owner,
+        AdvisorPrompts prompts, AdvisorOperationReferences references) => question.AllowOperations
+            ? (source as IAdvisorOperationSource)?.CreateOperations(owner, prompts, references) : null;
+
     internal static async Task<AdviceResult> RunAsync(AdvisorBackendSetup setup, AdvisorContext context,
         string logDirectory, AdvisorQuestion question, CancellationToken cancellation)
     {

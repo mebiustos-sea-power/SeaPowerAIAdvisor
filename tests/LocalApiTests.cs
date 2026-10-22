@@ -107,6 +107,31 @@ internal static partial class LocalApiTests
                 target.Turn!.AdvisorName == "Michael", "A plain request changed the following request's default mode");
             api.Disable();
         });
+        check("Developer operation permission validates booleans, follows shortcut defaults and remains local to one accepted question", () =>
+        {
+            var target = new Target(); var api = Api(); api.Attach(new object(), "tactical_battle", () => target); api.Enable();
+            foreach (var value in new JToken[] { JValue.CreateNull(), new JValue("true"), new JValue(0), new JObject(), new JArray() })
+            {
+                var invalid = Send(api, "POST", "/v1/consultations", new JObject { ["question"] = "Question", ["allow_operations"] = value });
+                Require(invalid.Status == 400 && (string?)invalid.Data["error"] == "invalid_operation_policy" && !target.Called,
+                    "Malformed permission reached consultation execution");
+            }
+            foreach (var (body, allowed) in new[] {
+                (new JObject { ["shortcut"] = "key_risks" }, false),
+                (new JObject { ["shortcut"] = "key_risks", ["allow_operations"] = true }, true),
+                (new JObject { ["question"] = "Manual question", ["allow_operations"] = false }, false),
+                (new JObject { ["question"] = "Manual question" }, true),
+                (new JObject { ["shortcut"] = "key_risks" }, false) })
+            {
+                var accepted = Send(api, "POST", "/v1/consultations", body);
+                Require(accepted.Status == 202 && (bool?)accepted.Data["allow_operations"] == allowed && target.Turn!.Request.AllowOperations == allowed,
+                    "Permission override leaked or the shortcut default was not applied");
+                var id = (string)accepted.Data["id"]!; Send(api, "POST", "/v1/consultations/cancel");
+                Require((bool?)Send(api, "GET", "/v1/consultations/" + id).Data["allow_operations"] == allowed,
+                    "Retained diagnostics lost the accepted permission");
+            }
+            api.Disable();
+        });
         check("Local prompt patches merge atomically, preserve consultation snapshots and reset without writing files", () =>
         {
             var original = AdvisorPrompts.Load(AdvisorPrompts.DefaultDirectory); var overrides = new AdvisorPromptOverrides(original);
@@ -164,12 +189,15 @@ internal static partial class LocalApiTests
         internal AdvisorLocalRun? Run;
         internal AdvisorTurn? Turn;
         public JObject LocalStatus() => new() { ["busy"] = Busy, ["settings_open"] = Editing };
-        public AdvisorLocalRun LocalConsult(string? question, string? shortcut, bool allowFallback, AdvisorBackendSetup execution, bool plainAdvisor)
+        public AdvisorLocalRun LocalConsult(string? question, string? shortcut, bool allowFallback, AdvisorBackendSetup execution, bool plainAdvisor, bool? allowOperations)
         {
             if (Busy) throw new AdvisorLocalApiException(409, "consultation_in_progress");
             Called = Busy = true; Thread = Environment.CurrentManagedThreadId; Shortcut = shortcut;
-            Turn = new AdvisorTurn(new AdvisorQuestion(question ?? shortcut!), 0, plainAdvisor ? AdvisorProfile.DefaultName : "Michael", "default");
-            Run = new AdvisorLocalRun(allowFallback, plainAdvisor); Run.Attach(Turn); return Run;
+            var request = shortcut == null ? new AdvisorQuestion(question!) :
+                (AdvisorShortcut.Find(shortcut) ?? throw new AdvisorLocalApiException(400, "unknown_shortcut")).Prepare(shortcut);
+            if (allowOperations.HasValue) request = request.WithOperations(allowOperations.Value);
+            Turn = new AdvisorTurn(request, 0, plainAdvisor ? AdvisorProfile.DefaultName : "Michael", "default");
+            Run = new AdvisorLocalRun(allowFallback, plainAdvisor, request.AllowOperations); Run.Attach(Turn); return Run;
         }
         public void LocalClear() { if (Busy) throw new AdvisorLocalApiException(409, "consultation_in_progress"); Cleared = true; }
         public void LocalCancel() { Turn!.Cancel(); Run!.Finish(); Busy = false; }

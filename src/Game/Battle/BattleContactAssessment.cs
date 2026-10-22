@@ -29,7 +29,7 @@ internal sealed class BattleContactAssessment
         context["assumed_affiliation"] = affiliation;
         var track = (int)(context["track_number"] ?? throw new InvalidOperationException("The assessment track number is missing."));
         return new AdvisorQuestion((prompts ?? AdvisorPrompts.Current).Format("requests.json", "contact_reassessment", track, affiliation),
-            caption, true, context);
+            caption, true, context, allowOperations: false);
     }
     internal JObject Focus { get; }
     internal JArray Candidates { get; }

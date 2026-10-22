@@ -84,7 +84,7 @@ internal static class ReservationTests
     {
         internal bool Busy, Editing;
         public JObject LocalStatus() => new() { ["busy"] = Busy, ["settings_open"] = Editing };
-        public AdvisorLocalRun LocalConsult(string? question, string? shortcut, bool fallback, AdvisorBackendSetup execution, bool plain) => throw new InvalidOperationException("Unexpected consultation");
+        public AdvisorLocalRun LocalConsult(string? question, string? shortcut, bool fallback, AdvisorBackendSetup execution, bool plain, bool? allowOperations) => throw new InvalidOperationException("Unexpected consultation");
         public void LocalClear() => throw new InvalidOperationException("Unexpected history clear");
         public void LocalCancel() => throw new InvalidOperationException("Unexpected cancellation");
     }

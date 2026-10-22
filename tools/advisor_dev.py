@@ -186,7 +186,7 @@ def consultation_request(args):
         body = {"question": args.question}
     else:
         body = {"shortcut": args.shortcut}
-    if set(body) - {"question", "shortcut", "connection_id", "allow_fallback", "plain_advisor", "model", "situation_delivery"}:
+    if set(body) - {"question", "shortcut", "connection_id", "allow_fallback", "plain_advisor", "model", "situation_delivery", "allow_operations"}:
         raise ToolError("Unsupported consultation request field.")
     if ("question" in body) == ("shortcut" in body):
         raise ToolError("Specify exactly one question or shortcut.")
@@ -210,6 +210,10 @@ def consultation_request(args):
         body["plain_advisor"] = args.plain_advisor
     if "plain_advisor" in body and type(body["plain_advisor"]) is not bool:
         raise ToolError("plain_advisor must be a boolean.")
+    if args.allow_operations is not None:
+        body["allow_operations"] = args.allow_operations
+    if "allow_operations" in body and type(body["allow_operations"]) is not bool:
+        raise ToolError("allow_operations must be a boolean.")
     body.setdefault("allow_fallback", False)
     if type(body["allow_fallback"]) is not bool:
         raise ToolError("allow_fallback must be a boolean.")
@@ -380,6 +384,10 @@ def parser():
     request.set_defaults(allow_fallback=None)
     request.add_argument("--plain-advisor", action=argparse.BooleanOptionalAction, default=None,
                          help="Use Michael Reed with empty personality and shared user instructions for this consultation.")
+    operation_policy = request.add_mutually_exclusive_group()
+    operation_policy.add_argument("--allow-operations", dest="allow_operations", action="store_true", help="Permit operation tools; WIP and approval still apply.")
+    operation_policy.add_argument("--no-operations", dest="allow_operations", action="store_false", help="Disable operation tools for this consultation.")
+    request.set_defaults(allow_operations=None)
     request.add_argument("--clear-history", action="store_true", help="Explicitly clear conversation before this consultation.")
     request.add_argument("--no-wait", action="store_true", help="Return the accepted ID immediately.")
     request.add_argument("--output", help="New result directory; an existing directory is rejected before API access.")
