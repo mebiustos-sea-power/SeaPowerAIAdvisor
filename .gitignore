@@ -5,6 +5,7 @@ dist/
 Directory.Build.local.props
 docs/agent-memory.md
 **/gemini.json
+**/api-settings.json
 **/profile.json
 **/portrait.png
 **/logs/

@@ -158,6 +158,16 @@ internal sealed class AdvisorOperations
         return string.Join("\n\n", proposal.Orders.GroupBy(o => o.OperationId)
             .Select(group => Operation(group.Key).DescribeProposal(group.ToArray(), language)));
     }
+    internal AdvisorMapPreview PreviewProposal(AdvisorOperationProposal proposal, string language)
+    {
+        CheckThread(); RequireCurrent(proposal);
+        if (proposal.State != AdvisorProposalState.Pending || !Enabled) return AdvisorMapPreview.Empty;
+        var previews = proposal.Orders.GroupBy(o => o.OperationId)
+            .Select(group => Operation(group.Key) is IAdvisorOperationPreview operation
+                ? operation.Preview(group.ToArray(), language) : AdvisorMapPreview.Empty).ToArray();
+        return new AdvisorMapPreview(previews.SelectMany(preview => preview.Drawings),
+            previews.FirstOrDefault(preview => preview.Center.HasValue)?.Center);
+    }
     internal void Approve(AdvisorOperationProposal proposal)
     {
         CheckThread(); RequireCurrent(proposal);

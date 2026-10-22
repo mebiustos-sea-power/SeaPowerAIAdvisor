@@ -12,14 +12,14 @@ Enable the MOD's full AI communication logging, complete a consultation, then ru
 
 ```sh
 python3 tools/measure_tokens.py capture /path/to/ai-communication.jsonl --output artifacts/token-measurements/before --label "Before"
-python3 tools/measure_tokens.py measure artifacts/token-measurements/before --settings /path/to/gemini.json
+python3 tools/measure_tokens.py measure artifacts/token-measurements/before --settings /path/to/api-settings.json
 ```
 
 Repeat with a different output directory after testing another version:
 
 ```sh
 python3 tools/measure_tokens.py capture /path/to/ai-communication.jsonl --output artifacts/token-measurements/after --label "After"
-python3 tools/measure_tokens.py measure artifacts/token-measurements/after --settings /path/to/gemini.json
+python3 tools/measure_tokens.py measure artifacts/token-measurements/after --settings /path/to/api-settings.json
 python3 tools/measure_tokens.py compare artifacts/token-measurements/before artifacts/token-measurements/after
 ```
 

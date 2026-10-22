@@ -20,7 +20,7 @@ Every request must include `X-Advisor-Developer: 1`. Send JSON bodies with `Cont
 
 ## Temp discovery file
 
-While the local API is enabled and listening, `%TEMP%\SeaPowerAIAdvisor\developer-api.json` contains the endpoint, game `process_id`, `default_connection_id` and the same allowed `connections` metadata as `/v1/connections`. Connection settings and credentials are not included. Read this file to discover choices without making an API request.
+While the local API is enabled and listening, `%TEMP%\SeaPowerAIAdvisor\developer-api.json` contains the endpoint, game `process_id`, `default_connection_id`, `allow_model_override` and the same allowed `connections` metadata as `/v1/connections`. Connection settings and credentials are not included. Read this file to discover choices without making an API request.
 
 The file is written at startup and after saved option/connection changes, and removed when the local API is disabled or the game exits normally. An abnormal exit can leave it behind; check the recorded process ID before using it. Unchecking or deleting the developer default leaves it unselected rather than choosing another connection automatically.
 
@@ -59,7 +59,17 @@ Question bodies specify exactly one of `question` and `shortcut`:
 {"shortcut":"key_risks","connection_id":"api-example","allow_fallback":false}
 ```
 
-An unset or deleted default returns HTTP 409 (`default_connection_missing`). An unavailable or unapproved connection returns HTTP 403 (`connection_not_allowed`). Developer selections do not rewrite the normal main/sub assignments. The accepted response includes the selected `connection_id` and `connection_name`.
+An unset or deleted default returns HTTP 409 (`default_connection_missing`). An unavailable or unapproved connection returns HTTP 403 (`connection_not_allowed`). Developer selections do not rewrite the normal main/sub assignments. The accepted response includes the selected `connection_id`, `connection_name` and effective `model`.
+
+To use another model for one consultation, save **Allow connection model override** (Japanese: **接続モデルの上書き許可**) in the Local API tab, then supply `model`:
+
+```json
+{"question":"Assess the current risks.","connection_id":"api-example","model":"vendor/another-model","allow_fallback":false}
+```
+
+The permission defaults to **off**, including existing installations. A supplied model without permission returns HTTP 403 (`model_override_not_allowed`). A non-string, empty, over-200-character or control-character model returns HTTP 400 (`invalid_model`); provider validation still applies. Providers must declare a non-secret `model` setting, otherwise the override returns HTTP 400 (`model_override_unavailable`). This does not add a new extension contract or change independent consultation workflows.
+
+The selected connection's credentials, endpoint and other settings are reused in a detached consultation draft. Saved connection fields and main/sub/default selections stay unchanged; omitting `model` uses the registered model on the next request. Progress, diagnostic logs and results identify the model actually used. The override applies only to the selected connection: an explicitly allowed fallback keeps its registered model. Read `allow_model_override` from `/v1/connections` or the Temp discovery file before a model comparison.
 
 `allow_fallback` is optional and **defaults to false** for local-API consultations. The host does not open or use the sub connection unless you explicitly permit it on that request:
 

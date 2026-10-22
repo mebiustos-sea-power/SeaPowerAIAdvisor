@@ -30,7 +30,13 @@ internal static class OperationApprovalTests
             requests[0]["arguments"]!["latitude"] = -80;
             proposal.Orders[0].Arguments["latitude"] = 80;
             unit.Depth = "below_layer";
+            var preview = service.PreviewProposal(proposal, "en");
+            Require(preview.Drawings.Count == 12 && preview.Drawings.All(point => point.Kind == AdvisorMapDrawingKind.Point && point.Label.StartsWith("Hobby 1 · ", StringComparison.Ordinal)),
+                "The sonobuoy preview lost accepted drops or their target labels");
             service.Approve(proposal); service.Approve(proposal);
+            Require(preview.Drawings.Select(point => point.Coordinates[0].Latitude).SequenceEqual(unit.Latitudes) &&
+                preview.Drawings.All(point => point.Coordinates[0].Longitude == 127.5),
+                "The approval preview differed from the registered coordinates or used caller-mutated arguments");
             Require(proposal.State == AdvisorProposalState.Registered && proposal.RegisteredCount == 12 && unit.Queue.Count == 13 &&
                 unit.Queue[0] == "player waypoint" && unit.Latitudes.SequenceEqual(Enumerable.Range(0, 12).Select(i => 26.5 + i * .001)) &&
                 unit.Depths.All(depth => depth == "below_layer"), "Approval lost order, repeated a task, cleared the player route or overwrote depth");

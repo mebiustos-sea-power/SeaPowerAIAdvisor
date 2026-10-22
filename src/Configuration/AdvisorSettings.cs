@@ -24,7 +24,32 @@ internal sealed class AdvisorSettings
     internal int MaxOutputTokens { get; }
     internal bool LogAiJson { get; }
     internal static int Revision { get; private set; }
-    internal static string PathIn(string gameDataPath) => Path.Combine(gameDataPath, "SeaPowerAIAdvisor", "gemini.json");
+    internal static string PathIn(string gameDataPath) => Path.Combine(gameDataPath, "SeaPowerAIAdvisor", "api-settings.json");
+
+    // Rename once before normal startup reads. Move never overwrites an existing destination.
+    internal static string MigrateFileName(string gameDataPath)
+    {
+        var path = PathIn(gameDataPath);
+        static bool Exists(string candidate)
+        {
+            try
+            {
+                if ((File.GetAttributes(candidate) & FileAttributes.Directory) != 0) throw new IOException();
+                return true;
+            }
+            catch (FileNotFoundException) { return false; }
+            catch (DirectoryNotFoundException) { return false; }
+        }
+        try
+        {
+            if (Exists(path)) return path;
+            var legacy = Path.Combine(gameDataPath, "SeaPowerAIAdvisor", "gemini.json");
+            if (Exists(legacy)) File.Move(legacy, path);
+            return path;
+        }
+        catch (IOException) { throw new AdvisorConnectionException("settings_migration_failed"); }
+        catch (UnauthorizedAccessException) { throw new AdvisorConnectionException("settings_migration_failed"); }
+    }
 
     private AdvisorSettings(string key, string model, int requestTimeout, int outputTokens, bool logAiJson,
         string fallbackKey = "", string fallbackModel = "", bool isFallbackKey = false, int? fallbackRequestTimeout = null)

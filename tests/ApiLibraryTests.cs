@@ -14,6 +14,50 @@ internal static class ApiLibraryTests
     private const string SubKey = "mock_library_sub_no_network";
     internal static void Run(Action<string, Action> check)
     {
+        check("Startup renames old settings byte-for-byte, preserves formats and leaves new installations unwritten", () => InTemp(directory =>
+        {
+            var current = AdvisorSettings.MigrateFileName(directory);
+            Require(!Directory.Exists(Path.GetDirectoryName(current)!) && !File.Exists(current), "Startup created empty settings for a new installation");
+            var registered = new JObject { ["schema_version"] = 2,
+                ["api_configurations"] = new JArray(new JObject { ["id"] = "kept", ["name"] = "Registered 日本語", ["api_key"] = MainKey, ["model"] = "gemini-main" }),
+                ["main_api_id"] = "kept", ["sub_api_id"] = JValue.CreateNull(), ["max_output_tokens"] = 2048, ["log_ai_json"] = true };
+            var modern = JObject.Parse(Encoding.UTF8.GetString(new AdvisorSettingsDraft(Legacy()).Data()));
+            foreach (var pair in new[] { Legacy(), registered, modern })
+            {
+                var dataPath = Path.Combine(directory, Guid.NewGuid().ToString("N"));
+                var destination = AdvisorSettings.PathIn(dataPath); Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                var legacy = Path.Combine(Path.GetDirectoryName(destination)!, "gemini.json");
+                var before = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(pair.ToString())).ToArray();
+                File.WriteAllBytes(legacy, before);
+                var path = AdvisorSettings.MigrateFileName(dataPath);
+                Require(path == destination && !File.Exists(legacy) && File.ReadAllBytes(path).SequenceEqual(before),
+                    "Filename migration transformed, duplicated or lost the existing settings");
+                var saved = AdvisorSettings.Edit(path);
+                Require(saved.Main.ApiKey == MainKey && saved.Options.MaxOutputTokens == 2048 && saved.LogAiJson,
+                    "Renaming lost the registered connection, output budget or logging preference");
+                Require(AdvisorSettings.MigrateFileName(dataPath) == path && File.ReadAllBytes(path).SequenceEqual(before), "Repeated startup rewrote the migrated settings");
+                new AdvisorApiSettingsStore(path, () => "API {0}").SaveLogging(false);
+                Require(!File.Exists(legacy) && !AdvisorSettings.Edit(path).LogAiJson, "Saving after migration wrote back to the retired filename");
+            }
+        }));
+        check("Existing new settings win and migration failures preserve the old file without silently resetting it", () => InTemp(directory =>
+        {
+            var current = AdvisorSettings.PathIn(directory); Directory.CreateDirectory(Path.GetDirectoryName(current)!);
+            var legacy = Path.Combine(Path.GetDirectoryName(current)!, "gemini.json");
+            var original = Encoding.UTF8.GetBytes(Legacy().ToString()); File.WriteAllBytes(legacy, original);
+            var newer = Legacy(); newer["api_key"] = "mock_preferred_new_settings"; File.WriteAllText(current, newer.ToString());
+            Require(AdvisorSettings.MigrateFileName(directory) == current && AdvisorSettings.Load(current).ApiKey == "mock_preferred_new_settings" &&
+                File.ReadAllBytes(legacy).SequenceEqual(original), "Migration overwrote the new file or removed the old file when both existed");
+            File.WriteAllText(current, "broken new settings");
+            Require(AdvisorSettings.MigrateFileName(directory) == current, "A broken new file selected the old filename");
+            Throws("settings_invalid", () => AdvisorSettings.Edit(current));
+            File.Delete(current); Directory.CreateDirectory(current);
+            Throws("settings_migration_failed", () => AdvisorSettings.MigrateFileName(directory));
+            Require(File.ReadAllBytes(legacy).SequenceEqual(original), "A blocked migration deleted or rewrote the old file");
+            Directory.Delete(current); File.Delete(legacy); Directory.CreateDirectory(legacy);
+            Throws("settings_migration_failed", () => AdvisorSettings.MigrateFileName(directory));
+            Require(!File.Exists(current), "An invalid old settings path was silently replaced with empty new settings");
+        }));
         check("Legacy API migration preserves both connections and advanced settings without writing until accepted", () => InTemp(directory =>
         {
             var path = Path.Combine(directory, "gemini.json");

@@ -173,6 +173,25 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(api.run("consult", "--shortcut", shortcut, "--no-wait")[0], 0)
                 self.assertEqual(api.calls[-1][2], {"shortcut": shortcut, "allow_fallback": False})
 
+    def test_model_override_uses_flags_or_files_without_leaking_to_later_requests(self):
+        with MockApi() as api, tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "request.json"
+            path.write_text(tool.encode({"question": "q", "connection_id": "nano", "model": "vendor/file-model"}))
+            self.assertEqual(api.run("consult", "--request-file", path, "--model", "vendor/flag-model", "--no-wait")[0], 0)
+            self.assertEqual(api.calls[-1][2], {"question": "q", "connection_id": "nano", "model": "vendor/flag-model", "allow_fallback": False})
+            self.assertEqual(api.run("consult", "--request-file", path, "--no-wait")[0], 0)
+            self.assertEqual(api.calls[-1][2]["model"], "vendor/file-model")
+            self.assertEqual(api.run("consult", "--question", "q", "--no-wait")[0], 0)
+            self.assertNotIn("model", api.calls[-1][2])
+            api.calls.clear()
+            for model in (None, False, 12, [], "", "   ", "bad\nmodel", "x" * 201):
+                path.write_text(tool.encode({"question": "q", "model": model}))
+                self.assertEqual(api.run("consult", "--request-file", path, "--clear-history")[0], 1)
+                self.assertEqual(api.calls, [], "Invalid models reached the API or cleared history")
+            api.fail_post = (403, {"error": "model_override_not_allowed"})
+            self.assertEqual(api.run("consult", "--question", "q", "--model", "vendor/test", "--no-wait")[0], 1)
+            self.assertEqual(len([c for c in api.calls if c[:2] == ("POST", "/v1/consultations")]), 1)
+
     def test_plain_adviser_is_controlled_by_flags_or_request_file(self):
         with MockApi() as api, tempfile.TemporaryDirectory() as temporary:
             self.assertEqual(api.run("consult", "--question", "q", "--plain-advisor", "--no-wait")[0], 0)

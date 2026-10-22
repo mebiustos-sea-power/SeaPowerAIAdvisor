@@ -146,7 +146,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
                 RefreshConfigurationNotice(); ShowConversation(false);
             }, ReturnToConversation, warn);
         operationReview = new AdvisorOperationReview(content, conversationPane, () => OperationService,
-            () => text, guard, () => ShowConversation(false));
+            () => text, guard, () => ShowConversation(false), map);
         Named<Button>(content, "Settings").Click += (_, _) => guard(settings.Open);
         try
         {
@@ -192,8 +192,9 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
 
     internal void Tick()
     {
-        if (!IsOpen) { CancelActive(); questionInput.Reset(); typing.Release(); ReleasePortrait(); return; }
+        if (!IsOpen) { operationReview.Close(); CancelActive(); questionInput.Reset(); typing.Release(); ReleasePortrait(); return; }
         settings.Tick();
+        operationReview.Tick();
         UpdateUnitInsertion();
         questionInput.Tick();
         CompleteActive();

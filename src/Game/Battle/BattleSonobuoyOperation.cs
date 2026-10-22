@@ -29,7 +29,7 @@ internal sealed class BattleSonobuoyAmmo
 }
 
 // One native compound reservation handles both travel and release. It never waits for deployment.
-internal sealed class BattleSonobuoyOperation : IAdvisorOperation
+internal sealed class BattleSonobuoyOperation : IAdvisorOperation, IAdvisorOperationPreview
 {
     internal const string OperationId = "seapower.schedule_sonobuoy_drop";
     private readonly Func<IReadOnlyList<IBattleSonobuoyUnit>> units;
@@ -105,6 +105,21 @@ internal sealed class BattleSonobuoyOperation : IAdvisorOperation
                     ((double)args["longitude"]!).ToString("F5", CultureInfo.InvariantCulture);
             }));
         }));
+    }
+    public AdvisorMapPreview Preview(IReadOnlyList<AdvisorOperationOrder> orders, string language)
+    {
+        var current = units();
+        var points = orders.GroupBy(order => order.Target).SelectMany(group =>
+        {
+            var unit = current.FirstOrDefault(unit => "unit:" + unit.Id.ToString(CultureInfo.InvariantCulture) == group.Key);
+            return group.Select((order, index) =>
+            {
+                var arguments = order.Arguments;
+                return AdvisorMapDrawing.Point(new AdvisorMapCoordinate((double)arguments["latitude"]!, (double)arguments["longitude"]!),
+                    (unit?.Name ?? group.Key) + " · " + (index + 1).ToString(CultureInfo.InvariantCulture));
+            });
+        }).ToArray();
+        return new AdvisorMapPreview(points, points.Length == 0 ? null : points[0].Coordinates[0]);
     }
     private (IBattleSonobuoyUnit Unit, string Ammunition, double Latitude, double Longitude) Read(string target, JObject arguments)
     {

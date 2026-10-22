@@ -389,6 +389,7 @@
               <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel>
                   <CheckBox x:Name="EnableLocalApi" Content="{DynamicResource Advisor.developer.local_api}" Margin="0,0,0,8" />
+                  <CheckBox x:Name="AllowLocalApiModelOverride" Content="{DynamicResource Advisor.developer.local_api_model_override}" Margin="0,0,0,8" />
                   <TextBlock x:Name="LocalApiStatus" FontSize="12" TextWrapping="Wrap" />
                   <TextBlock Text="{DynamicResource Advisor.developer.local_api_connections}" FontWeight="Bold" Margin="0,16,0,6" />
                   <StackPanel x:Name="LocalApiConnections" />

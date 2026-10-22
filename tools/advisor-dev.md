@@ -78,6 +78,12 @@ Choose exactly one of `--question TEXT`, `--question-file FILE`, `--shortcut ID`
 
 Omitting `--connection-id` uses the saved **developer default**, not the normal main assignment. Fallback defaults to **false**; use `--allow-fallback` to permit it explicitly or `--no-fallback` to override a request file. History is preserved unless `--clear-history` is supplied. Each `consult` starts one consultation; its internal provider requests remain controlled by the MOD.
 
+Use `--model MODEL_ID` for a per-consultation model override after enabling **Allow connection model override** in the Local API settings. The selected connection supplies credentials and its other settings; neither its registered model nor the normal/default connection selections change. The option requires an allowed connection, leaves an allowed fallback's model unchanged, and never enables fallback itself. Omitting it uses the saved model. `--model` overrides a request file's `model` value; that field is also accepted directly in JSON. `discover` and `connections` report `allow_model_override` without credentials.
+
+```sh
+python3 tools/advisor_dev.py --quiet consult --shortcut key_risks --connection-id api-example --model vendor/another-model --no-fallback --clear-history --output artifacts/model-tests/another-01
+```
+
 A request file can specify the full current consultation body:
 
 ```json

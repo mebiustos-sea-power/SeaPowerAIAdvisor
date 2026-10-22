@@ -10,17 +10,19 @@ internal sealed class AdvisorLocalConnectionsView
 {
     private readonly StackPanel host;
     private readonly ComboBox defaultConnection;
+    private readonly CheckBox modelOverride;
     private readonly Func<AdvisorText> text;
     private readonly Action<Action> guard;
     private readonly List<(string Id, string Name, CheckBox Box)> choices = new();
     private string[] defaultIds = Array.Empty<string>();
-    internal AdvisorLocalConnectionsView(StackPanel host, ComboBox defaultConnection, Func<AdvisorText> text, Action<Action> guard)
-    { this.host = host; this.defaultConnection = defaultConnection; this.text = text; this.guard = guard; }
+    internal AdvisorLocalConnectionsView(StackPanel host, ComboBox defaultConnection, CheckBox modelOverride, Func<AdvisorText> text, Action<Action> guard)
+    { this.host = host; this.defaultConnection = defaultConnection; this.modelOverride = modelOverride; this.text = text; this.guard = guard; }
     private string? SelectedDefaultId => defaultConnection.SelectedIndex <= 0 ? null : defaultIds[defaultConnection.SelectedIndex - 1];
     internal AdvisorLocalConnections Value => new(choices.Where(c => c.Box.IsChecked == true).Select(c => c.Id),
-        SelectedDefaultId);
+        SelectedDefaultId, modelOverride.IsChecked == true);
     internal void Open(AdvisorLocalConnections saved, AdvisorSettingsDraft settings)
     {
+        modelOverride.IsChecked = saved.AllowModelOverride;
         host.Children.Clear(); choices.Clear();
         foreach (var entry in settings.Configurations)
         {

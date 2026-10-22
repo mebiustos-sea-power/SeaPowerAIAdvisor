@@ -36,6 +36,8 @@ internal abstract class AdvisorService
         throw new InvalidOperationException("This provider uses the standard engine.");
     internal abstract IReadOnlyList<AdvisorConnectionField> Fields { get; }
     internal JObject Defaults() => new(Fields.Select(f => new JProperty(f.Key, f.DefaultValue)));
+    // Providers can add missing fields from shared legacy defaults without rewriting saved settings.
+    internal virtual JObject EditSettings(JObject settings, AdvisorConnectionOptions defaults) => (JObject)settings.DeepClone();
     internal abstract void Validate(JObject settings);
     internal abstract IAdvisorProvider Open(AdvisorApiConfiguration configuration, AdvisorConnectionOptions options,
         bool fallback, AdvisorHttpTransport transport);
@@ -83,7 +85,7 @@ internal sealed class AdvisorServiceCatalog
     internal AdvisorService Require(string id) => Find(id) ?? throw new AdvisorConnectionException("provider_unavailable");
 }
 
-// Existing file name remains stable; provider-specific values live inside each registered entry.
+// Shared defaults remain separate from each registered provider's settings.
 internal sealed class AdvisorConnectionOptions
 {
     internal int RequestTimeoutSeconds { get; }

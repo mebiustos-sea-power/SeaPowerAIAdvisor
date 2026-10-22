@@ -186,7 +186,7 @@ internal static class OperationTests
         {
             var enabled = true; var unit = new Unit(); var operations = Service(() => enabled, unit);
             var api = new AdvisorLocalApi(() => throw new InvalidOperationException("Prompt access"), e => throw e,
-                () => throw new InvalidOperationException("Connection access"), (_, _) => throw new InvalidOperationException("AI preparation"));
+                () => throw new InvalidOperationException("Connection access"), (_, _, _) => throw new InvalidOperationException("AI preparation"));
             var owner = new object();
             api.Attach(owner, "tactical_battle", () => throw new InvalidOperationException("Conversation access"), operations); api.Enable();
             var candidates = Send(api, "GET", "/v1/operations/" + BattleSonobuoyOperation.OperationId + "/candidates");

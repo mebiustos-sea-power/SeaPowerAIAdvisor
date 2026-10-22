@@ -51,11 +51,15 @@ For an unidentified contact, open its information window and use **[adviser name
 | Gemini | API key, Gemini model ID | `gemini-3.5-flash-lite` |
 | Ollama | Server URL, installed model, context length | `qwen3:8b` |
 | OpenRouter | API key, model ID in `provider/model` form | `google/gemini-3.5-flash-lite` |
-| NanoGPT | API key, subscription-included model ID | `z-ai/glm-5.3` |
+| NanoGPT | API key, subscription-included model ID, output token limit | `z-ai/glm-5.3` |
 
 Choose a model that supports **tool calling**. These are examples, not a guarantee that every model will interpret the supplied data correctly. OpenRouter and NanoGPT connection tests check a tool-call/result round trip as well as the final response.
 
 Future prompt tuning and evaluation of adviser responses will primarily use **GLM 5.3 through NanoGPT**. Other supported services and models remain available, but response quality and information retrieval behavior may vary by model.
+
+NanoGPT connections also have an **Output token limit (including reasoning)** field. Increase it if a model exhausts its reasoning budget before producing an answer or tool call. Existing connections retain their previous effective limit until edited.
+
+Connection settings are stored in `api-settings.json`. On the first startup after this update, an existing `gemini.json` is renamed automatically if the new file does not exist. Its contents are preserved.
 
 NanoGPT uses its subscription-only API for both consultations and connection tests. An active subscription and an included model are required; requests outside the subscription allowance fail without retrying through NanoGPT's pay-as-you-go endpoint. Model names are editable. Any separately configured sub connection still follows the normal fallback policy.
 

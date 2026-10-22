@@ -90,6 +90,7 @@ internal sealed class AdvisorApiSettingsView
         providerError.Text = service == null && editor != null ? text()["connection.provider_unavailable"] : "";
         providerError.Visibility = providerError.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         if (service == null) return;
+        editor!.Settings = service.EditSettings(editor.Settings, store.TestOptions());
         foreach (var field in service.Fields)
         {
             fields.Children.Add(new TextBlock { Text = field.Caption(text()), FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 4) });
