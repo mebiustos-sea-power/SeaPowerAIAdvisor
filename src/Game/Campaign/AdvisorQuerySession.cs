@@ -126,22 +126,24 @@ internal sealed class AdvisorQuerySession : IAdvisorQuerySession
             if (RoundsUsed >= MaxRounds) throw Invalid("round_limit", "round_limit");
             // Every attempt consumes a round, including rejected requests.
             RoundsUsed++;
-            Allowed(request, "consultation_id", "requests");
+            Allowed(request, "consultation_id", "requests", "partial_results", "response_limit_bytes", "remaining_data_bytes");
+            var partial = AdvisorQueryBatch.Partial(request);
+            var responseLimit = AdvisorQueryBatch.Budget(request, "response_limit_bytes", MaxResponseBytes);
+            var remainingData = AdvisorQueryBatch.Budget(request, "remaining_data_bytes", MaxTotalBytes);
             if (String(request, "consultation_id") != Id) throw Invalid("wrong_consultation", "wrong_consultation");
             if (Bytes(request) > MaxRequestBytes) throw Invalid("request_too_large", "request_too_large");
             if (!(request["requests"] is JArray requests) || requests.Count < 1 || requests.Count > MaxQueriesPerRound)
                 throw Invalid("invalid_arguments", "requests_count", MaxQueriesPerRound);
-            var results = new JArray();
-            foreach (var item in requests)
+            var results = AdvisorQueryBatch.Execute(requests, partial, item =>
             {
                 if (!(item is JObject query)) throw Invalid("invalid_arguments", "query_object_invalid");
-                results.Add(new JObject { ["query"] = String(query, "query"), ["data"] = Dispatch(query) });
-            }
+                return new JObject { ["query"] = String(query, "query"), ["data"] = Dispatch(query) };
+            });
             var response = Envelope("ok");
             response["results"] = results;
             var bytes = Bytes(response);
-            if (bytes > MaxResponseBytes) throw Invalid("response_too_large", "response_too_large");
-            if (ReturnedBytes + bytes > MaxTotalBytes) throw Invalid("payload_limit", "payload_limit");
+            if (bytes > responseLimit) throw Invalid("response_too_large", "response_too_large");
+            if (ReturnedBytes + bytes > MaxTotalBytes || bytes > remainingData) throw Invalid("payload_limit", "payload_limit");
             ReturnedBytes += bytes;
             return response;
         }
@@ -158,20 +160,22 @@ internal sealed class AdvisorQuerySession : IAdvisorQuerySession
     {
         var name = String(query, "query");
         if (!information.CampaignQuery(name)) throw Invalid("information_disabled", "information_disabled");
+        var shapes = AdvisorQueryCatalog.RequestShapes;
+        if (shapes.Any(s => s.Matches(name)) && !shapes.Any(s => s.Matches(name) && s.AllowsFields(query, "query")))
+            throw Invalid("invalid_arguments", "unsupported_argument");
+        if (shapes.Any(s => s.Matches(name)) && !shapes.Any(s => s.Matches(name) && s.HasRequired(query)))
+            throw Invalid("invalid_arguments", "ids_count", "ids", MaxIdsPerQuery);
         switch (name)
         {
             case "catalog":
-                Allowed(query, "query");
                 return AdvisorQueryCatalog.Describe(snapshot, information, Prompts);
             case "list_forces":
-                Allowed(query, "query", "offset", "limit");
                 return Page(query, snapshot.Forces.Select((f, i) => CampaignInformation.Force(new JObject
                 {
                     ["id"] = SnapshotIds.Force(i), ["display_name"] = f.Name,
                     ["position"] = AdvisorInputBuilder.Position(f.Position), ["ship_count"] = f.Ships.Count, ["is_convoy"] = f.IsConvoy
                 }, information)));
             case "get_forces":
-                Allowed(query, "query", "ids", "include_ships");
                 var includeShips = Boolean(query, "include_ships", false);
                 if (includeShips && !information.Allows(InformationKind.CampaignShips))
                     throw Invalid("information_disabled", "ships_disabled");
@@ -184,7 +188,6 @@ internal sealed class AdvisorQuerySession : IAdvisorQuerySession
                     return CampaignInformation.Force(result, information);
                 }));
             case "list_ships":
-                Allowed(query, "query", "offset", "limit", "force_ids");
                 var selected = query["force_ids"] == null ? null : new HashSet<int>(Ids(query, "force_ids").Select(id => Resolve(forces, id)));
                 return Page(query, snapshot.Forces.SelectMany((f, fi) => f.Ships.Select((s, si) => (f, fi, s, si)))
                     .Where(x => selected == null || selected.Contains(x.fi)).Select(x => new JObject
@@ -193,7 +196,6 @@ internal sealed class AdvisorQuerySession : IAdvisorQuerySession
                         ["display_name"] = x.s.Name, ["type_code"] = x.s.Type, ["is_merchant"] = x.s.Merchant
                     }));
             case "get_ships":
-                Allowed(query, "query", "ids");
                 return new JArray(Ids(query, "ids").Select(id =>
                 {
                     if (!ships.TryGetValue(id, out var index)) throw Invalid("unknown_id", "unknown_ship");
@@ -202,7 +204,6 @@ internal sealed class AdvisorQuerySession : IAdvisorQuerySession
                     return CampaignInformation.Ship(result, information);
                 }));
             case "list_air_units":
-                Allowed(query, "query", "offset", "limit", "force_ids", "base_ids");
                 if (query["force_ids"] != null && !information.Allows(InformationKind.CampaignForces))
                     throw Invalid("information_disabled", "force_filter_disabled");
                 if (query["force_ids"] != null && query["base_ids"] != null)
@@ -214,20 +215,16 @@ internal sealed class AdvisorQuerySession : IAdvisorQuerySession
                         (airBases == null || x.u.BaseIndex.HasValue && airBases.Contains(x.u.BaseIndex.Value)))
                     .Select(x => CampaignInformation.Aviation(AdvisorInputBuilder.AirUnit(x.u, x.i, false), information)));
             case "get_air_units":
-                Allowed(query, "query", "ids");
                 return new JArray(Ids(query, "ids").Select(id =>
                 {
                     var i = Index(id, snapshot.Aviation.Units.Count, SnapshotIds.AirUnit);
                     return CampaignInformation.Aviation(AdvisorInputBuilder.AirUnit(snapshot.Aviation.Units[i], i), information);
                 }));
             case "list_air_flights":
-                Allowed(query, "query", "offset", "limit");
                 return Page(query, snapshot.Aviation.Flights.Select(AdvisorInputBuilder.AirFlight));
             case "list_contacts":
-                Allowed(query, "query", "offset", "limit");
                 return Page(query, snapshot.Contacts.Select((c, i) => AdvisorInputBuilder.Contact(c, i, snapshot.At)));
             case "list_bases":
-                Allowed(query, "query", "offset", "limit");
                 return Page(query, snapshot.Victory.Bases.Select((b, i) => CampaignInformation.PublicBase(new JObject
                 {
                     ["id"] = SnapshotIds.Base(i), ["display_name"] = b.Name, ["kind"] = AdvisorInputBuilder.BaseKind(b.Kind),
@@ -237,7 +234,6 @@ internal sealed class AdvisorQuerySession : IAdvisorQuerySession
                     ["observation_status"] = observations.ContainsKey(i) ? "in_snapshot" : "not_in_snapshot"
                 }, information)));
             case "get_bases":
-                Allowed(query, "query", "ids");
                 return new JArray(Ids(query, "ids").Select(id =>
                 {
                     var row = snapshot.Ground.Bases().OfType<JObject>().SingleOrDefault(b => (string?)b["id"] == id)
@@ -245,19 +241,16 @@ internal sealed class AdvisorQuerySession : IAdvisorQuerySession
                     return CampaignInformation.Base(row, information);
                 }));
             case "list_ground_units":
-                Allowed(query, "query", "offset", "limit");
                 return Page(query, snapshot.Ground.Units().OfType<JObject>().Select(row =>
                 {
                     row.Remove("strength"); row.Remove("maximum_strength"); row.Remove("strength_meaning");
                     return CampaignInformation.Ground(row, information);
                 }));
             case "get_ground_units":
-                Allowed(query, "query", "ids");
                 return new JArray(Ids(query, "ids").Select(id => CampaignInformation.Ground(
                     snapshot.Ground.Units().OfType<JObject>().SingleOrDefault(u => (string?)u["id"] == id)
                         ?? throw Invalid("unknown_id", "unknown_ground_unit"), information)));
             case "get_base_observations":
-                Allowed(query, "query", "ids");
                 return new JArray(Ids(query, "ids").Select(id =>
                 {
                     var index = Index(id, snapshot.Victory.Bases.Count, SnapshotIds.Base);
@@ -269,19 +262,16 @@ internal sealed class AdvisorQuerySession : IAdvisorQuerySession
                     return result;
                 }));
             case "list_orders":
-                Allowed(query, "query", "offset", "limit");
                 return Page(query, snapshot.Orders.Select((o, i) =>
                 {
                     var result = AdvisorInputBuilder.Order(o, i); result.Remove("briefing_text"); return result;
                 }));
             case "get_orders":
-                Allowed(query, "query", "ids");
                 return new JArray(Ids(query, "ids").Select(id => {
                     var i = Index(id, snapshot.Orders.Count, SnapshotIds.Order);
                     return AdvisorInputBuilder.Order(snapshot.Orders[i], i);
                 }));
             case "list_reports":
-                Allowed(query, "query", "offset", "limit", "kind");
                 var kind = query["kind"] == null ? null : String(query, "kind");
                 if (kind != null && !new[] { "contact", "battle", "landing", "fleet", "air", "supply", "production", "admiralty", "economy", "other" }.Contains(kind))
                     throw Invalid("invalid_arguments", "report_kind_invalid");
@@ -292,7 +282,6 @@ internal sealed class AdvisorQuerySession : IAdvisorQuerySession
                         result["id"] = SnapshotIds.Report(x.i); result["text_length_utf16"] = x.r.Text.Length; return result;
                     }).Where(r => kind == null || (string?)r["kind"] == kind));
             case "get_reports":
-                Allowed(query, "query", "ids");
                 return new JArray(Ids(query, "ids").Select(id => {
                     var i = Index(id, snapshot.Reports.Count, SnapshotIds.Report);
                     var result = AdvisorInputBuilder.Report(snapshot.Reports[i]); result["id"] = id; return result;

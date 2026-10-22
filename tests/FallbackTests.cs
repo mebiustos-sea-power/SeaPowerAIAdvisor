@@ -204,7 +204,7 @@ internal static class FallbackTests
         ["contact_threat_references"] = new JArray(), ["weapon_references"] = new JArray(), ["published_reports"] = new JArray(), ["mission_briefing"] = "Briefing"
     }), "ja", "Question", maxRounds: maxRounds);
     private static JObject Tool(string query, string signature) => new() { ["thoughtSignature"] = signature, ["functionCall"] = new JObject {
-        ["id"] = query, ["name"] = "query_situation", ["args"] = new JObject { ["requests"] = new JArray(new JObject { ["query"] = query }) } } };
+        ["id"] = query, ["name"] = "query_game", ["args"] = new JObject { ["requests"] = new JArray(new JObject { ["source"] = "situation", ["query"] = query }) } } };
     private static string Reply(params JObject[] parts) => InteractionFixture.Reply(parts).ToString(Formatting.None);
     private static string Key(HttpRequestMessage request) => request.Headers.GetValues("x-goog-api-key").Single();
     private static HttpResponseMessage Response(int status, string body) => new((HttpStatusCode)status) { Content = new StringContent(body) };

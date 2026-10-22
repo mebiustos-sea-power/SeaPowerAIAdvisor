@@ -8,10 +8,11 @@ using SeaPowerAIAdvisor;
 
 internal static partial class ProviderTests
 {
-    private const string ToolName = "read_known_game_state";
+    private const string ToolName = "query_game";
     internal static void Run(Action<string, Action> check)
     {
         RunBackends(check);
+        RunUnifiedReads(check);
         RunLocalFallbackPolicy(check);
         RunLocalConnections(check);
         RunOllama(check);
@@ -112,7 +113,7 @@ internal static partial class ProviderTests
     }
 
     private static AdvisorToolCall Call(string id, string query) => new(id, ToolName,
-        new JObject { ["requests"] = new JArray(new JObject { ["query"] = query }) });
+        new JObject { ["requests"] = new JArray(new JObject { ["source"] = "situation", ["query"] = query }) });
     private static AdvisorReply Reply(params AdvisorToolCall[] calls) => new("", calls, 7);
 
     private sealed class FakeProvider : IAdvisorProvider

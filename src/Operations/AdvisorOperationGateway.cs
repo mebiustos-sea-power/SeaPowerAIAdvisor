@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -17,6 +18,24 @@ internal interface IAdvisorOperationSession : IDisposable
 internal sealed class AdvisorOperationGateway : IDisposable
 {
     internal const string ToolName = "game_operations";
+    private static readonly AdvisorRequestShape[] requestShapes = {
+        new(new[] { "list" }, Array.Empty<string>(), "search", "offset", "limit"),
+        new(new[] { "describe" }, new[] { "operation_id" }),
+        new(new[] { "candidates" }, new[] { "operation_id" }, "target_ref", "offset", "limit"),
+        new(new[] { "execute" }, new[] { "operation_id", "target_ref", "request_id", "arguments" })
+    };
+    internal static JObject ReadSchema(JObject tool) => AdvisorRequestShape.Union("action", requestShapes,
+        (JObject)tool["parameters"]!["properties"]!, new[] { "list", "describe", "candidates" });
+    internal static JObject ExecutionSchema(JObject tool) => requestShapes[3].Schema("action",
+        (JObject)tool["parameters"]!["properties"]!, new[] { "execute" });
+    // Standard adapters expose proposals separately; independent clients retain the complete service.
+    internal static Task<JObject> ProposeAsync(IAdvisorOperationSession session, JObject request, CancellationToken cancellation)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        if (request["action"]?.Type != JTokenType.String || (string?)request["action"] != "execute")
+            return Task.FromResult(Error("invalid_operation_request"));
+        return session.ExecuteAsync(request, cancellation);
+    }
     private sealed class Command
     {
         internal readonly string Owner;
@@ -73,22 +92,20 @@ internal sealed class AdvisorOperationGateway : IDisposable
     {
         if (!operations.Enabled) throw new AdvisorOperationException(403, "unit_operations_disabled");
         var action = Text(request, "action");
+        if (requestShapes.Any(s => s.Matches(action)) && !requestShapes.Any(s => s.Matches(action) && s.AllowsFields(request, "action") && s.HasRequired(request)))
+            throw new AdvisorOperationException(400, "invalid_operation_request");
         switch (action)
         {
             case "list":
-                Allowed(request, "action", "search", "offset", "limit");
                 var search = request["search"] == null ? "" : request["search"]!.Type == JTokenType.String && ((string)request["search"]!).Length <= 200
                     ? ((string)request["search"]!).Trim() : throw new AdvisorOperationException(400, "invalid_operation_request");
                 return operations.Discover(search, Number(request, "offset", 0, int.MaxValue), Number(request, "limit", 10, 20, 1));
             case "describe":
-                Allowed(request, "action", "operation_id");
                 return operations.Describe(Text(request, "operation_id"));
             case "candidates":
-                Allowed(request, "action", "operation_id", "target_ref", "offset", "limit");
                 return operations.CandidatePage(Text(request, "operation_id"), request["target_ref"] == null ? null : Text(request, "target_ref"),
                     Number(request, "offset", 0, int.MaxValue), Number(request, "limit", 10, 20, 1));
             case "execute":
-                Allowed(request, "action", "operation_id", "target_ref", "request_id", "arguments");
                 var id = Text(request, "request_id");
                 if (id.Length > 40 || request["arguments"] is not JObject args) throw new AdvisorOperationException(400, "invalid_operation_request");
                 // The host binds battle and owner identity. A repeated order ID reaches the same receipt.
@@ -100,11 +117,6 @@ internal sealed class AdvisorOperationGateway : IDisposable
     private static string Text(JObject request, string key) => request[key]?.Type == JTokenType.String &&
         !string.IsNullOrWhiteSpace((string?)request[key]) && ((string)request[key]!).Length <= 200
         ? (string)request[key]! : throw new AdvisorOperationException(400, "invalid_operation_request");
-    private static void Allowed(JObject request, params string[] names)
-    {
-        foreach (var field in request.Properties())
-            if (Array.IndexOf(names, field.Name) < 0) throw new AdvisorOperationException(400, "invalid_operation_request");
-    }
     private static int Number(JObject request, string key, int fallback, int maximum, int minimum = 0)
     {
         if (request[key] == null) return fallback;

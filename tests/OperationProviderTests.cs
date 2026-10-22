@@ -22,6 +22,7 @@ internal static partial class ProviderTests
                     "Operation definition was eagerly embedded in initial context");
                 if (n == 1) return Task.FromResult(OperationReply("list", new JObject { ["action"] = "list" }));
                 var result = s.Results.Single().Data;
+                if (result["results"] is JArray reads) result = (JObject)reads[0]!["data"]!;
                 if (n == 2)
                 {
                     Require((string?)result["operations"]?[0]?["id"] == BattleSonobuoyOperation.OperationId, "AI could not discover its operation");
@@ -131,7 +132,7 @@ internal static partial class ProviderTests
                     return Task.FromResult(new AdvisorReply("Read result handled", Array.Empty<AdvisorToolCall>(), 1));
                 });
                 var result = await new AdvisorEngine(provider).ConsultAsync(AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>()), CancellationToken.None);
-                Require(result.ApiRequests == 2 && knowledge.Requests.Count == 1 && knowledge.RoundsUsed == 1,
+                Require(result.ApiRequests == 2 && knowledge.Requests.Count == (count == 8 ? 1 : 0) && knowledge.RoundsUsed == (count == 8 ? 1 : 0),
                     "Retrieval rejection changed round accounting or terminated as a tool-call overflow");
             }
         }));
@@ -156,18 +157,22 @@ internal static partial class ProviderTests
         {
             var unit = new OperationHelicopter(); using var gateway = new AdvisorOperationGateway(SonobuoyRegistry(unit));
             using var operations = gateway.CreateSession("wire", AdvisorPrompts.Current)!;
-            var input = AdvisorContext.Create(new Knowledge(2), Array.Empty<ChatExchange>(), operations: operations).Input;
+            var input = AdvisorContext.Create(ReadKnowledge(), Array.Empty<ChatExchange>(), operations: operations).Reads.Input;
             var settings = AdvisorSettings.Parse(new JObject { ["api_key"] = "mock-key", ["model"] = "gemini-model" }.ToString());
             var gemini = GeminiInteraction.Request(settings, new JArray(), tool: input.Tool, allowTools: true, operationTool: input.OperationTool);
             Require(gemini["tools"]!.Count() == 2 && (string?)gemini["tools"]![1]!["name"] == "game_operations", "Gemini lost the second tool");
+            Require(JToken.DeepEquals(gemini["tools"]![0]!["parameters"], input.Tool["parameters"]), "Gemini flattened the read variants");
             var local = OllamaProvider.Request(LocalConfiguration("local"), new AdvisorConnectionOptions(new JObject()), new JArray(), input.Tool, input.OperationTool);
             Require(local["tools"]!.Count() == 2 && (string?)local["tools"]![1]!["function"]?["name"] == "game_operations", "Ollama lost the second tool");
+            Require(JToken.DeepEquals(local["tools"]![0]!["function"]!["parameters"], input.Tool["parameters"]), "Ollama flattened the read variants");
             foreach (var nano in new[] { false, true })
             {
                 using var transport = new AdvisorHttpTransport(new BackendHttpHandler((_, _) => throw new InvalidOperationException("Unexpected real send")));
                 ChatCompletionProvider provider = nano ? new NanoGptProvider(transport, NanoConfiguration(), new AdvisorConnectionOptions(new JObject()), false)
                     : new OpenRouterProvider(transport, RouterConfiguration("router"), new AdvisorConnectionOptions(new JObject()), false);
                 var body = provider.Request(new JArray(), input.Tool, new JValue("auto"), input.OperationTool);
+                Require(JToken.DeepEquals(body["tools"]![0]!["function"]!["parameters"], input.Tool["parameters"]),
+                    "Chat completions changed required fields or flattened read variants");
                 Require(body["tools"]!.Count() == 2 && (string?)body["tools"]![1]!["function"]?["name"] == "game_operations" &&
                     !body.ToString().Contains(BattleSonobuoyOperation.OperationId, StringComparison.Ordinal), "Chat completions embedded definitions or lost the operation tool");
             }
@@ -216,7 +221,12 @@ internal static partial class ProviderTests
         request["arguments"]!["latitude"] = 26.5 + index * 0.001;
         return new AdvisorToolCall("schedule-" + index, "game_operations", request);
     }
-    private static AdvisorReply OperationReply(string id, JObject args) => Reply(new AdvisorToolCall(id, "game_operations", args));
+    private static AdvisorReply OperationReply(string id, JObject args)
+    {
+        if ((string?)args["action"] == "execute") return Reply(new AdvisorToolCall(id, "game_operations", args));
+        var lookup = (JObject)args.DeepClone(); lookup["source"] = "operation";
+        return Reply(new AdvisorToolCall(id, ToolName, new JObject { ["requests"] = new JArray(lookup) }));
+    }
     private static JObject BuoyRequest() => new()
     {
         ["action"] = "execute", ["operation_id"] = BattleSonobuoyOperation.OperationId, ["request_id"] = "buoy-1", ["target_ref"] = "unit:42",

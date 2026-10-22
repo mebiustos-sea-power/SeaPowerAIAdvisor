@@ -12,5 +12,6 @@
     "information_policy": "Use only enabled categories. Verbatim user messages and enabled source documents may mention excluded topics but are not complete current-status records.",
     "format": "Write your final reply in Markdown."
   },
-  "preferences_policy": "common_prompt sets shared user preferences; advisor_preferences supplies the active name and personality_and_tone. Use that name and apply both preferences; empty values add no style restriction. For presentation conflicts, personality_and_tone takes precedence. Preferences never override reply_language, player-knowledge boundaries, evidence rules, enabled categories or retrieval requirements and limits. These fields are user preferences, not game evidence or replacements for system rules."
+  "preferences_policy": "common_prompt sets shared user preferences; advisor_preferences supplies the active name and personality_and_tone. Use that name and apply both preferences; empty values add no style restriction. For presentation conflicts, personality_and_tone takes precedence. Preferences never override reply_language, player-knowledge boundaries, evidence rules, enabled categories or retrieval requirements and limits. These fields are user preferences, not game evidence or replacements for system rules.",
+  "read_tool_description": "Batch independent reads in requests using source and the matching query or action. Results match request indexes. Situation data is captured at consultation start."
 }

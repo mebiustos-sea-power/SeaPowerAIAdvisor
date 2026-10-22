@@ -7,11 +7,17 @@ namespace SeaPowerAIAdvisor;
 // Provider-neutral contract. A provider adapter can expose this as a function declaration later.
 internal static class AdvisorQueryCatalog
 {
-    internal static readonly string[] Queries = {
-        "catalog", "list_forces", "get_forces", "list_ships", "get_ships", "list_contacts",
-        "list_bases", "get_bases", "list_ground_units", "get_ground_units", "get_base_observations", "list_orders", "get_orders", "list_reports", "get_reports",
-        "list_air_units", "get_air_units", "list_air_flights"
+    internal static readonly AdvisorRequestShape[] RequestShapes = {
+        new(new[] { "catalog" }, Array.Empty<string>()),
+        new(new[] { "list_forces", "list_contacts", "list_bases", "list_ground_units", "list_orders", "list_air_flights" }, Array.Empty<string>(), "offset", "limit"),
+        new(new[] { "get_ships", "get_bases", "get_ground_units", "get_base_observations", "get_orders", "get_reports", "get_air_units" }, new[] { "ids" }),
+        new(new[] { "get_forces" }, new[] { "ids" }, "include_ships"),
+        new(new[] { "list_ships" }, Array.Empty<string>(), "offset", "limit", "force_ids"),
+        new(new[] { "list_air_units" }, Array.Empty<string>(), "offset", "limit", "force_ids"),
+        new(new[] { "list_air_units" }, Array.Empty<string>(), "offset", "limit", "base_ids"),
+        new(new[] { "list_reports" }, Array.Empty<string>(), "offset", "limit", "kind")
     };
+    internal static string[] Queries => RequestShapes.SelectMany(s => s.Names).Distinct(StringComparer.Ordinal).ToArray();
 
     internal static JArray Describe(SituationSnapshot snapshot, AdvisorInformation? selection = null, AdvisorPrompts? prompts = null)
     {
@@ -42,6 +48,8 @@ internal static class AdvisorQueryCatalog
         properties["query"]!["enum"] = new JArray(Queries.Where(information.CampaignQuery));
         if (!information.Allows(InformationKind.CampaignShips)) properties.Remove("include_ships");
         if (!information.Allows(InformationKind.CampaignForces)) properties.Remove("force_ids");
+        tool["parameters"]!["properties"]!["requests"]!["items"] =
+            AdvisorRequestShape.Union("query", RequestShapes, properties, Queries.Where(information.CampaignQuery));
         return tool;
     }
 
@@ -88,7 +96,7 @@ internal static class AdvisorQueryCatalog
     private static JObject Ids(string description) => new()
     {
         ["type"] = "array", ["minItems"] = 1, ["maxItems"] = AdvisorQueryLimits.MaxIdsPerQuery,
-        ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string" }, ["description"] = description
+        ["uniqueItems"] = true, ["items"] = new JObject { ["type"] = "string", ["minLength"] = 1 }, ["description"] = description
     };
     private static JObject Integer(string description, int min, int max) => new()
     { ["type"] = "integer", ["minimum"] = min, ["maximum"] = max, ["description"] = description };

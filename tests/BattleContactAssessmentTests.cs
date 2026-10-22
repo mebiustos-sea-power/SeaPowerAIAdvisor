@@ -45,8 +45,7 @@ internal static partial class BattleTests
                 "Evidence mutated after capture or candidates could not batch with existing known-contact retrieval");
             var normal = source.CreateSession("en", "What now?");
             Require(normal.InitialInput()["contact_assessment"] == null &&
-                !normal.InitialInput()["query_tool"]!["parameters"]!["properties"]!["requests"]!["items"]!["properties"]!["query"]!["enum"]!
-                    .Values<string>().Contains(BattleContactAssessment.Query),
+                !RequestSchemaFixture.Queries(normal.InitialInput()["query_tool"]!).Contains(BattleContactAssessment.Query),
                 "Normal consultations acquired an unrelated fixed candidate-tool burden");
         });
         check("Identified, excluded and missing contacts cannot start an assessment, while hostile unidentified contacts can", () =>

@@ -71,8 +71,8 @@ internal static partial class ProviderTests
                     if (includeBriefing)
                         Require((string?)catalog["results"]?[0]?["query"] == "catalog" && (string?)denied["results"]?[0]?["query"] == "get_briefing",
                             "Successful parallel queries returned crossed result contents");
-                    else Require((string?)catalog["error"]?["code"] == "information_disabled" && (string?)denied["error"]?["code"] == "information_disabled" &&
-                        !body.ToString().Contains("Public briefing", StringComparison.Ordinal), "OpenRouter received excluded data or hid the batch rejection");
+                    else Require((string?)catalog["results"]?[0]?["status"] == "ok" && (string?)denied["results"]?[0]?["error"]?["code"] == "information_disabled" &&
+                        !body.ToString().Contains("Public briefing", StringComparison.Ordinal), "OpenRouter received excluded data or discarded an independent successful query");
                     return JsonResponse(RouterReply("Known evidence only"));
                 });
                 var setup = AdvisorServices.Prepare(RouterDraft(), transportFactory: trace => new AdvisorHttpTransport(handler, trace));
@@ -102,7 +102,7 @@ internal static partial class ProviderTests
                             reply["choices"]![0]!["message"]!["reasoning"] = "PRIVATE_PROVIDER_STATE"; return JsonResponse(reply);
                         }
                         var result = InteractionFixture.Reply(new JObject { ["functionCall"] = new JObject
-                        { ["id"] = "first", ["name"] = ToolName, ["args"] = new JObject { ["requests"] = new JArray(new JObject { ["query"] = "get_briefing" }) } } });
+                        { ["id"] = "first", ["name"] = ToolName, ["args"] = new JObject { ["requests"] = new JArray(new JObject { ["source"] = "situation", ["query"] = "get_briefing" }) } } });
                         result["id"] = "PRIVATE_PROVIDER_STATE"; return JsonResponse(result);
                     }
                     if (sends == 2)
@@ -230,7 +230,7 @@ internal static partial class ProviderTests
     private static JObject RouterCall(string id, string query, string name = ToolName, JObject? arguments = null) => new()
     {
         ["id"] = id, ["type"] = "function", ["function"] = new JObject { ["name"] = name,
-            ["arguments"] = (arguments ?? new JObject { ["requests"] = new JArray(new JObject { ["query"] = query }) }).ToString(Formatting.None) }
+            ["arguments"] = (arguments ?? new JObject { ["requests"] = new JArray(new JObject { ["source"] = "situation", ["query"] = query }) }).ToString(Formatting.None) }
     };
     private static JObject RouterReply(string text, params JObject[] calls) => new()
     {

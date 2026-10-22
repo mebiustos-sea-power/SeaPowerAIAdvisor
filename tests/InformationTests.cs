@@ -70,7 +70,7 @@ internal static partial class InformationTests
             Require(!initial["situation"]!["overview"]!.HasValues && initial["situation"]!["victory_conditions"]!["bases"]!.HasValues &&
                 ((JArray)initial["knowledge_catalog"]!).Count == 1 && initial["aviation_semantics"] == null,
                 "Disabled counts, catalogs or aviation details leaked, or mandatory victory context was removed");
-            var queries = initial["query_tool"]!["parameters"]!["properties"]!["requests"]!["items"]!["properties"]!["query"]!["enum"]!.Values<string>().ToArray();
+            var queries = RequestSchemaFixture.Queries(initial["query_tool"]!).ToArray();
             Require(queries.SequenceEqual(new[] { "catalog", "list_bases" }), "Tools still advertise an excluded category");
             foreach (var query in AdvisorQueryCatalog.Queries.Where(q => q != "catalog" && q != "list_bases"))
                 Require((string?)Call(session, new JObject { ["query"] = query, ["ids"] = new JArray("own_force_1") })["error"]?["code"] == "information_disabled",

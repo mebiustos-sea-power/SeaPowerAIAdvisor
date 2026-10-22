@@ -452,7 +452,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
                     if (update.UsingFallback) connectionName = execution.SubConnectionName;
                     progress(new AdvisorProgress(update.Stage, update.ApiRequest, update.Rounds, update.MaxRounds,
                         update.Queries, update.UsingFallback, update.Model, connectionName));
-                }, historyLimit, userName, operationScope);
+                }, historyLimit, userName, operationScope, recording == null ? null : recording.CaptureInput);
                 recording?.CaptureInput(context.Input);
                 return await AdvisorConsultation.RunAsync(execution, context, logDirectory, request, cancellation).ConfigureAwait(false);
             }, warn);

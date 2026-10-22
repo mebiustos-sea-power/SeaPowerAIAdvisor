@@ -192,7 +192,7 @@ internal sealed class ExternalAdvisorService : AdvisorService
         { this.execution = execution; this.settings = settings; this.continuation = continuation; this.requestCount = requestCount; }
         public async Task<AdviceResult> ConsultAsync(AdvisorContext context, CancellationToken cancellation)
         {
-            var known = ((JArray)context.Input.Tool["parameters"]!["properties"]!["requests"]!["items"]!["properties"]!["query"]!["enum"]!).Values<string>().ToHashSet(StringComparer.Ordinal);
+            var known = AdvisorRequestShape.Values((JObject)context.Input.Tool["parameters"]!["properties"]!["requests"]!["items"]!, "query").ToHashSet(StringComparer.Ordinal);
             var input = new Api.ConsultationContext(AdvisorExtensionBridge.Input(context.Input), new Knowledge(context.Knowledge),
                 AdvisorExtensionBridge.History(continuation)!, progress =>
                 {

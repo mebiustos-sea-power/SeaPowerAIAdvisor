@@ -183,10 +183,10 @@ internal static partial class BattleTests
         {
             Calls++;
             JObject part;
-            if (Calls == 1) part = new JObject { ["functionCall"] = new JObject { ["name"] = "query_situation", ["args"] = new JObject { ["requests"] = new JArray(
-                new JObject { ["query"] = "get_bases", ["ids"] = new JArray("own_unit_2") },
-                new JObject { ["query"] = "get_ground_units", ["ids"] = new JArray("own_unit_3") },
-                new JObject { ["query"] = "get_air_units", ["ids"] = new JArray("hosted_air_unit_1") }) } } };
+            if (Calls == 1) part = new JObject { ["functionCall"] = new JObject { ["name"] = "query_game", ["args"] = new JObject { ["requests"] = new JArray(
+                new JObject { ["source"] = "situation", ["query"] = "get_bases", ["ids"] = new JArray("own_unit_2") },
+                new JObject { ["source"] = "situation", ["query"] = "get_ground_units", ["ids"] = new JArray("own_unit_3") },
+                new JObject { ["source"] = "situation", ["query"] = "get_air_units", ["ids"] = new JArray("hosted_air_unit_1") }) } } };
             else
             {
                 var response = InteractionFixture.Result(body);

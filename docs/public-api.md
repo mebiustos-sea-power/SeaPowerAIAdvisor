@@ -72,6 +72,8 @@ Implement `IStandardAdvisorExtension.OpenSession` and return `IAdvisorSession`.
 4. `AcceptResults` receives matching call IDs/names and result JSON. The adapter owns API history, signatures, continuation IDs and thinking.
 5. Dispose session-owned resources; do not dispose shared connection services.
 
+The standard read tool is `query_game`. Its `requests` array combines snapshot queries (`source: "situation"`, plus the supplied query fields) and, with WIP operations enabled, operation lookups (`source: "operation"`, plus `action: "list" | "describe" | "candidates"` and applicable fields). Preserve the supplied schema, including `kind` for contact filtering. Results have zero-based `index`, `status`, and `data` or `error`; an invalid item does not discard other successful items. Operation execution remains in the separate `OperationToolJson` (`game_operations`, `action: "execute"`). Snapshot evidence is captured at consultation start; candidates reflect their lookup time. The standard read facade is not imposed on independent consultations below.
+
 The host retains its existing batching, disclosure validation, retrieval/sending limits, progress and main/sub policy. An empty final reply fails instead of producing an empty successful turn.
 
 ## Independent consultation
@@ -95,7 +97,7 @@ Return `AdvisorAnswer`. The host uses actual knowledge-round counts. Leave token
 
 These additions are available in the current development build; the published v0.16.0 does not include them.
 
-The host can additionally supply `ConsultationInput.OperationToolJson` when WIP unit scheduling is enabled for the battle. It describes a fixed discovery/execution tool, not every registered operation. Standard adapters may expose this second tool and normalize its calls/results alongside the existing read-only `ToolJson`. Adapters that do not use it retain their existing read-only behavior.
+The host can additionally supply `ConsultationInput.OperationToolJson` when WIP unit scheduling is enabled for the battle. For standard adapters it describes only execution proposals; discovery is included in the shared read tool. For independent consultations it retains the original discovery/execution actions below. Neither schema embeds every registered operation. Standard adapters may expose this second tool and normalize its calls/results alongside the existing read-only `ToolJson`. Adapters that do not use it retain their existing read-only behavior.
 
 Independent consultations receive an optional `ConsultationContext.Operations` (`IAdvisorOperations`). If non-null, call `ExecuteAsync(requestJson, cancellation)` with the same `action` envelope described by `OperationToolJson`. The host queues detached requests and dispatches on the game thread. No HTTP loop or standard-engine request sequence is required. The service is separate from `IAdvisorKnowledge`: reading snapshot knowledge never schedules orders.
 

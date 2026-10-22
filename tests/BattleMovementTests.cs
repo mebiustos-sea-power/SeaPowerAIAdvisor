@@ -68,7 +68,7 @@ internal static partial class BattleTests
                 var off = new BattleQuerySession(f.Capture(), "en", "Movement", information: policy);
                 Require(off.InitialInput()["knowledge_catalog"]!["movement_plans"] == null &&
                     !off.InitialInput().ToString().Contains("get_movement_plans", StringComparison.Ordinal) &&
-                    !off.InitialInput()["query_tool"]!["parameters"]!["properties"]!["requests"]!["items"]!["properties"]!["query"]!["enum"]!.Values<string>().Contains("get_movement_plans") &&
+                    !RequestSchemaFixture.Queries(off.InitialInput()["query_tool"]!).Contains("get_movement_plans") &&
                     (string?)off.Execute(Request(off, new JObject { ["query"] = "get_movement_plans", ["ids"] = new JArray("own_unit_3") }))["error"]!["code"] == "information_disabled",
                     "Movement or parent exclusions left another retrieval path available");
             }

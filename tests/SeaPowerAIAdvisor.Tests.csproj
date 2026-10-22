@@ -94,6 +94,9 @@
     <Compile Include="..\src\Advisor\AdvisorBackendRegistry.cs" Link="AdvisorBackendRegistry.cs" />
     <Compile Include="..\src\Providers\Gemini\GeminiBackend.cs" Link="GeminiBackend.cs" />
     <Compile Include="..\src\Advisor\AdvisorContext.cs" Link="AdvisorContext.cs" />
+    <Compile Include="..\src\Advisor\AdvisorRequestShape.cs" Link="AdvisorRequestShape.cs" />
+    <Compile Include="..\src\Advisor\AdvisorReadSession.cs" Link="AdvisorReadSession.cs" />
+    <Compile Include="..\src\Advisor\AdvisorQueryBatch.cs" Link="AdvisorQueryBatch.cs" />
     <Compile Include="..\src\Advisor\AdvisorProvider.cs" Link="AdvisorProvider.cs" />
     <Compile Include="..\src\Advisor\AdvisorConnection.cs" Link="AdvisorConnection.cs" />
     <Compile Include="..\src\Advisor\AdvisorEngine.cs" Link="AdvisorEngine.cs" />

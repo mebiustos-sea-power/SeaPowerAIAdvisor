@@ -34,8 +34,8 @@ internal static class TraceTests
                 if (sent.Count == 1)
                     response = Reply(new JObject { ["functionCall"] = new JObject
                     {
-                        ["id"] = "force-list", ["name"] = "query_situation",
-                        ["args"] = new JObject { ["requests"] = new JArray(QueryTests.Q("list_forces")) }
+                        ["id"] = "force-list", ["name"] = "query_game",
+                        ["args"] = new JObject { ["requests"] = new JArray(new JObject(QueryTests.Q("list_forces")) { ["source"] = "situation" }) }
                     }, ["thoughtSignature"] = "opaque-signature" });
                 else
                 {

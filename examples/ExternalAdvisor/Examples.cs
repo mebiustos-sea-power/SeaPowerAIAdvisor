@@ -61,7 +61,7 @@ internal sealed class StandardExample : ExampleDefinition, IStandardAdvisorExten
         internal Session(string toolName) { this.toolName = toolName; }
         public ProviderRequest Prepare(bool allowTools)
         {
-            var args = "{\"requests\":[{\"query\":\"catalog\"}]}";
+            var args = "{\"requests\":[{\"source\":\"situation\",\"query\":\"catalog\"}]}";
             return new ProviderRequest(Encoding.UTF8.GetByteCount(args), cancellation =>
             {
                 cancellation.ThrowIfCancellationRequested();

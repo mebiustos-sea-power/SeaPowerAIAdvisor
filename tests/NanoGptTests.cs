@@ -69,7 +69,7 @@ internal static partial class ProviderTests
                         "NanoGPT lost tool correlation/reasoning or exceeded its retrieval limit");
                     var briefing = JObject.Parse((string)messages[4]!["content"]!);
                     Require(includeBriefing ? (string?)briefing["results"]?[0]?["query"] == "get_briefing" :
-                        (string?)briefing["error"]?["code"] == "information_disabled" && !body.ToString().Contains("Public briefing", StringComparison.Ordinal),
+                        (string?)briefing["results"]?[0]?["error"]?["code"] == "information_disabled" && !body.ToString().Contains("Public briefing", StringComparison.Ordinal),
                         "NanoGPT ignored the player's data exclusions or lost a successful result");
                     return JsonResponse(NanoReply("Known evidence only"));
                 });
@@ -182,7 +182,7 @@ internal static partial class ProviderTests
     private static JObject NanoCall(string id, string query, string name = ToolName, JObject? arguments = null) => new()
     {
         ["id"] = id, ["type"] = "function", ["function"] = new JObject { ["name"] = name,
-            ["arguments"] = (arguments ?? new JObject { ["requests"] = new JArray(new JObject { ["query"] = query }) }).ToString(Formatting.None) }
+            ["arguments"] = (arguments ?? new JObject { ["requests"] = new JArray(new JObject { ["source"] = "situation", ["query"] = query }) }).ToString(Formatting.None) }
     };
     private static JObject NanoReply(string text, params JObject[] calls) => new()
     {

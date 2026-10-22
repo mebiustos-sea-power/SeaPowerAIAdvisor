@@ -75,7 +75,7 @@ internal sealed class AdvisorPrompts
 
     internal static AdvisorPrompts Load(string directory)
     {
-        var common = Read(directory, "common.json", "system", "instructions", "preferences_policy");
+        var common = Read(directory, "common.json", "system", "instructions", "preferences_policy", "read_tool_description");
         if (!(common["instructions"] is JObject instructions)) throw Invalid("common.json");
         ValidateStrings(instructions, "common.json", "task", "advice_policy", "retrieval_policy", "language", "knowledge", "source_text", "coverage", "information_policy", "format");
         var campaign = Read(directory, "campaign.json", CampaignFields);
@@ -120,7 +120,7 @@ internal sealed class AdvisorPrompts
         "tool_host_ids", "tool_air_unit_ids", "tool_kind", "tool_sections",
         "tool_offset", "tool_limit", "host_count_semantics",
         "catalog_identification_candidates", "catalog_friendly_launched_weapons", "catalog_movement_plans",
-        "operation_sonobuoy_drop", "operation_tool_description", "operation_search", "operation_target_ref", "operation_request_id",
+        "operation_sonobuoy_drop", "operation_tool_description", "operation_execution_description", "operation_search", "operation_target_ref", "operation_request_id",
     };
     private static readonly string[] CampaignFields =
     {

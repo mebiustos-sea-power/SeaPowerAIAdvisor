@@ -18,6 +18,7 @@ internal static class PromptTests
             Prepare(directory);
             Rewrite(directory, "common", value =>
             {
+                value["read_tool_description"] = "EXTERNAL_READ_TOOL";
                 value["system"] = "EXTERNAL_COMMON_V1"; value["instructions"]!["task"] = "EXTERNAL_TASK_V1";
                 value["instructions"]!["advice_policy"] = "EXTERNAL_ADVICE_POLICY";
                 value["instructions"]!["format"] = "EXTERNAL_REPLY_FORMAT";
@@ -44,7 +45,7 @@ internal static class PromptTests
                     system.Contains("EXTERNAL_COORDINATE_LINKS", StringComparison.Ordinal) &&
                     !system.Contains("CONSUMER_MUTATION", StringComparison.Ordinal) &&
                     !system.Contains("EXTERNAL_COMMON_V2", StringComparison.Ordinal), "A reread, hardcoded policy or mutable consumer copy replaced the loaded instructions");
-                Require((string?)body["tools"]![0]!["description"] == "EXTERNAL_BATTLE_TOOL", "The tool description ignored its external resource");
+                Require((string?)body["tools"]![0]!["description"] == "EXTERNAL_READ_TOOL", "The tool description ignored its external resource");
                 var sent = InteractionFixture.Initial(body);
                 Require((string?)sent["knowledge_catalog"]!["observed_contacts"]!["description"] == "EXTERNAL_CONTACT_DESCRIPTION",
                     "The knowledge catalogue ignored its external resource");
@@ -132,8 +133,8 @@ internal static class PromptTests
                     runtime.Apply(edits);
                     return InteractionFixture.Reply(new JObject { ["functionCall"] = new JObject
                     {
-                        ["id"] = "prompt-round", ["name"] = "query_situation",
-                        ["args"] = new JObject { ["requests"] = new JArray(new JObject { ["query"] = "catalog" }) }
+                        ["id"] = "prompt-round", ["name"] = "query_game",
+                        ["args"] = new JObject { ["requests"] = new JArray(new JObject { ["source"] = "situation", ["query"] = "catalog" }) }
                     } });
                 }
                 Require((string?)InteractionFixture.Result(body)["status"] == "ok", "The prompt update interrupted information retrieval");

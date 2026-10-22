@@ -203,7 +203,7 @@ internal static class GeminiTests
                 return Reply(new JObject { ["text"] = "現在の艦隊情報を確認しました。" });
             });
             var advice = await new GeminiAdvisor(transport).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None);
-            Require(advice.ApiRequests == 3 && advice.QueryRounds == 2, "Binding introduced an extra request or failed to count rejection");
+            Require(advice.ApiRequests == 3 && advice.QueryRounds == 1, "Rejected envelope reached the snapshot or binding introduced an extra request");
         }));
         check("Parallel Gemini calls are grouped into one bounded round with exact response IDs", () => Async(async () =>
         {
@@ -327,8 +327,8 @@ internal static class GeminiTests
             foreach (var malformed in new[] { "missing_id", "duplicate_id", "invalid_arguments" })
             {
                 var session = Session(assembly);
-                var call = new JObject { ["type"] = "function_call", ["id"] = "call-1", ["name"] = "query_situation",
-                    ["arguments"] = new JObject { ["requests"] = new JArray(new JObject { ["query"] = "catalog" }) } };
+                var call = new JObject { ["type"] = "function_call", ["id"] = "call-1", ["name"] = "query_game",
+                    ["arguments"] = new JObject { ["requests"] = new JArray(new JObject { ["source"] = "situation", ["query"] = "catalog" }) } };
                 if (malformed == "missing_id") call.Remove("id");
                 if (malformed == "invalid_arguments") call["arguments"] = "not an argument object";
                 var steps = new JArray(call);
@@ -375,7 +375,7 @@ internal static class GeminiTests
     private static AdvisorQuerySession Session(Assembly assembly) => new(QueryTests.Capture(new SituationTests.Fixture(assembly)), "ja", "護衛隊の状態は？");
     private static JObject Call(AdvisorQuerySession session, string name, string id, string? key = null, JToken? value = null) => new()
     {
-        ["id"] = id, ["name"] = "query_situation", ["args"] = new JObject { ["requests"] = new JArray(QueryTests.Q(name, key, value)) }
+        ["id"] = id, ["name"] = "query_game", ["args"] = new JObject { ["requests"] = new JArray(new JObject(QueryTests.Q(name, key, value)) { ["source"] = "situation" }) }
     };
     private static JObject Reply(params JObject[] parts) => InteractionFixture.Reply(parts);
     private static void Async(Func<Task> run) => run().GetAwaiter().GetResult();

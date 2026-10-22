@@ -28,7 +28,7 @@ internal sealed class AdvisorExtensionBackend : IAdvisorBackend
     {
         var switchedToSub = false;
         using var knowledge = new KnowledgeLedger(context.Knowledge);
-        var detached = new AdvisorContext(knowledge, context.Input.Copy(), context.Progress, context.Operations);
+        var detached = new AdvisorContext(knowledge, context.Input.Copy(), context.Progress, context.Operations, context.PreparedInput);
         async Task<AdviceResult> Run(AdvisorService service, AdvisorApiConfiguration configuration, bool fallback)
         {
             cancellation.ThrowIfCancellationRequested();

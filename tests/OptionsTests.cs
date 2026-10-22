@@ -161,7 +161,7 @@ internal static class OptionsTests
                 Require(!result.Completed && result.QueryRounds == limit && result.ApiRequests == limit && transport.Calls == limit && session.MaxRounds == limit,
                     "A fixed five-round or six-request limit overrode the configured consultation");
                 var rejected = session.Execute(new JObject { ["consultation_id"] = session.Id,
-                    ["requests"] = new JArray(new JObject { ["query"] = "catalog" }) });
+                    ["requests"] = new JArray(new JObject { ["source"] = "situation", ["query"] = "catalog" }) });
                 Require((string?)rejected["error"]?["code"] == "round_limit" && session.RoundsUsed == limit,
                     "The adapter accepted more queries than it advertised");
             }
@@ -179,8 +179,8 @@ internal static class OptionsTests
                 Require((int?)InteractionFixture.Initial(body)["query_limits"]?["max_rounds"] == limit, "The AI was told a different limit from the adapter");
             Require(Calls <= limit && (string?)body["generation_config"]!["tool_choice"] == "auto",
                 "The configured limit allowed an extra generation or forced tools off");
-            var part = new JObject { ["functionCall"] = new JObject { ["name"] = "query_situation",
-                ["args"] = new JObject { ["requests"] = new JArray(new JObject { ["query"] = "catalog" }) } } };
+            var part = new JObject { ["functionCall"] = new JObject { ["name"] = "query_game",
+                ["args"] = new JObject { ["requests"] = new JArray(new JObject { ["source"] = "situation", ["query"] = "catalog" }) } } };
             return Task.FromResult(InteractionFixture.Reply(part));
         }
     }

@@ -26,6 +26,26 @@ internal static class QueryTests
             Require(!session.InitialInput().ToString().Contains("外部変更", StringComparison.Ordinal), "A caller can mutate the initial input");
             Require(session.InitialInput()["knowledge_catalog"]!.All(c => (int)c["item_count"]! >= 0), "Catalog counts invalid");
         });
+        check("Campaign read variants match runtime identifiers, report filters and mutually exclusive aviation filters", () =>
+        {
+            foreach (var (query, valid) in new[] {
+                (Q("catalog"), true), (Q("list_forces"), true),
+                (Q("get_forces", "ids", new JArray("own_force_1")), true),
+                (Q("list_air_units", "force_ids", new JArray("own_force_1")), true),
+                (Q("get_forces"), false),
+                (Q("catalog", "kind", "air"), false),
+                (new JObject { ["query"] = "list_air_units", ["force_ids"] = new JArray("own_force_1"), ["base_ids"] = new JArray("victory_base_1") }, false),
+                (Q("list_contacts", "kind", "air"), false)
+            })
+            {
+                var session = Session(new Fixture(assembly));
+                var tool = session.InitialInput()["query_tool"]!;
+                Require(RequestSchemaFixture.Accepts(tool["parameters"]!, new JObject { ["requests"] = new JArray(query) }) == valid,
+                    "Campaign schema accepts a request the runtime cannot support: " + query);
+                Require(((string?)session.Execute(Request(session, query))["status"] == "ok") == valid,
+                    "Campaign dispatch disagrees with its request definition: " + query);
+            }
+        });
         check("A consultation can drill from catalog to forces to ship list to ship readiness", () =>
         {
             var session = Session(new Fixture(assembly));
@@ -145,6 +165,21 @@ internal static class QueryTests
             var other = new AdvisorQuerySession(snapshot, "ja", "");
             Require((string?)current.Execute(Request(other, Q("list_forces")))["error"]!["code"] == "wrong_consultation",
                 "IDs were accepted with a stale consultation scope");
+        });
+        check("Standard campaign reads retain successful data beside an invalid individual query", () =>
+        {
+            var session = Session(new Fixture(assembly));
+            var read = AdvisorContext.Create(session, Array.Empty<ChatExchange>()).Reads;
+            var result = read.ExecuteAsync(new JObject { ["requests"] = new JArray(
+                new JObject { ["source"] = "situation", ["query"] = "catalog" },
+                new JObject { ["source"] = "situation", ["query"] = "unknown" },
+                new JObject { ["source"] = "situation", ["query"] = "list_forces" }) },
+                System.Threading.CancellationToken.None).GetAwaiter().GetResult();
+            Require((string?)result["results"]?[0]?["status"] == "ok" &&
+                (string?)result["results"]?[1]?["error"]?["code"] == "unknown_query" &&
+                result["results"]?[1]?["data"] == null && (int?)result["results"]?[2]?["index"] == 2 &&
+                result["results"]?[2]?["data"]?["items"]?.Count() == 1 && session.RoundsUsed == 1,
+                "A campaign item error discarded other results or consumed extra rounds");
         });
         check("Every attempted request consumes a round and the query limit stops further results", () =>
         {
