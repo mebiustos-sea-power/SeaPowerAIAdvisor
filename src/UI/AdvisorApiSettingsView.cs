@@ -9,7 +9,10 @@ namespace SeaPowerAIAdvisor;
 // Registration forms and role selections are separate operations; no whole-settings draft is saved here.
 internal sealed class AdvisorApiSettingsView
 {
-    private readonly ComboBox main, sub, selector, provider;
+    private static readonly AdvisorSituationDelivery[] deliveryChoices =
+        { AdvisorSituationDelivery.Upfront, AdvisorSituationDelivery.OnDemand };
+    private readonly ComboBox main, sub, selector, provider, delivery;
+    private readonly FrameworkElement deliveryPanel;
     private readonly TextBox name, timeout;
     private readonly StackPanel fields;
     private readonly TextBlock providerDescription, providerError;
@@ -44,6 +47,8 @@ internal sealed class AdvisorApiSettingsView
         T Named<T>(string id) where T : class => content.FindName(id) as T ?? throw new InvalidOperationException("Missing API control: " + id);
         main = Named<ComboBox>("MainApiConfiguration"); sub = Named<ComboBox>("SubApiConfiguration"); selector = Named<ComboBox>("ApiConfigurationSelector");
         name = Named<TextBox>("ApiConfigurationName"); timeout = Named<TextBox>("RequestTimeout"); provider = Named<ComboBox>("ApiProvider");
+        delivery = Named<ComboBox>("SituationDelivery"); deliveryPanel = Named<FrameworkElement>("SituationDeliveryPanel");
+        delivery.SelectionChanged += (_, _) => guard(NotifyChanged);
         fields = Named<StackPanel>("ApiProviderFields"); providerError = Named<TextBlock>("ApiProviderError");
         providerDescription = Named<TextBlock>("ApiProviderDescription"); providerDescriptionBox = Named<Border>("ApiProviderDescriptionBox");
         add = Named<Button>("AddApiConfiguration"); edit = Named<Button>("EditApiConfiguration"); duplicate = Named<Button>("DuplicateApiConfiguration"); remove = Named<Button>("RemoveApiConfiguration");
@@ -78,6 +83,7 @@ internal sealed class AdvisorApiSettingsView
     {
         if (editor == null) return;
         editor.Name = name.Text ?? "";
+        if (delivery.SelectedIndex >= 0) editor.SituationDelivery = deliveryChoices[delivery.SelectedIndex];
         if (includeTimeout) editor.RequestTimeoutSeconds = AdvisorRequestTimeout.Parse(timeout.Text ?? "");
         foreach (var field in fieldValues) editor.Settings[field.Key] = field.Value().Trim();
     }
@@ -89,6 +95,18 @@ internal sealed class AdvisorApiSettingsView
         providerDescriptionBox.Visibility = string.IsNullOrWhiteSpace(providerDescription.Text) ? Visibility.Collapsed : Visibility.Visible;
         providerError.Text = service == null && editor != null ? text()["connection.provider_unavailable"] : "";
         providerError.Visibility = providerError.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        deliveryPanel.Visibility = service?.Independent == false ? Visibility.Visible : Visibility.Collapsed;
+        if (service?.Independent == true) editor!.SituationDelivery = AdvisorSituationDelivery.OnDemand;
+        var wasUpdating = updating; updating = true;
+        try
+        {
+            delivery.Items.Clear();
+            foreach (var choice in deliveryChoices)
+                delivery.Items.Add(new ComboBoxItem { Content = text()[choice == AdvisorSituationDelivery.Upfront
+                    ? "connection.situation_upfront" : "connection.situation_on_demand"] });
+            delivery.SelectedIndex = Array.IndexOf(deliveryChoices, editor?.SituationDelivery ?? AdvisorSituationDelivery.OnDemand);
+        }
+        finally { updating = wasUpdating; }
         if (service == null) return;
         editor!.Settings = service.EditSettings(editor.Settings, store.TestOptions());
         foreach (var field in service.Fields)
@@ -118,7 +136,7 @@ internal sealed class AdvisorApiSettingsView
         main.IsEnabled = sub.IsEnabled = saveAssignments.IsEnabled = useTab.IsEnabled = data != null && !busy && !Editing;
         selector.IsEnabled = add.IsEnabled = data != null && !busy && !Editing;
         edit.IsEnabled = duplicate.IsEnabled = remove.IsEnabled = data != null && SelectedId != null && !busy && !Editing;
-        name.IsEnabled = timeout.IsEnabled = provider.IsEnabled = fields.IsEnabled = saveEntry.IsEnabled = cancelEntry.IsEnabled = Editing && !busy;
+        name.IsEnabled = timeout.IsEnabled = provider.IsEnabled = delivery.IsEnabled = fields.IsEnabled = saveEntry.IsEnabled = cancelEntry.IsEnabled = Editing && !busy;
     }
     private void Refresh(AdvisorSettingsDraft? value, string? selection, bool keepAssignments)
     {

@@ -16,9 +16,12 @@ internal sealed class AdvisorEngine : IAdvisorBackend
     private readonly IAdvisorProvider? sub;
     private readonly Action<AdvisorConnectionException>? switched;
     private readonly AdvisorContinuation? continuation;
+    private readonly AdvisorSituationDelivery delivery, fallbackDelivery;
     internal AdvisorEngine(IAdvisorProvider main, IAdvisorProvider? sub = null, Action<AdvisorConnectionException>? switched = null,
-        AdvisorContinuation? continuation = null)
-    { this.main = main; this.sub = sub; this.switched = switched; this.continuation = continuation; }
+        AdvisorContinuation? continuation = null, AdvisorSituationDelivery delivery = AdvisorSituationDelivery.OnDemand,
+        AdvisorSituationDelivery? fallbackDelivery = null)
+    { this.main = main; this.sub = sub; this.switched = switched; this.continuation = continuation;
+        this.delivery = delivery; this.fallbackDelivery = fallbackDelivery ?? delivery; }
 
     public Task<AdviceResult> ConsultAsync(AdvisorContext context, CancellationToken cancellation) => RunAsync(context, cancellation);
 
@@ -26,8 +29,6 @@ internal sealed class AdvisorEngine : IAdvisorBackend
     {
         var session = context.Knowledge;
         var reads = context.Reads;
-        var input = context.PrepareStandardInput();
-        var tool = input.Tool;
         var maxExchanges = Math.Max(0, session.MaxRounds - (continuation == null ? 0 : session.RoundsUsed));
         var bytesSent = 0;
         long totalTokens = 0;
@@ -37,7 +38,7 @@ internal sealed class AdvisorEngine : IAdvisorBackend
         var lastQueries = Array.Empty<string>();
         var lastApiRequest = 0;
         var retrievals = continuation == null ? new JArray() : (JArray)continuation.Retrievals.DeepClone();
-        using var connection = new AdvisorConnection(main, sub, input, error =>
+        using var connection = new AdvisorConnection(main, sub, fallback => context.PrepareStandardInput(fallback ? fallbackDelivery : delivery), error =>
         {
             usageKnown = false; // A lost response may have consumed tokens that we cannot measure.
             switched?.Invoke(error);
@@ -61,6 +62,8 @@ internal sealed class AdvisorEngine : IAdvisorBackend
             cancellation.ThrowIfCancellationRequested();
             if (reply.TotalTokens.HasValue) totalTokens += reply.TotalTokens.Value;
             else usageKnown = false;
+            var input = reads.Input;
+            var tool = input.Tool;
             var calls = reply.Calls;
             if (calls.Count == 0)
             {
@@ -69,17 +72,17 @@ internal sealed class AdvisorEngine : IAdvisorBackend
                 return Result(reply.Text, AdvisorCompletionReason.Completed);
             }
             if (calls.Count > MaxToolCallsPerResponse) throw new AdvisorConnectionException("tool_call_limit");
-            if (calls.Any(call => string.IsNullOrWhiteSpace(call.Id) || (call.Name != (string?)tool["name"] && (context.Operations == null || call.Name != (string?)input.OperationTool?["name"]))) ||
+            if (calls.Any(call => string.IsNullOrWhiteSpace(call.Id) || (call.Name != (string?)tool?["name"] && (context.Operations == null || call.Name != (string?)input.OperationTool?["name"]))) ||
                 calls.Select(call => call.Id).Distinct(StringComparer.Ordinal).Count() != calls.Count)
                 throw new AdvisorConnectionException("invalid_function_call");
-            var queryCalls = calls.Where(c => c.Name == (string?)tool["name"]).ToArray();
+            var queryCalls = calls.Where(c => c.Name == (string?)tool?["name"]).ToArray();
             var results = new Dictionary<string, AdvisorToolResult>(StringComparer.Ordinal);
             lastQueries = Array.Empty<string>();
             if (queryCalls.Length > 0)
             {
                 var combined = Combine(queryCalls);
                 var pendingQueries = reads.Queries(combined);
-                var hasSituationRead = (combined["requests"] as JArray)?.OfType<JObject>()
+                var hasSituationRead = reads.AllowsSituationReads && (combined["requests"] as JArray)?.OfType<JObject>()
                     .Any(q => q["source"]?.Type == JTokenType.String && (string?)q["source"] == "situation") == true;
                 context.Progress?.Invoke(new AdvisorProgress(AdvisorStage.Retrieving, connection.ApiRequests,
                     session.RoundsUsed + (hasSituationRead ? 1 : 0), session.MaxRounds, pendingQueries, connection.UsingFallback, connection.Model));
@@ -94,7 +97,7 @@ internal sealed class AdvisorEngine : IAdvisorBackend
                 if (errorCode == "payload_limit") limit = AdvisorCompletionReason.PayloadLimit;
                 else if (errorCode == "round_limit") limit = AdvisorCompletionReason.RoundLimit;
             }
-            foreach (var call in calls.Where(c => c.Name != (string?)tool["name"]))
+            foreach (var call in calls.Where(c => c.Name != (string?)tool?["name"]))
             {
                 context.Progress?.Invoke(new AdvisorProgress(AdvisorStage.Retrieving, connection.ApiRequests, session.RoundsUsed,
                     session.MaxRounds, new[] { AdvisorOperationGateway.ToolName }, connection.UsingFallback, connection.Model));

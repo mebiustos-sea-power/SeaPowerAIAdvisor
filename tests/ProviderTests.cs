@@ -13,6 +13,7 @@ internal static partial class ProviderTests
     {
         RunBackends(check);
         RunUnifiedReads(check);
+        RunSituationDelivery(check);
         RunLocalFallbackPolicy(check);
         RunLocalConnections(check);
         RunOllama(check);

@@ -68,7 +68,7 @@ internal static partial class ProviderTests
             {
                 Require(history == null && JObject.Parse(input.DataJson)["prior_dialogue"]!.Count() == 1 &&
                     !input.DataJson.Contains("external-secret", StringComparison.Ordinal), "Public input exposed credentials or lost conversation");
-                var tool = (string)JObject.Parse(input.ToolJson)["name"]!;
+                var tool = (string)JObject.Parse(input.ToolJson!)["name"]!;
                 return new Client.Session(allow => new Api.ProviderRequest(100, token =>
                 {
                     token.ThrowIfCancellationRequested();

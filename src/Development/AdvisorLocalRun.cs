@@ -31,7 +31,7 @@ internal sealed class AdvisorLocalRun
     internal void Complete(AdviceResult value, string connectionName) { result = value; connection = connectionName; }
     internal void CaptureInput(AdvisorProviderInput value)
     {
-        lock (gate) if (finished == null) input = new JObject { ["data"] = value.Data.DeepClone(), ["system_instruction"] = value.SystemInstruction, ["tool"] = value.Tool.DeepClone(), ["operation_tool"] = value.OperationTool?.DeepClone() };
+        lock (gate) if (finished == null) input = new JObject { ["data"] = value.Data.DeepClone(), ["system_instruction"] = value.SystemInstruction, ["tool"] = value.Tool?.DeepClone(), ["operation_tool"] = value.OperationTool?.DeepClone() };
     }
     internal IAdvisorOperationSession Observe(IAdvisorOperationSession session) => new RecordingOperations(session, this);
     internal IAdvisorQuerySession Observe(IAdvisorQuerySession session) => new RecordingSession(session, this);
@@ -93,7 +93,7 @@ internal sealed class AdvisorLocalRun
         public void Dispose() => inner.Dispose();
     }
 
-    private sealed class RecordingSession : IAdvisorQuerySession
+    private sealed class RecordingSession : IAdvisorSnapshotSource, IAdvisorQuerySession
     {
         private readonly IAdvisorQuerySession inner;
         private readonly AdvisorLocalRun run;
@@ -103,6 +103,7 @@ internal sealed class AdvisorLocalRun
         public int MaxRounds => inner.MaxRounds;
         public AdvisorPrompts Prompts => inner.Prompts;
         public JObject InitialInput() => inner.InitialInput();
+        public JArray ExportSituation() => AdvisorSnapshotExport.From(inner);
         public JObject Execute(JObject request)
         {
             var entry = new JObject { ["time_utc"] = DateTime.UtcNow.ToString("O"), ["request"] = request.DeepClone() };

@@ -99,7 +99,12 @@ internal sealed class AdvisorSettings
     {
         var library = AdvisorApiLibrary.Read(value);
         foreach (var entry in library.Configurations)
-            AdvisorServiceCatalog.BuiltIn.Find(entry.Provider)?.Validate(entry.Settings);
+        {
+            var service = AdvisorServiceCatalog.BuiltIn.Find(entry.Provider);
+            if (service == null) continue;
+            AdvisorServices.ValidateDelivery(service, entry);
+            service.Validate(entry.Settings);
+        }
         ValidateParameters(value);
     }
 

@@ -9,7 +9,7 @@ using Newtonsoft.Json.Linq;
 namespace SeaPowerAIAdvisor;
 
 // Queries operate only on detached player knowledge. This type has no game or provider access.
-internal sealed class AdvisorQuerySession : IAdvisorQuerySession
+internal sealed partial class AdvisorQuerySession : IAdvisorQuerySession, IAdvisorSnapshotSource
 {
     private readonly SituationSnapshot snapshot;
     private readonly AdvisorInformation information;

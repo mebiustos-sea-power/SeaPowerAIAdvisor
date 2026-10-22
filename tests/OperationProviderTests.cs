@@ -12,44 +12,47 @@ internal static partial class ProviderTests
     {
         check("The standard AI engine discovers operation metadata and proposes exactly one buoy until host approval", () =>
         {
-            var unit = new OperationHelicopter(); var registry = SonobuoyRegistry(unit);
-            using var gateway = new AdvisorOperationGateway(registry);
-            using var operations = gateway.CreateSession("ai", AdvisorPrompts.Current)!;
-            var knowledge = new Knowledge(5);
-            var provider = new FakeProvider("operation-model", (s, n, allowed, token) =>
+            foreach (var delivery in new[] { AdvisorSituationDelivery.OnDemand, AdvisorSituationDelivery.Upfront })
             {
-                Require(s.Input.OperationTool != null && !s.Input.Data.ToString().Contains(BattleSonobuoyOperation.OperationId, StringComparison.Ordinal),
-                    "Operation definition was eagerly embedded in initial context");
-                if (n == 1) return Task.FromResult(OperationReply("list", new JObject { ["action"] = "list" }));
-                var result = s.Results.Single().Data;
-                if (result["results"] is JArray reads) result = (JObject)reads[0]!["data"]!;
-                if (n == 2)
+                var unit = new OperationHelicopter(); var registry = SonobuoyRegistry(unit);
+                using var gateway = new AdvisorOperationGateway(registry);
+                using var operations = gateway.CreateSession("ai", AdvisorPrompts.Current)!;
+                var knowledge = DeliveryKnowledge();
+                var provider = new FakeProvider("operation-model", (s, n, allowed, token) =>
                 {
-                    Require((string?)result["operations"]?[0]?["id"] == BattleSonobuoyOperation.OperationId, "AI could not discover its operation");
-                    return Task.FromResult(OperationReply("detail", new JObject { ["action"] = "describe", ["operation_id"] = BattleSonobuoyOperation.OperationId }));
-                }
-                if (n == 3)
-                {
-                    Require(result["operation"]?["parameters"]?["properties"]?["depth"] == null, "AI was offered depth control");
-                    return Task.FromResult(OperationReply("candidates", new JObject { ["action"] = "candidates", ["operation_id"] = BattleSonobuoyOperation.OperationId }));
-                }
-                if (n == 4)
-                {
-                    Require((double?)result["candidates"]?[0]?["position"]?["latitude_deg"] == 26.5 &&
-                        (string?)result["candidates"]?[0]?["depth"] == "alternating", "Candidate position or user setting was unavailable");
-                    return Task.FromResult(OperationReply("schedule", BuoyRequest()));
-                }
-                Require((string?)result["status"] == "proposed" && (bool?)result["registered"] == false && unit.Calls == 0,
-                    "AI was told an unapproved operation was registered");
-                return Task.FromResult(new AdvisorReply("One buoy order proposed.", Array.Empty<AdvisorToolCall>(), 1));
-            });
-            var context = AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations);
-            var result = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(provider).ConsultAsync(context, CancellationToken.None)));
-            Require(unit.Calls == 0, "AI bypassed approval");
-            var proposal = registry.FinishProposal("ai", true)!; registry.Approve(proposal);
-            Require(result.Text == "One buoy order proposed." && result.ApiRequests == 5 && unit.Calls == 1 && unit.Depth == "alternating" &&
-                unit.Thread == Environment.CurrentManagedThreadId && knowledge.Requests.Count == 0 && operations.History.Count == 4,
-                "AI execution bypassed the operation service, duplicated registration, changed depth or used the read-only query gateway");
+                    Require(s.Input.OperationTool != null && !s.Input.Data.ToString().Contains(BattleSonobuoyOperation.OperationId, StringComparison.Ordinal),
+                        "Operation definition was eagerly embedded in initial context");
+                    if (n == 1) return Task.FromResult(OperationReply("list", new JObject { ["action"] = "list" }));
+                    var result = s.Results.Single().Data;
+                    if (result["results"] is JArray reads) result = (JObject)reads[0]!["data"]!;
+                    if (n == 2)
+                    {
+                        Require((string?)result["operations"]?[0]?["id"] == BattleSonobuoyOperation.OperationId, "AI could not discover its operation");
+                        return Task.FromResult(OperationReply("detail", new JObject { ["action"] = "describe", ["operation_id"] = BattleSonobuoyOperation.OperationId }));
+                    }
+                    if (n == 3)
+                    {
+                        Require(result["operation"]?["parameters"]?["properties"]?["depth"] == null, "AI was offered depth control");
+                        return Task.FromResult(OperationReply("candidates", new JObject { ["action"] = "candidates", ["operation_id"] = BattleSonobuoyOperation.OperationId }));
+                    }
+                    if (n == 4)
+                    {
+                        Require((double?)result["candidates"]?[0]?["position"]?["latitude_deg"] == 26.5 &&
+                            (string?)result["candidates"]?[0]?["depth"] == "alternating", "Candidate position or user setting was unavailable");
+                        return Task.FromResult(OperationReply("schedule", BuoyRequest()));
+                    }
+                    Require((string?)result["status"] == "proposed" && (bool?)result["registered"] == false && unit.Calls == 0,
+                        "AI was told an unapproved operation was registered");
+                    return Task.FromResult(new AdvisorReply("One buoy order proposed.", Array.Empty<AdvisorToolCall>(), 1));
+                });
+                var context = AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations);
+                var result = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(provider, delivery: delivery).ConsultAsync(context, CancellationToken.None)));
+                Require(unit.Calls == 0, "AI bypassed approval");
+                var proposal = registry.FinishProposal("ai", true)!; registry.Approve(proposal);
+                Require(result.Text == "One buoy order proposed." && result.ApiRequests == 5 && unit.Calls == 1 && unit.Depth == "alternating" &&
+                    unit.Thread == Environment.CurrentManagedThreadId && knowledge.RoundsUsed == 0 && operations.History.Count == 4,
+                    "AI execution bypassed the operation service, duplicated registration, changed depth or used the read-only query gateway");
+            }
         });
         check("A single AI response can propose eleven or forty orders and approval registers their sequence", () =>
         {
@@ -161,17 +164,17 @@ internal static partial class ProviderTests
             var settings = AdvisorSettings.Parse(new JObject { ["api_key"] = "mock-key", ["model"] = "gemini-model" }.ToString());
             var gemini = GeminiInteraction.Request(settings, new JArray(), tool: input.Tool, allowTools: true, operationTool: input.OperationTool);
             Require(gemini["tools"]!.Count() == 2 && (string?)gemini["tools"]![1]!["name"] == "game_operations", "Gemini lost the second tool");
-            Require(JToken.DeepEquals(gemini["tools"]![0]!["parameters"], input.Tool["parameters"]), "Gemini flattened the read variants");
+            Require(JToken.DeepEquals(gemini["tools"]![0]!["parameters"], input.Tool!["parameters"]), "Gemini flattened the read variants");
             var local = OllamaProvider.Request(LocalConfiguration("local"), new AdvisorConnectionOptions(new JObject()), new JArray(), input.Tool, input.OperationTool);
             Require(local["tools"]!.Count() == 2 && (string?)local["tools"]![1]!["function"]?["name"] == "game_operations", "Ollama lost the second tool");
-            Require(JToken.DeepEquals(local["tools"]![0]!["function"]!["parameters"], input.Tool["parameters"]), "Ollama flattened the read variants");
+            Require(JToken.DeepEquals(local["tools"]![0]!["function"]!["parameters"], input.Tool!["parameters"]), "Ollama flattened the read variants");
             foreach (var nano in new[] { false, true })
             {
                 using var transport = new AdvisorHttpTransport(new BackendHttpHandler((_, _) => throw new InvalidOperationException("Unexpected real send")));
                 ChatCompletionProvider provider = nano ? new NanoGptProvider(transport, NanoConfiguration(), new AdvisorConnectionOptions(new JObject()), false)
                     : new OpenRouterProvider(transport, RouterConfiguration("router"), new AdvisorConnectionOptions(new JObject()), false);
                 var body = provider.Request(new JArray(), input.Tool, new JValue("auto"), input.OperationTool);
-                Require(JToken.DeepEquals(body["tools"]![0]!["function"]!["parameters"], input.Tool["parameters"]),
+                Require(JToken.DeepEquals(body["tools"]![0]!["function"]!["parameters"], input.Tool!["parameters"]),
                     "Chat completions changed required fields or flattened read variants");
                 Require(body["tools"]!.Count() == 2 && (string?)body["tools"]![1]!["function"]?["name"] == "game_operations" &&
                     !body.ToString().Contains(BattleSonobuoyOperation.OperationId, StringComparison.Ordinal), "Chat completions embedded definitions or lost the operation tool");

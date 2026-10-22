@@ -8,7 +8,7 @@ using static SeaPowerAIAdvisor.AdvisorQueryLimits;
 namespace SeaPowerAIAdvisor;
 
 // Queries operate exclusively on the detached player view captured at consultation start.
-internal sealed class BattleQuerySession : IAdvisorQuerySession, IAdvisorUnitReferenceSource
+internal sealed partial class BattleQuerySession : IAdvisorQuerySession, IAdvisorUnitReferenceSource, IAdvisorSnapshotSource
 {
     private static readonly AdvisorRequestShape[] requestShapes = {
         new(new[] { "catalog", "get_briefing" }, Array.Empty<string>()),

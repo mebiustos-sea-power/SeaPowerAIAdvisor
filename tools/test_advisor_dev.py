@@ -173,6 +173,22 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(api.run("consult", "--shortcut", shortcut, "--no-wait")[0], 0)
                 self.assertEqual(api.calls[-1][2], {"shortcut": shortcut, "allow_fallback": False})
 
+    def test_delivery_override_uses_flags_or_files_and_rejects_invalid_input_before_clearing(self):
+        with MockApi() as api, tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "request.json"
+            path.write_text(tool.encode({"shortcut": "key_risks", "situation_delivery": "upfront"}))
+            self.assertEqual(api.run("consult", "--request-file", path, "--situation-delivery", "on_demand", "--no-wait")[0], 0)
+            self.assertEqual(api.calls[-1][2]["situation_delivery"], "on_demand")
+            self.assertEqual(api.run("consult", "--request-file", path, "--no-wait")[0], 0)
+            self.assertEqual(api.calls[-1][2]["situation_delivery"], "upfront")
+            self.assertEqual(api.run("consult", "--question", "q", "--no-wait")[0], 0)
+            self.assertNotIn("situation_delivery", api.calls[-1][2])
+            api.calls.clear()
+            for value in (None, False, 1, {}, [], "", "invalid"):
+                path.write_text(tool.encode({"question": "q", "situation_delivery": value}))
+                self.assertEqual(api.run("consult", "--request-file", path, "--clear-history")[0], 1)
+                self.assertEqual(api.calls, [], "Invalid delivery reached the API or cleared history")
+
     def test_model_override_uses_flags_or_files_without_leaking_to_later_requests(self):
         with MockApi() as api, tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "request.json"

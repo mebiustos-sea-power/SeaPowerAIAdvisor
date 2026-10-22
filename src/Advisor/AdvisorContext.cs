@@ -15,8 +15,8 @@ internal sealed class AdvisorContext
     private AdvisorReadSession? reads;
     internal AdvisorReadSession Reads => reads ??= new AdvisorReadSession(Knowledge, Operations, Input);
     private readonly Action<AdvisorProviderInput>? preparedInput;
-    internal AdvisorProviderInput PrepareStandardInput()
-    { preparedInput?.Invoke(Reads.Input); return Reads.Input; }
+    internal AdvisorProviderInput PrepareStandardInput(AdvisorSituationDelivery mode = AdvisorSituationDelivery.OnDemand)
+    { var input = Reads.Prepare(mode); preparedInput?.Invoke(input); return input; }
     internal Action<AdvisorProviderInput>? PreparedInput => preparedInput;
 
     internal AdvisorContext(IAdvisorQuerySession knowledge, AdvisorProviderInput input, Action<AdvisorProgress>? progress = null, IAdvisorOperationSession? operations = null,

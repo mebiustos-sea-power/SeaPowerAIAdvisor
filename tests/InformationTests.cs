@@ -60,6 +60,22 @@ internal static partial class InformationTests
     {
         RunGroundCampaign(campaignPath, check);
         var snapshot = QueryTests.Capture(new SituationTests.Fixture(Assembly.LoadFrom(campaignPath)));
+        check("Upfront campaign data reuses permission-filtered ship, fleet and public-base projections without consuming rounds", () =>
+        {
+            var policy = AdvisorInformation.All.With(CampaignFuel, false).With(CampaignDamage, false).With(CampaignAmmunition, false);
+            var session = new AdvisorQuerySession(snapshot, "ja", "Compare", information: policy);
+            var input = AdvisorContext.Create(session, Array.Empty<ChatExchange>()).PrepareStandardInput(AdvisorSituationDelivery.Upfront);
+            var rows = (JArray)input.Data["situation_data"]!;
+            Require(rows.Where(r => (string?)r["query"] == "get_ships").Sum(r => r["data"]!.Count()) == snapshot.Forces.Sum(f => f.Ships.Count) &&
+                rows.Where(r => (string?)r["query"] == "get_ships").SelectMany(r => r["data"]!).All(ship => ship["fuel"] == null && ship["ammunition"] == null && ship["damage_fraction"] == null) && session.RoundsUsed == 0,
+                "Upfront campaign data dropped ships, leaked excluded status, or consumed read rounds");
+            var disabled = AdvisorInformation.All;
+            foreach (var item in AdvisorInformation.Items) disabled = disabled.With(item.Kind, false);
+            var limited = new AdvisorQuerySession(snapshot, "ja", "Limited", information: disabled).ExportSituation();
+            Require(limited.Count == 1 && (string?)limited[0]?["query"] == "list_bases" &&
+                limited[0]?["data"]?["items"]?.Count() == snapshot.Victory.Bases.Count,
+                "Mandatory public bases were dropped or disabled categories leaked");
+        });
         check("Campaign exclusions apply to overview, catalog, tools and direct requests while objectives remain available", () =>
         {
             var policy = AdvisorInformation.All;

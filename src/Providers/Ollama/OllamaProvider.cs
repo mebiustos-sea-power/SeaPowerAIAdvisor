@@ -72,7 +72,7 @@ internal sealed class OllamaProvider : IAdvisorProvider
     private sealed class Session : IAdvisorProviderSession
     {
         private readonly OllamaProvider owner;
-        private readonly JObject tool;
+        private readonly JObject? tool;
         private readonly JObject? operationTool;
         private readonly JArray messages;
         private IReadOnlyList<AdvisorToolCall> pending = Array.Empty<AdvisorToolCall>();

@@ -284,6 +284,11 @@
                   <TextBlock x:Name="ApiProviderError" Foreground="{DynamicResource AdvisorErrorBrush}" TextWrapping="Wrap" Margin="0,8,0,0" Visibility="Collapsed" />
                   <TextBlock Text="{DynamicResource Advisor.connection.request_timeout_label}" FontSize="12" Margin="0,12,0,4" />
                   <TextBox x:Name="RequestTimeout" Width="100" HorizontalAlignment="Left" FontSize="14" Padding="7" MaxLength="5" />
+                  <StackPanel x:Name="SituationDeliveryPanel" Margin="0,12,0,0">
+                    <TextBlock Text="{DynamicResource Advisor.connection.situation_delivery}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,4" />
+                    <TextBlock Text="{DynamicResource Advisor.connection.situation_delivery_hint}" FontSize="11" TextWrapping="Wrap" Opacity="0.85" Margin="0,0,0,6" />
+                    <ComboBox x:Name="SituationDelivery" MinHeight="30" />
+                  </StackPanel>
                   <Button x:Name="TestConnection" Content="{DynamicResource Advisor.connection.test}" Height="30" Padding="12,0" Margin="0,12,0,0" />
                   <TextBlock x:Name="ConnectionTestStatus" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0" />
                   <TextBlock x:Name="ConnectionTestError" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0" Foreground="{DynamicResource AdvisorErrorBrush}" Visibility="Collapsed" />

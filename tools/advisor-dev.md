@@ -158,3 +158,14 @@ The tests run a loopback mock server and use synthetic connections, prompts, ans
 ```sh
 ADVISOR_TEST_POWERSHELL='/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe' PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools -p 'test_advisor_dev.py' -v
 ```
+
+## Compare situation delivery
+
+Use `consult --situation-delivery on_demand` or `consult --situation-delivery upfront` for a single consultation. Omitting the flag uses the selected connection's saved choice. Request files accept the same `situation_delivery` strings; an explicit flag takes precedence. The selected connection's credentials, model and Data for AI restrictions are preserved, and no saved setting is modified. Fallback remains off unless explicitly enabled, and any allowed fallback keeps its own delivery choice. Invalid file values are rejected before API access or history clearing.
+
+```sh
+python tools/advisor_dev.py consult --shortcut key_risks --situation-delivery upfront --no-fallback --plain-advisor --clear-history --output results/upfront
+python tools/advisor_dev.py consult --shortcut key_risks --situation-delivery on_demand --no-fallback --plain-advisor --clear-history --output results/on-demand
+```
+
+Use the same save, connection/model and information selections for a comparison. `connections`/`discover` show saved delivery modes, while `accepted.json` records the requested consultation's effective choice; verify actual input in `result.json`. Each command starts a real consultation, so run it only when authorized.

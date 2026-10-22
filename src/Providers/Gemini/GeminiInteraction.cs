@@ -42,6 +42,7 @@ internal sealed class GeminiInteraction
                 ["description"] = operationTool["description"]!.DeepClone(), ["parameters"] = operationTool["parameters"]!.DeepClone() });
             body["tools"] = tools;
         }
+        if (body["tools"] == null) ((JObject)body["generation_config"]!).Remove("tool_choice");
         return body;
     }
 

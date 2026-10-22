@@ -24,16 +24,17 @@ internal abstract class ChatCompletionProvider : IAdvisorProvider
     { this.transport = transport; this.configuration = configuration; this.options = options; this.fallback = fallback; }
     public IAdvisorProviderSession Start(AdvisorProviderInput input, AdvisorContinuation? continuation) => new Session(this, input, continuation);
 
-    internal JObject Request(JArray messages, JObject tool, JToken choice, JObject? operationTool = null)
+    internal JObject Request(JArray messages, JObject? tool, JToken choice, JObject? operationTool = null)
     {
         var body = new JObject
         {
             ["model"] = configuration.Model, ["messages"] = messages.DeepClone(), ["stream"] = false,
-            ["max_tokens"] = options.MaxOutputTokens,
-            ["tools"] = new JArray(new JObject { ["type"] = "function", ["function"] = tool.DeepClone() }),
-            ["tool_choice"] = choice.DeepClone()
+            ["max_tokens"] = options.MaxOutputTokens
         };
-        if (operationTool != null) ((JArray)body["tools"]!).Add(new JObject { ["type"] = "function", ["function"] = operationTool.DeepClone() });
+        var tools = new JArray();
+        foreach (var definition in new[] { tool, operationTool }.Where(t => t != null))
+            tools.Add(new JObject { ["type"] = "function", ["function"] = definition!.DeepClone() });
+        if (tools.Count > 0) { body["tools"] = tools; body["tool_choice"] = choice.DeepClone(); }
         ConfigureRequest(body);
         return body;
     }
@@ -113,7 +114,7 @@ internal abstract class ChatCompletionProvider : IAdvisorProvider
     private sealed class Session : IAdvisorProviderSession
     {
         private readonly ChatCompletionProvider owner;
-        private readonly JObject tool;
+        private readonly JObject? tool;
         private readonly JObject? operationTool;
         private readonly JArray messages;
         private IReadOnlyList<AdvisorToolCall> pending = Array.Empty<AdvisorToolCall>();

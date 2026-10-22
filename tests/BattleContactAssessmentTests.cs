@@ -36,6 +36,11 @@ internal static partial class BattleTests
                 (int?)initial["contact_assessment"]!["candidate_count"] == 2 &&
                 initial["contact_assessment"]!["candidates"] == null,
                 "The wrong contact was selected or large candidate details were forced into the initial input");
+            var upfront = AdvisorContext.Create(session, Array.Empty<ChatExchange>()).PrepareStandardInput(AdvisorSituationDelivery.Upfront);
+            Require(upfront.Data["contact_assessment"] != null &&
+                upfront.Data["situation_data"]!.Single(r => (string?)r["query"] == BattleContactAssessment.Query)["data"]!["items"]!.Count() == 2 &&
+                session.RoundsUsed == 0 && upfront.Tool == null,
+                "Upfront assessment lost its context-only candidates or still required a query");
             var altered = request.Context!; altered["evidence"]!["candidates"]![0]!["display_name"] = "Changed later";
             var data = session.Execute(Request(session, new JObject { ["query"] = BattleContactAssessment.Query, ["limit"] = 1 },
                 new JObject { ["query"] = "list_contacts" }));

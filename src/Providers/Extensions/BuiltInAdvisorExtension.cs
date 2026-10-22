@@ -39,7 +39,7 @@ internal sealed class BuiltInAdvisorExtension : Api.IStandardAdvisorExtension, A
     {
         var provider = Service.Open(Configuration(connection), Options(connection), connection.IsSubConnection, RequireServices(services));
         return new Session(provider.Start(new AdvisorProviderInput(AdvisorExtensionBridge.Object(input.DataJson), input.SystemInstruction,
-            AdvisorExtensionBridge.Object(input.ToolJson), input.OperationToolJson == null ? null : AdvisorExtensionBridge.Object(input.OperationToolJson)), continuation == null ? null : new AdvisorContinuation(
+            input.ToolJson == null ? null : AdvisorExtensionBridge.Object(input.ToolJson), input.OperationToolJson == null ? null : AdvisorExtensionBridge.Object(input.OperationToolJson)), continuation == null ? null : new AdvisorContinuation(
                 JArray.Parse(continuation.RetrievalsJson), continuation.RoundsUsed, continuation.MaxRounds, JArray.Parse(continuation.OperationsJson))));
     }
     private static AdvisorHttpTransport RequireServices(Api.IAdvisorConnectionServices services) =>

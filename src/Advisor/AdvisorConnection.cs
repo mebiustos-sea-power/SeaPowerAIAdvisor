@@ -10,7 +10,7 @@ internal sealed class AdvisorConnection : IDisposable
 {
     private readonly IAdvisorProvider main;
     private readonly IAdvisorProvider? sub;
-    private readonly AdvisorProviderInput input;
+    private readonly Func<bool, AdvisorProviderInput> input;
     private readonly Action<AdvisorConnectionException> switched;
     private IAdvisorProviderSession? session;
     internal bool UsingFallback { get; private set; }
@@ -18,9 +18,13 @@ internal sealed class AdvisorConnection : IDisposable
     internal string Model => (UsingFallback ? sub! : main).Model;
 
     internal AdvisorConnection(IAdvisorProvider main, IAdvisorProvider? sub, AdvisorProviderInput input, Action<AdvisorConnectionException> switched, AdvisorContinuation? continuation = null)
+        : this(main, sub, _ => input, switched, continuation) { }
+
+    internal AdvisorConnection(IAdvisorProvider main, IAdvisorProvider? sub, Func<bool, AdvisorProviderInput> input,
+        Action<AdvisorConnectionException> switched, AdvisorContinuation? continuation = null)
     {
         this.main = main; this.sub = sub; this.input = input; this.switched = switched;
-        session = main.Start(input.Copy(), continuation);
+        session = main.Start(input(false).Copy(), continuation);
     }
 
     internal async Task<AdvisorReply> GenerateAsync(bool allowTools, AdvisorContinuation continuation, CancellationToken cancellation,
@@ -44,7 +48,7 @@ internal sealed class AdvisorConnection : IDisposable
                 switched(error);
                 await Task.Delay(1000, cancellation).ConfigureAwait(false);
                 Dispose();
-                session = sub!.Start(input.Copy(), continuation);
+                session = sub!.Start(input(true).Copy(), continuation);
                 return await Send().ConfigureAwait(false);
             }
         }

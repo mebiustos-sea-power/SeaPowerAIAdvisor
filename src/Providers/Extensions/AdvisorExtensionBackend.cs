@@ -35,7 +35,7 @@ internal sealed class AdvisorExtensionBackend : IAdvisorBackend
             var continuation = knowledge.Continuation(context.Operations?.History);
             var backend = service.Independent
                 ? service.OpenIndependent(configuration, options, fallback, transport, continuation)
-                : new AdvisorEngine(service.Open(configuration, options, fallback, transport), continuation: fallback ? continuation : null);
+                : new AdvisorEngine(service.Open(configuration, options, fallback, transport), continuation: fallback ? continuation : null, delivery: configuration.SituationDelivery);
             try { return await backend.ConsultAsync(detached, cancellation).ConfigureAwait(false); }
             finally { (backend as IDisposable)?.Dispose(); }
         }
@@ -64,7 +64,7 @@ internal sealed class AdvisorExtensionBackend : IAdvisorBackend
                 ? (fallback ? subService!.Model(sub!) : mainService.Model(main)) : answer.Model, answer.CompletionReason);
     }
 
-    private sealed class KnowledgeLedger : IAdvisorQuerySession, IDisposable
+    private sealed class KnowledgeLedger : IAdvisorSnapshotSource, IAdvisorQuerySession, IDisposable
     {
         private readonly IAdvisorQuerySession inner;
         private readonly object sync = new();
@@ -76,6 +76,7 @@ internal sealed class AdvisorExtensionBackend : IAdvisorBackend
         public int MaxRounds => inner.MaxRounds;
         public AdvisorPrompts Prompts => inner.Prompts;
         public JObject InitialInput() => inner.InitialInput();
+        public JArray ExportSituation() => AdvisorSnapshotExport.From(inner);
         public JObject Execute(JObject request)
         {
             lock (sync)

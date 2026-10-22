@@ -72,7 +72,7 @@ internal static partial class ProviderTests
             {
                 var reads = AdvisorContext.Create(ReadKnowledge(), Array.Empty<ChatExchange>(), operations: operations).Reads;
                 var args = new JObject { ["requests"] = new JArray(request) };
-                Require(RequestSchemaFixture.Accepts(reads.Input.Tool["parameters"]!, args) == valid,
+                Require(RequestSchemaFixture.Accepts(reads.Input.Tool!["parameters"]!, args) == valid,
                     "The published schema disagrees with the request contract: " + request);
                 var result = OperationGatewayTests.Finish(gateway, reads.ExecuteAsync(args, CancellationToken.None));
                 Require(((string?)result["results"]?[0]?["status"] == "ok") == valid,
@@ -80,7 +80,7 @@ internal static partial class ProviderTests
             }
             var context = AdvisorContext.Create(ReadKnowledge(), Array.Empty<ChatExchange>(), operations: operations);
             var mixed = new JObject { ["requests"] = new JArray(requests.Take(5).Select(r => r.Item1)) };
-            Require(RequestSchemaFixture.Accepts(context.Reads.Input.Tool["parameters"]!, mixed), "Valid heterogeneous requests no longer batch");
+            Require(RequestSchemaFixture.Accepts(context.Reads.Input.Tool!["parameters"]!, mixed), "Valid heterogeneous requests no longer batch");
             var combined = OperationGatewayTests.Finish(gateway, context.Reads.ExecuteAsync(mixed, CancellationToken.None));
             Require(combined["results"]!.Count() == 5 && combined["results"]!.All(r => (string?)r["status"] == "ok") && operation.Writes == 0,
                 "Valid mixed reads lost results or performed an operation");

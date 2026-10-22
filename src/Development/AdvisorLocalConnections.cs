@@ -39,10 +39,11 @@ internal sealed class AdvisorLocalConnections
             ["allow_model_override"] = AllowModelOverride,
             ["default_connection_id"] = available.Any(c => c.Id == DefaultId) ? DefaultId : null,
             ["connections"] = new JArray(available.Select(c => new JObject
-            { ["id"] = c.Id, ["name"] = c.Name, ["provider"] = c.Provider, ["model"] = c.Model }))
+            { ["id"] = c.Id, ["name"] = c.Name, ["provider"] = c.Provider, ["model"] = c.Model,
+                ["situation_delivery"] = AdvisorServiceCatalog.BuiltIn.Find(c.Provider)?.Independent == true ? null : c.SituationDelivery.Code() }))
         };
     }
-    internal void Select(AdvisorSettingsDraft settings, string id, bool allowFallback, string? model = null)
+    internal void Select(AdvisorSettingsDraft settings, string id, bool allowFallback, string? model = null, AdvisorSituationDelivery? situationDelivery = null)
     {
         if (!AllowedIds.Contains(id) || settings.Find(id) == null)
             throw new AdvisorLocalApiException(403, "connection_not_allowed");
@@ -58,6 +59,7 @@ internal sealed class AdvisorLocalConnections
             // The caller supplies a detached consultation draft, never a saved settings editor.
             selected.Model = model;
         }
+        if (situationDelivery.HasValue) settings.Find(id)!.SituationDelivery = situationDelivery.Value;
         var sub = settings.SubId;
         settings.MainId = id;
         settings.SubId = allowFallback && sub != id && sub != null && AllowedIds.Contains(sub) ? sub : null;

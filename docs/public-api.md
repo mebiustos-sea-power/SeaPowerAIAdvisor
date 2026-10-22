@@ -74,6 +74,10 @@ Implement `IStandardAdvisorExtension.OpenSession` and return `IAdvisorSession`.
 
 The standard read tool is `query_game`. Its `requests` array combines snapshot queries (`source: "situation"`, plus the supplied query fields) and, with WIP operations enabled, operation lookups (`source: "operation"`, plus `action: "list" | "describe" | "candidates"` and applicable fields). Preserve the supplied schema, including `kind` for contact filtering. Results have zero-based `index`, `status`, and `data` or `error`; an invalid item does not discard other successful items. Operation execution remains in the separate `OperationToolJson` (`game_operations`, `action: "execute"`). Snapshot evidence is captured at consultation start; candidates reflect their lookup time. The standard read facade is not imposed on independent consultations below.
 
+The host's standard strategy has a per-connection `situation_delivery` setting (`on_demand`, the default, or `upfront`). In upfront mode, `DataJson.situation_data` contains all enabled snapshot projections, without consuming query rounds. `query_game` then advertises only operation lookups, if available. `ToolJson` is nullable when no read tool remains; omit that tool from API requests in this case. `OperationToolJson` remains independently optional. Preserve the supplied schemas instead of assuming that situation reads are always present. The nullable annotation does not change assembly signatures; existing on-demand connections retain their previous input. See the offline standard example for tool-less handling.
+
+Independent consultations keep their original input/gateway and control their own retrieval strategy. The host's upfront setting is unavailable for them. The independent/standard handoff still preserves the captured knowledge and executed-retrieval history; a standard sub connection applies its own saved delivery choice.
+
 The host retains its existing batching, disclosure validation, retrieval/sending limits, progress and main/sub policy. An empty final reply fails instead of producing an empty successful turn.
 
 ## Independent consultation

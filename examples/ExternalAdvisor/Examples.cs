@@ -53,19 +53,19 @@ internal sealed class StandardExample : ExampleDefinition, IStandardAdvisorExten
     public override string Id => "example.standard";
     public override string Name => "Example: standard engine (offline)";
     public IAdvisorSession OpenSession(ConnectionSettings connection, IAdvisorConnectionServices services,
-        ConsultationInput input, RetrievalHistory? continuation) => new Session((string)JObject.Parse(input.ToolJson)["name"]!);
+        ConsultationInput input, RetrievalHistory? continuation) => new Session(input.ToolJson == null || (string?)JObject.Parse(input.DataJson)["interaction_mode"] == "upfront" ? null : (string)JObject.Parse(input.ToolJson)["name"]!);
     private sealed class Session : IAdvisorSession
     {
-        private readonly string toolName;
+        private readonly string? toolName;
         private bool received;
-        internal Session(string toolName) { this.toolName = toolName; }
+        internal Session(string? toolName) { this.toolName = toolName; }
         public ProviderRequest Prepare(bool allowTools)
         {
             var args = "{\"requests\":[{\"source\":\"situation\",\"query\":\"catalog\"}]}";
             return new ProviderRequest(Encoding.UTF8.GetByteCount(args), cancellation =>
             {
                 cancellation.ThrowIfCancellationRequested();
-                return Task.FromResult(received || !allowTools
+                return Task.FromResult(received || !allowTools || toolName == null
                     ? new ProviderReply("**Offline API example**: the standard engine completed this demonstration.")
                     : new ProviderReply("", new[] { new ToolCall("example-catalog", toolName, args) }));
             });

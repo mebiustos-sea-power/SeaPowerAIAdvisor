@@ -220,3 +220,13 @@ Only the most recently accepted local-API consultation is retained. Rejected req
 HTTP 409 indicates conditions such as an active consultation, open settings, unavailable game scene, IME composition or an unavailable quick action. Bad payloads return 400. At most 16 commands can wait for the game thread; excess commands return 429. If the game cannot process a command within 15 seconds, it expires with HTTP 503 and is not executed later. This command deadline does not limit the AI consultation duration; the existing per-request provider timeouts still apply. Keep the game rendering frames during experiments.
 
 The transport is exercised with a real Windows loopback HTTP listener in the automated suite. Scene integration, Unity runtime listener behavior and the rendered developer controls still require an in-game check after deployment.
+
+## Per-consultation situation delivery
+
+`POST /v1/consultations` accepts optional `situation_delivery`: `on_demand` (retrieve as needed) or `upfront` (send all permitted situation data at the start). It uses the selected allowed connection's credentials and changes only that consultation's detached settings. Omit it to use the connection's saved delivery. No additional permission switch is required; the allowed connection and Data for AI restrictions still apply. Model-override permission remains separate. An explicitly allowed fallback retains its own saved delivery setting.
+
+```json
+{"shortcut":"key_risks","situation_delivery":"upfront","allow_fallback":false}
+```
+
+Null, non-string and unknown values return HTTP 400 `invalid_situation_delivery` before consultation execution. Independent workflows retain their own strategy; an unsupported upfront choice returns HTTP 400 `situation_delivery_unavailable`. The accepted response reports the selected connection's captured `situation_delivery`. `/v1/connections` and the Temp discovery file report each connection's saved value; this field is null for independent workflows. These choices do not change normal UI consultations or saved defaults. The result's recorded input also identifies the actual `interaction_mode`.

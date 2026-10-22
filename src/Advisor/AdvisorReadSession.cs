@@ -16,12 +16,17 @@ internal sealed class AdvisorReadSession
     private readonly IAdvisorOperationSession? operations;
     private readonly HashSet<string> knownQueries;
     private int returnedBytes;
-    internal AdvisorProviderInput Input { get; }
+    internal AdvisorProviderInput Input { get; private set; }
+    internal bool AllowsSituationReads => delivery == AdvisorSituationDelivery.OnDemand;
+    private readonly AdvisorProviderInput onDemand;
+    private AdvisorProviderInput? upfront;
+    private AdvisorSituationDelivery delivery;
+    private int initialBytes;
 
     internal AdvisorReadSession(IAdvisorQuerySession knowledge, IAdvisorOperationSession? operations, AdvisorProviderInput input)
     {
         this.knowledge = knowledge; this.operations = operations;
-        var tool = (JObject)input.Tool.DeepClone();
+        var tool = (JObject)(input.Tool ?? throw new InvalidOperationException("The snapshot query definition is missing.")).DeepClone();
         tool["name"] = ToolName;
         tool["description"] = knowledge.Prompts.Text("common.json", "read_tool_description");
         var item = (JObject)tool["parameters"]!["properties"]!["requests"]!["items"]!;
@@ -39,9 +44,25 @@ internal sealed class AdvisorReadSession
         tool["parameters"]!["properties"]!["requests"]!["items"] = new JObject { ["anyOf"] = variants };
         Input = new AdvisorProviderInput(input.Data, input.SystemInstruction, tool, executionTool);
         // The information budget excludes chat history and user preferences; the sending budget covers the whole request.
-        returnedBytes = Bytes(knowledge.InitialInput()) + Math.Max(0, Bytes(tool) - Bytes(input.Tool)) +
+        returnedBytes = Bytes(knowledge.InitialInput()) + Math.Max(0, Bytes(tool) - Bytes(input.Tool!)) +
             (executionTool == null ? 0 : Bytes(executionTool));
         if (returnedBytes > MaxTotalBytes) throw new InvalidOperationException("Mandatory read input exceeds the consultation payload limit.");
+        onDemand = Input; initialBytes = returnedBytes;
+    }
+
+    internal AdvisorProviderInput Prepare(AdvisorSituationDelivery mode)
+    {
+        if (mode == AdvisorSituationDelivery.OnDemand) { delivery = mode; return Input = onDemand; }
+        if (mode != AdvisorSituationDelivery.Upfront) throw new AdvisorConnectionException("settings_invalid");
+        if (upfront == null)
+        {
+            var prepared = AdvisorSituationInput.Upfront(knowledge, onDemand, operations, out var size);
+            var increase = Math.Max(0, size - initialBytes);
+            if (increase > MaxTotalBytes - returnedBytes) throw new AdvisorConnectionException("situation_payload_limit");
+            returnedBytes += increase; initialBytes = Math.Max(initialBytes, size); upfront = prepared;
+        }
+        delivery = mode;
+        return Input = upfront;
     }
 
     private static JObject WithSource(JObject schema, string source)
@@ -79,7 +100,10 @@ internal sealed class AdvisorReadSession
             var args = (JObject)item.DeepClone(); args.Remove("source");
             switch ((string)item["source"]!)
             {
-                case "situation": queries.Add(args); positions.Add(i); break;
+                case "situation":
+                    if (delivery == AdvisorSituationDelivery.Upfront) results[i] = ItemError(i, "situation_already_supplied");
+                    else { queries.Add(args); positions.Add(i); }
+                    break;
                 case "operation":
                     if (operations == null) { results[i] = ItemError(i, "unit_operations_disabled"); break; }
                     if (args["action"]?.Type != JTokenType.String || (string?)args["action"] is not ("list" or "describe" or "candidates"))

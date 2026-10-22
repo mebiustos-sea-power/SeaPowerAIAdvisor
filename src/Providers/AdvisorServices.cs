@@ -128,9 +128,9 @@ internal static class AdvisorServices
         catalog ??= AdvisorServiceCatalog.BuiltIn;
         var main = settings.Main.Build(); var sub = allowFallback ? settings.Sub?.Build() : null;
         var options = settings.Options;
-        var mainService = catalog.Require(main.Provider); mainService.Validate(main.Settings);
+        var mainService = catalog.Require(main.Provider); ValidateDelivery(mainService, main); mainService.Validate(main.Settings);
         var subService = sub == null ? null : catalog.Require(sub.Provider);
-        if (sub != null) subService!.Validate(sub.Settings);
+        if (sub != null) { ValidateDelivery(subService!, sub); subService!.Validate(sub.Settings); }
         var diagnostics = Diagnostics(options, main, sub, catalog);
         return new AdvisorBackendSetup(diagnostics, trace =>
         {
@@ -142,11 +142,16 @@ internal static class AdvisorServices
                 IAdvisorBackend backend = mainService.Independent || subService?.Independent == true
                     ? new AdvisorExtensionBackend(mainService, subService, main, sub, options, transport, Switched)
                     : new AdvisorEngine(mainService.Open(main, options, false, transport),
-                        sub == null ? null : subService!.Open(sub, options, true, transport), Switched);
+                        sub == null ? null : subService!.Open(sub, options, true, transport), Switched, delivery: main.SituationDelivery, fallbackDelivery: sub?.SituationDelivery);
                 return new AdvisorBackendHandle(new AdvisorErrorBackend(backend, transport), transport);
             }
             catch (Exception error) { transport.CaptureFailure(error); transport.Dispose(); throw; }
-        }, main.Name, sub?.Name ?? "");
+        }, main.Name, sub?.Name ?? "", mainService.Independent ? null : main.SituationDelivery);
+    }
+    internal static void ValidateDelivery(AdvisorService service, AdvisorApiConfiguration configuration)
+    {
+        if (service.Independent && configuration.SituationDelivery != AdvisorSituationDelivery.OnDemand)
+            throw new AdvisorConnectionException("situation_delivery_unavailable");
     }
     internal static AdvisorTraceOptions Diagnostics(AdvisorConnectionOptions options, AdvisorApiConfiguration main,
         AdvisorApiConfiguration? sub, AdvisorServiceCatalog catalog) => new(options.LogAiJson,

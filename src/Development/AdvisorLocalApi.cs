@@ -49,7 +49,7 @@ internal sealed class AdvisorLocalApi
     private readonly Func<AdvisorPromptOverrides> prompts;
     private readonly Action<Exception> unexpected;
     private readonly Func<JObject> connections;
-    private readonly Func<string, bool, string?, AdvisorBackendSetup> prepareConnection;
+    private readonly Func<string, bool, string?, AdvisorSituationDelivery?, AdvisorBackendSetup> prepareConnection;
     private object? owner;
     private string mode = "";
     private Func<IAdvisorLocalTarget>? target;
@@ -57,7 +57,7 @@ internal sealed class AdvisorLocalApi
     private AdvisorOperations? operations;
     private AdvisorUnitReservations? reservations;
     internal AdvisorLocalApi(Func<AdvisorPromptOverrides> prompts, Action<Exception> unexpected,
-        Func<JObject> connections, Func<string, bool, string?, AdvisorBackendSetup> prepareConnection)
+        Func<JObject> connections, Func<string, bool, string?, AdvisorSituationDelivery?, AdvisorBackendSetup> prepareConnection)
     { this.prompts = prompts; this.unexpected = unexpected; this.connections = connections; this.prepareConnection = prepareConnection; }
     internal JObject ConnectionInfo() => connections();
     internal void Attach(object owner, string mode, Func<IAdvisorLocalTarget> target, AdvisorOperations? operations = null, AdvisorUnitReservations? reservations = null)
@@ -172,7 +172,7 @@ internal sealed class AdvisorLocalApi
         if (method == "POST" && path == "/v1/consultations")
         {
             var question = body["question"]; var shortcut = body["shortcut"]; var fallback = body["allow_fallback"];
-            if (body.Properties().Any(p => p.Name != "question" && p.Name != "shortcut" && p.Name != "allow_fallback" && p.Name != "connection_id" && p.Name != "plain_advisor" && p.Name != "model") ||
+            if (body.Properties().Any(p => p.Name != "question" && p.Name != "shortcut" && p.Name != "allow_fallback" && p.Name != "connection_id" && p.Name != "plain_advisor" && p.Name != "model" && p.Name != "situation_delivery") ||
                 (question == null) == (shortcut == null) || (question != null && question.Type != JTokenType.String) ||
                 (shortcut != null && shortcut.Type != JTokenType.String))
                 throw new AdvisorLocalApiException(400, "specify_question_or_shortcut");
@@ -185,14 +185,25 @@ internal sealed class AdvisorLocalApi
             var model = body["model"];
             if (model != null && model.Type != JTokenType.String)
                 throw new AdvisorLocalApiException(400, "invalid_model");
+            AdvisorSituationDelivery? delivery = null;
+            if (body["situation_delivery"] is JToken suppliedDelivery)
+            {
+                if (suppliedDelivery.Type != JTokenType.String) throw new AdvisorLocalApiException(400, "invalid_situation_delivery");
+                delivery = (string?)suppliedDelivery switch
+                {
+                    "on_demand" => AdvisorSituationDelivery.OnDemand, "upfront" => AdvisorSituationDelivery.Upfront,
+                    _ => throw new AdvisorLocalApiException(400, "invalid_situation_delivery")
+                };
+            }
             var info = ConnectionInfo();
             var id = (string?)body["connection_id"] ?? (string?)info["default_connection_id"];
             if (id == null) throw new AdvisorLocalApiException(409, "default_connection_missing");
             if (!((JArray)info["connections"]!).Any(c => (string?)c["id"] == id))
                 throw new AdvisorLocalApiException(403, "connection_not_allowed");
-            var execution = prepareConnection(id, (bool?)fallback ?? false, (string?)model);
+            var execution = prepareConnection(id, (bool?)fallback ?? false, (string?)model, delivery);
             last = Target().LocalConsult((string?)question, (string?)shortcut, (bool?)fallback ?? false, execution, (bool?)plain ?? false);
             return new(202, new JObject { ["connection_id"] = id, ["connection_name"] = execution.ConnectionName, ["model"] = execution.Model,
+                ["situation_delivery"] = execution.SituationDelivery?.Code(),
                 ["allow_fallback"] = last.AllowFallback, ["plain_advisor"] = last.PlainAdvisor, ["id"] = last.Id, ["status_url"] = "/v1/consultations/" + last.Id });
         }
         return AdvisorLocalResponse.Error(404, "unknown_endpoint");

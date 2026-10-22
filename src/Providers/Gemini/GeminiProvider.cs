@@ -20,7 +20,7 @@ internal sealed class GeminiProvider : IAdvisorProvider
         private readonly IGeminiTransport transport;
         private readonly AdvisorSettings settings;
         private readonly string system;
-        private readonly JObject tool;
+        private readonly JObject? tool;
         private readonly JObject? operationTool;
         private JArray input;
         private string? previous;

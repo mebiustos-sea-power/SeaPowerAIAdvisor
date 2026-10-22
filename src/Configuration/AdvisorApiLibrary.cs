@@ -14,13 +14,14 @@ internal sealed class AdvisorApiConfiguration
     internal string Provider { get; }
     internal int RequestTimeoutSeconds { get; }
     internal JObject Settings { get; }
+    internal AdvisorSituationDelivery SituationDelivery { get; }
     internal string ApiKey => (string?)Settings["api_key"] ?? "";
     internal string Model => (string?)Settings["model"] ?? "";
     internal AdvisorApiConfiguration(string id, string name, string key, string model, int requestTimeoutSeconds = AdvisorRequestTimeout.DefaultSeconds)
         : this(id, name, "gemini", new JObject { ["api_key"] = key.Trim(), ["model"] = model.Trim() }, requestTimeoutSeconds) { }
-    internal AdvisorApiConfiguration(string id, string name, string provider, JObject settings, int requestTimeoutSeconds = AdvisorRequestTimeout.DefaultSeconds)
-    { Id = id; Name = name.Trim(); Provider = provider; Settings = (JObject)settings.DeepClone(); RequestTimeoutSeconds = AdvisorRequestTimeout.Validate(requestTimeoutSeconds); }
-    internal JObject Json() => new() { ["id"] = Id, ["name"] = Name, ["provider"] = Provider, ["settings"] = Settings.DeepClone(), ["request_timeout_seconds"] = RequestTimeoutSeconds };
+    internal AdvisorApiConfiguration(string id, string name, string provider, JObject settings, int requestTimeoutSeconds = AdvisorRequestTimeout.DefaultSeconds, AdvisorSituationDelivery situationDelivery = AdvisorSituationDelivery.OnDemand)
+    { SituationDelivery = situationDelivery; _ = situationDelivery.Code(); Id = id; Name = name.Trim(); Provider = provider; Settings = (JObject)settings.DeepClone(); RequestTimeoutSeconds = AdvisorRequestTimeout.Validate(requestTimeoutSeconds); }
+    internal JObject Json() => new() { ["id"] = Id, ["name"] = Name, ["provider"] = Provider, ["settings"] = Settings.DeepClone(), ["request_timeout_seconds"] = RequestTimeoutSeconds, ["situation_delivery"] = SituationDelivery.Code() };
 }
 
 internal sealed class AdvisorApiLibrary
@@ -62,11 +63,11 @@ internal sealed class AdvisorApiLibrary
         {
             var legacy = (int)source["schema_version"]! == 2;
             var fields = legacy ? new[] { "id", "name", "api_key", "model" } : new[] { "id", "name", "provider", "settings" };
-            if (entry is not JObject item || item.Properties().Any(p => !fields.Contains(p.Name) && (legacy || p.Name != "request_timeout_seconds")) ||
+            if (entry is not JObject item || item.Properties().Any(p => !fields.Contains(p.Name) && (legacy || (p.Name != "request_timeout_seconds" && p.Name != "situation_delivery"))) ||
                 fields.Any(f => item[f]?.Type != (f == "settings" ? JTokenType.Object : JTokenType.String))) throw Invalid();
             items.Add(legacy
                 ? new AdvisorApiConfiguration((string)item["id"]!, (string)item["name"]!, (string)item["api_key"]!, (string)item["model"]!, legacyTimeout)
-                : new AdvisorApiConfiguration((string)item["id"]!, (string)item["name"]!, (string)item["provider"]!, (JObject)item["settings"]!, AdvisorRequestTimeout.Read(item, legacyTimeout)));
+                : new AdvisorApiConfiguration((string)item["id"]!, (string)item["name"]!, (string)item["provider"]!, (JObject)item["settings"]!, AdvisorRequestTimeout.Read(item, legacyTimeout), AdvisorSituationDeliverySetting.Read(item)));
         }
         var result = new AdvisorApiLibrary(items, (string?)source["main_api_id"], (string?)source["sub_api_id"]);
         result.ValidateAssignments();
@@ -122,9 +123,10 @@ internal sealed class AdvisorApiConfigurationDraft
     internal string Provider { get; set; }
     internal int RequestTimeoutSeconds { get; set; }
     internal JObject Settings { get; set; }
+    internal AdvisorSituationDelivery SituationDelivery { get; set; }
     internal string ApiKey { get => (string?)Settings["api_key"] ?? ""; set => Settings["api_key"] = value.Trim(); }
     internal string Model { get => (string?)Settings["model"] ?? ""; set => Settings["model"] = value.Trim(); }
     internal AdvisorApiConfigurationDraft(AdvisorApiConfiguration value)
-    { Id = value.Id; Name = value.Name; Provider = value.Provider; Settings = (JObject)value.Settings.DeepClone(); RequestTimeoutSeconds = value.RequestTimeoutSeconds; }
-    internal AdvisorApiConfiguration Build() => new(Id, Name, Provider, Settings, RequestTimeoutSeconds);
+    { Id = value.Id; Name = value.Name; Provider = value.Provider; Settings = (JObject)value.Settings.DeepClone(); RequestTimeoutSeconds = value.RequestTimeoutSeconds; SituationDelivery = value.SituationDelivery; }
+    internal AdvisorApiConfiguration Build() => new(Id, Name, Provider, Settings, RequestTimeoutSeconds, SituationDelivery);
 }

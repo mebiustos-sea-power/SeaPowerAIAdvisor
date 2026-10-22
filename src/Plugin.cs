@@ -62,10 +62,10 @@ public sealed class Plugin : IAnchorChainMod
                 return true;
             });
             LocalApi = new AdvisorLocalApi(() => AdvisorPromptOverrides.Session, error => Log.LogError("Developer local API failed: " + error),
-                () => options.Current.LocalConnections.Describe(AdvisorSettings.Edit(settingsPath)), (id, allowFallback, model) =>
+                () => options.Current.LocalConnections.Describe(AdvisorSettings.Edit(settingsPath)), (id, allowFallback, model, delivery) =>
                 {
                     var saved = AdvisorSettings.Edit(settingsPath);
-                    options.Current.LocalConnections.Select(saved, id, allowFallback, model);
+                    options.Current.LocalConnections.Select(saved, id, allowFallback, model, delivery);
                     return AdvisorServices.Prepare(saved, allowFallback: allowFallback);
                 });
             var driverObject = new UnityEngine.GameObject("SeaPowerAIAdvisor.DeveloperLocalApi");

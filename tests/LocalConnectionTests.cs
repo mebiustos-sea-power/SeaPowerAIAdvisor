@@ -14,10 +14,10 @@ internal static partial class LocalApiTests
             var policy = new AdvisorLocalConnections(new[] { "local", "sub" }, "local");
             var target = new Target(); var selected = "";
             var api = new AdvisorLocalApi(() => new AdvisorPromptOverrides(AdvisorPrompts.Load(AdvisorPrompts.DefaultDirectory)), error => throw error,
-                () => policy.Describe(settings), (id, fallback, model) =>
+                () => policy.Describe(settings), (id, fallback, model, delivery) =>
                 {
                     selected = id;
-                    var draft = LocalLibrary(); policy.Select(draft, id, fallback, model);
+                    var draft = LocalLibrary(); policy.Select(draft, id, fallback, model, delivery);
                     return AdvisorServices.Prepare(draft, allowFallback: fallback);
                 });
             api.Attach(new object(), "tactical_battle", () => target); api.Enable();
@@ -47,16 +47,56 @@ internal static partial class LocalApiTests
                 "Deleting the default caused automatic reassignment: " + deletedDefault + " / " + rejectedDefault.Data);
             api.Disable();
         });
+        check("Developer delivery overrides validate input, preserve saved modes and fallback settings, and report the captured mode", () =>
+        {
+            var settings = LocalLibrary(); settings.Find("local")!.SituationDelivery = AdvisorSituationDelivery.Upfront;
+            var original = settings.Data(); var policy = new AdvisorLocalConnections(new[] { "local", "sub" }, "local");
+            var target = new Target(); var prepared = 0;
+            var api = new AdvisorLocalApi(() => new AdvisorPromptOverrides(AdvisorPrompts.Load(AdvisorPrompts.DefaultDirectory)), error => throw error,
+                () => policy.Describe(settings), (id, fallback, model, delivery) =>
+                {
+                    var draft = new AdvisorSettingsDraft(JObject.Parse(System.Text.Encoding.UTF8.GetString(original)));
+                    policy.Select(draft, id, fallback, model, delivery); prepared++;
+                    Require(draft.Find("sub")!.SituationDelivery == AdvisorSituationDelivery.OnDemand && draft.MainId == "local",
+                        "A delivery override changed another connection");
+                    return AdvisorServices.Prepare(draft, allowFallback: fallback);
+                });
+            api.Attach(new object(), "tactical_battle", () => target); api.Enable();
+            var info = Send(api, "GET", "/v1/connections");
+            Require((string?)info.Data["connections"]![0]!["situation_delivery"] == "upfront",
+                "Discovery omitted the saved mode");
+            foreach (var value in new JToken[] { JValue.CreateNull(), new JValue(""), new JValue("typo"), new JValue(false), new JValue(1), new JObject(), new JArray() })
+            {
+                var invalid = Send(api, "POST", "/v1/consultations", new JObject { ["question"] = "Question", ["situation_delivery"] = value });
+                Require(invalid.Status == 400 && (string?)invalid.Data["error"] == "invalid_situation_delivery" && !target.Called && prepared == 0,
+                    "An invalid delivery reached execution");
+            }
+            var denied = Send(api, "POST", "/v1/consultations", new JObject { ["question"] = "Question", ["connection_id"] = "normal", ["situation_delivery"] = "upfront" });
+            Require(denied.Status == 403 && prepared == 0 && !target.Called, "A delivery override bypassed the allowlist");
+            foreach (var choice in new[] { "on_demand", "upfront", null })
+            {
+                var body = new JObject { ["shortcut"] = "key_risks" };
+                if (choice != null) body["situation_delivery"] = choice;
+                var accepted = Send(api, "POST", "/v1/consultations", body);
+                Require(accepted.Status == 202 && (string?)accepted.Data["situation_delivery"] == (choice ?? "upfront") &&
+                    !target.Run!.AllowFallback && settings.Data().SequenceEqual(original),
+                    "The override leaked into another consultation, enabled fallback or rewrote a saved setting");
+                Send(api, "POST", "/v1/consultations/cancel");
+            }
+            Require((string?)Send(api, "GET", "/v1/connections").Data["connections"]![0]!["situation_delivery"] == "upfront",
+                "A consultation override was published as the saved default");
+            api.Disable();
+        });
         check("Developer model overrides require permission and do not survive the consultation draft", () =>
         {
             var settings = LocalLibrary(); var original = settings.Data();
             var policy = new AdvisorLocalConnections(new[] { "local", "sub" }, "local");
             var target = new Target();
             var api = new AdvisorLocalApi(() => new AdvisorPromptOverrides(AdvisorPrompts.Load(AdvisorPrompts.DefaultDirectory)), error => throw error,
-                () => policy.Describe(settings), (id, fallback, model) =>
+                () => policy.Describe(settings), (id, fallback, model, delivery) =>
                 {
                     var draft = new AdvisorSettingsDraft(JObject.Parse(System.Text.Encoding.UTF8.GetString(original)));
-                    policy.Select(draft, id, fallback, model);
+                    policy.Select(draft, id, fallback, model, delivery);
                     return AdvisorServices.Prepare(draft, allowFallback: fallback);
                 });
             api.Attach(new object(), "tactical_battle", () => target); api.Enable();

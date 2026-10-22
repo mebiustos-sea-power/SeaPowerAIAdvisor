@@ -10,11 +10,12 @@ public sealed class ConsultationInput
 {
     public string DataJson { get; }
     public string SystemInstruction { get; }
-    public string ToolJson { get; }
+    // Null when the host has supplied the complete snapshot and no read-only lookups remain.
+    public string? ToolJson { get; }
     public string? OperationToolJson { get; }
-    public ConsultationInput(string dataJson, string systemInstruction, string toolJson)
+    public ConsultationInput(string dataJson, string systemInstruction, string? toolJson)
         : this(dataJson, systemInstruction, toolJson, null) { }
-    public ConsultationInput(string dataJson, string systemInstruction, string toolJson, string? operationToolJson)
+    public ConsultationInput(string dataJson, string systemInstruction, string? toolJson, string? operationToolJson)
     { DataJson = dataJson; SystemInstruction = systemInstruction; ToolJson = toolJson; OperationToolJson = operationToolJson; }
 }
 

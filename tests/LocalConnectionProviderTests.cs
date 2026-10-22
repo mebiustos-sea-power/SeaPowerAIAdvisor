@@ -47,6 +47,39 @@ internal static partial class ProviderTests
                     "Developer selection changed the normal stored main/sub assignments");
             }
         }));
+        check("Developer delivery overrides reach the NanoGPT wire while saved credentials, modes and subsequent defaults remain unchanged", () => Async(async () =>
+        {
+            await InServiceDirectory(async directory =>
+            {
+                var saved = NanoDraft(); var path = System.IO.Path.Combine(directory, "settings.json");
+                AdvisorSettings.WriteBytes(path, saved.Data()); var original = System.IO.File.ReadAllBytes(path);
+                var policy = new AdvisorLocalConnections(new[] { "nano" }, "nano");
+                foreach (var choice in new AdvisorSituationDelivery?[] { AdvisorSituationDelivery.Upfront, AdvisorSituationDelivery.OnDemand, null })
+                {
+                    var draft = AdvisorSettings.Edit(path); policy.Select(draft, "nano", false, situationDelivery: choice);
+                    var expected = choice ?? AdvisorSituationDelivery.OnDemand;
+                    var handler = new BackendHttpHandler(async (request, token) =>
+                    {
+                        var body = JObject.Parse(await request.Content!.ReadAsStringAsync(token));
+                        Require(request.RequestUri!.AbsolutePath == "/api/subscription/v1/chat/completions" &&
+                            request.Headers.GetValues("Authorization").Single() == "Bearer mock_nano_secret" &&
+                            (string?)body["model"] == NanoGptService.DefaultModel, "Delivery changed credentials, endpoint or model");
+                        var data = JObject.Parse((string)body["messages"]![1]!["content"]!);
+                        Require((string?)data["interaction_mode"] == expected.Code() &&
+                            (data["situation_data"] != null) == (expected == AdvisorSituationDelivery.Upfront) &&
+                            (body["tools"] == null) == (expected == AdvisorSituationDelivery.Upfront),
+                            "The consultation used the saved delivery instead of its override");
+                        return JsonResponse(NanoReply("Per-request delivery"));
+                    });
+                    var setup = AdvisorServices.Prepare(draft, allowFallback: false, transportFactory: trace => new AdvisorHttpTransport(handler, trace));
+                    var result = await AdvisorConsultation.RunAsync(setup, AdvisorContext.Create(DeliveryKnowledge(), Array.Empty<ChatExchange>()),
+                        directory, new AdvisorQuestion("Question"), default);
+                    Require(result.Completed && result.ApiRequests == 1 && setup.SituationDelivery == expected &&
+                        System.IO.File.ReadAllBytes(path).SequenceEqual(original) && AdvisorSettings.Edit(path).Main.SituationDelivery == AdvisorSituationDelivery.OnDemand,
+                        "The override persisted, altered its reported mode or required extra requests");
+                }
+            });
+        }));
         check("Developer model override reuses NanoGPT subscription credentials and records the actual model without saving it", () => Async(async () =>
         {
             await InServiceDirectory(async directory =>

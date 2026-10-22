@@ -151,7 +151,7 @@ internal static partial class LocalApiTests
     private static AdvisorLocalApi Api(AdvisorPromptOverrides? overrides = null) => new(
         () => overrides ?? new AdvisorPromptOverrides(AdvisorPrompts.Load(AdvisorPrompts.DefaultDirectory)), error => throw error,
         () => new JObject { ["default_connection_id"] = "test", ["connections"] = new JArray(new JObject { ["id"] = "test" }) },
-        (_, fallback, _) => AdvisorServices.Prepare(new AdvisorSettingsDraft(new JObject { ["api_key"] = "mock-local-key" }), allowFallback: fallback));
+        (_, fallback, _, _) => AdvisorServices.Prepare(new AdvisorSettingsDraft(new JObject { ["api_key"] = "mock-local-key" }), allowFallback: fallback));
     private static AdvisorLocalResponse Send(AdvisorLocalApi api, string method, string path, JObject? body = null)
     { var task = api.Enqueue(method, path, body ?? new()); api.Pump(); return task.GetAwaiter().GetResult(); }
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }

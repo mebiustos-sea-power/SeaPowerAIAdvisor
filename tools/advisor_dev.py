@@ -186,7 +186,7 @@ def consultation_request(args):
         body = {"question": args.question}
     else:
         body = {"shortcut": args.shortcut}
-    if set(body) - {"question", "shortcut", "connection_id", "allow_fallback", "plain_advisor", "model"}:
+    if set(body) - {"question", "shortcut", "connection_id", "allow_fallback", "plain_advisor", "model", "situation_delivery"}:
         raise ToolError("Unsupported consultation request field.")
     if ("question" in body) == ("shortcut" in body):
         raise ToolError("Specify exactly one question or shortcut.")
@@ -200,6 +200,10 @@ def consultation_request(args):
     if "model" in body and (not isinstance(body["model"], str) or not body["model"].strip()
                             or len(body["model"]) > 200 or any(ord(c) < 32 or 127 <= ord(c) <= 159 for c in body["model"])):
         raise ToolError("model must be a nonempty model ID of at most 200 characters without control characters.")
+    if args.situation_delivery is not None:
+        body["situation_delivery"] = args.situation_delivery
+    if "situation_delivery" in body and body["situation_delivery"] not in ("on_demand", "upfront"):
+        raise ToolError("situation_delivery must be on_demand or upfront.")
     if args.allow_fallback is not None:
         body["allow_fallback"] = args.allow_fallback
     if args.plain_advisor is not None:
@@ -368,6 +372,8 @@ def parser():
     question.add_argument("--request-file", help="Full consultation request JSON.")
     request.add_argument("--connection-id", help="Omit to use the developer default.")
     request.add_argument("--model", help="Override this consultation model when permitted in Local API settings; saved connections are unchanged.")
+    request.add_argument("--situation-delivery", choices=("on_demand", "upfront"),
+                         help="Override situation delivery for this consultation; omit to use the saved connection setting.")
     fallback = request.add_mutually_exclusive_group()
     fallback.add_argument("--allow-fallback", dest="allow_fallback", action="store_true")
     fallback.add_argument("--no-fallback", dest="allow_fallback", action="store_false")

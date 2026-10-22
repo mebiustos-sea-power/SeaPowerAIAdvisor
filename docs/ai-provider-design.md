@@ -294,3 +294,17 @@ OpenRouterの使用量は `usage.total_tokens`を共通結果へ渡し、欠落�
 OpenAI互換の履歴・ツール呼び出し／結果・不透明な応答メタデータの保持と、2段階接続テストを`Providers/ChatCompletions`へ共有する。各提供元はURL・要求固有項目・課金エラーの解釈を所有する。Gemini Interactions／Ollamaの処理や公開SDK契約は変えない。
 
 API仕様の参照先：https://docs.nano-gpt.com/api-reference/endpoint/chat-completion 、定額APIの案内：https://nano-gpt.com/support 。
+
+## 接続別の戦況データ供給方式（2026-10-23 実装）
+
+登録済み接続の共通項目 `situation_delivery` で `on_demand`（省略時の初期値）／`upfront` を選ぶ。プロバイダー固有の `settings` には入れない。編集・複製・保存は接続の属性として引き継ぐ。既存設定を読むだけでは保存しない。既存のプロバイダーメッセージ欄には、Geminiの前回Interaction IDによる継続、Ollama／OpenRouter／NanoGPTの各要求での履歴再送を短く記載する。
+
+責務は次のとおり。
+
+- `BattleSnapshotExport`／`CampaignSnapshotExport` は各情報取得セッションの一部として、既存の非公開 `Dispatch` と同じ許可・整形を用いて固定スナップショットを全件取得する。`AdvisorSnapshotExport` は内部のID分割・ページ送りと共通資料の重複排除だけを担当し、公開問い合わせの回数・返却予算を消費しない。生の診断JSONは送らない。
+- `AdvisorSituationInput` が標準エンジンの一括入力を組み立てる。初期カタログと取得向け指示を置換し、許可済み全データを `situation_data` に載せる。戦況用スキーマを除き、WIP有効時の操作照会・実行提案は維持する。操作候補は必要時点のライブ照会のままで、戦況一括データに混ぜない。
+- `AdvisorReadSession` が相談全体の情報量と読取の受付を所有する。一括送信中の戦況取得はデータなしの `situation_already_supplied` とし、操作照会は通常処理する。一括入力が既存160,000バイトの情報量上限を超える場合は送信前に明示エラーとし、部分送信や自動の方式変更はしない。
+- `AdvisorEngine` は同じ相談ループを使用し、`AdvisorConnection` の切替時入力ファクトリーを通じてメイン／サブそれぞれの方式を適用する。元のスナップショットと相談上限は維持する。各プロバイダーはJSON・会話ID・履歴などの通信形式だけを担当する。
+- 独自相談処理には標準供給方式を強制せず、従来の入力／知識窓口を渡す。標準アダプターには読取ツールがない場合の `ToolJson=null` を許容する（公開型のnullable注釈のみで既存署名は維持）。
+
+一括送信で消えるのは戦況の追加取得であり、操作照会・提案の往復や履歴再送は残る。入力トークン・応答品質の優劣は実測前に断定しない。接続テストは通信互換性の小さな試験のままとし、ゲームの全量データを送らない。
