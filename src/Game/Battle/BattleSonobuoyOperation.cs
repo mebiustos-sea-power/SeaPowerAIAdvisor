@@ -29,7 +29,7 @@ internal sealed class BattleSonobuoyAmmo
 }
 
 // One native compound reservation handles both travel and release. It never waits for deployment.
-internal sealed class BattleSonobuoyOperation : IAdvisorOperation, IAdvisorOperationPreview
+internal sealed class BattleSonobuoyOperation : IAdvisorOperation, IAdvisorOperationPreview, IAdvisorOperationArgumentNormalizer
 {
     internal const string OperationId = "seapower.schedule_sonobuoy_drop";
     private readonly Func<IReadOnlyList<IBattleSonobuoyUnit>> units;
@@ -77,6 +77,22 @@ internal sealed class BattleSonobuoyOperation : IAdvisorOperation, IAdvisorOpera
                     ["remaining_count"] = a.Remaining, ["available_count"] = a.Available, ["single_drop_supported"] = a.SingleDrop }))
             };
         }));
+    }
+    public JObject NormalizeArguments(string target, JObject arguments, AdvisorOperationReferences references, JArray resolutions)
+    {
+        CheckInformation();
+        if (arguments["ammunition"]?.Type != JTokenType.String) return arguments;
+        var requested = (string)arguments["ammunition"]!;
+        var unit = units().FirstOrDefault(u => "unit:" + u.Id.ToString(CultureInfo.InvariantCulture) == target);
+        if (unit == null) return arguments;
+        var matches = references.Weapons.Match(requested, unit.Ammunition().Select(a => (a.Id, a.Name)), out var reason);
+        if (matches.Length > 1) throw new AdvisorOperationException(409, "ambiguous_ammunition_reference");
+        if (matches.Length == 1 && matches[0] != requested)
+        {
+            arguments["ammunition"] = matches[0];
+            resolutions.Add(new JObject { ["argument"] = "ammunition", ["requested"] = requested, ["resolved"] = matches[0], ["reason"] = reason });
+        }
+        return arguments;
     }
     public void Validate(IReadOnlyList<AdvisorOperationOrder> orders)
     {

@@ -68,7 +68,7 @@ internal static class OperationTargetTests
                 trial.Main.Orders.Count == 1 && trial.Main.Orders[0] == ("custom_buoy", 26.5, 127.5),
                 "An alias retry registered twice or changed the operation arguments");
             using var retry = trial.Gateway.CreateSession("replay", AdvisorPrompts.Current,
-                new AdvisorUnitReferences(new[] { ("own_unit_8", 8) }))!;
+                new AdvisorOperationReferences(new AdvisorUnitReferences(new[] { ("own_unit_8", 8) })))!;
             Require(Code(Send(trial, retry, Execute("own_unit_8"))) == "request_id_conflict" && trial.Other.Orders.Count == 0,
                 "A retry rebound a previously registered request to another unit");
         });
@@ -77,7 +77,7 @@ internal static class OperationTargetTests
             using var trial = new Trial();
             using var first = trial.Gateway.CreateSession("first", AdvisorPrompts.Current, References())!;
             using var next = trial.Gateway.CreateSession("next", AdvisorPrompts.Current,
-                new AdvisorUnitReferences(new[] { ("own_unit_8", 8) }))!;
+                new AdvisorOperationReferences(new AdvisorUnitReferences(new[] { ("own_unit_8", 8) })))!;
             using var empty = trial.Gateway.CreateSession("empty", AdvisorPrompts.Current)!;
             Require((string?)Send(trial, first, Candidates("own_unit_8"))["candidates"]?[0]?["target_ref"] == "unit:42" &&
                 (string?)Send(trial, next, Candidates("own_unit_8"))["candidates"]?[0]?["target_ref"] == "unit:8",
@@ -85,7 +85,7 @@ internal static class OperationTargetTests
             Require(Code(Send(trial, empty, Candidates("own_unit_8"))) == "unknown_unit_reference" &&
                 (int?)Send(trial, empty, Candidates("unit:42"))["total_count"] == 1, "An absent map guessed an ID or broke canonical callers");
         });
-        check("Unit normalization leaves ammunition identifiers and conflicting request IDs unchanged", () =>
+        check("Unit normalization does not guess unmapped ammunition references or replace conflicting request IDs", () =>
         {
             using var trial = new Trial();
             using var session = trial.Gateway.CreateSession("ammunition", AdvisorPrompts.Current, References())!;
@@ -119,7 +119,7 @@ internal static class OperationTargetTests
                 trial.Main.Orders.Count == 0, "A retired battle applied an old alias");
         });
     }
-    private static AdvisorUnitReferences References() => new AdvisorUnitReferences(new[] { ("own_unit_8", 42), ("own_unit_9", 8) }).Only(new[] { "own_unit_8" });
+    private static AdvisorOperationReferences References() => new(new AdvisorUnitReferences(new[] { ("own_unit_8", 42), ("own_unit_9", 8) }).Only(new[] { "own_unit_8" }));
     private static JObject Candidates(string target) => new() { ["action"] = "candidates", ["operation_id"] = BattleSonobuoyOperation.OperationId, ["target_ref"] = target };
     private static JObject Execute(string target, string id = "order-1") => new()
     {

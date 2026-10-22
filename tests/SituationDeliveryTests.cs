@@ -219,8 +219,8 @@ internal static partial class ProviderTests
                 ["id"] = "own_unit_" + i, ["display_name"] = "Own " + i, ["fuel"] = new JObject { ["remaining"] = 80 },
                 ["damage"] = new JObject { ["damage_fraction"] = 0 }, ["sensors"] = new JArray(new JObject { ["active"] = true }),
                 ["sensor_performance"] = new JArray(new JObject { ["reference_id"] = "sensor_1" }),
-                ["weapons"] = new JObject { ["ammunition"] = new JArray(new JObject { ["reference_id"] = "weapon_1", ["remaining_count"] = 4 }) } })),
-            ["weapon_references"] = new JArray(new JObject { ["id"] = "weapon_1", ["details"] = referenceText }),
+                ["weapons"] = new JObject { ["ammunition"] = new JArray(new JObject { ["reference_id"] = "weapon_1", ["display_name"] = "Test weapon", ["remaining_count"] = 4 }) } })),
+            ["weapon_references"] = new JArray(new JObject { ["id"] = "weapon_1", ["reference_key"] = "test_weapon", ["details"] = referenceText }),
             ["sensor_references"] = new JArray(new JObject { ["id"] = "sensor_1", ["range"] = 100 }),
             ["observed_contacts"] = new JArray(Enumerable.Range(1, 25).Select(i => new JObject { ["id"] = "observed_contact_" + i,
                 ["kind"] = "surface", ["posture"] = i == 24 ? "neutral" : "enemy", ["destroyed"] = i == 25 }))

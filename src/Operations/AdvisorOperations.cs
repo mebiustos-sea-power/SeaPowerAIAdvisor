@@ -18,6 +18,12 @@ internal interface IAdvisorOperation
     JObject Execute(string target, JObject arguments);
 }
 
+// Optional: each command owns the meaning of its arguments; normalization precedes receipt comparison.
+internal interface IAdvisorOperationArgumentNormalizer
+{
+    JObject NormalizeArguments(string target, JObject arguments, AdvisorOperationReferences references, JArray resolutions);
+}
+
 internal sealed class AdvisorOperationException : Exception
 {
     internal int Status { get; }
@@ -114,6 +120,14 @@ internal sealed class AdvisorOperations
         CheckEnabled();
         if (Proposal(owner)?.State != AdvisorProposalState.Collecting)
             proposals[owner] = new AdvisorOperationProposal(owner);
+    }
+    internal JObject NormalizeArguments(string id, string target, JObject arguments, AdvisorOperationReferences references, JArray resolutions)
+    {
+        CheckEnabled();
+        var operation = Operation(id);
+        var detached = (JObject)arguments.DeepClone();
+        return operation is IAdvisorOperationArgumentNormalizer normalizer
+            ? normalizer.NormalizeArguments(target, detached, references, resolutions) : detached;
     }
     internal JObject Propose(string owner, JObject request)
     {

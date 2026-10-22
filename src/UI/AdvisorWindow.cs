@@ -435,8 +435,10 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
             var execution = prepared ?? backends.Prepare(recording?.AllowFallback ?? true);
             IAdvisorQuerySession session = source.CreateSession(replyLanguage(), request.Text, options.Current.MaxQueryRounds, options.Current.Information, request.Context);
             turn.SetUnitReferences(session is IAdvisorUnitReferenceSource references ? references.UnitReferences : AdvisorUnitReferences.Empty);
+            var operationReferences = session is IAdvisorOperationReferenceSource operationSource
+                ? operationSource.OperationReferences : new AdvisorOperationReferences(turn.UnitReferences);
             if (recording != null) session = recording.Observe(session);
-            var operationSession = (source as IAdvisorOperationSource)?.CreateOperations(turn.OperationId, session.Prompts, turn.UnitReferences);
+            var operationSession = (source as IAdvisorOperationSource)?.CreateOperations(turn.OperationId, session.Prompts, operationReferences);
             if (recording != null && operationSession != null) operationSession = recording.Observe(operationSession);
             var historyLimit = options.Current.HistoryExchanges;
             pendingTurn = turn;

@@ -205,8 +205,8 @@ internal static partial class ProviderTests
             ["movement_plans"] = new JArray(Enumerable.Range(1, 2).Select(i => new JObject { ["id"] = "own_unit_" + i, ["route_unit_id"] = "own_unit_" + i })),
             ["movement_routes"] = new JArray(Enumerable.Range(1, 2).Select(i => new JObject { ["id"] = "own_unit_" + i, ["waypoints"] = new JArray() })),
             ["unit_capabilities"] = new JArray(new JObject { ["id"] = "own_unit_1", ["display_name"] = "Own 1", ["weapons"] = new JObject
-                { ["ammunition"] = new JArray(new JObject { ["reference_id"] = "weapon_reference_1", ["remaining_count"] = 4 }) } }),
-            ["weapon_references"] = new JArray(new JObject { ["id"] = "weapon_reference_1", ["details"] = referenceText }),
+                { ["ammunition"] = new JArray(new JObject { ["reference_id"] = "weapon_reference_1", ["display_name"] = "Test weapon", ["remaining_count"] = 4 }) } }),
+            ["weapon_references"] = new JArray(new JObject { ["id"] = "weapon_reference_1", ["reference_key"] = "test_weapon", ["details"] = referenceText }),
             ["observed_contacts"] = new JArray(new JObject { ["id"] = "observed_contact_1", ["kind"] = "surface", ["posture"] = "enemy" },
                 new JObject { ["id"] = "observed_contact_2", ["kind"] = "air", ["posture"] = "enemy" })
         };

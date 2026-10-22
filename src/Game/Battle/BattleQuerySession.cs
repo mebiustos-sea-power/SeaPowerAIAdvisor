@@ -8,7 +8,7 @@ using static SeaPowerAIAdvisor.AdvisorQueryLimits;
 namespace SeaPowerAIAdvisor;
 
 // Queries operate exclusively on the detached player view captured at consultation start.
-internal sealed partial class BattleQuerySession : IAdvisorQuerySession, IAdvisorUnitReferenceSource, IAdvisorSnapshotSource
+internal sealed partial class BattleQuerySession : IAdvisorQuerySession, IAdvisorUnitReferenceSource, IAdvisorOperationReferenceSource, IAdvisorSnapshotSource
 {
     private static readonly AdvisorRequestShape[] requestShapes = {
         new(new[] { "catalog", "get_briefing" }, Array.Empty<string>()),
@@ -29,6 +29,7 @@ internal sealed partial class BattleQuerySession : IAdvisorQuerySession, IAdviso
     public int MaxRounds { get; }
     public AdvisorPrompts Prompts { get; }
     public AdvisorUnitReferences UnitReferences { get; }
+    public AdvisorOperationReferences OperationReferences { get; }
     private int returnedBytes;
     private readonly HashSet<string> deliveredWeaponReferences = new(StringComparer.Ordinal);
     private readonly HashSet<string> deliveredSensorReferences = new(StringComparer.Ordinal);
@@ -48,6 +49,13 @@ internal sealed partial class BattleQuerySession : IAdvisorQuerySession, IAdviso
         snapshot["movement_routes"] ??= new JArray();
         BattleInformation.Apply(snapshot, information);
         UnitReferences = situation.UnitReferences.Only(Rows("friendly_units").Select(row => (string)row["id"]!));
+        var weaponReferences = information.Allows(InformationKind.BattleWeapons)
+            ? new AdvisorWeaponReferences(Rows("unit_capabilities").SelectMany(row => row["weapons"]?["ammunition"] as JArray ?? new JArray())
+                .Join(Rows("weapon_references"), ammo => (string?)ammo["reference_id"], reference => (string?)reference["id"],
+                    (ammo, reference) => new[] { ((string)reference["id"]!, (string)reference["reference_key"]!, (string)ammo["display_name"]!),
+                        ((string)reference["id"]!, (string)reference["reference_key"]!, (string?)reference["display_name"] ?? (string)ammo["display_name"]!) }).SelectMany(rows => rows))
+            : AdvisorWeaponReferences.Empty;
+        OperationReferences = new AdvisorOperationReferences(UnitReferences, weaponReferences);
         if (context != null) assessment = new BattleContactAssessment(snapshot, context, information);
         initial = AdvisorInputBuilder.Header(language, question, Prompts, true);
         initial["schema_version"] = 5;
