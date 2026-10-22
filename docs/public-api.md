@@ -78,6 +78,8 @@ The host's standard strategy has a per-connection `situation_delivery` setting (
 
 Independent consultations keep their original input/gateway and control their own retrieval strategy. The host's upfront setting is unavailable for them. The independent/standard handoff still preserves the captured knowledge and executed-retrieval history; a standard sub connection applies its own saved delivery choice.
 
+AI operation `candidates` and `execute` requests may use the current consultation's known own-unit alias (`own_unit_N` or `unit:own_unit_N`) as `target_ref`. The host resolves it to the game's `unit:<id>` before candidate filtering and receipt comparison, preserving approval and live validation. Unknown own-unit aliases return `unknown_unit_reference`; numeric and custom target references are not guessed or reinterpreted. A corrected response includes `target_ref_resolution` with `requested`, `resolved` and `reason: "consultation_unit_reference"`; operation history retains the original request. Ammunition and request IDs are unchanged. Independent consultations use this same operation service.
+
 The host retains its existing batching, disclosure validation, retrieval/sending limits, progress and main/sub policy. An empty final reply fails instead of producing an empty successful turn.
 
 ## Independent consultation

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -40,11 +41,12 @@ internal sealed class AdvisorOperationGateway : IDisposable
     {
         internal readonly string Owner;
         internal readonly JObject Request;
+        internal readonly AdvisorUnitReferences UnitReferences;
         internal readonly CancellationToken Cancellation;
         internal readonly DateTime Deadline = DateTime.UtcNow.AddSeconds(15);
         internal readonly TaskCompletionSource<JObject> Completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        internal Command(string owner, JObject request, CancellationToken cancellation)
-        { Owner = owner; Request = (JObject)request.DeepClone(); Cancellation = cancellation; }
+        internal Command(string owner, JObject request, AdvisorUnitReferences unitReferences, CancellationToken cancellation)
+        { Owner = owner; Request = (JObject)request.DeepClone(); UnitReferences = unitReferences; Cancellation = cancellation; }
     }
     private readonly AdvisorOperations operations;
     private readonly ConcurrentQueue<Command> commands = new();
@@ -53,11 +55,11 @@ internal sealed class AdvisorOperationGateway : IDisposable
     private int queued;
     internal AdvisorOperations Operations => operations;
     internal AdvisorOperationGateway(AdvisorOperations operations) => this.operations = operations;
-    internal IAdvisorOperationSession? CreateSession(string owner, AdvisorPrompts prompts)
+    internal IAdvisorOperationSession? CreateSession(string owner, AdvisorPrompts prompts, AdvisorUnitReferences? unitReferences = null)
     {
         if (!operations.Enabled) return null;
         operations.BeginProposal(owner);
-        return new Session(this, owner, prompts, operations.PriorOrders(owner));
+        return new Session(this, owner, prompts, operations.PriorOrders(owner), unitReferences ?? AdvisorUnitReferences.Empty);
     }
 
     internal void Pump()
@@ -67,12 +69,16 @@ internal sealed class AdvisorOperationGateway : IDisposable
             Interlocked.Decrement(ref queued);
             if (command.Cancellation.IsCancellationRequested) { command.Completion.TrySetCanceled(); continue; }
             if (DateTime.UtcNow >= command.Deadline) { command.Completion.TrySetResult(Error("game_thread_unavailable")); continue; }
-            try { command.Completion.TrySetResult(Dispatch(command.Owner, command.Request)); }
-            catch (AdvisorOperationException error) { command.Completion.TrySetResult(Error(error.Code)); }
+            JObject? resolution = null;
+            JObject result;
+            try { result = Dispatch(command.Owner, command.Request, command.UnitReferences, out resolution); }
+            catch (AdvisorOperationException error) { result = Error(error.Code); }
             catch (Exception error) { command.Completion.TrySetException(error); throw; }
+            if (resolution != null) result["target_ref_resolution"] = resolution;
+            command.Completion.TrySetResult(result);
         }
     }
-    private async Task<JObject> Enqueue(string owner, JObject request, CancellationToken cancellation)
+    private async Task<JObject> Enqueue(string owner, JObject request, AdvisorUnitReferences unitReferences, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
         Command command;
@@ -81,19 +87,34 @@ internal sealed class AdvisorOperationGateway : IDisposable
             if (disposed) return Error("operation_scope_changed");
             if (Interlocked.Increment(ref queued) > 16)
             { Interlocked.Decrement(ref queued); return Error("operation_queue_full"); }
-            command = new Command(owner, request, cancellation); commands.Enqueue(command);
+            command = new Command(owner, request, unitReferences, cancellation); commands.Enqueue(command);
         }
         var deadline = Task.Delay(TimeSpan.FromSeconds(15), cancellation);
         await Task.WhenAny(command.Completion.Task, deadline).ConfigureAwait(false);
         cancellation.ThrowIfCancellationRequested();
         return command.Completion.Task.IsCompleted ? await command.Completion.Task.ConfigureAwait(false) : Error("game_thread_unavailable");
     }
-    private JObject Dispatch(string owner, JObject request)
+    private JObject Dispatch(string owner, JObject request, AdvisorUnitReferences unitReferences, out JObject? resolution)
     {
+        resolution = null;
         if (!operations.Enabled) throw new AdvisorOperationException(403, "unit_operations_disabled");
         var action = Text(request, "action");
         if (requestShapes.Any(s => s.Matches(action)) && !requestShapes.Any(s => s.Matches(action) && s.AllowsFields(request, "action") && s.HasRequired(request)))
             throw new AdvisorOperationException(400, "invalid_operation_request");
+        if ((action is "candidates" or "execute") && request["target_ref"] != null)
+        {
+            var target = Text(request, "target_ref");
+            var alias = target.StartsWith("unit:", StringComparison.Ordinal) ? target.Substring(5) : target;
+            if (alias.StartsWith("own_unit_", StringComparison.Ordinal))
+            {
+                var id = unitReferences.Resolve(alias) ?? throw new AdvisorOperationException(400, "unknown_unit_reference");
+                var canonical = "unit:" + id.ToString(CultureInfo.InvariantCulture);
+                resolution = new JObject { ["requested"] = target, ["resolved"] = canonical, ["reason"] = "consultation_unit_reference" };
+                // Normalize before receipt comparison; the original request stays in session and wire logs.
+                request = (JObject)request.DeepClone();
+                request["target_ref"] = canonical;
+            }
+        }
         switch (action)
         {
             case "list":
@@ -140,15 +161,16 @@ internal sealed class AdvisorOperationGateway : IDisposable
     {
         private readonly AdvisorOperationGateway gateway;
         private readonly string owner;
+        private readonly AdvisorUnitReferences unitReferences;
         private readonly CancellationTokenSource lifetime = new();
         private readonly object gate = new();
         private readonly JArray history = new();
         private int calls, bytes;
         public JObject Tool { get; }
         public JArray History { get { lock (gate) return (JArray)history.DeepClone(); } }
-        internal Session(AdvisorOperationGateway gateway, string owner, AdvisorPrompts prompts, JArray prior)
+        internal Session(AdvisorOperationGateway gateway, string owner, AdvisorPrompts prompts, JArray prior, AdvisorUnitReferences unitReferences)
         {
-            this.gateway = gateway; this.owner = owner; history = (JArray)prior.DeepClone();
+            this.gateway = gateway; this.owner = owner; this.unitReferences = unitReferences; history = (JArray)prior.DeepClone();
             Tool = new JObject
             {
                 ["name"] = ToolName, ["description"] = prompts.Text("battle.json", "operation_tool_description"),
@@ -179,7 +201,7 @@ internal sealed class AdvisorOperationGateway : IDisposable
             }
             if (AdvisorQueryLimits.Bytes(request) > AdvisorQueryLimits.MaxRequestBytes) return Error("request_too_large");
             var detached = (JObject)request.DeepClone();
-            var result = await gateway.Enqueue(owner, detached, linked.Token).ConfigureAwait(false);
+            var result = await gateway.Enqueue(owner, detached, unitReferences, linked.Token).ConfigureAwait(false);
             linked.Token.ThrowIfCancellationRequested();
             if (AdvisorQueryLimits.Bytes(result) > AdvisorQueryLimits.MaxResponseBytes) result = Error("operation_response_too_large");
             lock (gate)

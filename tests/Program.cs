@@ -20,6 +20,7 @@ internal static class Program
             OperationTests.Run(Check);
             ReservationTests.Run(Check);
             OperationGatewayTests.Run(Check);
+            OperationTargetTests.Run(Check);
             OperationApprovalTests.Run(Check);
             OperationPreviewTests.Run(Check);
             BattleTests.Run(Check);
@@ -140,6 +141,7 @@ internal static class Program
         OperationTests.Run(Check);
         ReservationTests.Run(Check);
         OperationGatewayTests.Run(Check);
+        OperationTargetTests.Run(Check);
         OperationApprovalTests.Run(Check);
         OperationPreviewTests.Run(Check);
         OptionsTests.Run(args[0], Check);

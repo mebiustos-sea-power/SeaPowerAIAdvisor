@@ -436,7 +436,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
             IAdvisorQuerySession session = source.CreateSession(replyLanguage(), request.Text, options.Current.MaxQueryRounds, options.Current.Information, request.Context);
             turn.SetUnitReferences(session is IAdvisorUnitReferenceSource references ? references.UnitReferences : AdvisorUnitReferences.Empty);
             if (recording != null) session = recording.Observe(session);
-            var operationSession = (source as IAdvisorOperationSource)?.CreateOperations(turn.OperationId, session.Prompts);
+            var operationSession = (source as IAdvisorOperationSource)?.CreateOperations(turn.OperationId, session.Prompts, turn.UnitReferences);
             if (recording != null && operationSession != null) operationSession = recording.Observe(operationSession);
             var historyLimit = options.Current.HistoryExchanges;
             pendingTurn = turn;
