@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -31,7 +32,7 @@ internal sealed class AdvisorLocalRun
     internal void Complete(AdviceResult value, string connectionName) { result = value; connection = connectionName; }
     internal void CaptureInput(AdvisorProviderInput value)
     {
-        lock (gate) if (finished == null) input = new JObject { ["data"] = value.Data.DeepClone(), ["system_instruction"] = value.SystemInstruction, ["tool"] = value.Tool?.DeepClone(), ["operation_tool"] = value.OperationTool?.DeepClone() };
+        lock (gate) if (finished == null) input = new JObject { ["data"] = value.Data.DeepClone(), ["system_instruction"] = value.SystemInstruction, ["tools"] = new JArray(value.Tools.Select(t => t.DeepClone())) };
     }
     internal IAdvisorOperationSession Observe(IAdvisorOperationSession session) => new RecordingOperations(session, this);
     internal IAdvisorQuerySession Observe(IAdvisorQuerySession session) => new RecordingSession(session, this);

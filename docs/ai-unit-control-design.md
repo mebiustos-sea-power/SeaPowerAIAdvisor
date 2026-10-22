@@ -32,7 +32,7 @@
 | 過去会話 | 完了した質問と回答を、設定された往復数だけ次の相談へ渡す | AIの問い返しにユーザーが答えること自体は、現在の通信方式でも可能 |
 | 相談の並行実行 | 同じ会話に複数の応答待ちを作らず、基本的に1件ずつ扱う | 操作完了の通知から直接AIを呼び出さず、再相談要求を相談実行部へ受け渡す |
 | 相談ごとの情報取得 | 相談開始時にゲーム情報をコピーし、追加取得はその情報を参照する | 通信中の整合性を保つ仕組みは、実行時の最新状態を保証する仕組みとは分ける必要がある |
-| 情報取得ツール | query_gameでプレイヤー既知の戦況と操作の定義・候補を一括取得できる | 読み取りと操作提案・登録の責務を分ける |
+| 情報取得ツール | 用途別ツールから戦況と操作定義・候補を同じAI応答でまとめて取得できる | 読み取りと操作提案・登録の責務を分ける |
 | プロバイダー拡張 | 標準の相談エンジンを使う方式と、独自の相談処理を実装する方式がある | 操作対応でも通信手順を一種類に固定しない設計が必要 |
 | ユニットの参照 | バッジは内部ユニットIDを保持し、相談内のIDへ対応付ける | 操作では、相談をまたいだ参照と実行時の対象確認も検討する |
 | 相談内の自軍ID | `own_unit_1`などは取得時の列挙から作られる | 過去の相談内IDを、そのまま将来の操作対象として再利用しない |
@@ -447,7 +447,7 @@ AI等から予約要求の`arguments.depth`が渡されても、この版では�
 
 ## 12. 操作カタログのオンデマンド取得とAI接続
 
-多数の内蔵・外部操作が登録されることを最初から前提にする。今回ソノブイ操作が1種類であっても、その定義を初期プロンプトへ直接埋め込む例外経路は作らない。標準エンジンは読み取り用query_gameを提供し、WIPがONの相談では実行提案用game_operationsを追加する。戦況取得と操作一覧・各定義・候補はquery_gameのrequestsで必要に応じて一括取得する。独自相談処理は従来の戦況取得と操作サービスを直接利用でき、標準エンジンの取得方式を強制しない。
+多数の内蔵・外部操作が登録されることを最初から前提にする。今回ソノブイ操作が1種類であっても、その定義を初期プロンプトへ直接埋め込む例外経路は作らない。標準エンジンは戦況用query_situationを提供し、WIPがONの相談では操作一覧・定義・候補・提案を用途別ツールで追加する。独立した読み取りは同じAI応答内でまとめて取得できる。独自相談処理は従来の戦況取得と操作サービスを直接利用でき、標準エンジンの取得方式を強制しない。
 
 | action | 取得・処理する内容 |
 | --- | --- |
@@ -503,27 +503,26 @@ AIからのexecuteは、引数と現在の候補を検証して`status: proposed
 
 全通信ログには outcome=incomplete と completion_reason、開発用APIには state=incomplete と結果内の終了理由・利用量を記録する。CLIも未完了を終端状態として保存し、非ゼロで終了する。独自相談実装へ標準エンジンの往復方式を強制しない。
 
-## 14. 戦況取得と操作照会の共通読み取り受付（2026-10-22）
+## 14. 用途別ツールと共通読み取り受付（2026-10-23更新）
 
-標準エンジンのquery_gameはrequests配列を受け、source=situationをスナップショット取得へ、source=operationを操作一覧・定義・最新候補の取得へ振り分ける。既存の接触検索でkindを使っているため、取得先の識別子にはsourceを使う。operationのactionはlist／describe／candidatesに限定する。game_operationsにはexecuteだけを提示し、既存の提案・承認・再検証・予約登録を維持する。読み取り入口にexecuteを渡しても、提案を作成しない。
+標準エンジンはquery_situation、list_operations、describe_operation、get_operation_candidates、propose_operationを定義と処理担当の組として登録する。相談エンジンは登録済みの名前へ要求を渡して結果を受け取り、各プロバイダーは任意長の定義一覧を通信形式へ変換する。操作ごとのツール追加や固有引数の解釈を共通エンジンへ持ち込まない。操作のスキーマと引数検証は操作受付、戦況のquery別定義と検証は戦況担当が所有する。
 
+query_situationは従来のrequests配列とqueryごとのanyOfを保持する。操作ツールは用途ごとの引数だけを公開し、source／actionをAIに設定させない。操作定義・候補のoperation_id等の必須項目は維持する。propose_operationは既存の提案・承認・再検証へ委譲し、読み取りからは提案を作成しない。strictは有効化せず、モデルでの遵守率や往復削減は別途検証する。
 
-要求のツール定義はrequests.items内のanyOfで分岐させる。戦況はqueryごとの必須・許可項目、操作はlist／describe／candidatesごとの必須・許可項目を各取得担当が定義し、受信時の項目検証と共有する。同じ引数形の戦況取得は1分岐のquery列挙へまとめる。共通受付は各分岐へsourceの固定値を付加するだけとし、戦況と操作の引数を1つのpropertiesへ混ぜない。get_unitsやget_movement_plans等のids、操作定義／候補取得のoperation_idを必須として公開する。キャンペーンの航空隊フィルターも所属艦隊と基地の同時指定を許さない分岐にする。IDの実在・情報選択・残弾・ゲーム状態などは従来どおり各担当が検証する。
-
-strictは今回有効化しない。anyOfを含む定義は各アダプターが保持して送信し、実際のモデルによる遵守率は別途検証する。GLMに報告された最上位oneOfの問題を理由に、先回りした代替プロトコルや自動切り替えは実装しない。
-
-要求例（各IDは同じ相談で取得済みとする）:
+同じAI応答での呼び出し例（各IDは同じ相談で取得済み、API固有の外側の形式は省略）:
 
 ```json
-{"requests":[
-  {"source":"situation","query":"get_movement_plans","ids":["own_unit_1","own_unit_2"]},
-  {"source":"operation","action":"describe","operation_id":"seapower.schedule_sonobuoy_drop"},
-  {"source":"operation","action":"candidates","operation_id":"seapower.schedule_sonobuoy_drop","target_ref":"unit:1029"},
-  {"source":"operation","action":"candidates","operation_id":"seapower.schedule_sonobuoy_drop","target_ref":"unit:1030"}
-]}
+[
+  {"name":"query_situation","arguments":{"requests":[{"query":"get_movement_plans","ids":["own_unit_1","own_unit_2"]}]}},
+  {"name":"describe_operation","arguments":{"operation_id":"seapower.schedule_sonobuoy_drop"}},
+  {"name":"get_operation_candidates","arguments":{"operation_id":"seapower.schedule_sonobuoy_drop","target_ref":"unit:1029"}},
+  {"name":"get_operation_candidates","arguments":{"operation_id":"seapower.schedule_sonobuoy_drop","target_ref":"unit:1030"}}
+]
 ```
 
-応答のresultsは要求順で、各項目にindex（0開始）とstatus=ok／errorを付ける。okにはdata、errorにはerror.codeを返す。戦況項目にはqueryも保持する。indexはホストが付け、モデルに新しい要求IDの採番を要求しない。1応答に複数のquery_game呼び出しがあれば共通受付でまとめ、結果を元の呼び出しIDに分配し、各呼び出しのindexを0開始へ戻す。
+各読み取りの担当が内部の共通読み取り要求へ変換し、同じAI応答の独立した要求を一括処理する。応答のresultsは要求順で、index（0開始）とstatus=ok／error、dataまたはerror.codeを返す。操作照会は各呼び出し1項目として扱う。共通受付が元の呼び出しIDに分配し、各呼び出しのindexを0開始へ戻す。提案は別経路で送信順を保持する。
+
+既存の外部標準アダプターはIStandardAdvisorExtensionのままなら従来のquery_game／game_operationsを受け取る。新しいIAdvisorToolListExtensionへ任意で移行するとConsultationInput.ToolsJson一覧を使う。旧形式のスキーマ合成だけを互換担当へ隔離し、読み取り受付・上限・承認は共有する。公開済みの必須メソッド、コンストラクター、assembly／contract versionは変更しない。独自相談のKnowledge／Operations窓口と手順は維持する。一括送信モードでは戦況用ツールを一覧から省き、WIP無効時には操作ツールを省く。
 
 独立した項目だけを同じバッチへ入れる。配列内で直前の結果を引数へ参照するDSL・変数展開・自動再照会は設けない。未知の操作IDや対象IDが必要なら次のAI応答で要求する。操作の選択、配置、複数ユニット間の割り振りはAI、利用条件と引数定義は各操作が所有する。共通受付は艦種・機数・作戦の意味を解釈しない。
 

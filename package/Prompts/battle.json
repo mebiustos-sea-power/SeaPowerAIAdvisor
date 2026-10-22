@@ -53,5 +53,8 @@
   "operation_search": "Optional text matched against operation IDs and descriptions; omit to browse.",
   "operation_target_ref": "Candidate target_ref; unit:N uses the game's unit_id.",
   "operation_request_id": "Unique order ID of letters, digits, dots, underscores or hyphens. Reuse it when retrying the same order.",
-  "operation_execution_description": "Propose requested operations using definitions and live candidates from query_game. Registration is not completion; proposals may require user approval."
+  "operation_execution_description": "Propose requested operations using their definitions and live candidates. Registration is not completion; proposals may require user approval.",
+  "operation_list_description": "List available game operations. Use search to filter the catalog.",
+  "operation_describe_description": "Get an operation definition and its required arguments.",
+  "operation_candidates_description": "Get live eligible targets and their operation-specific choices."
 }

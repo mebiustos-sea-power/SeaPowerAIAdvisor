@@ -308,3 +308,11 @@ API仕様の参照先：https://docs.nano-gpt.com/api-reference/endpoint/chat-co
 - 独自相談処理には標準供給方式を強制せず、従来の入力／知識窓口を渡す。標準アダプターには読取ツールがない場合の `ToolJson=null` を許容する（公開型のnullable注釈のみで既存署名は維持）。
 
 一括送信で消えるのは戦況の追加取得であり、操作照会・提案の往復や履歴再送は残る。入力トークン・応答品質の優劣は実測前に断定しない。接続テストは通信互換性の小さな試験のままとし、ゲームの全量データを送らない。
+
+## 用途別Function Callingと内部構造の整理（2026-10-23）
+
+標準エンジンのツールをquery_situation／list_operations／describe_operation／get_operation_candidates／propose_operationに分割した。AdvisorToolBindingが定義と処理担当を組にし、AdvisorToolSessionが登録・呼び出しIDの対応・集約・順序を管理する。AdvisorReadSessionは正規化済み読み取りの実行と共通データ予算に限定し、操作スキーマと変換はAdvisorOperationToolsが所有する。AdvisorEngineは個別のツール名やsource／actionを判断しない。
+
+AdvisorProviderInputとGemini／Ollama／Chat Completionsの通信処理は任意長の定義一覧を扱う。公開APIではIAdvisorToolListExtensionを任意の移行先とし、ToolsJsonを受け取る。従来のIStandardAdvisorExtensionは旧2ツール形式を維持し、その合成をAdvisorLegacyToolsと拡張境界へ限定する。旧方式との接続切替でも実行済み情報と提案receipt、取得・送信予算を共有する。独自相談の実行方式とKnowledge／Operationsサービスは変更しない。
+
+操作ごとの登録・引数正規化・承認時検証・ゲームスレッド実行は既存担当へ残す。データ供給方式、情報選択、初回資料送信、上限時の未完了終了も維持する。目的は責務整理であり、実モデルでの精度向上や通信回数削減はこの構造変更だけでは断定しない。

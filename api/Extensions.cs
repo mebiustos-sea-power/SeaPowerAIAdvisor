@@ -50,6 +50,10 @@ public interface IStandardAdvisorExtension : IAdvisorExtension
         ConsultationInput input, RetrievalHistory? continuation);
 }
 
+// Opt into ConsultationInput.ToolsJson and expose every supplied definition unchanged.
+// IStandardAdvisorExtension alone retains the original two-tool contract.
+public interface IAdvisorToolListExtension : IStandardAdvisorExtension { }
+
 public interface IIndependentAdvisorExtension : IAdvisorExtension
 {
     IAdvisorConsultation OpenConsultation(ConnectionSettings connection, IAdvisorConnectionServices services);

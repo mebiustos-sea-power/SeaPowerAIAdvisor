@@ -106,6 +106,10 @@
     <Compile Include="..\src\Advisor\AdvisorContext.cs" Link="AdvisorContext.cs" />
     <Compile Include="..\src\Advisor\AdvisorRequestShape.cs" Link="AdvisorRequestShape.cs" />
     <Compile Include="..\src\Advisor\AdvisorReadSession.cs" Link="AdvisorReadSession.cs" />
+    <Compile Include="..\src\Advisor\AdvisorToolBinding.cs" Link="AdvisorToolBinding.cs" />
+    <Compile Include="..\src\Advisor\AdvisorToolSession.cs" Link="AdvisorToolSession.cs" />
+    <Compile Include="..\src\Advisor\AdvisorLegacyTools.cs" Link="AdvisorLegacyTools.cs" />
+    <Compile Include="..\src\Operations\AdvisorOperationTools.cs" Link="AdvisorOperationTools.cs" />
     <Compile Include="..\src\Advisor\AdvisorQueryBatch.cs" Link="AdvisorQueryBatch.cs" />
     <Compile Include="..\src\Advisor\AdvisorProvider.cs" Link="AdvisorProvider.cs" />
     <Compile Include="..\src\Advisor\AdvisorConnection.cs" Link="AdvisorConnection.cs" />

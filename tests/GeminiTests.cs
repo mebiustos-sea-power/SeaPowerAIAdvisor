@@ -327,8 +327,8 @@ internal static class GeminiTests
             foreach (var malformed in new[] { "missing_id", "duplicate_id", "invalid_arguments" })
             {
                 var session = Session(assembly);
-                var call = new JObject { ["type"] = "function_call", ["id"] = "call-1", ["name"] = "query_game",
-                    ["arguments"] = new JObject { ["requests"] = new JArray(new JObject { ["source"] = "situation", ["query"] = "catalog" }) } };
+                var call = new JObject { ["type"] = "function_call", ["id"] = "call-1", ["name"] = "query_situation",
+                    ["arguments"] = new JObject { ["requests"] = new JArray(new JObject { ["query"] = "catalog" }) } };
                 if (malformed == "missing_id") call.Remove("id");
                 if (malformed == "invalid_arguments") call["arguments"] = "not an argument object";
                 var steps = new JArray(call);
@@ -375,7 +375,7 @@ internal static class GeminiTests
     private static AdvisorQuerySession Session(Assembly assembly) => new(QueryTests.Capture(new SituationTests.Fixture(assembly)), "ja", "護衛隊の状態は？");
     private static JObject Call(AdvisorQuerySession session, string name, string id, string? key = null, JToken? value = null) => new()
     {
-        ["id"] = id, ["name"] = "query_game", ["args"] = new JObject { ["requests"] = new JArray(new JObject(QueryTests.Q(name, key, value)) { ["source"] = "situation" }) }
+        ["id"] = id, ["name"] = "query_situation", ["args"] = new JObject { ["requests"] = new JArray(QueryTests.Q(name, key, value)) }
     };
     private static JObject Reply(params JObject[] parts) => InteractionFixture.Reply(parts);
     private static void Async(Func<Task> run) => run().GetAwaiter().GetResult();

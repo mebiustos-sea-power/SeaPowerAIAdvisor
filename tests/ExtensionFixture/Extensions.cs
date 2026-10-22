@@ -32,6 +32,14 @@ public sealed class StandardExtension : Definition, IStandardAdvisorExtension
         => Open(connection, services, input, history);
 }
 
+public sealed class ToolListExtension : Definition, IAdvisorToolListExtension
+{
+    public Func<ConnectionSettings, IAdvisorConnectionServices, ConsultationInput, RetrievalHistory?, IAdvisorSession> Open { get; set; }
+        = (_, _, _, _) => throw new InvalidOperationException("Fixture session not configured");
+    public IAdvisorSession OpenSession(ConnectionSettings connection, IAdvisorConnectionServices services, ConsultationInput input, RetrievalHistory? history)
+        => Open(connection, services, input, history);
+}
+
 public sealed class IndependentExtension : Definition, IIndependentAdvisorExtension
 {
     public Func<ConnectionSettings, IAdvisorConnectionServices, ConsultationContext, CancellationToken, Task<AdvisorAnswer>> Consult { get; set; }

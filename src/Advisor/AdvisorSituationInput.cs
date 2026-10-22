@@ -8,7 +8,7 @@ namespace SeaPowerAIAdvisor;
 internal static class AdvisorSituationInput
 {
     internal static AdvisorProviderInput Upfront(IAdvisorQuerySession knowledge, AdvisorProviderInput input,
-        IAdvisorOperationSession? operations, out int informationBytes)
+        out int informationBytes)
     {
         var snapshot = AdvisorSnapshotExport.From(knowledge);
         JObject Data(JObject original)
@@ -27,20 +27,6 @@ internal static class AdvisorSituationInput
             }
             return result;
         }
-        JObject? tool = null;
-        if (operations != null)
-        {
-            tool = (JObject)input.Tool!.DeepClone();
-            var variants = AdvisorRequestShape.Variants(AdvisorOperationGateway.ReadSchema(operations.Tool)).Select(schema =>
-            {
-                var result = (JObject)schema.DeepClone();
-                ((JObject)result["properties"]!).AddFirst(new JProperty("source", new JObject { ["type"] = "string", ["enum"] = new JArray("operation") }));
-                ((JArray)result["required"]!).Insert(0, "source");
-                return result;
-            });
-            tool["parameters"]!["properties"]!["requests"]!["items"] = new JObject { ["anyOf"] = new JArray(variants) };
-            tool["description"] = knowledge.Prompts.Text("common.json", "operation_read_tool_description");
-        }
         var instructions = (JObject)knowledge.InitialInput()["instructions"]!.DeepClone();
         instructions.Remove("retrieval");
         instructions["retrieval_policy"] = knowledge.Prompts.Text("common.json", "upfront_retrieval_policy");
@@ -48,7 +34,7 @@ internal static class AdvisorSituationInput
         var information = Data(knowledge.InitialInput());
         // Match on-demand accounting: game input, instructions and tool definitions, excluding user preferences/history.
         information["instructions"] = instructions;
-        informationBytes = Bytes(information) + (tool == null ? 0 : Bytes(tool)) + (input.OperationTool == null ? 0 : Bytes(input.OperationTool));
-        return new AdvisorProviderInput(Data(input.Data), system, tool, input.OperationTool);
+        informationBytes = Bytes(information) + input.Tools.Sum(Bytes);
+        return new AdvisorProviderInput(Data(input.Data), system, input.Tools);
     }
 }

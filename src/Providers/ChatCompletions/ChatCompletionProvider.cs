@@ -24,7 +24,7 @@ internal abstract class ChatCompletionProvider : IAdvisorProvider
     { this.transport = transport; this.configuration = configuration; this.options = options; this.fallback = fallback; }
     public IAdvisorProviderSession Start(AdvisorProviderInput input, AdvisorContinuation? continuation) => new Session(this, input, continuation);
 
-    internal JObject Request(JArray messages, JObject? tool, JToken choice, JObject? operationTool = null)
+    internal JObject Request(JArray messages, IEnumerable<JObject> definitions, JToken choice)
     {
         var body = new JObject
         {
@@ -32,7 +32,7 @@ internal abstract class ChatCompletionProvider : IAdvisorProvider
             ["max_tokens"] = options.MaxOutputTokens
         };
         var tools = new JArray();
-        foreach (var definition in new[] { tool, operationTool }.Where(t => t != null))
+        foreach (var definition in definitions)
             tools.Add(new JObject { ["type"] = "function", ["function"] = definition!.DeepClone() });
         if (tools.Count > 0) { body["tools"] = tools; body["tool_choice"] = choice.DeepClone(); }
         ConfigureRequest(body);
@@ -114,13 +114,12 @@ internal abstract class ChatCompletionProvider : IAdvisorProvider
     private sealed class Session : IAdvisorProviderSession
     {
         private readonly ChatCompletionProvider owner;
-        private readonly JObject? tool;
-        private readonly JObject? operationTool;
+        private readonly IReadOnlyList<JObject> tools;
         private readonly JArray messages;
         private IReadOnlyList<AdvisorToolCall> pending = Array.Empty<AdvisorToolCall>();
         internal Session(ChatCompletionProvider owner, AdvisorProviderInput input, AdvisorContinuation? continuation)
         {
-            this.owner = owner; tool = input.Tool; operationTool = input.OperationTool;
+            this.owner = owner; tools = input.Tools;
             var data = (JObject)input.Data.DeepClone();
             if (continuation != null) data["continuation"] = new JObject
             {
@@ -134,7 +133,7 @@ internal abstract class ChatCompletionProvider : IAdvisorProvider
         public AdvisorProviderRequest Prepare(bool allowTools)
         {
             if (pending.Count != 0) throw new InvalidOperationException("Chat-completion tool results have not been accepted.");
-            var body = owner.Request(messages, tool, new JValue(allowTools ? "auto" : "none"), operationTool);
+            var body = owner.Request(messages, tools, new JValue(allowTools ? "auto" : "none"));
             return new AdvisorProviderRequest(AdvisorQueryLimits.Bytes(body), async cancellation =>
             {
                 var response = await owner.SendAsync(body, cancellation).ConfigureAwait(false);

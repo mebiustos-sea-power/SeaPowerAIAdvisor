@@ -39,7 +39,7 @@ internal static partial class BattleTests
             var upfront = AdvisorContext.Create(session, Array.Empty<ChatExchange>()).PrepareStandardInput(AdvisorSituationDelivery.Upfront);
             Require(upfront.Data["contact_assessment"] != null &&
                 upfront.Data["situation_data"]!.Single(r => (string?)r["query"] == BattleContactAssessment.Query)["data"]!["items"]!.Count() == 2 &&
-                session.RoundsUsed == 0 && upfront.Tool == null,
+                session.RoundsUsed == 0 && upfront.Tools.Count == 0,
                 "Upfront assessment lost its context-only candidates or still required a query");
             var altered = request.Context!; altered["evidence"]!["candidates"]![0]!["display_name"] = "Changed later";
             var data = session.Execute(Request(session, new JObject { ["query"] = BattleContactAssessment.Query, ["limit"] = 1 },

@@ -465,8 +465,8 @@ internal static partial class BattleTests
             {
                 var sections = RequestSchemaFixture.Field(body["tools"]![0]!, "get_unit_capabilities", "sections")["items"]!["enum"]!.Values<string>();
                 Require(!sections.Contains("weapons") && sections.Contains("fuel"), "The actual wire request advertised a disabled section");
-                part = new JObject { ["functionCall"] = new JObject { ["name"] = "query_game", ["args"] = new JObject {
-                    ["requests"] = new JArray(new JObject { ["source"] = "situation", ["query"] = "get_unit_capabilities", ["ids"] = new JArray("own_unit_1"), ["sections"] = new JArray("fuel", "weapons") }) } } };
+                part = new JObject { ["functionCall"] = new JObject { ["name"] = "query_situation", ["args"] = new JObject {
+                    ["requests"] = new JArray(new JObject { ["query"] = "get_unit_capabilities", ["ids"] = new JArray("own_unit_1"), ["sections"] = new JArray("fuel", "weapons") }) } } };
             }
             else
             {
@@ -491,20 +491,20 @@ internal static partial class BattleTests
                 Require((string?)input["mode"] == "tactical_battle" && (string?)input["reply_language"] == "ja", "Provider changed mode or reply language");
             }
             JObject part;
-            if (calls == 1) part = Call(new JObject { ["source"] = "situation", ["query"] = "list_units" }, new JObject { ["source"] = "situation", ["query"] = "list_contacts" }, new JObject { ["source"] = "situation", ["query"] = "get_briefing" });
+            if (calls == 1) part = Call(new JObject { ["query"] = "list_units" }, new JObject { ["query"] = "list_contacts" }, new JObject { ["query"] = "get_briefing" });
             else if (calls == 2)
             {
                 var answer = InteractionFixture.Result(body);
                 var id = answer["results"]![0]!["data"]!["items"]![0]!["id"]!.DeepClone();
                 Require((string?)answer["results"]![2]!["data"]!["text"] == "公開済みの任務説明", "Briefing was not returned");
-                part = Call(new JObject { ["source"] = "situation", ["query"] = "get_units", ["ids"] = new JArray(id) });
+                part = Call(new JObject { ["query"] = "get_units", ["ids"] = new JArray(id) });
             }
             else part = new JObject { ["text"] = "公開目標を優先し、接触を確認してください。" };
             return Task.FromResult(InteractionFixture.Reply(part));
         }
         private static JObject Call(params JObject[] requests) => new()
         {
-            ["functionCall"] = new JObject { ["name"] = "query_game", ["args"] = new JObject { ["requests"] = new JArray(requests) } }
+            ["functionCall"] = new JObject { ["name"] = "query_situation", ["args"] = new JObject { ["requests"] = new JArray(requests) } }
         };
     }
 
@@ -515,12 +515,12 @@ internal static partial class BattleTests
         {
             calls++;
             JObject part;
-            if (calls == 1) part = Tool(new JObject { ["source"] = "situation", ["query"] = "list_units" }, new JObject { ["source"] = "situation", ["query"] = "list_contacts" });
+            if (calls == 1) part = Tool(new JObject { ["query"] = "list_units" }, new JObject { ["query"] = "list_contacts" });
             else if (calls == 2)
             {
                 var data = InteractionFixture.Result(body)["results"]!;
-                part = Tool(new JObject { ["source"] = "situation", ["query"] = "get_unit_capabilities", ["ids"] = new JArray(data[0]!["data"]!["items"]![0]!["id"]!.DeepClone()) },
-                    new JObject { ["source"] = "situation", ["query"] = "get_contact_threats", ["ids"] = new JArray(data[1]!["data"]!["items"]![0]!["id"]!.DeepClone()) });
+                part = Tool(new JObject { ["query"] = "get_unit_capabilities", ["ids"] = new JArray(data[0]!["data"]!["items"]![0]!["id"]!.DeepClone()) },
+                    new JObject { ["query"] = "get_contact_threats", ["ids"] = new JArray(data[1]!["data"]!["items"]![0]!["id"]!.DeepClone()) });
             }
             else
             {
@@ -537,7 +537,7 @@ internal static partial class BattleTests
             return Task.FromResult(InteractionFixture.Reply(part));
         }
         private static JObject Tool(params JObject[] requests) => new() { ["functionCall"] = new JObject {
-            ["name"] = "query_game", ["args"] = new JObject { ["requests"] = new JArray(requests) } } };
+            ["name"] = "query_situation", ["args"] = new JObject { ["requests"] = new JArray(requests) } } };
     }
 
     private sealed class Fixture

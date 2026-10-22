@@ -12,11 +12,12 @@ internal sealed class AdvisorContext
     internal AdvisorProviderInput Input { get; }
     internal Action<AdvisorProgress>? Progress { get; }
     internal IAdvisorOperationSession? Operations { get; }
-    private AdvisorReadSession? reads;
-    internal AdvisorReadSession Reads => reads ??= new AdvisorReadSession(Knowledge, Operations, Input);
+    private AdvisorToolSession? tools;
+    internal AdvisorToolSession Tools => tools ??= new AdvisorToolSession(Knowledge, Operations, Input);
+    internal AdvisorReadSession Reads => Tools.Reads;
     private readonly Action<AdvisorProviderInput>? preparedInput;
-    internal AdvisorProviderInput PrepareStandardInput(AdvisorSituationDelivery mode = AdvisorSituationDelivery.OnDemand)
-    { var input = Reads.Prepare(mode); preparedInput?.Invoke(input); return input; }
+    internal AdvisorProviderInput PrepareStandardInput(AdvisorSituationDelivery mode = AdvisorSituationDelivery.OnDemand, bool legacy = false)
+    { var input = Tools.Prepare(mode, legacy); preparedInput?.Invoke(input); return input; }
     internal Action<AdvisorProviderInput>? PreparedInput => preparedInput;
 
     internal AdvisorContext(IAdvisorQuerySession knowledge, AdvisorProviderInput input, Action<AdvisorProgress>? progress = null, IAdvisorOperationSession? operations = null,
@@ -43,6 +44,6 @@ internal sealed class AdvisorContext
         initial["prior_dialogue"] = new JArray(history.Skip(Math.Max(0, history.Count - historyExchanges))
             .Select(h => new JObject { ["question"] = h.Question, ["answer"] = h.Answer, ["advisor_name"] = h.AdvisorName }));
         initial["omitted_prior_exchange_count"] = Math.Max(0, history.Count - historyExchanges);
-        return new AdvisorContext(session, new AdvisorProviderInput(initial, session.Prompts.SystemInstruction(instructions), tool, operations?.Tool), progress, operations, preparedInput);
+        return new AdvisorContext(session, new AdvisorProviderInput(initial, session.Prompts.SystemInstruction(instructions), operations == null ? new[] { tool } : new[] { tool, operations.Tool }), progress, operations, preparedInput);
     }
 }

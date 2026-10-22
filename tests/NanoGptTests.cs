@@ -217,7 +217,7 @@ internal static partial class ProviderTests
     private static JObject NanoCall(string id, string query, string name = ToolName, JObject? arguments = null) => new()
     {
         ["id"] = id, ["type"] = "function", ["function"] = new JObject { ["name"] = name,
-            ["arguments"] = (arguments ?? new JObject { ["requests"] = new JArray(new JObject { ["source"] = "situation", ["query"] = query }) }).ToString(Formatting.None) }
+            ["arguments"] = (arguments ?? new JObject { ["requests"] = new JArray(new JObject { ["query"] = query }) }).ToString(Formatting.None) }
     };
     private static JObject NanoReply(string text, params JObject[] calls) => new()
     {

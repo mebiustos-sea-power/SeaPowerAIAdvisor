@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -17,7 +18,7 @@ internal sealed class GeminiInteraction
     { Id = id; Calls = calls; Text = text; TotalTokens = totalTokens; }
 
     internal static JObject Request(AdvisorSettings settings, JArray input, string? previous = null,
-        string? system = null, JObject? tool = null, bool allowTools = false, bool store = true, JObject? operationTool = null)
+        string? system = null, IEnumerable<JObject>? tools = null, bool allowTools = false, bool store = true)
     {
         var body = new JObject
         {
@@ -30,18 +31,13 @@ internal sealed class GeminiInteraction
         };
         if (previous != null) body["previous_interaction_id"] = previous;
         if (system != null) body["system_instruction"] = system;
-        if (tool != null) body["tools"] = new JArray(new JObject
+        var definitions = tools ?? Enumerable.Empty<JObject>();
+        var functions = new JArray(definitions.Select(definition => new JObject
         {
-            ["type"] = "function", ["name"] = tool["name"]!.DeepClone(),
-            ["description"] = tool["description"]!.DeepClone(), ["parameters"] = tool["parameters"]!.DeepClone()
-        });
-        if (operationTool != null)
-        {
-            var tools = body["tools"] as JArray ?? new JArray();
-            tools.Add(new JObject { ["type"] = "function", ["name"] = operationTool["name"]!.DeepClone(),
-                ["description"] = operationTool["description"]!.DeepClone(), ["parameters"] = operationTool["parameters"]!.DeepClone() });
-            body["tools"] = tools;
-        }
+            ["type"] = "function", ["name"] = definition["name"]!.DeepClone(),
+            ["description"] = definition["description"]!.DeepClone(), ["parameters"] = definition["parameters"]!.DeepClone()
+        }));
+        if (functions.Count > 0) body["tools"] = functions;
         if (body["tools"] == null) ((JObject)body["generation_config"]!).Remove("tool_choice");
         return body;
     }

@@ -54,14 +54,14 @@ internal static partial class ProviderTests
             Require(rows.OfType<JObject>().SelectMany(r => (r["data"] as JObject)?["weapon_references"] as JArray ?? new JArray()).Count() == 1 &&
                 rows.OfType<JObject>().SelectMany(r => (r["data"] as JObject)?["sensor_references"] as JArray ?? new JArray()).Count() == 1,
                 "Shared performance references were duplicated");
-            Require(knowledge.RoundsUsed == 0 && JToken.DeepEquals(before, knowledge.InitialInput()) && input.Tool == null &&
+            Require(knowledge.RoundsUsed == 0 && JToken.DeepEquals(before, knowledge.InitialInput()) && input.Tools.Count == 0 &&
                 input.Data["knowledge_catalog"] == null && input.Data["query_limits"] == null &&
                 (string?)input.Data["common_prompt"] == "Style" &&
                 run.Snapshot()["input"]?["data"]?["situation_data"] != null &&
-                run.Snapshot()["input"]?["tool"]?.Type == JTokenType.Null,
+                run.Snapshot()["input"]?["tools"]?.Count() == 0,
                 "Preparing full input changed the snapshot, consumed reads, lost preferences, or recorded the wrong tool");
             var next = context.PrepareStandardInput(AdvisorSituationDelivery.OnDemand);
-            Require(next.Tool != null && next.Data["situation_data"] == null, "Connection switch reused the other delivery schema");
+            Require(next.Tools.Count > 0 && next.Data["situation_data"] == null, "Connection switch reused the other delivery schema");
         });
         check("Upfront battle projections honor status, reference, neutral, destroyed and category exclusions", () =>
         {
@@ -94,11 +94,11 @@ internal static partial class ProviderTests
             var knowledge = DeliveryKnowledge(); var context = AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations);
             var input = context.PrepareStandardInput(AdvisorSituationDelivery.Upfront);
             var batch = new JObject { ["requests"] = new JArray(new JObject { ["source"] = "situation", ["query"] = "get_units", ["ids"] = new JArray("own_unit_1") }, Lookup("describe"), Lookup("candidates")) };
-            Require(!RequestSchemaFixture.Accepts(input.Tool!["parameters"]!, batch), "The upfront schema advertises situation reads");
+            Require(!input.Tools.Any(t => RequestSchemaFixture.Accepts(t["parameters"]!, batch)), "The upfront schema advertises situation reads");
             var response = OperationGatewayTests.Finish(gateway, context.Reads.ExecuteAsync(batch, CancellationToken.None));
             Require((string?)response["results"]?[0]?["error"]?["code"] == "situation_already_supplied" &&
                 response["results"]?[0]?["data"] == null && (string?)response["results"]?[1]?["status"] == "ok" &&
-                (string?)response["results"]?[2]?["status"] == "ok" && knowledge.RoundsUsed == 0 && operation.Writes == 0 && input.OperationTool != null,
+                (string?)response["results"]?[2]?["status"] == "ok" && knowledge.RoundsUsed == 0 && operation.Writes == 0 && input.Tools.Any(t => (string?)t["name"] == "propose_operation"),
                 "A duplicate read returned data, blocked operation lookup or executed an order");
         });
         check("An oversized upfront snapshot fails before sending and remains available on demand", () => Async(async () =>

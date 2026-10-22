@@ -64,17 +64,31 @@ Provider error history is independent of the optional full communication log. Th
 
 ## Standard-engine adapter
 
-Implement `IStandardAdvisorExtension.OpenSession` and return `IAdvisorSession`.
+For a new adapter, implement `IAdvisorToolListExtension` and return `IAdvisorSession` from its inherited `OpenSession` method. It uses the standard execution strategy with an arbitrary tool list; it adds no methods to implement.
 
-1. `ConsultationInput` separates data, system instruction and tool-schema JSON. Reformat them for the API as needed.
+1. `ConsultationInput` separates `DataJson`, `SystemInstruction` and `ToolsJson` (a read-only list of tool-definition JSON strings). Encode every supplied definition for the service API.
 2. `Prepare(allowTools)` returns a `ProviderRequest` containing its UTF-8 byte count and deferred send callback. Preparing must not perform I/O. The host checks the sending budget before invoking it.
 3. Return final text or `ToolCall` objects normalized to the supplied host tool names and schemas. AI-facing names or wire formats may differ.
 4. `AcceptResults` receives matching call IDs/names and result JSON. The adapter owns API history, signatures, continuation IDs and thinking.
 5. Dispose session-owned resources; do not dispose shared connection services.
 
-The standard read tool is `query_game`. Its `requests` array combines snapshot queries (`source: "situation"`, plus the supplied query fields) and, with WIP operations enabled, operation lookups (`source: "operation"`, plus `action: "list" | "describe" | "candidates"` and applicable fields). Preserve the supplied schema, including `kind` for contact filtering. Results have zero-based `index`, `status`, and `data` or `error`; an invalid item does not discard other successful items. Operation execution remains in the separate `OperationToolJson` (`game_operations`, `action: "execute"`). Snapshot evidence is captured at consultation start; candidates reflect their lookup time. The standard read facade is not imposed on independent consultations below.
+The standard strategy exposes the following tools as applicable:
 
-The host's standard strategy has a per-connection `situation_delivery` setting (`on_demand`, the default, or `upfront`). In upfront mode, `DataJson.situation_data` contains all enabled snapshot projections, without consuming query rounds. `query_game` then advertises only operation lookups, if available. `ToolJson` is nullable when no read tool remains; omit that tool from API requests in this case. `OperationToolJson` remains independently optional. Preserve the supplied schemas instead of assuming that situation reads are always present. The nullable annotation does not change assembly signatures; existing on-demand connections retain their previous input. See the offline standard example for tool-less handling.
+| Tool | Arguments and purpose |
+| --- | --- |
+| `query_situation` | A `requests` array of snapshot queries, with the existing query-specific filters and required fields. |
+| `list_operations` | Optional `search`, `offset`, `limit`; retrieve operation summaries. |
+| `describe_operation` | Required `operation_id`; retrieve one definition. |
+| `get_operation_candidates` | Required `operation_id`, optional `target_ref`, `offset`, `limit`; retrieve current eligible targets and choices. |
+| `propose_operation` | Required `operation_id`, `target_ref`, `request_id`, `arguments`; submit a proposal through the existing approval service. |
+
+Operation tools are present only with an available WIP operation session. Their schemas contain their own fields and no `source` or `action` discriminator. Definitions of individual commands are still obtained on demand. Preserve all supplied constraints, including query-specific `anyOf` branches and contact `kind` filtering; the standard strategy does not enable provider-specific strict mode.
+
+Independent read calls in one AI response are normalized into one shared read batch. Each tool result contains a `results` array with zero-based local `index`, `status`, and `data` or `error`; a single invalid item does not discard other successful items. Lookup tools each contribute one read item. Snapshot evidence is captured at consultation start; candidates reflect their lookup time. The aggregate limit remains eight read items per AI response across all read tools, and forty calls including proposals. Proposal results retain their separate receipt/approval format and ordering.
+
+The per-connection `situation_delivery` setting is `on_demand` by default. In `upfront` mode, `DataJson.situation_data` contains all enabled snapshot projections without consuming query rounds, and `query_situation` is omitted. Operation lookups and proposals remain available when enabled. `ToolsJson` may therefore be empty. Preserve the supplied list instead of assuming that any particular tool is always present.
+
+Existing `IStandardAdvisorExtension` implementations that do not opt into `IAdvisorToolListExtension` keep their original `ToolJson` (`query_game`) and optional `OperationToolJson` (`game_operations`) schemas. The former batches `source: "situation"` queries and `source: "operation"` lookups with `action: "list" | "describe" | "candidates"`; the latter accepts `action: "execute"` proposals. In upfront mode the legacy read schema contains only operation lookups, or `ToolJson` is null if none remain. Both formats use the same dispatch, limits, ID resolution and approval services; no automatic protocol retry is added. Existing constructors, required interfaces and assembly/contract version 1 remain unchanged. A tool-list input uses `ToolsJson` and leaves the two legacy properties null; `ConsultationInput.WithTools` constructs that input explicitly. The offline standard example demonstrates the new list contract.
 
 Independent consultations keep their original input/gateway and control their own retrieval strategy. The host's upfront setting is unavailable for them. The independent/standard handoff still preserves the captured knowledge and executed-retrieval history; a standard sub connection applies its own saved delivery choice.
 
@@ -103,7 +117,7 @@ Return `AdvisorAnswer`. The host uses actual knowledge-round counts. Leave token
 
 These additions are available in the current development build; the published v0.16.0 does not include them.
 
-The host can additionally supply `ConsultationInput.OperationToolJson` when WIP unit scheduling is enabled for the battle. For standard adapters it describes only execution proposals; discovery is included in the shared read tool. For independent consultations it retains the original discovery/execution actions below. Neither schema embeds every registered operation. Standard adapters may expose this second tool and normalize its calls/results alongside the existing read-only `ToolJson`. Adapters that do not use it retain their existing read-only behavior.
+With WIP unit scheduling enabled, tool-list standard adapters receive the four operation tools listed above. Legacy standard adapters retain their optional execution-only `OperationToolJson`. Independent consultations receive the original discovery/execution schema in `OperationToolJson`. Each path uses the same operation service; reading snapshot knowledge never schedules orders. None of the initial schemas embeds every registered operation.
 
 Independent consultations receive an optional `ConsultationContext.Operations` (`IAdvisorOperations`). If non-null, call `ExecuteAsync(requestJson, cancellation)` with the same `action` envelope described by `OperationToolJson`. The host queues detached requests and dispatches on the game thread. No HTTP loop or standard-engine request sequence is required. The service is separate from `IAdvisorKnowledge`: reading snapshot knowledge never schedules orders.
 

@@ -29,7 +29,10 @@ internal static class AdvisorExtensionBridge
         }
         catch (JsonException) { throw new Api.AdvisorException(errorCode); }
     }
-    internal static Api.ConsultationInput Input(AdvisorProviderInput input) => new(Json(input.Data), input.SystemInstruction, input.Tool == null ? null : Json(input.Tool), input.OperationTool == null ? null : Json(input.OperationTool));
+    internal static Api.ConsultationInput Input(AdvisorProviderInput input, bool toolList = false) => toolList
+        ? Api.ConsultationInput.WithTools(Json(input.Data), input.SystemInstruction, input.Tools.Select(Json))
+        : new Api.ConsultationInput(Json(input.Data), input.SystemInstruction,
+            input.Tools.Count > 0 ? Json(input.Tools[0]) : null, input.Tools.Count > 1 ? Json(input.Tools[1]) : null);
     internal static Api.RetrievalHistory? History(AdvisorContinuation? value) => value == null ? null : new(Json(value.Retrievals), value.RoundsUsed, value.MaxRounds, Json(value.Operations));
     internal static Api.ConnectionSettings Configuration(AdvisorService service, AdvisorApiConfiguration configuration,
         AdvisorConnectionOptions options, bool fallback) => new(configuration.Id, configuration.Name, configuration.Provider,
@@ -147,17 +150,18 @@ internal sealed class ExternalAdvisorService : AdvisorService
         cancellation.ThrowIfCancellationRequested(); return AdvisorExtensionBridge.Answer(answer);
     }
 
-    private sealed class Provider : IAdvisorProvider
+    private sealed class Provider : IAdvisorProvider, IAdvisorLegacyToolProvider
     {
         private readonly Api.IStandardAdvisorExtension extension;
         private readonly Api.ConnectionSettings settings;
         private readonly Api.IAdvisorConnectionServices services;
         public string Model => settings.Model;
+        public bool UsesLegacyTools => extension is not Api.IAdvisorToolListExtension;
         internal Provider(Api.IStandardAdvisorExtension extension, Api.ConnectionSettings settings, Api.IAdvisorConnectionServices services)
         { this.extension = extension; this.settings = settings; this.services = services; }
         public IAdvisorProviderSession Start(AdvisorProviderInput input, AdvisorContinuation? continuation) =>
             new Session(AdvisorExtensionBridge.Invoke(() => extension.OpenSession(settings, services,
-                AdvisorExtensionBridge.Input(input), AdvisorExtensionBridge.History(continuation)))
+                AdvisorExtensionBridge.Input(input, !UsesLegacyTools), AdvisorExtensionBridge.History(continuation)))
                 ?? throw new InvalidOperationException("The extension returned no provider session."));
     }
     private sealed class Session : IAdvisorProviderSession
@@ -192,7 +196,7 @@ internal sealed class ExternalAdvisorService : AdvisorService
         { this.execution = execution; this.settings = settings; this.continuation = continuation; this.requestCount = requestCount; }
         public async Task<AdviceResult> ConsultAsync(AdvisorContext context, CancellationToken cancellation)
         {
-            var known = AdvisorRequestShape.Values((JObject)(context.Input.Tool ?? throw new InvalidOperationException("The independent workflow query definition is missing."))["parameters"]!["properties"]!["requests"]!["items"]!, "query").ToHashSet(StringComparer.Ordinal);
+            var known = AdvisorRequestShape.Values((JObject)(context.Input.Tools.FirstOrDefault() ?? throw new InvalidOperationException("The independent workflow query definition is missing."))["parameters"]!["properties"]!["requests"]!["items"]!, "query").ToHashSet(StringComparer.Ordinal);
             var input = new Api.ConsultationContext(AdvisorExtensionBridge.Input(context.Input), new Knowledge(context.Knowledge),
                 AdvisorExtensionBridge.History(continuation)!, progress =>
                 {

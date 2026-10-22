@@ -10,13 +10,20 @@ public sealed class ConsultationInput
 {
     public string DataJson { get; }
     public string SystemInstruction { get; }
-    // Null when the host has supplied the complete snapshot and no read-only lookups remain.
+    // Legacy standard/independent schemas. Null for tool-list inputs; use ToolsJson in that mode.
     public string? ToolJson { get; }
     public string? OperationToolJson { get; }
+    public IReadOnlyList<string> ToolsJson { get; }
+    public static ConsultationInput WithTools(string dataJson, string systemInstruction, IEnumerable<string> toolsJson) =>
+        new(dataJson, systemInstruction, null, null, toolsJson);
+    private ConsultationInput(string dataJson, string systemInstruction, string? toolJson, string? operationToolJson, IEnumerable<string> toolsJson)
+    { DataJson = dataJson; SystemInstruction = systemInstruction; ToolJson = toolJson; OperationToolJson = operationToolJson;
+        ToolsJson = Array.AsReadOnly(toolsJson.ToArray()); }
     public ConsultationInput(string dataJson, string systemInstruction, string? toolJson)
         : this(dataJson, systemInstruction, toolJson, null) { }
     public ConsultationInput(string dataJson, string systemInstruction, string? toolJson, string? operationToolJson)
-    { DataJson = dataJson; SystemInstruction = systemInstruction; ToolJson = toolJson; OperationToolJson = operationToolJson; }
+        : this(dataJson, systemInstruction, toolJson, operationToolJson,
+            new[] { toolJson, operationToolJson }.Where(t => t != null).Select(t => t!)) { }
 }
 
 // Contains only executed queries/results. Provider conversation IDs and thinking are excluded.

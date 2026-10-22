@@ -14,6 +14,12 @@ internal interface IAdvisorProvider
     IAdvisorProviderSession Start(AdvisorProviderInput input, AdvisorContinuation? continuation);
 }
 
+// Older standard extensions retain their two-tool wire contract at the extension boundary.
+internal interface IAdvisorLegacyToolProvider
+{
+    bool UsesLegacyTools { get; }
+}
+
 internal interface IAdvisorProviderSession : IDisposable
 {
     AdvisorProviderRequest Prepare(bool allowTools);
@@ -34,11 +40,13 @@ internal sealed class AdvisorProviderInput
 {
     internal JObject Data { get; }
     internal string SystemInstruction { get; }
-    internal JObject? Tool { get; }
-    internal JObject? OperationTool { get; }
-    internal AdvisorProviderInput(JObject data, string systemInstruction, JObject? tool, JObject? operationTool = null)
-    { Data = (JObject)data.DeepClone(); SystemInstruction = systemInstruction; Tool = (JObject?)tool?.DeepClone(); OperationTool = (JObject?)operationTool?.DeepClone(); }
-    internal AdvisorProviderInput Copy() => new(Data, SystemInstruction, Tool, OperationTool);
+    internal IReadOnlyList<JObject> Tools { get; }
+    internal AdvisorProviderInput(JObject data, string systemInstruction, JObject tool)
+        : this(data, systemInstruction, new[] { tool }) { }
+    internal AdvisorProviderInput(JObject data, string systemInstruction, IEnumerable<JObject> tools)
+    { Data = (JObject)data.DeepClone(); SystemInstruction = systemInstruction;
+        Tools = Array.AsReadOnly(tools.Select(t => (JObject)t.DeepClone()).ToArray()); }
+    internal AdvisorProviderInput Copy() => new(Data, SystemInstruction, Tools);
 }
 
 // Only host-executed query requests/results cross a connection boundary; provider IDs/signatures do not.

@@ -48,12 +48,12 @@ internal abstract class ExampleDefinition : IAdvisorExtension, IAdvisorExtension
     }
 }
 
-internal sealed class StandardExample : ExampleDefinition, IStandardAdvisorExtension
+internal sealed class StandardExample : ExampleDefinition, IAdvisorToolListExtension
 {
     public override string Id => "example.standard";
     public override string Name => "Example: standard engine (offline)";
     public IAdvisorSession OpenSession(ConnectionSettings connection, IAdvisorConnectionServices services,
-        ConsultationInput input, RetrievalHistory? continuation) => new Session(input.ToolJson == null || (string?)JObject.Parse(input.DataJson)["interaction_mode"] == "upfront" ? null : (string)JObject.Parse(input.ToolJson)["name"]!);
+        ConsultationInput input, RetrievalHistory? continuation) => new Session(input.ToolsJson.Select(JObject.Parse).Select(t => (string?)t["name"]).FirstOrDefault(n => n == "query_situation"));
     private sealed class Session : IAdvisorSession
     {
         private readonly string? toolName;
@@ -61,7 +61,7 @@ internal sealed class StandardExample : ExampleDefinition, IStandardAdvisorExten
         internal Session(string? toolName) { this.toolName = toolName; }
         public ProviderRequest Prepare(bool allowTools)
         {
-            var args = "{\"requests\":[{\"source\":\"situation\",\"query\":\"catalog\"}]}";
+            var args = "{\"requests\":[{\"query\":\"catalog\"}]}";
             return new ProviderRequest(Encoding.UTF8.GetByteCount(args), cancellation =>
             {
                 cancellation.ThrowIfCancellationRequested();

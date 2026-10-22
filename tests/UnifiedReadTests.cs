@@ -8,6 +8,8 @@ using SeaPowerAIAdvisor;
 internal static partial class ProviderTests
 {
     private static JObject ReadArguments(params JObject[] queries) => new()
+    { ["requests"] = new JArray(queries.Select(q => q.DeepClone())) };
+    private static JObject LegacyReadArguments(params JObject[] queries) => new()
     { ["requests"] = new JArray(queries.Select(q => new JObject(q) { ["source"] = "situation" })) };
     private static JObject Lookup(string action) => new()
     { ["source"] = "operation", ["action"] = action, ["operation_id"] = "example.inspect" };
@@ -21,7 +23,7 @@ internal static partial class ProviderTests
             using var operations = gateway.CreateSession("mixed", AdvisorPrompts.Current)!;
             var knowledge = ReadKnowledge(); var recording = new AdvisorLocalRun();
             var context = AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations, preparedInput: recording.CaptureInput);
-            var provider = new FakeProvider("generic", (session, n, _, _) =>
+            var provider = new LegacyProvider("generic", (session, n, _, _) =>
             {
                 if (n == 1)
                 {
@@ -30,7 +32,7 @@ internal static partial class ProviderTests
                         new JObject { ["source"] = "situation", ["query"] = "get_movement_plans", ["ids"] = new JArray("own_unit_1", "own_unit_2") },
                         new JObject { ["source"] = "situation", ["query"] = "get_units", ["ids"] = new JArray("missing") },
                         new JObject { ["source"] = "situation", ["query"] = "list_contacts", ["kind"] = "surface" }, Lookup("candidates"));
-                    return Task.FromResult(Reply(new AdvisorToolCall("all-read", ToolName, new JObject { ["requests"] = requests })));
+                    return Task.FromResult(Reply(new AdvisorToolCall("all-read", AdvisorLegacyTools.ReadName, new JObject { ["requests"] = requests })));
                 }
                 var rows = (JArray)session.Results.Single().Data["results"]!;
                 Require(rows.Count == 5 && rows.Select((row, i) => (int?)row["index"] == i).All(v => v) &&
@@ -44,7 +46,7 @@ internal static partial class ProviderTests
             var answer = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(provider).ConsultAsync(context, CancellationToken.None)));
             Require(answer.Completed && answer.ApiRequests == 2 && knowledge.RoundsUsed == 1 && operations.History.Count == 2 &&
                 operation.Writes == 0 && operation.Thread == Environment.CurrentManagedThreadId &&
-                (string?)recording.Snapshot()["input"]?["tool"]?["name"] == ToolName,
+                (string?)recording.Snapshot()["input"]?["tools"]?[0]?["name"] == AdvisorLegacyTools.ReadName,
                 "The read required extra AI calls, ran on a worker, changed the game, or diagnostics recorded another schema");
         });
         check("Published read variants and dispatch reject historical mixed fields and missing identifiers while valid mixed reads succeed", () =>
@@ -71,8 +73,10 @@ internal static partial class ProviderTests
             foreach (var (request, valid) in requests)
             {
                 var reads = AdvisorContext.Create(ReadKnowledge(), Array.Empty<ChatExchange>(), operations: operations).Reads;
+                var legacy = reads.Prepare(AdvisorSituationDelivery.OnDemand,
+                    AdvisorLegacyTools.Create((JObject)ReadKnowledge().InitialInput()["query_tool"]!, operations, AdvisorPrompts.Current, true).Select(t => t.Definition).ToArray());
                 var args = new JObject { ["requests"] = new JArray(request) };
-                Require(RequestSchemaFixture.Accepts(reads.Input.Tool!["parameters"]!, args) == valid,
+                Require(RequestSchemaFixture.Accepts(legacy.Tools[0]["parameters"]!, args) == valid,
                     "The published schema disagrees with the request contract: " + request);
                 var result = OperationGatewayTests.Finish(gateway, reads.ExecuteAsync(args, CancellationToken.None));
                 Require(((string?)result["results"]?[0]?["status"] == "ok") == valid,
@@ -80,7 +84,7 @@ internal static partial class ProviderTests
             }
             var context = AdvisorContext.Create(ReadKnowledge(), Array.Empty<ChatExchange>(), operations: operations);
             var mixed = new JObject { ["requests"] = new JArray(requests.Take(5).Select(r => r.Item1)) };
-            Require(RequestSchemaFixture.Accepts(context.Reads.Input.Tool!["parameters"]!, mixed), "Valid heterogeneous requests no longer batch");
+            Require(RequestSchemaFixture.Accepts(context.PrepareStandardInput(legacy: true).Tools[0]["parameters"]!, mixed), "Valid heterogeneous requests no longer batch");
             var combined = OperationGatewayTests.Finish(gateway, context.Reads.ExecuteAsync(mixed, CancellationToken.None));
             Require(combined["results"]!.Count() == 5 && combined["results"]!.All(r => (string?)r["status"] == "ok") && operation.Writes == 0,
                 "Valid mixed reads lost results or performed an operation");
@@ -95,9 +99,9 @@ internal static partial class ProviderTests
             var batch = new JObject { ["requests"] = new JArray(execute, new JObject { ["source"] = new JObject() }, 123,
                 new JObject { ["source"] = "situation", ["query"] = "get_briefing" }) };
             JObject result = new();
-            var provider = new FakeProvider("malformed", (session, send, _, _) =>
+            var provider = new LegacyProvider("malformed", (session, send, _, _) =>
             {
-                if (send == 1) return Task.FromResult(Reply(new AdvisorToolCall("bad-items", ToolName, batch)));
+                if (send == 1) return Task.FromResult(Reply(new AdvisorToolCall("bad-items", AdvisorLegacyTools.ReadName, batch)));
                 result = session.Results.Single().Data;
                 return Task.FromResult(new AdvisorReply("Valid information retained", Array.Empty<AdvisorToolCall>(), 1));
             });
@@ -171,10 +175,10 @@ internal static partial class ProviderTests
             using var gateway = new AdvisorOperationGateway(registry);
             using var operations = gateway.CreateSession("read-handoff", AdvisorPrompts.Current)!;
             var knowledge = ReadKnowledge();
-            var main = new FakeProvider("main", (_, send, _, _) => send == 1 ? Task.FromResult(Reply(new AdvisorToolCall("mixed", ToolName,
+            var main = new LegacyProvider("main", (_, send, _, _) => send == 1 ? Task.FromResult(Reply(new AdvisorToolCall("mixed", AdvisorLegacyTools.ReadName,
                 new JObject { ["requests"] = new JArray(new JObject { ["source"] = "situation", ["query"] = "get_briefing" }, Lookup("describe"), Lookup("candidates")) })))
                 : throw new AdvisorConnectionException("rate_limited", 429));
-            var sub = new FakeProvider("sub", (session, _, _, _) =>
+            var sub = new LegacyProvider("sub", (session, _, _, _) =>
             {
                 var history = session.Continuation ?? throw new InvalidOperationException("Missing handoff");
                 Require(history.Retrievals.Count == 1 && history.Retrievals[0]?["response"]?["results"]?.Count() == 1 &&
@@ -191,7 +195,7 @@ internal static partial class ProviderTests
         check("Unexpected snapshot errors escape the read facade instead of becoming normal item errors", () =>
         {
             var reads = AdvisorContext.Create(new BrokenReadKnowledge(), Array.Empty<ChatExchange>()).Reads;
-            try { _ = reads.ExecuteAsync(ReadArguments(QueryTests.Q("catalog")), CancellationToken.None).GetAwaiter().GetResult(); }
+            try { _ = reads.ExecuteAsync(LegacyReadArguments(QueryTests.Q("catalog")), CancellationToken.None).GetAwaiter().GetResult(); }
             catch (InvalidOperationException error) when (error.Message == "broken source") { return; }
             throw new InvalidOperationException("An internal source error was hidden");
         });

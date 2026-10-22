@@ -25,6 +25,8 @@ internal sealed class AdvisorOperationGateway : IDisposable
         new(new[] { "candidates" }, new[] { "operation_id" }, "target_ref", "offset", "limit"),
         new(new[] { "execute" }, new[] { "operation_id", "target_ref", "request_id", "arguments" })
     };
+    internal static JObject ActionSchema(JObject tool, string action) => requestShapes.Single(s => s.Matches(action)).Schema("action",
+        (JObject)tool["parameters"]!["properties"]!, new[] { action });
     internal static JObject ReadSchema(JObject tool) => AdvisorRequestShape.Union("action", requestShapes,
         (JObject)tool["parameters"]!["properties"]!, new[] { "list", "describe", "candidates" });
     internal static JObject ExecutionSchema(JObject tool) => requestShapes[3].Schema("action",

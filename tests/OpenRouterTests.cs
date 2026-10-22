@@ -102,7 +102,7 @@ internal static partial class ProviderTests
                             reply["choices"]![0]!["message"]!["reasoning"] = "PRIVATE_PROVIDER_STATE"; return JsonResponse(reply);
                         }
                         var result = InteractionFixture.Reply(new JObject { ["functionCall"] = new JObject
-                        { ["id"] = "first", ["name"] = ToolName, ["args"] = new JObject { ["requests"] = new JArray(new JObject { ["source"] = "situation", ["query"] = "get_briefing" }) } } });
+                        { ["id"] = "first", ["name"] = ToolName, ["args"] = new JObject { ["requests"] = new JArray(new JObject { ["query"] = "get_briefing" }) } } });
                         result["id"] = "PRIVATE_PROVIDER_STATE"; return JsonResponse(result);
                     }
                     if (sends == 2)
@@ -230,7 +230,7 @@ internal static partial class ProviderTests
     private static JObject RouterCall(string id, string query, string name = ToolName, JObject? arguments = null) => new()
     {
         ["id"] = id, ["type"] = "function", ["function"] = new JObject { ["name"] = name,
-            ["arguments"] = (arguments ?? new JObject { ["requests"] = new JArray(new JObject { ["source"] = "situation", ["query"] = query }) }).ToString(Formatting.None) }
+            ["arguments"] = (arguments ?? new JObject { ["requests"] = new JArray(new JObject { ["query"] = query }) }).ToString(Formatting.None) }
     };
     private static JObject RouterReply(string text, params JObject[] calls) => new()
     {

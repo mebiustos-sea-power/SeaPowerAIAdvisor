@@ -8,69 +8,43 @@ using static SeaPowerAIAdvisor.AdvisorQueryLimits;
 
 namespace SeaPowerAIAdvisor;
 
-// The standard engine's read-only facade. Snapshot reads and live operation lookups keep their own owners.
+// Read execution and its shared data budget. Tool bindings normalize wire arguments before dispatch.
 internal sealed class AdvisorReadSession
 {
-    internal const string ToolName = "query_game";
     private readonly IAdvisorQuerySession knowledge;
     private readonly IAdvisorOperationSession? operations;
     private readonly HashSet<string> knownQueries;
-    private int returnedBytes;
+    private readonly AdvisorProviderInput original;
+    private int returnedBytes, initialBytes;
+    private AdvisorSituationDelivery delivery;
     internal AdvisorProviderInput Input { get; private set; }
     internal bool AllowsSituationReads => delivery == AdvisorSituationDelivery.OnDemand;
-    private readonly AdvisorProviderInput onDemand;
-    private AdvisorProviderInput? upfront;
-    private AdvisorSituationDelivery delivery;
-    private int initialBytes;
 
     internal AdvisorReadSession(IAdvisorQuerySession knowledge, IAdvisorOperationSession? operations, AdvisorProviderInput input)
     {
-        this.knowledge = knowledge; this.operations = operations;
-        var tool = (JObject)(input.Tool ?? throw new InvalidOperationException("The snapshot query definition is missing.")).DeepClone();
-        tool["name"] = ToolName;
-        tool["description"] = knowledge.Prompts.Text("common.json", "read_tool_description");
-        var item = (JObject)tool["parameters"]!["properties"]!["requests"]!["items"]!;
-        knownQueries = AdvisorRequestShape.Values(item, "query").ToHashSet(StringComparer.Ordinal);
-        var variants = new JArray(AdvisorRequestShape.Variants(item).Select(s => WithSource(s, "situation")));
-        JObject? executionTool = null;
-        if (operations != null)
-        {
-            foreach (var variant in AdvisorRequestShape.Variants(AdvisorOperationGateway.ReadSchema(operations.Tool)))
-                variants.Add(WithSource(variant, "operation"));
-            executionTool = (JObject)operations.Tool.DeepClone();
-            executionTool["description"] = knowledge.Prompts.Text("battle.json", "operation_execution_description");
-            executionTool["parameters"] = AdvisorOperationGateway.ExecutionSchema(operations.Tool);
-        }
-        tool["parameters"]!["properties"]!["requests"]!["items"] = new JObject { ["anyOf"] = variants };
-        Input = new AdvisorProviderInput(input.Data, input.SystemInstruction, tool, executionTool);
-        // The information budget excludes chat history and user preferences; the sending budget covers the whole request.
-        returnedBytes = Bytes(knowledge.InitialInput()) + Math.Max(0, Bytes(tool) - Bytes(input.Tool!)) +
-            (executionTool == null ? 0 : Bytes(executionTool));
-        if (returnedBytes > MaxTotalBytes) throw new InvalidOperationException("Mandatory read input exceeds the consultation payload limit.");
-        onDemand = Input; initialBytes = returnedBytes;
+        this.knowledge = knowledge; this.operations = operations; original = Input = input;
+        var snapshotTool = (JObject)knowledge.InitialInput()["query_tool"]!;
+        knownQueries = AdvisorRequestShape.Values((JObject)snapshotTool["parameters"]!["properties"]!["requests"]!["items"]!, "query").ToHashSet(StringComparer.Ordinal);
     }
 
-    internal AdvisorProviderInput Prepare(AdvisorSituationDelivery mode)
+    internal AdvisorProviderInput Prepare(AdvisorSituationDelivery mode, IReadOnlyList<JObject> tools)
     {
-        if (mode == AdvisorSituationDelivery.OnDemand) { delivery = mode; return Input = onDemand; }
-        if (mode != AdvisorSituationDelivery.Upfront) throw new AdvisorConnectionException("settings_invalid");
-        if (upfront == null)
+        if (mode is not (AdvisorSituationDelivery.OnDemand or AdvisorSituationDelivery.Upfront))
+            throw new AdvisorConnectionException("settings_invalid");
+        var input = new AdvisorProviderInput(original.Data, original.SystemInstruction, tools);
+        int size;
+        if (mode == AdvisorSituationDelivery.Upfront) input = AdvisorSituationInput.Upfront(knowledge, input, out size);
+        else
         {
-            var prepared = AdvisorSituationInput.Upfront(knowledge, onDemand, operations, out var size);
-            var increase = Math.Max(0, size - initialBytes);
-            if (increase > MaxTotalBytes - returnedBytes) throw new AdvisorConnectionException("situation_payload_limit");
-            returnedBytes += increase; initialBytes = Math.Max(initialBytes, size); upfront = prepared;
+            var initial = knowledge.InitialInput();
+            size = Bytes(initial) + Math.Max(0, tools.Sum(Bytes) - Bytes(initial["query_tool"]!));
         }
+        // Initial information is charged once; a fallback can add a larger snapshot or tool set, never reset the budget.
+        var increase = Math.Max(0, size - initialBytes);
+        if (increase > MaxTotalBytes - returnedBytes) throw new AdvisorConnectionException("situation_payload_limit");
+        returnedBytes += increase; initialBytes = Math.Max(initialBytes, size);
         delivery = mode;
-        return Input = upfront;
-    }
-
-    private static JObject WithSource(JObject schema, string source)
-    {
-        var result = (JObject)schema.DeepClone();
-        ((JObject)result["properties"]!).AddFirst(new JProperty("source", new JObject { ["type"] = "string", ["enum"] = new JArray(source) }));
-        ((JArray)result["required"]!).Insert(0, "source");
-        return result;
+        return Input = input;
     }
 
     internal string[] Queries(JObject request) => (request["requests"] as JArray ?? new JArray()).Select(QueryName).ToArray();

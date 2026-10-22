@@ -114,10 +114,10 @@ internal static class FallbackModelTests
     }),"ja","Question",maxRounds:3);
     private static JObject Tool(string name,string signature,string? contactId=null)
     {
-        var query=new JObject { ["source"]="situation",["query"]=name };
+        var query=new JObject { ["query"]=name };
         if (contactId!=null) query["ids"]=new JArray(contactId);
         return new JObject { ["thoughtSignature"]=signature,["functionCall"]=new JObject {
-            ["name"]="query_game",["args"]=new JObject { ["requests"]=new JArray(query) } } };
+            ["name"]="query_situation",["args"]=new JObject { ["requests"]=new JArray(query) } } };
     }
     private static string Reply(params JObject[] parts) => InteractionFixture.Reply(parts).ToString(Formatting.None);
     private static HttpResponseMessage Response(int status,string body) => new((HttpStatusCode)status) { Content=new StringContent(body) };

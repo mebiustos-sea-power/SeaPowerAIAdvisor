@@ -8,11 +8,12 @@ using SeaPowerAIAdvisor;
 
 internal static partial class ProviderTests
 {
-    private const string ToolName = "query_game";
+    private const string ToolName = "query_situation";
     internal static void Run(Action<string, Action> check)
     {
         RunBackends(check);
         RunUnifiedReads(check);
+        RunSplitTools(check);
         RunSituationDelivery(check);
         RunLocalFallbackPolicy(check);
         RunLocalConnections(check);
@@ -114,12 +115,13 @@ internal static partial class ProviderTests
     }
 
     private static AdvisorToolCall Call(string id, string query) => new(id, ToolName,
-        new JObject { ["requests"] = new JArray(new JObject { ["source"] = "situation", ["query"] = query }) });
+        new JObject { ["requests"] = new JArray(new JObject { ["query"] = query }) });
     private static AdvisorReply Reply(params AdvisorToolCall[] calls) => new("", calls, 7);
 
-    private sealed class FakeProvider : IAdvisorProvider
+    private class FakeProvider : IAdvisorProvider, IAdvisorLegacyToolProvider
     {
         public string Model { get; }
+        public virtual bool UsesLegacyTools => false;
         private readonly Func<FakeSession, int, bool, CancellationToken, Task<AdvisorReply>> send;
         private readonly int bytes;
         internal List<FakeSession> Sessions { get; } = new();
@@ -130,6 +132,13 @@ internal static partial class ProviderTests
             var session = new FakeSession(input, continuation, send, bytes);
             Sessions.Add(session); return session;
         }
+    }
+
+    private sealed class LegacyProvider : FakeProvider
+    {
+        public override bool UsesLegacyTools => true;
+        internal LegacyProvider(string model, Func<FakeSession, int, bool, CancellationToken, Task<AdvisorReply>> send, int bytes = 100)
+            : base(model, send, bytes) { }
     }
 
     private sealed class FakeSession : IAdvisorProviderSession

@@ -128,7 +128,7 @@ internal static class ProgressTests
     }), "ja", "What next?", maxRounds: maxRounds);
     private static AdvisorSettings Settings() => AdvisorSettings.Parse("{\"api_key\":\"mock_key_no_network\"}");
     private static JObject Call(params string[] names) => new() { ["functionCall"] = new JObject {
-        ["name"] = "query_game", ["args"] = new JObject { ["requests"] = new JArray(names.Select(n => new JObject { ["source"] = "situation", ["query"] = n })) } } };
+        ["name"] = "query_situation", ["args"] = new JObject { ["requests"] = new JArray(names.Select(n => new JObject { ["query"] = n })) } } };
     private static JObject Reply(params JObject[] parts) => InteractionFixture.Reply(parts);
     private sealed class Fake : IGeminiTransport
     {

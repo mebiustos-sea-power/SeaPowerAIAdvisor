@@ -20,14 +20,13 @@ internal sealed class GeminiProvider : IAdvisorProvider
         private readonly IGeminiTransport transport;
         private readonly AdvisorSettings settings;
         private readonly string system;
-        private readonly JObject? tool;
-        private readonly JObject? operationTool;
+        private readonly IReadOnlyList<JObject> tools;
         private JArray input;
         private string? previous;
 
         internal Session(IGeminiTransport transport, AdvisorSettings settings, AdvisorProviderInput initial, AdvisorContinuation? continuation)
         {
-            this.transport = transport; this.settings = settings; system = initial.SystemInstruction; tool = initial.Tool; operationTool = initial.OperationTool;
+            this.transport = transport; this.settings = settings; system = initial.SystemInstruction; tools = initial.Tools;
             var data = (JObject)initial.Data.DeepClone();
             if (continuation != null)
                 data["continuation"] = new JObject
@@ -41,7 +40,7 @@ internal sealed class GeminiProvider : IAdvisorProvider
 
         public AdvisorProviderRequest Prepare(bool allowTools)
         {
-            var body = GeminiInteraction.Request(settings, input, previous, system, tool, allowTools, operationTool: operationTool);
+            var body = GeminiInteraction.Request(settings, input, previous, system, allowTools: allowTools, tools: tools);
             return new AdvisorProviderRequest(AdvisorQueryLimits.Bytes(body), async cancellation =>
             {
                 var response = await transport.GenerateAsync(settings, body, cancellation).ConfigureAwait(false);

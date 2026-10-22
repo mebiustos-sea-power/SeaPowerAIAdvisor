@@ -73,7 +73,7 @@ internal static partial class ProviderTests
                 {
                     token.ThrowIfCancellationRequested();
                     if (++calls == 1) return Task.FromResult(new Api.ProviderReply("", new[] {
-                        new Api.ToolCall("a", tool, ReadArguments(QueryTests.Q("get_briefing")).ToString()), new Api.ToolCall("b", tool, ReadArguments(QueryTests.Q("catalog")).ToString()) }, 3));
+                        new Api.ToolCall("a", tool, LegacyReadArguments(QueryTests.Q("get_briefing")).ToString()), new Api.ToolCall("b", tool, LegacyReadArguments(QueryTests.Q("catalog")).ToString()) }, 3));
                     Require(results?.Count == 2 && results[0].Id == "a" && results[1].Id == "b" &&
                         JObject.Parse(results[0].DataJson).ToString().Contains("Public briefing", StringComparison.Ordinal),
                         "Public tool replies lost call identity or player-known data");

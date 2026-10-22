@@ -10,7 +10,7 @@ namespace SeaPowerAIAdvisor;
 
 // Built-ins declare the same registration contract. The catalog retains their native adapters
 // after validation, preserving the established Gemini/Ollama wire requests and test seams.
-internal sealed class BuiltInAdvisorExtension : Api.IStandardAdvisorExtension, Api.IAdvisorExtensionDescription
+internal sealed class BuiltInAdvisorExtension : Api.IAdvisorToolListExtension, Api.IAdvisorExtensionDescription
 {
     internal AdvisorService Service { get; }
     public int ApiVersion => Api.AdvisorApi.ContractVersion;
@@ -39,7 +39,7 @@ internal sealed class BuiltInAdvisorExtension : Api.IStandardAdvisorExtension, A
     {
         var provider = Service.Open(Configuration(connection), Options(connection), connection.IsSubConnection, RequireServices(services));
         return new Session(provider.Start(new AdvisorProviderInput(AdvisorExtensionBridge.Object(input.DataJson), input.SystemInstruction,
-            input.ToolJson == null ? null : AdvisorExtensionBridge.Object(input.ToolJson), input.OperationToolJson == null ? null : AdvisorExtensionBridge.Object(input.OperationToolJson)), continuation == null ? null : new AdvisorContinuation(
+            input.ToolsJson.Select(json => AdvisorExtensionBridge.Object(json))), continuation == null ? null : new AdvisorContinuation(
                 JArray.Parse(continuation.RetrievalsJson), continuation.RoundsUsed, continuation.MaxRounds, JArray.Parse(continuation.OperationsJson))));
     }
     private static AdvisorHttpTransport RequireServices(Api.IAdvisorConnectionServices services) =>

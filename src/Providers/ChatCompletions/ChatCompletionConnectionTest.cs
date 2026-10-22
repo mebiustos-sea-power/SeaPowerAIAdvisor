@@ -16,7 +16,7 @@ internal static class ChatCompletionConnectionTest
         var messages = new JArray(new JObject { ["role"] = "system", ["content"] = AdvisorPrompts.ToolConnectionTestRequest() },
             new JObject { ["role"] = "user", ["content"] = request });
         var forced = new JObject { ["type"] = "function", ["function"] = new JObject { ["name"] = name } };
-        var firstResponse = await provider.SendAsync(provider.Request(messages, tool, forced), cancellation).ConfigureAwait(false);
+        var firstResponse = await provider.SendAsync(provider.Request(messages, new[] { tool }, forced), cancellation).ConfigureAwait(false);
         cancellation.ThrowIfCancellationRequested();
         var first = provider.ReadReply(firstResponse);
         if (first.Calls.Count != 1 || first.Calls[0].Name != name || first.Calls[0].Arguments.Count != 0)
@@ -26,7 +26,7 @@ internal static class ChatCompletionConnectionTest
         messages.Add(new JObject { ["role"] = "tool", ["tool_call_id"] = first.Calls[0].Id,
             ["content"] = new JObject { ["confirmation"] = confirmation }.ToString(Formatting.None) });
         var second = provider.ReadReply(await provider.SendAsync(
-            provider.Request(messages, tool, new JValue("none")), cancellation).ConfigureAwait(false));
+            provider.Request(messages, new[] { tool }, new JValue("none")), cancellation).ConfigureAwait(false));
         cancellation.ThrowIfCancellationRequested();
         if (second.Calls.Count != 0 || second.Text.Trim() != confirmation) throw new AdvisorConnectionException("tool_call_test_failed");
         var total = first.TotalTokens.HasValue && second.TotalTokens.HasValue && first.TotalTokens <= long.MaxValue - second.TotalTokens

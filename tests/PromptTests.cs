@@ -18,7 +18,7 @@ internal static class PromptTests
             Prepare(directory);
             Rewrite(directory, "common", value =>
             {
-                value["read_tool_description"] = "EXTERNAL_READ_TOOL";
+                value["situation_tool_description"] = "EXTERNAL_READ_TOOL";
                 value["system"] = "EXTERNAL_COMMON_V1"; value["instructions"]!["task"] = "EXTERNAL_TASK_V1";
                 value["instructions"]!["advice_policy"] = "EXTERNAL_ADVICE_POLICY";
                 value["instructions"]!["format"] = "EXTERNAL_REPLY_FORMAT";
@@ -133,8 +133,8 @@ internal static class PromptTests
                     runtime.Apply(edits);
                     return InteractionFixture.Reply(new JObject { ["functionCall"] = new JObject
                     {
-                        ["id"] = "prompt-round", ["name"] = "query_game",
-                        ["args"] = new JObject { ["requests"] = new JArray(new JObject { ["source"] = "situation", ["query"] = "catalog" }) }
+                        ["id"] = "prompt-round", ["name"] = "query_situation",
+                        ["args"] = new JObject { ["requests"] = new JArray(new JObject { ["query"] = "catalog" }) }
                     } });
                 }
                 Require((string?)InteractionFixture.Result(body)["status"] == "ok", "The prompt update interrupted information retrieval");

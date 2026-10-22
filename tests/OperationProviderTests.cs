@@ -20,7 +20,7 @@ internal static partial class ProviderTests
                 var knowledge = DeliveryKnowledge();
                 var provider = new FakeProvider("operation-model", (s, n, allowed, token) =>
                 {
-                    Require(s.Input.OperationTool != null && !s.Input.Data.ToString().Contains(BattleSonobuoyOperation.OperationId, StringComparison.Ordinal),
+                    Require(s.Input.Tools.Any(t => (string?)t["name"] == "propose_operation") && !s.Input.Data.ToString().Contains(BattleSonobuoyOperation.OperationId, StringComparison.Ordinal),
                         "Operation definition was eagerly embedded in initial context");
                     if (n == 1) return Task.FromResult(OperationReply("list", new JObject { ["action"] = "list" }));
                     var result = s.Results.Single().Data;
@@ -156,31 +156,35 @@ internal static partial class ProviderTests
             var proposal = registry.FinishProposal("handoff", true)!; registry.Approve(proposal);
             Require(answer.Text == "Existing reservation retained." && unit.Calls == 1 && operations.History.Count == 2, "A connection handoff duplicated the order");
         });
-        check("Gemini, Ollama, OpenRouter and NanoGPT carry separate read and operation tools without eager operation definitions", () => Async(async () =>
+        check("All built-in wires preserve the complete split tool list and operation schemas without eager command definitions", () => Async(async () =>
         {
             var unit = new OperationHelicopter(); using var gateway = new AdvisorOperationGateway(SonobuoyRegistry(unit));
             using var operations = gateway.CreateSession("wire", AdvisorPrompts.Current)!;
-            var input = AdvisorContext.Create(ReadKnowledge(), Array.Empty<ChatExchange>(), operations: operations).Reads.Input;
+            var input = AdvisorContext.Create(ReadKnowledge(), Array.Empty<ChatExchange>(), operations: operations).PrepareStandardInput();
             var settings = AdvisorSettings.Parse(new JObject { ["api_key"] = "mock-key", ["model"] = "gemini-model" }.ToString());
-            var gemini = GeminiInteraction.Request(settings, new JArray(), tool: input.Tool, allowTools: true, operationTool: input.OperationTool);
-            Require(gemini["tools"]!.Count() == 2 && (string?)gemini["tools"]![1]!["name"] == "game_operations", "Gemini lost the second tool");
-            Require(JToken.DeepEquals(gemini["tools"]![0]!["parameters"], input.Tool!["parameters"]), "Gemini flattened the read variants");
-            var local = OllamaProvider.Request(LocalConfiguration("local"), new AdvisorConnectionOptions(new JObject()), new JArray(), input.Tool, input.OperationTool);
-            Require(local["tools"]!.Count() == 2 && (string?)local["tools"]![1]!["function"]?["name"] == "game_operations", "Ollama lost the second tool");
-            Require(JToken.DeepEquals(local["tools"]![0]!["function"]!["parameters"], input.Tool!["parameters"]), "Ollama flattened the read variants");
+            void CheckWire(JArray wire, bool nested)
+            {
+                Require(wire.Count == input.Tools.Count && wire.Count == 5, "A tool was omitted or duplicated");
+                for (var i = 0; i < wire.Count; i++)
+                {
+                    var definition = nested ? wire[i]!["function"]! : wire[i]!;
+                    Require((string?)definition["name"] == (string?)input.Tools[i]["name"] &&
+                        JToken.DeepEquals(definition["parameters"], input.Tools[i]["parameters"]), "Wire schema changed argument constraints");
+                }
+            }
+            CheckWire((JArray)GeminiInteraction.Request(settings, new JArray(), allowTools: true, tools: input.Tools)["tools"]!, false);
+            CheckWire((JArray)OllamaProvider.Request(LocalConfiguration("local"), new AdvisorConnectionOptions(new JObject()), new JArray(), input.Tools)["tools"]!, true);
             foreach (var nano in new[] { false, true })
             {
                 using var transport = new AdvisorHttpTransport(new BackendHttpHandler((_, _) => throw new InvalidOperationException("Unexpected real send")));
                 ChatCompletionProvider provider = nano ? new NanoGptProvider(transport, NanoConfiguration(), new AdvisorConnectionOptions(new JObject()), false)
                     : new OpenRouterProvider(transport, RouterConfiguration("router"), new AdvisorConnectionOptions(new JObject()), false);
-                var body = provider.Request(new JArray(), input.Tool, new JValue("auto"), input.OperationTool);
-                Require(JToken.DeepEquals(body["tools"]![0]!["function"]!["parameters"], input.Tool!["parameters"]),
-                    "Chat completions changed required fields or flattened read variants");
-                Require(body["tools"]!.Count() == 2 && (string?)body["tools"]![1]!["function"]?["name"] == "game_operations" &&
-                    !body.ToString().Contains(BattleSonobuoyOperation.OperationId, StringComparison.Ordinal), "Chat completions embedded definitions or lost the operation tool");
+                var body = provider.Request(new JArray(), input.Tools, new JValue("auto"));
+                CheckWire((JArray)body["tools"]!, true);
+                Require(!body.ToString().Contains(BattleSonobuoyOperation.OperationId, StringComparison.Ordinal), "Commands were eagerly embedded");
             }
             var old = new Api.ConsultationInput("{}", "system", "{}");
-            Require(old.OperationToolJson == null && new Api.RetrievalHistory("[]", 0, 1).OperationsJson == "[]", "Legacy public constructors changed behavior");
+            Require(old.OperationToolJson == null && old.ToolsJson.Count == 1 && new Api.RetrievalHistory("[]", 0, 1).OperationsJson == "[]", "Legacy constructors changed");
             await Task.CompletedTask;
         }));
         check("An independent external consultation discovers and proposes through the same host approval boundary", () =>
@@ -214,7 +218,7 @@ internal static partial class ProviderTests
             var request = BuoyRequest(); _ = OperationGatewayTests.Finish(gateway, operations.ExecuteAsync(request, CancellationToken.None));
             request["request_id"] = "mutated"; turn.Complete("Registered"); run.Finish();
             var snapshot = run.Snapshot();
-            Require(snapshot["input"]?["operation_tool"] != null && (string?)snapshot["operations"]?[0]?["request"]?["request_id"] == "buoy-1" &&
+            Require(snapshot["input"]?["tools"]?.Count() == 2 && (string?)snapshot["operations"]?[0]?["request"]?["request_id"] == "buoy-1" &&
                 (string?)snapshot["operations"]?[0]?["response"]?["status"] == "proposed", "Operation evidence was lost or aliased");
         });
     }
@@ -222,13 +226,16 @@ internal static partial class ProviderTests
     {
         var request = BuoyRequest(); request["request_id"] = "buoy-" + index;
         request["arguments"]!["latitude"] = 26.5 + index * 0.001;
-        return new AdvisorToolCall("schedule-" + index, "game_operations", request);
+        request.Remove("action");
+        return new AdvisorToolCall("schedule-" + index, "propose_operation", request);
     }
     private static AdvisorReply OperationReply(string id, JObject args)
     {
-        if ((string?)args["action"] == "execute") return Reply(new AdvisorToolCall(id, "game_operations", args));
-        var lookup = (JObject)args.DeepClone(); lookup["source"] = "operation";
-        return Reply(new AdvisorToolCall(id, ToolName, new JObject { ["requests"] = new JArray(lookup) }));
+        var name = (string?)args["action"] switch {
+            "list" => "list_operations", "describe" => "describe_operation", "candidates" => "get_operation_candidates",
+            "execute" => "propose_operation", _ => throw new InvalidOperationException("Unknown fixture operation") };
+        var arguments = (JObject)args.DeepClone(); arguments.Remove("action");
+        return Reply(new AdvisorToolCall(id, name, arguments));
     }
     private static JObject BuoyRequest() => new()
     {

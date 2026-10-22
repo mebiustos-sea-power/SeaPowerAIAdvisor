@@ -149,7 +149,7 @@ internal static partial class ProviderTests
                 if (++sends == 1)
                 {
                     var reply = InteractionFixture.Reply(new JObject { ["functionCall"] = new JObject { ["name"] = ToolName,
-                        ["args"] = new JObject { ["requests"] = new JArray(new JObject { ["source"] = "situation", ["query"] = "get_briefing" }) } } });
+                        ["args"] = new JObject { ["requests"] = new JArray(new JObject { ["query"] = "get_briefing" }) } } });
                     reply["id"] = "PRIVATE_GEMINI_ID"; return JsonResponse(reply);
                 }
                 if (sends == 2) return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) { Content = new StringContent("busy") };
@@ -275,7 +275,7 @@ internal static partial class ProviderTests
     private static AdvisorSettingsDraft LocalDraft()
     { var draft = new AdvisorSettingsDraft(new JObject()); var entry = LocalConfiguration("local"); draft.Put(new AdvisorApiConfigurationDraft(entry)); draft.MainId = entry.Id; return draft; }
     private static JObject LocalCall(string query) => new() { ["function"] = new JObject { ["name"] = ToolName,
-        ["arguments"] = new JObject { ["requests"] = new JArray(new JObject { ["source"] = "situation", ["query"] = query }) } } };
+        ["arguments"] = new JObject { ["requests"] = new JArray(new JObject { ["query"] = query }) } } };
     private static JObject LocalReply(string text, string? thinking = null, params JObject[] calls)
     {
         var message = new JObject { ["role"] = "assistant", ["content"] = text };
