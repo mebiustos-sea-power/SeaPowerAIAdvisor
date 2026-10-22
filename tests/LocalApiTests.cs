@@ -176,7 +176,7 @@ internal static partial class LocalApiTests
     private static AdvisorLocalApi Api(AdvisorPromptOverrides? overrides = null) => new(
         () => overrides ?? new AdvisorPromptOverrides(AdvisorPrompts.Load(AdvisorPrompts.DefaultDirectory)), error => throw error,
         () => new JObject { ["default_connection_id"] = "test", ["connections"] = new JArray(new JObject { ["id"] = "test" }) },
-        (_, fallback, _, _) => AdvisorServices.Prepare(new AdvisorSettingsDraft(new JObject { ["api_key"] = "mock-local-key" }), allowFallback: fallback));
+        (_, fallback, _, delivery) => AdvisorServices.Prepare(new AdvisorSettingsDraft(new JObject { ["api_key"] = "mock-local-key" }), allowFallback: fallback, situationDelivery: delivery));
     private static AdvisorLocalResponse Send(AdvisorLocalApi api, string method, string path, JObject? body = null)
     { var task = api.Enqueue(method, path, body ?? new()); api.Pump(); return task.GetAwaiter().GetResult(); }
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
@@ -189,15 +189,17 @@ internal static partial class LocalApiTests
         internal AdvisorLocalRun? Run;
         internal AdvisorTurn? Turn;
         public JObject LocalStatus() => new() { ["busy"] = Busy, ["settings_open"] = Editing };
-        public AdvisorLocalRun LocalConsult(string? question, string? shortcut, bool allowFallback, AdvisorBackendSetup execution, bool plainAdvisor, bool? allowOperations)
+        public AdvisorLocalRun LocalConsult(string? question, string? shortcut, bool allowFallback, Func<AdvisorSituationDelivery?, AdvisorBackendSetup> prepare, bool plainAdvisor, bool? allowOperations, AdvisorSituationDelivery? situationDelivery)
         {
             if (Busy) throw new AdvisorLocalApiException(409, "consultation_in_progress");
-            Called = Busy = true; Thread = Environment.CurrentManagedThreadId; Shortcut = shortcut;
             var request = shortcut == null ? new AdvisorQuestion(question!) :
                 (AdvisorShortcut.Find(shortcut) ?? throw new AdvisorLocalApiException(400, "unknown_shortcut")).Prepare(shortcut);
             if (allowOperations.HasValue) request = request.WithOperations(allowOperations.Value);
+            if (situationDelivery.HasValue) request = request.WithSituationDelivery(situationDelivery);
+            var execution = prepare(request.SituationDelivery);
+            Called = Busy = true; Thread = Environment.CurrentManagedThreadId; Shortcut = shortcut;
             Turn = new AdvisorTurn(request, 0, plainAdvisor ? AdvisorProfile.DefaultName : "Michael", "default");
-            Run = new AdvisorLocalRun(allowFallback, plainAdvisor, request.AllowOperations); Run.Attach(Turn); return Run;
+            Run = new AdvisorLocalRun(allowFallback, plainAdvisor, request.AllowOperations, execution); Run.Attach(Turn); return Run;
         }
         public void LocalClear() { if (Busy) throw new AdvisorLocalApiException(409, "consultation_in_progress"); Cleared = true; }
         public void LocalCancel() { Turn!.Cancel(); Run!.Finish(); Busy = false; }

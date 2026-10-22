@@ -340,7 +340,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         ["proposal_review_open"] = operationReview.IsOpen, ["busy"] = active != null, ["settings_open"] = conversationPane.Visibility != Visibility.Visible,
         ["advisor_name"] = DisplayName, ["answered_exchanges"] = conversation.Exchanges.Count
     };
-    AdvisorLocalRun IAdvisorLocalTarget.LocalConsult(string? message, string? shortcut, bool allowFallback, AdvisorBackendSetup execution, bool plainAdvisor, bool? allowOperations)
+    AdvisorLocalRun IAdvisorLocalTarget.LocalConsult(string? message, string? shortcut, bool allowFallback, Func<AdvisorSituationDelivery?, AdvisorBackendSetup> prepare, bool plainAdvisor, bool? allowOperations, AdvisorSituationDelivery? situationDelivery)
     {
         RequireLocalReady();
         if (QuestionInputController.IsComposing) throw new AdvisorLocalApiException(409, "input_composing");
@@ -358,7 +358,9 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
             request = new AdvisorQuestion(message!);
         }
         if (allowOperations.HasValue) request = request.WithOperations(allowOperations.Value);
-        var run = new AdvisorLocalRun(allowFallback, plainAdvisor, request.AllowOperations);
+        if (situationDelivery.HasValue) request = request.WithSituationDelivery(situationDelivery);
+        var execution = prepare(request.SituationDelivery);
+        var run = new AdvisorLocalRun(allowFallback, plainAdvisor, request.AllowOperations, execution);
         guard(() => { if (!IsOpen) Toggle(); StartConsultation(request, recording: run, prepared: execution); });
         if (!run.Attached) throw new AdvisorLocalApiException(409, "advisor_unavailable");
         return run;
@@ -427,7 +429,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         try
         {
             options.EnsureUserName(text["general.default_user_name"]);
-            var execution = prepared ?? backends.Prepare(recording?.AllowFallback ?? true);
+            var execution = prepared ?? backends.Prepare(recording?.AllowFallback ?? true, request.SituationDelivery);
             IAdvisorQuerySession session = source.CreateSession(replyLanguage(), request.Text, options.Current.MaxQueryRounds, options.Current.Information, request.Context);
             turn.SetUnitReferences(session is IAdvisorUnitReferenceSource references ? references.UnitReferences : AdvisorUnitReferences.Empty);
             var operationReferences = session is IAdvisorOperationReferenceSource operationSource

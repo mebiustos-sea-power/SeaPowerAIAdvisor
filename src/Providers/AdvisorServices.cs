@@ -118,15 +118,16 @@ internal static class AdvisorServices
         Func<AdvisorTrace?, AdvisorHttpTransport>? transportFactory = null)
     {
         var registry = new AdvisorBackendRegistry();
-        registry.Register("standard", allowFallback => Prepare(AdvisorSettings.Edit(path), catalog, transportFactory, allowFallback: allowFallback));
+        registry.Register("standard", (allowFallback, delivery) => Prepare(AdvisorSettings.Edit(path), catalog, transportFactory, allowFallback: allowFallback, situationDelivery: delivery));
         registry.Select("standard");
         return registry;
     }
     internal static AdvisorBackendSetup Prepare(AdvisorSettingsDraft settings, AdvisorServiceCatalog? catalog = null,
-        Func<AdvisorTrace?, AdvisorHttpTransport>? transportFactory = null, AdvisorErrorHistory? errorHistory = null, bool allowFallback = true)
+        Func<AdvisorTrace?, AdvisorHttpTransport>? transportFactory = null, AdvisorErrorHistory? errorHistory = null, bool allowFallback = true, AdvisorSituationDelivery? situationDelivery = null)
     {
         catalog ??= AdvisorServiceCatalog.BuiltIn;
-        var main = settings.Main.Build(); var sub = allowFallback ? settings.Sub?.Build() : null;
+        var main = Delivery(settings.Main.Build(), situationDelivery);
+        var sub = allowFallback && settings.Sub != null ? Delivery(settings.Sub.Build(), situationDelivery) : null;
         var options = settings.Options;
         var mainService = catalog.Require(main.Provider); ValidateDelivery(mainService, main); mainService.Validate(main.Settings);
         var subService = sub == null ? null : catalog.Require(sub.Provider);
@@ -148,6 +149,9 @@ internal static class AdvisorServices
             catch (Exception error) { transport.CaptureFailure(error); transport.Dispose(); throw; }
         }, main.Name, sub?.Name ?? "", mainService.Independent ? null : main.SituationDelivery);
     }
+    private static AdvisorApiConfiguration Delivery(AdvisorApiConfiguration configuration, AdvisorSituationDelivery? mode) => !mode.HasValue ? configuration :
+        new(configuration.Id, configuration.Name, configuration.Provider, configuration.Settings, configuration.RequestTimeoutSeconds, mode.Value);
+
     internal static void ValidateDelivery(AdvisorService service, AdvisorApiConfiguration configuration)
     {
         if (service.Independent && configuration.SituationDelivery != AdvisorSituationDelivery.OnDemand)

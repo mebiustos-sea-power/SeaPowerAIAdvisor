@@ -33,6 +33,7 @@ internal sealed class AdvisorTrace : IDisposable
         {
             ["mod_version"] = typeof(AdvisorTrace).Assembly.GetName().Version!.ToString(), ["api"] = settings.Api,
             ["model"] = settings.Model, ["fallback_model"] = settings.FallbackModel, ["display_question"] = question.DisplayText,
+            ["situation_delivery_override"] = question.SituationDelivery?.Code(),
             ["question_source"] = question.IsShortcut ? "shortcut" : "typed", ["allow_operations"] = question.AllowOperations
         });
     }

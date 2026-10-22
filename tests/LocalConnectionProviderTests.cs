@@ -56,7 +56,7 @@ internal static partial class ProviderTests
                 var policy = new AdvisorLocalConnections(new[] { "nano" }, "nano");
                 foreach (var choice in new AdvisorSituationDelivery?[] { AdvisorSituationDelivery.Upfront, AdvisorSituationDelivery.OnDemand, AdvisorSituationDelivery.OnRequest, null })
                 {
-                    var draft = AdvisorSettings.Edit(path); policy.Select(draft, "nano", false, situationDelivery: choice);
+                    var draft = AdvisorSettings.Edit(path); policy.Select(draft, "nano", false);
                     var expected = choice ?? AdvisorSituationDelivery.OnDemand;
                     var handler = new BackendHttpHandler(async (request, token) =>
                     {
@@ -71,7 +71,7 @@ internal static partial class ProviderTests
                             "The consultation used the saved delivery instead of its override");
                         return JsonResponse(NanoReply("Per-request delivery"));
                     });
-                    var setup = AdvisorServices.Prepare(draft, allowFallback: false, transportFactory: trace => new AdvisorHttpTransport(handler, trace));
+                    var setup = AdvisorServices.Prepare(draft, allowFallback: false, situationDelivery: choice, transportFactory: trace => new AdvisorHttpTransport(handler, trace));
                     var result = await AdvisorConsultation.RunAsync(setup, AdvisorContext.Create(DeliveryKnowledge(), Array.Empty<ChatExchange>()),
                         directory, new AdvisorQuestion("Question"), default);
                     Require(result.Completed && result.ApiRequests == 1 && setup.SituationDelivery == expected &&

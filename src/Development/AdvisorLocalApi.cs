@@ -11,7 +11,7 @@ namespace SeaPowerAIAdvisor;
 internal interface IAdvisorLocalTarget
 {
     JObject LocalStatus();
-    AdvisorLocalRun LocalConsult(string? question, string? shortcut, bool allowFallback, AdvisorBackendSetup execution, bool plainAdvisor, bool? allowOperations);
+    AdvisorLocalRun LocalConsult(string? question, string? shortcut, bool allowFallback, Func<AdvisorSituationDelivery?, AdvisorBackendSetup> prepare, bool plainAdvisor, bool? allowOperations, AdvisorSituationDelivery? situationDelivery);
     void LocalClear();
     void LocalCancel();
 }
@@ -203,10 +203,11 @@ internal sealed class AdvisorLocalApi
             if (id == null) throw new AdvisorLocalApiException(409, "default_connection_missing");
             if (!((JArray)info["connections"]!).Any(c => (string?)c["id"] == id))
                 throw new AdvisorLocalApiException(403, "connection_not_allowed");
-            var execution = prepareConnection(id, (bool?)fallback ?? false, (string?)model, delivery);
-            last = Target().LocalConsult((string?)question, (string?)shortcut, (bool?)fallback ?? false, execution, (bool?)plain ?? false, (bool?)operationPermission);
-            return new(202, new JObject { ["connection_id"] = id, ["connection_name"] = execution.ConnectionName, ["model"] = execution.Model,
-                ["situation_delivery"] = execution.SituationDelivery?.Code(),
+            last = Target().LocalConsult((string?)question, (string?)shortcut, (bool?)fallback ?? false,
+                chosen => prepareConnection(id, (bool?)fallback ?? false, (string?)model, chosen),
+                (bool?)plain ?? false, (bool?)operationPermission, delivery);
+            return new(202, new JObject { ["connection_id"] = id, ["connection_name"] = last.ConnectionName, ["model"] = last.Model,
+                ["situation_delivery"] = last.SituationDelivery?.Code(),
                 ["allow_fallback"] = last.AllowFallback, ["plain_advisor"] = last.PlainAdvisor, ["allow_operations"] = last.AllowOperations, ["id"] = last.Id, ["status_url"] = "/v1/consultations/" + last.Id });
         }
         return AdvisorLocalResponse.Error(404, "unknown_endpoint");

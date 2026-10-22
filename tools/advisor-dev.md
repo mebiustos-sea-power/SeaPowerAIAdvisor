@@ -168,7 +168,7 @@ ADVISOR_TEST_POWERSHELL='/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershe
 
 ## Compare situation delivery
 
-Use `consult --situation-delivery on_demand`, `consult --situation-delivery upfront` or `consult --situation-delivery on_request` for a single consultation. Omitting the flag uses the selected connection's saved choice. Request files accept the same `situation_delivery` strings; an explicit flag takes precedence. The selected connection's credentials, model and Data for AI restrictions are preserved, and no saved setting is modified. Fallback remains off unless explicitly enabled, and any allowed fallback keeps its own delivery choice. Invalid file values are rejected before API access or history clearing.
+Use `consult --situation-delivery on_demand`, `consult --situation-delivery upfront` or `consult --situation-delivery on_request` for a single consultation. Omitting the flag uses the shortcut's internal delivery choice when present (currently upfront for every built-in shortcut), otherwise the selected connection's saved choice. Request files accept the same `situation_delivery` strings; an explicit flag takes precedence. The selected connection's credentials, model and Data for AI restrictions are preserved, and no saved setting is modified. Fallback remains off unless explicitly enabled. Explicit API or shortcut delivery choices also apply to an allowed standard sub connection; inherited choices follow each connection individually. Invalid file values are rejected before API access or history clearing.
 
 ```sh
 python tools/advisor_dev.py consult --shortcut key_risks --situation-delivery upfront --no-fallback --plain-advisor --clear-history --output results/upfront

@@ -20,8 +20,14 @@ internal sealed class AdvisorLocalRun
     internal bool AllowFallback { get; }
     internal bool PlainAdvisor { get; }
     internal bool AllowOperations { get; }
-    internal AdvisorLocalRun(bool allowFallback = false, bool plainAdvisor = false, bool allowOperations = true)
-    { AllowFallback = allowFallback; PlainAdvisor = plainAdvisor; AllowOperations = allowOperations; }
+    internal string ConnectionName { get; }
+    internal string Model { get; }
+    internal AdvisorSituationDelivery? SituationDelivery { get; }
+    internal AdvisorLocalRun(bool allowFallback = false, bool plainAdvisor = false, bool allowOperations = true, AdvisorBackendSetup? execution = null)
+    {
+        AllowFallback = allowFallback; PlainAdvisor = plainAdvisor; AllowOperations = allowOperations;
+        ConnectionName = execution?.ConnectionName ?? ""; Model = execution?.Model ?? ""; SituationDelivery = execution?.SituationDelivery;
+    }
     internal AdvisorProfile? ProfileFor(AdvisorProfile? selected) => PlainAdvisor
         ? new AdvisorProfile(Array.Empty<AdvisorPersona>(), null, true, "") : selected;
     internal string CommonPromptFor(string configured) => PlainAdvisor ? "" : configured;
@@ -53,6 +59,7 @@ internal sealed class AdvisorLocalRun
         {
             ["id"] = Id, ["started_utc"] = started, ["allow_fallback"] = AllowFallback, ["plain_advisor"] = PlainAdvisor, ["allow_operations"] = AllowOperations,
             ["state"] = turn?.State.ToString().ToLowerInvariant() ?? "starting",
+            ["situation_delivery"] = SituationDelivery?.Code(), ["situation_delivery_override"] = turn?.Request.SituationDelivery?.Code(),
             ["question"] = turn?.Request.Text, ["display_question"] = turn?.Request.DisplayText,
             ["advisor_name"] = turn?.AdvisorName, ["answer"] = turn?.Exchange?.Answer,
             ["error"] = turn?.Error == null ? null : new JObject { ["code"] = turn.Error.Code, ["http_status"] = turn.Error.HttpStatus },

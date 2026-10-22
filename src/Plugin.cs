@@ -65,8 +65,8 @@ public sealed class Plugin : IAnchorChainMod
                 () => options.Current.LocalConnections.Describe(AdvisorSettings.Edit(settingsPath)), (id, allowFallback, model, delivery) =>
                 {
                     var saved = AdvisorSettings.Edit(settingsPath);
-                    options.Current.LocalConnections.Select(saved, id, allowFallback, model, delivery);
-                    return AdvisorServices.Prepare(saved, allowFallback: allowFallback);
+                    options.Current.LocalConnections.Select(saved, id, allowFallback, model);
+                    return AdvisorServices.Prepare(saved, allowFallback: allowFallback, situationDelivery: delivery);
                 });
             var driverObject = new UnityEngine.GameObject("SeaPowerAIAdvisor.DeveloperLocalApi");
             UnityEngine.Object.DontDestroyOnLoad(driverObject);

@@ -7,7 +7,7 @@ namespace SeaPowerAIAdvisor;
 internal sealed class AdvisorBackendRegistry
 {
     private readonly object sync = new();
-    private readonly Dictionary<string, Func<bool, AdvisorBackendSetup>> factories = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Func<bool, AdvisorSituationDelivery?, AdvisorBackendSetup>> factories = new(StringComparer.Ordinal);
     private string? selected;
     internal string? SelectedId { get { lock (sync) return selected; } }
 
@@ -18,6 +18,13 @@ internal sealed class AdvisorBackendRegistry
     }
 
     internal void Register(string id, Func<bool, AdvisorBackendSetup> prepare)
+    {
+        if (prepare == null) throw new ArgumentNullException(nameof(prepare));
+        Register(id, (fallback, delivery) => delivery.HasValue
+            ? throw new AdvisorConnectionException("situation_delivery_unavailable") : prepare(fallback));
+    }
+
+    internal void Register(string id, Func<bool, AdvisorSituationDelivery?, AdvisorBackendSetup> prepare)
     {
         if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("A backend ID is required.", nameof(id));
         if (prepare == null) throw new ArgumentNullException(nameof(prepare));
@@ -37,15 +44,15 @@ internal sealed class AdvisorBackendRegistry
         }
     }
 
-    internal AdvisorBackendSetup Prepare(bool allowFallback = true)
+    internal AdvisorBackendSetup Prepare(bool allowFallback = true, AdvisorSituationDelivery? situationDelivery = null)
     {
-        Func<bool, AdvisorBackendSetup> prepare;
+        Func<bool, AdvisorSituationDelivery?, AdvisorBackendSetup> prepare;
         lock (sync)
         {
             if (selected == null) throw new InvalidOperationException("No adviser backend is selected.");
             prepare = factories[selected];
         }
         // Capture a configuration for this consultation; registration changes cannot replace it mid-flight.
-        return prepare(allowFallback) ?? throw new InvalidOperationException("The adviser backend returned no configuration.");
+        return prepare(allowFallback, situationDelivery) ?? throw new InvalidOperationException("The adviser backend returned no configuration.");
     }
 }

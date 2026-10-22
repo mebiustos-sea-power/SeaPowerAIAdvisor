@@ -43,7 +43,7 @@ internal sealed class AdvisorLocalConnections
                 ["situation_delivery"] = AdvisorServiceCatalog.BuiltIn.Find(c.Provider)?.Independent == true ? null : c.SituationDelivery.Code() }))
         };
     }
-    internal void Select(AdvisorSettingsDraft settings, string id, bool allowFallback, string? model = null, AdvisorSituationDelivery? situationDelivery = null)
+    internal void Select(AdvisorSettingsDraft settings, string id, bool allowFallback, string? model = null)
     {
         if (!AllowedIds.Contains(id) || settings.Find(id) == null)
             throw new AdvisorLocalApiException(403, "connection_not_allowed");
@@ -59,7 +59,6 @@ internal sealed class AdvisorLocalConnections
             // The caller supplies a detached consultation draft, never a saved settings editor.
             selected.Model = model;
         }
-        if (situationDelivery.HasValue) settings.Find(id)!.SituationDelivery = situationDelivery.Value;
         var sub = settings.SubId;
         settings.MainId = id;
         settings.SubId = allowFallback && sub != id && sub != null && AllowedIds.Contains(sub) ? sub : null;

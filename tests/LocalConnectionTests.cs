@@ -17,8 +17,8 @@ internal static partial class LocalApiTests
                 () => policy.Describe(settings), (id, fallback, model, delivery) =>
                 {
                     selected = id;
-                    var draft = LocalLibrary(); policy.Select(draft, id, fallback, model, delivery);
-                    return AdvisorServices.Prepare(draft, allowFallback: fallback);
+                    var draft = LocalLibrary(); policy.Select(draft, id, fallback, model);
+                    return AdvisorServices.Prepare(draft, allowFallback: fallback, situationDelivery: delivery);
                 });
             api.Attach(new object(), "tactical_battle", () => target); api.Enable();
             var metadata = Send(api, "GET", "/v1/connections");
@@ -56,10 +56,10 @@ internal static partial class LocalApiTests
                 () => policy.Describe(settings), (id, fallback, model, delivery) =>
                 {
                     var draft = new AdvisorSettingsDraft(JObject.Parse(System.Text.Encoding.UTF8.GetString(original)));
-                    policy.Select(draft, id, fallback, model, delivery); prepared++;
+                    policy.Select(draft, id, fallback, model); prepared++;
                     Require(draft.Find("sub")!.SituationDelivery == AdvisorSituationDelivery.OnDemand && draft.MainId == "local",
                         "A delivery override changed another connection");
-                    return AdvisorServices.Prepare(draft, allowFallback: fallback);
+                    return AdvisorServices.Prepare(draft, allowFallback: fallback, situationDelivery: delivery);
                 });
             api.Attach(new object(), "tactical_battle", () => target); api.Enable();
             var info = Send(api, "GET", "/v1/connections");
@@ -87,6 +87,29 @@ internal static partial class LocalApiTests
                 "A consultation override was published as the saved default");
             api.Disable();
         });
+        check("Developer delivery overrides take priority over shortcut choices without changing later shortcuts or manual requests", () =>
+        {
+            var target = new Target();
+            var api = Api(); api.Attach(new object(), "tactical_battle", () => target); api.Enable();
+            foreach (var (body, expected, requested) in new[] {
+                (new JObject { ["shortcut"] = "key_risks" }, "upfront", "upfront"),
+                (new JObject { ["shortcut"] = "key_risks", ["situation_delivery"] = "on_request" }, "on_request", "on_request"),
+                (new JObject { ["shortcut"] = "key_risks", ["situation_delivery"] = "on_demand", ["allow_operations"] = true }, "on_demand", "on_demand"),
+                (new JObject { ["shortcut"] = "key_risks" }, "upfront", "upfront"),
+                (new JObject { ["question"] = "Hello" }, "on_demand", (string?)null) })
+            {
+                var accepted = Send(api, "POST", "/v1/consultations", body);
+                Require(accepted.Status == 202 && (string?)accepted.Data["situation_delivery"] == expected &&
+                    target.Turn!.Request.SituationDelivery?.Code() == requested,
+                    "API/shortcut/connection precedence or manual request inheritance was lost");
+                var id = (string)accepted.Data["id"]!; Send(api, "POST", "/v1/consultations/cancel");
+                var retained = Send(api, "GET", "/v1/consultations/" + id).Data;
+                Require((string?)retained["situation_delivery"] == expected && (string?)retained["situation_delivery_override"] == requested,
+                    "Retained diagnostics did not identify the accepted delivery");
+            }
+            Require(AdvisorShortcut.KeyRisks.Prepare("Risks").SituationDelivery == AdvisorSituationDelivery.Upfront, "A developer override changed a shortcut definition");
+            api.Disable();
+        });
         check("Developer model overrides require permission and do not survive the consultation draft", () =>
         {
             var settings = LocalLibrary(); var original = settings.Data();
@@ -96,8 +119,8 @@ internal static partial class LocalApiTests
                 () => policy.Describe(settings), (id, fallback, model, delivery) =>
                 {
                     var draft = new AdvisorSettingsDraft(JObject.Parse(System.Text.Encoding.UTF8.GetString(original)));
-                    policy.Select(draft, id, fallback, model, delivery);
-                    return AdvisorServices.Prepare(draft, allowFallback: fallback);
+                    policy.Select(draft, id, fallback, model);
+                    return AdvisorServices.Prepare(draft, allowFallback: fallback, situationDelivery: delivery);
                 });
             api.Attach(new object(), "tactical_battle", () => target); api.Enable();
             var body = new JObject { ["question"] = "Hello", ["model"] = "gemini-experiment" };
