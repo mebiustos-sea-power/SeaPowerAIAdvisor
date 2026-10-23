@@ -118,9 +118,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         foreach (var item in shortcuts)
             item.Button.Click += (_, _) => guard(() => ConsultShortcut(item.Shortcut, item.Button));
 
-        questionInput = new QuestionInputController(question, () => active != null, StartConsultation, guard);
-        question.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(question));
-        question.LostKeyboardFocus += (_, _) => guard(() => typing.Release(question));
+        questionInput = new QuestionInputController(question, typing, () => active != null, StartConsultation, guard);
         var templates = new AdvisorTextTemplateStore(profileDirectory);
         consultationMenu = new AdvisorConsultationMenu(content, templates, () => text, ChooseTemplate, guard, warn);
         otherConsultations = Named<ToggleButton>(content, "OtherConsultations");
@@ -198,7 +196,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         WindowHostCommands.OpenWindowCommand.Execute(window, view);
         if (!IsOpen) throw new InvalidOperationException("The game window host did not open the advisor.");
         // Reopen the conversation with its history and message text intact.
-        question.Focus();
+        questionInput.RequestFocus();
     }
 
     internal void Tick()
@@ -291,7 +289,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         if (!CanEditDraft() || !selected.HasValue) return;
         questionInput.Reset();
         if (unitDraft.Add(selected.Value.Id, selected.Value.Name)) RefreshUnitBadges();
-        question.Focus();
+        questionInput.RequestFocus();
     }
 
     private void RemoveUnit(int unitId)
@@ -300,7 +298,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         questionInput.Reset();
         unitDraft.Remove(unitId);
         RefreshUnitBadges();
-        question.Focus();
+        questionInput.RequestFocus();
     }
 
     private void RefreshUnitBadges() { unitBadges.Show(unitDraft.Units); UpdateInputClear(); }
@@ -321,7 +319,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         ClearDraft();
         question.SelectionStart = 0;
         question.SelectionLength = 0;
-        question.Focus();
+        questionInput.RequestFocus();
     }
 
     private void Send()
@@ -334,7 +332,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     private void ToggleOtherConsultations()
     {
         if (!CanEditDraft()) return;
-        if (consultationMenu.IsOpen) { consultationMenu.Close(); question.Focus(); return; }
+        if (consultationMenu.IsOpen) { consultationMenu.Close(); questionInput.RequestFocus(); return; }
         pendingScroll = null; ReleaseInput(); consultationMenu.Open();
     }
 
@@ -343,7 +341,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         if (!CanEditDraft()) return;
         questionInput.Reset(); question.Text = template.Text;
         consultationMenu.Close();
-        question.SelectionStart = question.Text.Length; question.SelectionLength = 0; question.Focus();
+        question.SelectionStart = question.Text.Length; question.SelectionLength = 0; questionInput.RequestFocus();
     }
 
     private void ConsultShortcut(AdvisorShortcut shortcut, Button button)
@@ -432,13 +430,13 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         if (QuestionInputController.IsComposing)
         {
             status.Text = text["status.ime"];
-            question.Focus();
+            questionInput.RequestFocus();
             return;
         }
         if (!AdvisorConversation.Validate(request.Text, out var error))
         {
             status.Text = ValidationMessage(error);
-            question.Focus();
+            questionInput.RequestFocus();
             return;
         }
         conversation.UseInformationPolicy(options.Current.Information.Key);
@@ -726,13 +724,13 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         ShowConversation(false, text["transcript.cleared"]);
         UpdateShortcuts();
         status.Text = text["status.new_question"];
-        question.Focus();
+        questionInput.RequestFocus();
     }
 
 
     private void ReturnToConversation()
     {
-        ReleaseInput(); RefreshConfigurationNotice(); ShowConversation(false); ScrollToEnd(); question.Focus();
+        ReleaseInput(); RefreshConfigurationNotice(); ShowConversation(false); ScrollToEnd(); questionInput.RequestFocus();
     }
 
     private void LoadProfile()

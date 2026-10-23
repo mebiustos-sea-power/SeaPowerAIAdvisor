@@ -1,11 +1,22 @@
 using Noesis;
 using SeaPower;
+using UnityEngine;
 
 namespace SeaPowerAIAdvisor;
 
 internal sealed class TypingScope
 {
     private UIElement? owned;
+
+    internal static bool CanRestoreFocus()
+    {
+        if (Input.GetMouseButton(0) || Input.GetMouseButton(1) || Input.GetMouseButton(2)) return false;
+        var input = InputHandler.Instance;
+        if (input.typingActive || input.menuOpen || input.consoleOpen || input.RebindMode.Value) return false;
+        if (!CameraManager.InstanceExists(false)) return true;
+        var camera = CameraManager.Instance;
+        return !camera.LeftMousePressed && !camera.RightMousePressed;
+    }
 
     internal void Acquire(UIElement element)
     {

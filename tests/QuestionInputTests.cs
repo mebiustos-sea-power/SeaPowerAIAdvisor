@@ -89,6 +89,35 @@ internal static class QuestionInputTests
             Require(!input.TakeSubmission(11, true, false, true, false), "Pending Enter started during a request");
             Require(!input.TakeSubmission(12, true, false, false, false), "Ignored Enter was queued for later");
         });
+        check("Automatic question focus leaves the click event and waits until the input adapter reports release", () =>
+        {
+            var focus = new QuestionFocus(); focus.Request(10);
+            Require(!focus.TakeFocus(10, true, true), "Focused inside the requesting frame");
+            Require(!focus.TakeFocus(11, true, false), "Focused while input was still pressed or suppressed");
+            Require(!focus.TakeFocus(12, true, false) && focus.Pending, "Dropped a request before the game consumed release");
+            Require(focus.TakeFocus(13, true, true), "Did not restore focus after input became ready");
+            Require(!focus.TakeFocus(14, true, true), "Restored focus more than once");
+        });
+        check("An unavailable question or a changed keyboard target discards automatic focus instead of stealing it later", () =>
+        {
+            var focus = new QuestionFocus(); focus.Request(10);
+            Require(!focus.TakeFocus(11, false, false) && !focus.Pending, "Kept a request after its target became ineligible");
+            Require(!focus.TakeFocus(12, true, true), "Stole focus when the old target became available again");
+        });
+        check("Closing or resetting question input cancels pending automatic focus", () =>
+        {
+            var focus = new QuestionFocus(); focus.Request(10); focus.Cancel();
+            Require(!focus.TakeFocus(11, true, true), "Restored focus after cancellation");
+            focus.Request(12);
+            Require(focus.TakeFocus(13, true, true), "Cancellation prevented a later explicit request");
+        });
+        check("Repeated automatic focus requests replace the older request without creating multiple restorations", () =>
+        {
+            var focus = new QuestionFocus(); focus.Request(10); focus.Request(11);
+            Require(!focus.TakeFocus(11, true, true), "Used the older request inside the newer event frame");
+            Require(focus.TakeFocus(12, true, true), "Lost the latest focus request");
+            Require(!focus.TakeFocus(13, true, true), "Retained an older focus request");
+        });
         check("Installed Noesis exposes the composition cache used across Unity IME confirmation", () =>
         {
             using var noesis = AssemblyDefinition.ReadAssembly(Path.Combine(Path.GetDirectoryName(gameScripts)!, "Noesis.NoesisGUI.dll"));

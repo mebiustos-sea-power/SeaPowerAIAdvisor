@@ -5,18 +5,21 @@ using UnityEngine;
 
 namespace SeaPowerAIAdvisor;
 
-// Adapts the game's Noesis/Unity event order to the independent input policy.
+// Adapts Noesis/Unity event order to the input and deferred focus policies.
 internal sealed class QuestionInputController
 {
     private static readonly FieldInfo nativeComposition = CompositionField();
     private readonly QuestionInput input = new();
+    private readonly QuestionFocus focus = new();
+    private readonly TypingScope typing;
+    private UIElement? focusOrigin;
     private readonly TextBox question;
     private readonly Func<bool> busy;
     private readonly Action submit;
 
-    internal QuestionInputController(TextBox question, Func<bool> busy, Action submit, Action<Action> guard)
+    internal QuestionInputController(TextBox question, TypingScope typing, Func<bool> busy, Action submit, Action<Action> guard)
     {
-        this.question = question;
+        this.question = question; this.typing = typing;
         this.busy = busy;
         this.submit = submit;
         question.PreviewKeyDown += (_, e) => guard(() => KeyDown(e));
@@ -28,8 +31,8 @@ internal sealed class QuestionInputController
             if (e.Text == "\r" || e.Text == "\n" || e.Text == "\r\n") e.Handled = true;
             else input.TextEntered(e.Text);
         });
-        question.GotKeyboardFocus += (_, _) => guard(Reset);
-        question.LostKeyboardFocus += (_, _) => guard(Reset);
+        question.GotKeyboardFocus += (_, _) => guard(() => { Reset(); typing.Acquire(question); });
+        question.LostKeyboardFocus += (_, _) => guard(() => { Reset(); typing.Release(question); });
     }
 
     internal static bool IsComposing =>
@@ -38,13 +41,34 @@ internal sealed class QuestionInputController
 
     private static bool EnterDown => Input.GetKey(KeyCode.Return) || Input.GetKey(KeyCode.KeypadEnter);
 
+    internal void RequestFocus()
+    {
+        Reset();
+        // Allow the game's input update to consume release before entering typing mode again.
+        typing.Release(question);
+        question.Keyboard.ClearFocus();
+        focusOrigin = question.Keyboard.FocusedElement;
+        focus.Request(Time.frameCount);
+    }
+
     internal void Tick()
     {
+        if (focus.Pending)
+        {
+            var eligible = question.IsVisible && question.IsEnabled && !question.IsReadOnly &&
+                question.Keyboard.FocusedElement == focusOrigin;
+            if (focus.TakeFocus(Time.frameCount, eligible, eligible && TypingScope.CanRestoreFocus())) question.Focus();
+            if (!focus.Pending) focusOrigin = null;
+        }
         if (input.TakeSubmission(Time.frameCount, question.IsKeyboardFocused, IsComposing, busy(), EnterDown))
             submit();
     }
 
-    internal void Reset() => input.Reset(EnterDown);
+    internal void Reset()
+    {
+        input.Reset(EnterDown);
+        focus.Cancel(); focusOrigin = null;
+    }
 
     private void KeyDown(KeyEventArgs e)
     {
