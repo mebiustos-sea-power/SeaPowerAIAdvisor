@@ -174,6 +174,6 @@ internal sealed class AdvisorPromptSettingsView
     private void Message(string message, bool error = false)
     {
         status.Text = message;
-        status.Foreground = error ? (Brush)content.FindResource("AdvisorErrorBrush") : new SolidColorBrush(Color.FromArgb(255, 232, 211, 154));
+        status.Foreground = (Brush)content.FindResource(error ? "AdvisorErrorBrush" : "AdvisorNoticeBrush");
     }
 }

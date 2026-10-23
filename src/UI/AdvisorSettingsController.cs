@@ -201,7 +201,7 @@ internal sealed class AdvisorSettingsController
     {
         savedNotice.Reset(); status.Opacity = 1;
         status.Text = message; status.Visibility = message.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-        status.Foreground = error ? (Brush)content.FindResource("AdvisorErrorBrush") : new SolidColorBrush(Color.FromArgb(255, 232, 211, 154));
+        status.Foreground = (Brush)content.FindResource(error ? "AdvisorErrorBrush" : "AdvisorNoticeBrush");
     }
     private void ApiError(AdvisorConnectionException error)
     {
