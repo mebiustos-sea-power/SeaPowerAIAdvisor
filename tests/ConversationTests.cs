@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Linq;
 using System.Xml.Linq;
 using SeaPowerAIAdvisor;
@@ -26,6 +27,41 @@ internal static class ConversationTests
                     chat.Exchanges.Single().Answer == "**回答**" && !View(chat, text).Contains(text["transcript.waiting"]),
                     "Completion duplicated the player message or left the waiting state behind");
             }
+        });
+        check("Only completed replies show stable elapsed seconds beside the original adviser without changing copied or AI dialogue", () =>
+        {
+            var chat = new AdvisorConversation();
+            var turn = chat.Begin(new AdvisorQuestion("Original question"), "Alice <>&", "alice");
+            var text = AdvisorText.Load("en");
+            Require(turn.Elapsed == null && chat.Exchanges.Count == 0, "A pending answer exposed a completed duration");
+            var pending = XDocument.Parse(AdvisorTranscript.Render(chat, text, "Current adviser", "empty"));
+            XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+            var pendingHeader = pending.Descendants().Single(e => (string?)e.Attribute(x + "Name") == "AnswerHeader0");
+            Require(pendingHeader.Descendants().Count(e => e.Name.LocalName == "TextBlock") == 1,
+                "A pending answer displayed an elapsed-time counter");
+            turn.Complete("**Original answer**");
+            var elapsed = turn.Elapsed ?? throw new InvalidOperationException("The answer has no elapsed time");
+            var expected = ((long)elapsed.TotalSeconds).ToString(CultureInfo.InvariantCulture) + "s";
+            foreach (var language in new[] { "en", "ja" })
+            foreach (var size in new[] { AdvisorTextSize.Small, AdvisorTextSize.Standard, AdvisorTextSize.Large })
+            {
+                var view = XDocument.Parse(AdvisorTranscript.Render(chat, AdvisorText.Load(language), "Renamed adviser", "empty", textSize: size));
+                var header = view.Descendants().Single(e => (string?)e.Attribute(x + "Name") == "AnswerHeader0");
+                var labels = header.Descendants().Where(e => e.Name.LocalName == "TextBlock").ToArray();
+                Require(labels.Select(e => (string?)e.Attribute("Text")).SequenceEqual(new[] { "Alice <>&", expected }) &&
+                    (double)labels[1].Attribute("FontSize")! < (double)labels[0].Attribute("FontSize")! &&
+                    header.Descendants().Any(e => (string?)e.Attribute(x + "Name") == "CopyAnswer0") && turn.Elapsed == elapsed,
+                    "Elapsed time moved away from the adviser, changed after completion, or disrupted answer copying and text sizing");
+            }
+            var next = chat.Begin(new AdvisorQuestion("Retry question"), "Bob", "bob");
+            next.Fail(AdvisorNotice.Connection(new AdvisorConnectionException("request_timeout")));
+            chat.Retry(next);
+            Require(next.Elapsed == null && turn.Elapsed == elapsed, "Retry reused a completed duration or changed earlier history");
+            next.Complete("Retried answer");
+            Require(next.Elapsed.HasValue && next.Elapsed.Value >= TimeSpan.Zero &&
+                chat.Exchanges[0].Question == "Original question" && chat.Exchanges[0].Answer == "**Original answer**" &&
+                chat.Exchanges[0].AdvisorName == "Alice <>&" && chat.Exchanges[1].Answer == "Retried answer",
+                "Timing changed the retained question, answer, speaker or retry result");
         });
         check("Failed messages keep their place and retry replaces the error without duplicating AI dialogue", () =>
         {

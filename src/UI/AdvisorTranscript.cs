@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Xml.Linq;
 using static SeaPowerAIAdvisor.AdvisorMarkup;
@@ -35,7 +36,7 @@ internal static class AdvisorTranscript
             if (turn.State == AdvisorTurnState.Waiting || turn.State == AdvisorTurnState.Answered)
             {
                 var header = Header(turn.AdvisorName.Length == 0 ? advisor : turn.AdvisorName, "AdvisorNameBrush",
-                    turn.State == AdvisorTurnState.Answered ? "CopyAnswer" + i : null, text, "transcript.copy_tip", "0,6,0,6");
+                    turn.State == AdvisorTurnState.Answered ? "CopyAnswer" + i : null, text, "transcript.copy_tip", "0,6,0,6", elapsed: turn.Elapsed);
                 header.Add(new XAttribute(XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml") + "Name", "AnswerHeader" + i));
                 row.Add(header);
             }
@@ -126,11 +127,18 @@ internal static class AdvisorTranscript
             yield return (name + "Plan" + i, text.Format("operation.review_plan", i + 1, proposal.Plans[i].Title), proposal.Plans[i].Id);
     }
 
-    private static XElement Header(string speaker, string brush, string? copyName, AdvisorText text, string tipKey, string margin, string captionKey = "action.copy")
+    private static XElement Header(string speaker, string brush, string? copyName, AdvisorText text, string tipKey, string margin,
+        string captionKey = "action.copy", TimeSpan? elapsed = null)
     {
+        var label = Label(speaker, brush);
+        if (elapsed.HasValue)
+            label = Element("WrapPanel", label, Element("TextBlock",
+                Text("Text", ((long)elapsed.Value.TotalSeconds).ToString(CultureInfo.InvariantCulture) + "s"),
+                new XAttribute("FontSize", "12"), new XAttribute("Foreground", "#AAB7C4"),
+                new XAttribute("VerticalAlignment", "Center"), new XAttribute("Margin", "6,0,0,5")));
         var header = Element("Grid", new XAttribute("Margin", margin),
             Element("Grid.ColumnDefinitions", Element("ColumnDefinition", new XAttribute("Width", "*")),
-                Element("ColumnDefinition", new XAttribute("Width", "Auto"))), Label(speaker, brush));
+                Element("ColumnDefinition", new XAttribute("Width", "Auto"))), label);
         if (copyName != null) header.Add(Action(copyName, text[captionKey], text[tipKey], 1));
         return header;
     }

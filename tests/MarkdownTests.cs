@@ -159,7 +159,7 @@ internal static class MarkdownTests
                     var expected = new[] { 1001, 1002, 7018 }.Where(id => id == 7018 ? contacts : own);
                     Require(links.Links.Select(link => link.UnitId).SequenceEqual(expected),
                         "An ambiguous badge was linked by its caption or ignored its own/contact setting");
-                    Require(rendered.Descendants(Ns + "WrapPanel").Single().Elements().Select(Visible)
+                    Require(rendered.Elements(Ns + "StackPanel").Single().Elements(Ns + "WrapPanel").Single().Elements().Select(Visible)
                         .SequenceEqual(new[] { "同名", "同名", "7018" }), "Turning links off removed or relabelled a badge");
                 }
             known.Remove(1001);

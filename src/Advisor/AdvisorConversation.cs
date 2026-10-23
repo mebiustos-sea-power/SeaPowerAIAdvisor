@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 
 namespace SeaPowerAIAdvisor;
@@ -18,6 +19,8 @@ internal enum AdvisorTurnState { Waiting, Answered, Incomplete, Failed, Cancelle
 
 internal sealed class AdvisorTurn
 {
+    private readonly Stopwatch clock = Stopwatch.StartNew();
+    internal TimeSpan? Elapsed => State == AdvisorTurnState.Waiting ? null : clock.Elapsed;
     internal AdvisorQuestion Request { get; }
     internal AdvisorOperationProposal? Proposal { get; set; }
     internal string OperationId { get; } = Guid.NewGuid().ToString("N");
@@ -44,24 +47,26 @@ internal sealed class AdvisorTurn
         Proposal = operations?.FinishProposal(OperationId, result.Completed);
         CompletionReason = result.CompletionReason;
         if (result.Completed) Complete(result.Text);
-        else State = AdvisorTurnState.Incomplete;
+        else { clock.Stop(); State = AdvisorTurnState.Incomplete; }
     }
 
     internal void Complete(string answer)
     {
         RequireWaiting();
         if (string.IsNullOrWhiteSpace(answer)) throw new ArgumentException("The answer is empty.");
+        clock.Stop();
         Exchange = new ChatExchange(Request.Text, answer, Request.DisplayText, AdvisorName);
         State = AdvisorTurnState.Answered;
     }
 
     internal void Fail(AdvisorNotice error)
-    { RequireWaiting(); Error = error; State = AdvisorTurnState.Failed; }
-    internal void Cancel() { RequireWaiting(); State = AdvisorTurnState.Cancelled; }
+    { RequireWaiting(); clock.Stop(); Error = error; State = AdvisorTurnState.Failed; }
+    internal void Cancel() { RequireWaiting(); clock.Stop(); State = AdvisorTurnState.Cancelled; }
     internal void Retry(int contextGeneration, string? advisorName, string? advisorId)
     {
         if (State != AdvisorTurnState.Failed && State != AdvisorTurnState.Cancelled)
             throw new InvalidOperationException("Only an unsuccessful turn can be retried.");
+        clock.Restart();
         Error = null; UnitReferences = AdvisorUnitReferences.Empty;
         ContextGeneration = contextGeneration;
         AdvisorName = advisorName ?? AdvisorName; AdvisorId = advisorId ?? AdvisorId; Progress = null;
