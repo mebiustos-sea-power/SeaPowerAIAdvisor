@@ -32,6 +32,7 @@
       </Trigger>
       <Trigger Property="IsEnabled" Value="False">
         <Setter Property="Foreground" Value="{DynamicResource Brush.Button.ForegroundDisabled}" />
+        <Setter Property="Background" Value="{DynamicResource Brush.Button.BackgroundDisabled}" TargetName="Border" />
       </Trigger>
       <Trigger Property="IsChecked" Value="True">
         <Setter Property="Background" Value="{DynamicResource Brush.Button.Checked}" TargetName="Border" />
