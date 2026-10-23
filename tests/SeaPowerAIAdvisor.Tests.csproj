@@ -4,6 +4,7 @@
     <Compile Include="..\src\Advisor\AdvisorSituationInput.cs" Link="AdvisorSituationInput.cs" />
 
     <Compile Include="..\src\Configuration\AdvisorSituationDelivery.cs" Link="AdvisorSituationDelivery.cs" />
+    <Compile Include="..\src\Configuration\AdvisorTextTemplates.cs" Link="AdvisorTextTemplates.cs" />
     <Compile Include="..\src\Advisor\AdvisorSnapshotExport.cs" Link="AdvisorSnapshotExport.cs" />
     <Compile Include="..\src\Game\Battle\BattleSnapshotExport.cs" Link="BattleSnapshotExport.cs" />
     <Compile Include="..\src\Game\Campaign\CampaignSnapshotExport.cs" Link="CampaignSnapshotExport.cs" />

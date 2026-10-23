@@ -23,6 +23,61 @@
     </Style>
     <Style x:Key="AdvisorWeaponLinkStyle" TargetType="{x:Type Hyperlink}" BasedOn="{StaticResource AdvisorPlainLinkStyle}" />
     <Style x:Key="AdvisorUnitBadgeLinkStyle" TargetType="{x:Type Hyperlink}" BasedOn="{StaticResource AdvisorPlainLinkStyle}" />
+    <!-- Keep native toggle visuals, with hover feedback taking precedence over selection on this button. -->
+    <ControlTemplate x:Key="AdvisorConsultationToggleTemplate" TargetType="ToggleButton">
+        <Grid x:Name="TemplateRoot" RenderTransformOrigin="0.5,0.5">
+          <Grid.RenderTransform>
+            <ScaleTransform />
+          </Grid.RenderTransform>
+          <Border x:Name="Border" Background="{TemplateBinding Background}"/>
+          <ContentPresenter x:Name="PART_ContentPresenter" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" Margin="{TemplateBinding Padding}"/>
+        </Grid>
+        <ControlTemplate.Resources>
+          <Storyboard x:Key="Anim.Press">
+            <DoubleAnimation Storyboard.TargetName="TemplateRoot" Storyboard.TargetProperty="RenderTransform.ScaleX" To="0.99" Duration="0:0:0.1" DecelerationRatio="0.25"/>
+            <DoubleAnimation Storyboard.TargetName="TemplateRoot" Storyboard.TargetProperty="RenderTransform.ScaleY" To="0.99" Duration="0:0:0.1" DecelerationRatio="0.25"/>
+          </Storyboard>
+          <Storyboard x:Key="Anim.Release">
+            <DoubleAnimation Storyboard.TargetName="TemplateRoot" Storyboard.TargetProperty="RenderTransform.ScaleX" To="1" Duration="0:0:0.2" DecelerationRatio="1"/>
+            <DoubleAnimation Storyboard.TargetName="TemplateRoot" Storyboard.TargetProperty="RenderTransform.ScaleY" To="1" Duration="0:0:0.2" DecelerationRatio="1"/>
+          </Storyboard>
+        </ControlTemplate.Resources>
+        <ControlTemplate.Triggers>
+          <Trigger Property="IsPressed" Value="True">
+            <Trigger.EnterActions>
+              <BeginStoryboard Storyboard="{StaticResource Anim.Press}"/>
+            </Trigger.EnterActions>
+            <Trigger.ExitActions>
+              <BeginStoryboard Storyboard="{StaticResource Anim.Release}"/>
+            </Trigger.ExitActions>
+            <Setter Property="Background" Value="{DynamicResource Brush.Button.BackgroundOver}" TargetName="Border"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Button.ForegroundOver}"/>
+          </Trigger>
+          <Trigger Property="IsEnabled" Value="False">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Button.ForegroundDisabled}"/>
+          </Trigger>
+          <Trigger Property="IsChecked" Value="True">
+            <Setter Property="Background" Value="{DynamicResource Brush.Button.Checked}" TargetName="Border"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Button.Background}"/>
+          </Trigger>
+          <MultiTrigger>
+            <MultiTrigger.Conditions>
+              <Condition Property="IsEnabled" Value="True"/>
+              <Condition Property="IsMouseOver" Value="True"/>
+            </MultiTrigger.Conditions>
+            <Setter Property="Background" Value="{DynamicResource Brush.Button.BackgroundOver}" TargetName="Border"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Button.ForegroundOver}"/>
+          </MultiTrigger>
+          <MultiTrigger>
+            <MultiTrigger.Conditions>
+              <Condition Property="IsEnabled" Value="False"/>
+              <Condition Property="IsChecked" Value="True"/>
+            </MultiTrigger.Conditions>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Foreground.DisabledChecked}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border.DisabledChecked}" TargetName="Border"/>
+          </MultiTrigger>
+        </ControlTemplate.Triggers>
+      </ControlTemplate>
   </Grid.Resources>
   <Grid x:Name="ConversationPane">
     <Grid.RowDefinitions>
@@ -63,14 +118,20 @@
               <Button x:Name="OwnUnits" Content="{DynamicResource Advisor.preset.own_units}" ToolTip="{DynamicResource Advisor.preset.own_units_tip}" Height="32" />
               <Button x:Name="Contacts" Grid.Column="2" Content="{DynamicResource Advisor.preset.contacts}" ToolTip="{DynamicResource Advisor.preset.contacts_tip}" Height="32" />
             </Grid>
+            <ToggleButton x:Name="OtherConsultations" Template="{StaticResource AdvisorConsultationToggleTemplate}" Content="{DynamicResource Advisor.quick.other}" Height="32" Margin="0,4,0,0" IsChecked="False" />
           </StackPanel>
         </StackPanel>
       </ScrollViewer>
-      <Border Grid.Column="2" BorderBrush="#607080" BorderThickness="1" Background="{StaticResource AdvisorConversationBackgroundBrush}" MinHeight="120">
-        <ScrollViewer x:Name="Transcript" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="10" HorizontalContentAlignment="Stretch">
-          <StackPanel x:Name="TranscriptMessages" />
+      <Grid Grid.Column="2" MinHeight="120">
+        <Border x:Name="ConversationHistory" BorderBrush="#607080" BorderThickness="1" Background="{StaticResource AdvisorConversationBackgroundBrush}">
+          <ScrollViewer x:Name="Transcript" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="10" HorizontalContentAlignment="Stretch">
+            <StackPanel x:Name="TranscriptMessages" />
+          </ScrollViewer>
+        </Border>
+        <ScrollViewer x:Name="OtherConsultationsPane" Visibility="Collapsed" Margin="10" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel x:Name="OtherConsultationGroups" Margin="0,0,8,0" />
         </ScrollViewer>
-      </Border>
+      </Grid>
     </Grid>
     <Grid Grid.Row="1" Margin="0,10,0,5">
       <Grid.ColumnDefinitions>
@@ -130,11 +191,12 @@
         </Grid.RowDefinitions>
         <Button x:Name="OpenGeneralCategory" Grid.Row="0" Grid.Column="0" Content="{DynamicResource Advisor.general.tab}" Height="64" Margin="4" FontSize="15" />
         <Button x:Name="OpenProfileCategory" Grid.Row="0" Grid.Column="1" Content="{DynamicResource Advisor.profile.tab}" Height="64" Margin="4" FontSize="15" />
-        <Button x:Name="OpenApiCategory" Grid.Row="1" Grid.Column="0" Content="{DynamicResource Advisor.settings.api_category}" Height="64" Margin="4" FontSize="15" />
-        <Button x:Name="OpenConsultationCategory" Grid.Row="1" Grid.Column="1" Content="{DynamicResource Advisor.ai.consultation}" Height="64" Margin="4" FontSize="15" />
-        <Button x:Name="OpenInformationCategory" Grid.Row="2" Grid.Column="0" Content="{DynamicResource Advisor.information.tab}" Height="64" Margin="4" FontSize="15" />
-        <Button x:Name="OpenDeveloperCategory" Grid.Row="2" Grid.Column="1" Content="{DynamicResource Advisor.diagnostics.heading}" Height="64" Margin="4" FontSize="15" />
-        <Button x:Name="OpenWipCategory" Grid.Row="3" Grid.Column="0" Content="{DynamicResource Advisor.wip.category}" Height="64" Margin="4" FontSize="15" />
+        <Button x:Name="OpenTemplatesCategory" Grid.Row="1" Grid.Column="0" Content="{DynamicResource Advisor.templates.category}" Height="64" Margin="4" FontSize="15" />
+        <Button x:Name="OpenApiCategory" Grid.Row="1" Grid.Column="1" Content="{DynamicResource Advisor.settings.api_category}" Height="64" Margin="4" FontSize="15" />
+        <Button x:Name="OpenConsultationCategory" Grid.Row="2" Grid.Column="0" Content="{DynamicResource Advisor.ai.consultation}" Height="64" Margin="4" FontSize="15" />
+        <Button x:Name="OpenInformationCategory" Grid.Row="2" Grid.Column="1" Content="{DynamicResource Advisor.information.tab}" Height="64" Margin="4" FontSize="15" />
+        <Button x:Name="OpenDeveloperCategory" Grid.Row="3" Grid.Column="0" Content="{DynamicResource Advisor.diagnostics.heading}" Height="64" Margin="4" FontSize="15" />
+        <Button x:Name="OpenWipCategory" Grid.Row="3" Grid.Column="1" Content="{DynamicResource Advisor.wip.category}" Height="64" Margin="4" FontSize="15" />
       </Grid>
       <Button x:Name="BackToConversation" Grid.Row="2" Content="{DynamicResource Advisor.settings.back_chat}" Height="30" Padding="12,0" HorizontalAlignment="Right" Margin="0,12,0,0" />
     </Grid>
@@ -238,6 +300,41 @@
             </ScrollViewer>
           </TabItem>
         </TabControl>
+        <Grid x:Name="TemplatesCategory" Visibility="Collapsed">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+          </Grid.RowDefinitions>
+          <Grid Margin="0,8,0,12">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <ComboBox x:Name="TemplateSelector" MinHeight="30" />
+            <Button x:Name="AddTemplate" Grid.Column="1" Content="{DynamicResource Advisor.templates.add}" Height="30" Padding="10,0" Margin="8,0,0,0" />
+            <Button x:Name="EditTemplate" Grid.Column="2" Content="{DynamicResource Advisor.settings.edit}" Height="30" Padding="10,0" Margin="8,0,0,0" />
+            <Button x:Name="RemoveTemplate" Grid.Column="3" Content="{DynamicResource Advisor.templates.remove}" Height="30" Padding="10,0" Margin="8,0,0,0" />
+          </Grid>
+          <Grid x:Name="TemplateEditor" Grid.Row="1" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="{DynamicResource Advisor.templates.name}" FontSize="12" Margin="0,0,0,4" />
+            <TextBox x:Name="TemplateName" Grid.Row="1" FontSize="14" Padding="7" />
+            <TextBlock Grid.Row="2" Text="{DynamicResource Advisor.templates.message}" FontSize="12" Margin="0,12,0,4" />
+            <TextBox x:Name="TemplateMessage" Grid.Row="3" AcceptsReturn="True" AcceptsTab="False" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" FontSize="14" Padding="7" />
+            <WrapPanel Grid.Row="4" HorizontalAlignment="Right" Margin="0,12,0,0">
+              <Button x:Name="CancelTemplate" Content="{DynamicResource Advisor.settings.cancel}" Height="30" Padding="12,0" />
+              <Button x:Name="SaveTemplate" Content="{DynamicResource Advisor.settings.save_form}" Height="30" Padding="12,0" Margin="8,0,0,0" />
+            </WrapPanel>
+          </Grid>
+        </Grid>
         <TabControl x:Name="ApiCategory" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
           <TabItem x:Name="ApiUseTab" Header="{DynamicResource Advisor.settings.selection_tab}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">

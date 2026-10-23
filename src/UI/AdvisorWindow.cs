@@ -25,6 +25,8 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     private readonly AdvisorUnitBadgeView unitBadges;
     private readonly Window window;
     private readonly AdvisorSettingsController settings;
+    private readonly AdvisorConsultationMenu consultationMenu;
+    private readonly ToggleButton otherConsultations;
     private AdvisorText text;
     private string uiLanguage;
     private readonly TextBox question, diagnosticOutput;
@@ -118,6 +120,14 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         questionInput = new QuestionInputController(question, () => active != null, StartConsultation, guard);
         question.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(question));
         question.LostKeyboardFocus += (_, _) => guard(() => typing.Release(question));
+        var templates = new AdvisorTextTemplateStore(profileDirectory);
+        consultationMenu = new AdvisorConsultationMenu(content, templates, () => text, ChooseTemplate, guard, warn);
+        otherConsultations = Named<ToggleButton>(content, "OtherConsultations");
+        otherConsultations.Click += (_, _) => guard(() =>
+        {
+            try { ToggleOtherConsultations(); }
+            finally { otherConsultations.IsChecked = consultationMenu.IsOpen; }
+        });
         foreach (var input in new[] { diagnosticOutput })
         {
             input.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(input));
@@ -139,7 +149,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         window.Template = view.TryFindResource("WindowLayoutNoScroll") as ControlTemplate
             ?? throw new InvalidOperationException("The game's WindowLayoutNoScroll template is unavailable.");
         window.OnClosed += (_, _) => guard(OnWindowClosed);
-        settings = new AdvisorSettingsController(content, () => text, options, profileDirectory, settingsPath, DefaultPortrait,
+        settings = new AdvisorSettingsController(content, () => text, options, profileDirectory, settingsPath, templates, DefaultPortrait,
             guard, typing, ReleaseInput, () => active != null, ApplyProfile, () =>
             {
                 conversation.UseInformationPolicy(options.Current.Information.Key);
@@ -247,6 +257,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
 
     private void OnWindowClosed()
     {
+        consultationMenu.Close();
         operationReview.Close();
         CancelActive();
         ReleaseInput();
@@ -317,6 +328,21 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         questionInput.Reset();
         if (active != null) { CancelActive(); return; }
         StartConsultation();
+    }
+
+    private void ToggleOtherConsultations()
+    {
+        if (!CanEditDraft()) return;
+        if (consultationMenu.IsOpen) { consultationMenu.Close(); question.Focus(); return; }
+        pendingScroll = null; ReleaseInput(); consultationMenu.Open();
+    }
+
+    private void ChooseTemplate(AdvisorTextTemplate template)
+    {
+        if (!CanEditDraft()) return;
+        questionInput.Reset(); question.Text = template.Text;
+        consultationMenu.Close();
+        question.SelectionStart = question.Text.Length; question.SelectionLength = 0; question.Focus();
     }
 
     private void ConsultShortcut(AdvisorShortcut shortcut, Button button)
@@ -673,6 +699,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
 
     private void ShowConversation(bool updateStatus = true, string? empty = null)
     {
+        consultationMenu.Close();
         OperationService?.DiscardProposalsExcept(conversation.Turns.Select(turn => turn.OperationId));
         pendingScroll = null;
         diagnosticScrollPending = false;
@@ -742,6 +769,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
 
     private void UpdateShortcuts()
     {
+        otherConsultations.IsEnabled = active == null;
         foreach (var item in shortcuts)
             item.Button.IsEnabled = item.Shortcut.IsAvailable(active != null, conversation.Exchanges.Count, options.Current.HistoryExchanges);
     }

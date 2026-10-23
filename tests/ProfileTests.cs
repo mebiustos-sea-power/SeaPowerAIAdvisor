@@ -367,7 +367,7 @@ internal static class ProfileTests
             XElement Named(string name) => root.Descendants().Single(e => (string?)e.Attribute(x + "Name") == name);
             var settings = Named("SettingsPane"); var home = Named("SettingsHome"); var conversation = Named("ConversationPane");
             Require(settings.Parent == root && conversation.Parent == root && (string?)settings.Attribute("Visibility") == "Collapsed", "Settings do not replace the whole conversation");
-            foreach (var button in new[] { "OpenGeneralCategory", "OpenProfileCategory", "OpenApiCategory", "OpenConsultationCategory", "OpenInformationCategory", "OpenDeveloperCategory" })
+            foreach (var button in new[] { "OpenGeneralCategory", "OpenProfileCategory", "OpenTemplatesCategory", "OpenApiCategory", "OpenConsultationCategory", "OpenInformationCategory", "OpenDeveloperCategory" })
                 Require(Named(button).Ancestors().Contains(home), "A category is inaccessible from the settings home");
             foreach (var control in new[] { "Portrait", "Question", "Transcript", "Send", "Status" })
                 Require(Named(control).Ancestors().Contains(conversation), "Conversation controls leak into settings");

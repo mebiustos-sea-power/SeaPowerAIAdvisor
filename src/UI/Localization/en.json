@@ -456,5 +456,18 @@
   "operation.review_plan": "Proposal {0}: {1}",
   "operation.plan_counter": "Proposal {0} / {1}",
   "operation.include_current": "Select this proposal",
-  "operation.selected_count": "Selected: {0}"
+  "operation.selected_count": "Selected: {0}",
+  "quick.other": "Other consultations…",
+  "templates.category": "Text templates",
+  "templates.empty": "No text templates. Add them in Settings.",
+  "templates.add": "Add",
+  "templates.remove": "Remove",
+  "templates.name": "Name",
+  "templates.message": "Message",
+  "settings.error.templates_invalid": "The text template settings file is invalid.",
+  "settings.error.templates_unreadable": "The text template settings file could not be read.",
+  "settings.error.templates_write_failed": "The text templates could not be saved.",
+  "settings.error.template_name_invalid": "Enter a name of 1–80 characters.",
+  "settings.error.template_text_invalid": "Enter a nonblank message within the message length limit.",
+  "settings.error.template_selection_invalid": "The text template library has changed. Reopen its settings."
 }

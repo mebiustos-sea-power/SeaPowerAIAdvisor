@@ -139,6 +139,8 @@ internal static class Program
         GeminiTests.Run(args[0], Check);
         ProfileTests.Run(args[1], Check);
         SettingsOperationsTests.Run(Check);
+        TemplateTests.Run(Check);
+        TemplateTests.RunInstalled(args[1], Check);
         LocalApiTests.Run(Check);
         OperationTests.Run(Check);
         ReservationTests.Run(Check);
