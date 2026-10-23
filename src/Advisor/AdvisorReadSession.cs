@@ -55,7 +55,11 @@ internal sealed class AdvisorReadSession
     private string QueryName(JToken token)
     {
         if (token is not JObject item || item["source"]?.Type != JTokenType.String) return "unknown_query";
-        if ((string?)item["source"] == "operation") return AdvisorOperationGateway.ToolName;
+        if ((string?)item["source"] == "operation") return item["action"]?.Type == JTokenType.String
+            ? (string?)item["action"] switch {
+                "list" => "list_operations", "describe" => "describe_operation", "candidates" => "get_operation_candidates",
+                _ => AdvisorOperationGateway.ToolName }
+            : AdvisorOperationGateway.ToolName;
         return (string?)item["source"] == "situation" && item["query"]?.Type == JTokenType.String && knownQueries.Contains((string)item["query"]!)
             ? (string)item["query"]! : "unknown_query";
     }

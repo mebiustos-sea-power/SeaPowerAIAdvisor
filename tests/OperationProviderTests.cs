@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,7 +20,7 @@ internal static partial class ProviderTests
                 var unit = new OperationHelicopter(); var registry = SonobuoyRegistry(unit);
                 using var gateway = new AdvisorOperationGateway(registry);
                 using var operations = gateway.CreateSession("ai", AdvisorPrompts.Current)!;
-                var knowledge = DeliveryKnowledge();
+                var knowledge = DeliveryKnowledge(); var progress = new List<AdvisorProgress>();
                 AdvisorReply Read(string id, JObject args) => legacy
                     ? Reply(new AdvisorToolCall(id, "query_game", new JObject { ["requests"] = new JArray(new JObject(args) { ["source"] = "operation" }) }))
                     : OperationReply(id, args);
@@ -63,9 +64,25 @@ internal static partial class ProviderTests
                     return Task.FromResult(new AdvisorReply("One buoy order proposed.", Array.Empty<AdvisorToolCall>(), 1));
                 }
                 IAdvisorProvider provider = legacy ? new LegacyProvider("operation-model", Send) : new FakeProvider("operation-model", Send);
-                var context = AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations);
+                var context = AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations, progress: progress.Add);
                 var result = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(provider, delivery: delivery).ConsultAsync(context, CancellationToken.None)));
                 Require(unit.Calls == 0, "AI bypassed approval");
+                var waiting = progress.Where(p => p.Stage == AdvisorStage.Waiting).ToArray();
+                Require(waiting.Length == 4, "Operation progress lost the matching network request");
+                foreach (var language in new[] { "en", "ja", "fr" })
+                {
+                    var text = AdvisorText.Load(language);
+                    var displays = waiting.Select(p => AdvisorProgress.Format(p, text)).ToArray();
+                    Require(displays[1].Contains(text["progress.topic.operations"], StringComparison.Ordinal) &&
+                        displays[2].Contains(text["progress.topic.operation_candidates"], StringComparison.Ordinal) &&
+                        displays[3].Contains(text["progress.proposed"], StringComparison.Ordinal) &&
+                        !displays[1].Contains(text["progress.proposed"], StringComparison.Ordinal) &&
+                        !displays[2].Contains(text["progress.proposed"], StringComparison.Ordinal),
+                        "Completed operation lookups and accepted proposals still show the same activity");
+                    Require(progress.Where(p => p.Stage == AdvisorStage.Retrieving).All(p =>
+                        !AdvisorProgress.Format(p, text).Contains(text["progress.proposed"], StringComparison.Ordinal)),
+                        "A submission was shown as received before the gateway accepted it");
+                }
                 var proposal = registry.FinishProposal("ai", true)!;
                 Require(proposal.State == AdvisorProposalState.Pending && proposal.Plans.Count == planCount,
                     "An accepted smaller submission was lost, padded or executed without approval");
@@ -74,6 +91,60 @@ internal static partial class ProviderTests
                     unit.Thread == Environment.CurrentManagedThreadId && knowledge.RoundsUsed == 0 && operations.History.Count == 3 &&
                     operations.History.All(row => (string?)row["request"]?["action"] != "describe"),
                     "Combined lookup needed an extra definition request, bypassed approval or changed native order behavior");
+            }
+        });
+        check("Rejected operation lookups and proposals retain the last real progress without claiming acceptance", () =>
+        {
+            foreach (var legacy in new[] { false, true })
+            {
+                var unit = new OperationHelicopter(); var registry = SonobuoyRegistry(unit);
+                using var gateway = new AdvisorOperationGateway(registry);
+                using var operations = gateway.CreateSession("progress-errors", AdvisorPrompts.Current)!;
+                var progress = new List<AdvisorProgress>();
+                AdvisorReply Read(string id, JObject args) => legacy
+                    ? Reply(new AdvisorToolCall(id, "query_game", new JObject { ["requests"] = new JArray(new JObject(args) { ["source"] = "operation" }) }))
+                    : OperationReply(id, args);
+                AdvisorReply Submit(string id, JObject request)
+                {
+                    if (legacy) request["action"] = "submit";
+                    return Reply(new AdvisorToolCall(id, legacy ? "game_operations" : "propose_operation_plans", request));
+                }
+                Task<AdvisorReply> Send(FakeSession session, int send, bool _, CancellationToken token)
+                {
+                    if (send is 1 or 3) return Task.FromResult(Read("missing-" + send, new JObject {
+                        ["action"] = "candidates", ["operation_id"] = "PRIVATE_MISSING_OPERATION" }));
+                    if (send == 2) return Task.FromResult(Read("list", new JObject { ["action"] = "list" }));
+                    if (send == 4)
+                    {
+                        var request = BuoyRequest(); request["request_id"] = "rejected-order";
+                        request["arguments"]!["ammunition"] = "PRIVATE_INVALID_AMMUNITION";
+                        return Task.FromResult(legacy ? Reply(new AdvisorToolCall("rejected", "game_operations", request)) : OperationReply("rejected", request));
+                    }
+                    if (send == 5)
+                    {
+                        Require((string?)session.Results.Single().Data["status"] == (legacy ? "rejected" : "error"), "The failed proposal fixture was not rejected");
+                        return Task.FromResult(Submit("valid", PlanRequest(BuoyRequest())));
+                    }
+                    if (send == 6) return Task.FromResult(Submit("invalid", new JObject { ["request_id"] = "invalid", ["plans"] = new JArray() }));
+                    Require((string?)session.Results.Single().Data["status"] == "error", "An invalid later submission was accepted");
+                    return Task.FromResult(new AdvisorReply("Ready for review", Array.Empty<AdvisorToolCall>(), 1));
+                }
+                IAdvisorProvider provider = legacy ? new LegacyProvider("progress", Send) : new FakeProvider("progress", Send);
+                var result = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(provider).ConsultAsync(
+                    AdvisorContext.Create(new Knowledge(10), Array.Empty<ChatExchange>(), operations: operations, progress: progress.Add), CancellationToken.None)));
+                var waiting = progress.Where(p => p.Stage == AdvisorStage.Waiting).ToArray();
+                Require(result.Completed && result.ApiRequests == 7 && waiting.Length == 7 && waiting[1].Queries.Count == 0 &&
+                    waiting[2].Queries.SequenceEqual(waiting[3].Queries) && waiting[3].Queries.SequenceEqual(waiting[4].Queries) &&
+                    waiting[5].Queries.SequenceEqual(waiting[6].Queries) && unit.Calls == 0 && registry.Proposal("progress-errors")!.Plans.Count == 2,
+                    "Rejections erased completed work, fabricated progress or changed the accepted proposal");
+                foreach (var language in new[] { "ja", "en" })
+                {
+                    var text = AdvisorText.Load(language);
+                    Require(waiting.Take(5).All(p => !AdvisorProgress.Format(p, text).Contains(text["progress.proposed"], StringComparison.Ordinal)) &&
+                        waiting.Skip(5).All(p => AdvisorProgress.Format(p, text).Contains(text["progress.proposed"], StringComparison.Ordinal)) &&
+                        progress.All(p => !AdvisorProgress.Format(p, text).Contains("PRIVATE_", StringComparison.Ordinal)),
+                        "A failed tool call claimed proposal acceptance or exposed model arguments");
+                }
             }
         });
         check("One tool call submits two full plans with eleven or forty ordered drops, and only the chosen plan registers", () =>

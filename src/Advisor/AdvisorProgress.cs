@@ -29,6 +29,8 @@ internal sealed class AdvisorProgress
         var value = text.Format(key, progress.ApiRequest, progress.Rounds, progress.MaxRounds);
         if (progress.UsingFallback && progress.Stage != AdvisorStage.SwitchingKey) value += "\n" + text["progress.fallback_active"];
         if (progress.ConnectionName.Length > 0) value += "\n" + FormatConnection(progress.ConnectionName, progress.Model, text);
+        if (progress.Stage != AdvisorStage.Retrieving && progress.Stage != AdvisorStage.SwitchingKey &&
+            progress.Queries.Contains("propose_operation_plans")) return value + "\n" + text["progress.proposed"];
         var topics = progress.Queries.Select(Topic).Distinct().Select(k => text["progress.topic." + k]).ToArray();
         if (topics.Length == 0 || progress.Stage == AdvisorStage.SwitchingKey) return value;
         var topicKey = progress.Stage == AdvisorStage.Retrieving ? "progress.topics_checking" : "progress.topics_considering";
@@ -41,7 +43,8 @@ internal sealed class AdvisorProgress
     {
         AdvisorReadSession.SnapshotQuery => "situation", "catalog" => "catalog", "list_units" or "get_units" => "units", "get_unit_capabilities" => "capabilities",
         "get_movement_plans" => "movement",
-        AdvisorOperationGateway.ToolName => "operations",
+        AdvisorOperationGateway.ToolName or "list_operations" => "operations", "describe_operation" => "operation_definition",
+        "get_operation_candidates" => "operation_candidates", "propose_operation_plans" => "operation_proposal",
         "list_contacts" or "list_identification_candidates" => "contacts", "get_contact_threats" => "threats", "get_briefing" => "briefing",
         "list_reports" or "get_reports" => "reports", "list_forces" or "get_forces" => "forces",
         "list_ships" or "get_ships" => "ships", "list_air_units" or "get_air_units" or "list_air_flights" or "list_air_tasks" => "aviation",

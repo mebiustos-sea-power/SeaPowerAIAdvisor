@@ -22,7 +22,7 @@ internal static class AdvisorOperationTools
             });
         }
         yield return new AdvisorToolBinding(Definition(session.Tool, "propose_operation_plans", "submit",
-            prompts.Text("battle.json", "operation_execution_description")), AdvisorOperationGateway.ToolName, (args, cancellation) =>
+            prompts.Text("battle.json", "operation_execution_description")), "propose_operation_plans", (args, cancellation) =>
         {
             if (args["action"] != null || args["source"] != null)
                 return Task.FromResult(new JObject { ["status"] = "error", ["error"] = new JObject { ["code"] = "invalid_operation_request" } });

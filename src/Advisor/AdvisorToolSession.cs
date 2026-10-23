@@ -112,7 +112,8 @@ internal sealed class AdvisorToolSession
             var response = await binding.Execute!(call.Arguments, cancellation).ConfigureAwait(false);
             cancellation.ThrowIfCancellationRequested();
             results.Add(call.Id, new AdvisorToolResult(call, response));
-            queries.Add(binding.ProgressQuery); completed.Add(binding.ProgressQuery);
+            queries.Add(binding.ProgressQuery);
+            if ((string?)response["status"] == "proposed") completed.Add(binding.ProgressQuery);
         }
         return new AdvisorToolDispatch(calls.Select(c => results[c.Id]).ToArray(), queries.ToArray(), completed.ToArray(), limit);
     }

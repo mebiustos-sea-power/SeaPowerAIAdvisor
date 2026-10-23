@@ -19,7 +19,8 @@ internal static partial class ProviderTests
             using var gateway = new AdvisorOperationGateway(registry);
             using var operations = gateway.CreateSession("split", AdvisorPrompts.Current)!;
             var knowledge = ReadKnowledge(); var recording = new AdvisorLocalRun();
-            var context = AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations, preparedInput: recording.CaptureInput);
+            var progress = new System.Collections.Generic.List<AdvisorProgress>();
+            var context = AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations, preparedInput: recording.CaptureInput, progress: progress.Add);
             var provider = new FakeProvider("split", (session, send, _, _) =>
             {
                 if (send == 1)
@@ -48,6 +49,17 @@ internal static partial class ProviderTests
             Require(answer.Completed && answer.ApiRequests == 2 && knowledge.RoundsUsed == 1 && operations.History.Count == 2 && operation.Writes == 0 &&
                 operation.Thread == Environment.CurrentManagedThreadId && recording.Snapshot()["input"]?["tools"]?.Count() == 5,
                 "Splitting added a round, changed state, escaped the game thread or lost diagnostic definitions");
+            var waiting = progress.Last(p => p.Stage == AdvisorStage.Waiting);
+            foreach (var language in new[] { "en", "ja" })
+            {
+                var text = AdvisorText.Load(language); var display = AdvisorProgress.Format(waiting, text);
+                Require(display.Contains(text["progress.topic.operation_definition"], StringComparison.Ordinal) &&
+                    display.Contains(text["progress.topic.operation_candidates"], StringComparison.Ordinal) &&
+                    display.Contains(text["progress.topic.movement"], StringComparison.Ordinal) &&
+                    display.Contains(text["progress.topic.contacts"], StringComparison.Ordinal) &&
+                    !display.Contains(text["progress.topic.units"], StringComparison.Ordinal),
+                    "A mixed batch hid its independent successful lookups or reported a failed read as completed");
+            }
         });
         check("Split schemas and handlers reject cross-purpose fields and never execute or broaden a forged read", () =>
         {

@@ -39,7 +39,7 @@ internal static class AdvisorLegacyTools
             var execution = (JObject)operations.Tool.DeepClone();
             execution["description"] = prompts.Text("battle.json", "operation_execution_description");
             execution["parameters"] = AdvisorOperationGateway.ExecutionSchema(operations.Tool);
-            yield return new AdvisorToolBinding(execution, AdvisorOperationGateway.ToolName,
+            yield return new AdvisorToolBinding(execution, "propose_operation_plans",
                 (args, cancellation) => AdvisorOperationGateway.ProposeAsync(operations, args, cancellation));
         }
     }

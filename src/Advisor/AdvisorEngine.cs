@@ -73,7 +73,7 @@ internal sealed class AdvisorEngine : IAdvisorBackend
                 context.Progress?.Invoke(new AdvisorProgress(AdvisorStage.Retrieving, connection.ApiRequests,
                     session.RoundsUsed + (situation ? 1 : 0), session.MaxRounds, pending, connection.UsingFallback, connection.Model)),
                 (request, response) => retrievals.Add(new JObject { ["request"] = request.DeepClone(), ["response"] = response.DeepClone() })).ConfigureAwait(false);
-            lastQueries = dispatch.CompletedQueries;
+            if (dispatch.CompletedQueries.Length > 0) lastQueries = dispatch.CompletedQueries;
             queriesUsed.AddRange(dispatch.Queries);
             limit = dispatch.Limit;
             connection.AcceptResults(dispatch.Results);
