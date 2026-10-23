@@ -20,7 +20,9 @@ internal static class ProfileTests
         {
             AdvisorProfile.EnsureCreated(directory, () => png);
             var profile = AdvisorProfile.Load(directory);
-            Require(profile.UseDefault && profile.DisplayName == "Michael Reed" && profile.PortraitFile == "portrait.png", "Initial user profile is incorrect");
+            Require(profile.UseDefault && profile.DisplayName == "Michael Reed" && profile.PortraitFile == "portrait.png" &&
+                profile.Personality == "Calm, professional and courteous." && profile.CustomPersonality == "",
+                "Initial user profile or default adviser style is incorrect");
             Require(profile.ReadPortrait(directory).SequenceEqual(png), "Bundled image was modified or not installed");
         }));
         check("Custom role initializes once from the game language for new and older profiles", () =>
@@ -29,7 +31,9 @@ internal static class ProfileTests
             {
                 var role = AdvisorText.Load(language)["advisor.role"];
                 AdvisorProfile.EnsureCreated(directory, () => png, role);
-                Require(AdvisorProfile.Load(directory).CustomRole == role, "The initial role was not saved in the selected language");
+                var initial = AdvisorProfile.Load(directory);
+                Require(initial.CustomRole == role && initial.DefaultPersonality == "Calm, professional and courteous.",
+                    "The initial role was not localized or the default adviser style depended on the game language");
                 var before = File.ReadAllBytes(AdvisorProfile.SettingsPath(directory));
                 var other = AdvisorText.Load(language == "ja" ? "en" : "ja")["advisor.role"];
                 AdvisorProfile.EnsureCreated(directory, () => throw new InvalidOperationException("Existing portrait replaced"), other);
@@ -147,13 +151,13 @@ internal static class ProfileTests
             draft.SelectPortrait(png);
             Require(draft.ReadActivePortrait(directory, () => throw new InvalidOperationException("Custom preview used defaults")).SequenceEqual(png) &&
                 File.ReadAllBytes(AdvisorProfile.SettingsPath(directory)).SequenceEqual(before) &&
-                Directory.GetFiles(directory).Length == count && applied.Personality == "",
+                Directory.GetFiles(directory).Length == count && applied.Personality != draft.Personality,
                 "Preview selection modified active preferences or saved an image");
             draft.UseDefault = true;
             var saved = draft.Save(directory);
             var loaded = AdvisorProfile.Load(directory);
             Require(loaded.UseDefault && loaded.DisplayName == AdvisorProfile.DefaultName &&
-                loaded.CustomName == "新しい士官" && loaded.Personality == "" && loaded.CustomPersonality == "穏やかな口調" &&
+                loaded.CustomName == "新しい士官" && loaded.Personality == applied.Personality && loaded.CustomPersonality == "穏やかな口調" &&
                 loaded.ReadPortrait(directory).SequenceEqual(png) && saved.PortraitFile != applied.PortraitFile,
                 "Saving defaults did not retain the pending custom image and custom style");
             var custom = new AdvisorProfileDraft(loaded) { UseDefault = false };
@@ -161,16 +165,29 @@ internal static class ProfileTests
                 custom.ReadActivePortrait(directory, () => throw new InvalidOperationException("Custom image lost")).SequenceEqual(png),
                 "The selected custom image or name was lost after saving default mode");
         }));
-        check("Repeated setup preserves user profile and portrait without consulting bundled defaults", () => InTemp(directory =>
+        check("Repeated setup preserves existing empty and edited styles and portraits without consulting bundled defaults", () =>
         {
-            AdvisorProfile.EnsureCreated(directory, () => png);
-            new AdvisorProfile("変更した名前", "custom.png").Save(directory);
-            File.WriteAllBytes(Path.Combine(directory, "custom.png"), png);
-            var before = File.ReadAllBytes(AdvisorProfile.SettingsPath(directory));
-            AdvisorProfile.EnsureCreated(directory, () => throw new InvalidOperationException("Existing profile must not be reset"));
-            Require(File.ReadAllBytes(AdvisorProfile.SettingsPath(directory)).SequenceEqual(before) &&
-                AdvisorProfile.Load(directory).ReadPortrait(directory).SequenceEqual(png), "Updating the mod reset user preferences");
-        }));
+            foreach (var useDefault in new[] { false, true })
+            foreach (var style in new[] { "", "Existing user style" }) InTemp(directory =>
+            {
+                AdvisorProfile.EnsureCreated(directory, () => png);
+                new AdvisorProfile("変更した名前", "custom.png", useDefault, style, "Custom style", "Saved role").Save(directory);
+                File.WriteAllBytes(Path.Combine(directory, "custom.png"), png);
+                var before = File.ReadAllBytes(AdvisorProfile.SettingsPath(directory));
+                AdvisorProfile.EnsureCreated(directory, () => throw new InvalidOperationException("Existing profile must not be reset"), "Different role");
+                var saved = AdvisorProfile.Load(directory);
+                Require(File.ReadAllBytes(AdvisorProfile.SettingsPath(directory)).SequenceEqual(before) &&
+                    saved.DefaultPersonality == style && saved.CustomPersonality == "Custom style" && saved.UseDefault == useDefault &&
+                    saved.ReadPortrait(directory).SequenceEqual(png), "Updating the mod reset user preferences");
+                var draft = new AdvisorProfileDraft(saved) { UseDefault = true, Personality = "Edited after update" };
+                draft.Save(directory);
+                Require(AdvisorProfile.Load(directory).DefaultPersonality == "Edited after update", "The default adviser style could no longer be edited");
+                draft.Personality = "";
+                draft.Save(directory);
+                AdvisorProfile.EnsureCreated(directory, () => png, "Different role");
+                Require(AdvisorProfile.Load(directory).DefaultPersonality == "", "An explicitly cleared style was filled in again");
+            });
+        });
         check("Profile names and image paths round-trip through files without changing provider settings", () => InTemp(directory =>
         {
             AdvisorProfile.EnsureCreated(directory, () => png);

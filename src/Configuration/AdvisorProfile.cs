@@ -69,7 +69,8 @@ internal sealed class AdvisorProfile
         try
         {
             if (defaults != null) WriteNew(portrait, defaults);
-            WriteNew(SettingsPath(directory), Encoding.UTF8.GetBytes(new AdvisorProfile(DefaultName, DefaultPortraitFile, true, customRole: initialCustomRole ?? "").Json()));
+            WriteNew(SettingsPath(directory), Encoding.UTF8.GetBytes(new AdvisorProfile(DefaultName, DefaultPortraitFile, true,
+                defaultPersonality: "Calm, professional and courteous.", customRole: initialCustomRole ?? "").Json()));
         }
         catch (IOException) { throw new AdvisorProfileException("profile_write_failed"); }
         catch (UnauthorizedAccessException) { throw new AdvisorProfileException("profile_write_failed"); }
