@@ -15,9 +15,9 @@ internal static class OptionsTests
         {
             var path = Path.Combine(directory, "options.json");
             var store = new AdvisorOptionsStore(path);
-            Require(!store.Current.CampaignEnabled && store.Current.MaxQueryRounds == 5 && store.Current.TextSize == AdvisorTextSize.Standard && store.Current.HistoryExchanges == 3 && !File.Exists(path),
+            Require(!store.Current.CampaignEnabled && store.Current.MaxQueryRounds == 15 && store.Current.TextSize == AdvisorTextSize.Standard && store.Current.HistoryExchanges == 3 && !File.Exists(path),
                 "A new or existing installation implicitly enabled campaign alpha support or wrote settings on read");
-            Require(!AdvisorOptions.Parse("{}").CampaignEnabled && AdvisorOptions.Parse("{}").MaxQueryRounds == 5 && AdvisorOptions.Parse("{}").TextSize == AdvisorTextSize.Standard && AdvisorOptions.Parse("{}").HistoryExchanges == 3,
+            Require(!AdvisorOptions.Parse("{}").CampaignEnabled && AdvisorOptions.Parse("{}").MaxQueryRounds == 15 && AdvisorOptions.Parse("{}").TextSize == AdvisorTextSize.Standard && AdvisorOptions.Parse("{}").HistoryExchanges == 3,
                 "Absent fields did not use compatible defaults");
             Require(AdvisorOptions.Parse("{\"conversation_text_size\":\"small\"}").TextSize == AdvisorTextSize.Small,
                 "An explicitly saved small text size was replaced by the new default");
@@ -32,7 +32,7 @@ internal static class OptionsTests
                 try { _ = store.Read(); }
                 catch (AdvisorOptionsException)
                 {
-                    Require(store.Current.MaxQueryRounds == 5 && !store.Current.CampaignEnabled && store.Current.TextSize == AdvisorTextSize.Standard && store.Current.HistoryExchanges == 3 && File.ReadAllText(path) == invalid,
+                    Require(store.Current.MaxQueryRounds == 15 && !store.Current.CampaignEnabled && store.Current.TextSize == AdvisorTextSize.Standard && store.Current.HistoryExchanges == 3 && File.ReadAllText(path) == invalid,
                         "Invalid settings were silently replaced or applied");
                     continue;
                 }
@@ -42,6 +42,25 @@ internal static class OptionsTests
             try { _ = store.Read(); }
             catch (AdvisorOptionsException error) when (error.Code == "options_unreadable") { return; }
             throw new InvalidOperationException("A directory at the settings path was treated as missing settings");
+        }));
+        check("Missing API request limits use the new default without writing and every saved limit survives reads and unrelated saves", () => InTemp(directory =>
+        {
+            var path = Path.Combine(directory, "options.json");
+            foreach (var limit in new int?[] { null, 1, 5, 10, 15, 20 })
+            {
+                var json = new JObject { ["common_prompt"] = "Existing preference" };
+                if (limit.HasValue) json["max_query_rounds"] = limit.Value;
+                File.WriteAllText(path, json.ToString());
+                var before = File.ReadAllBytes(path);
+                var store = new AdvisorOptionsStore(path);
+                var expected = limit ?? AdvisorQueryLimits.DefaultMaxRounds;
+                Require(store.Current.MaxQueryRounds == expected && File.ReadAllBytes(path).SequenceEqual(before),
+                    "Reading settings rewrote the file, replaced a saved limit or ignored the new missing-field default");
+                store.SaveInformation(AdvisorInformation.Default);
+                var reopened = new AdvisorOptionsStore(path);
+                Require(reopened.Current.MaxQueryRounds == expected && reopened.Current.CommonPrompt == "Existing preference",
+                    "Saving another setting changed an existing request limit or shared preference");
+            }
         }));
         check("User names initialize once in the initial UI language and retain edits and explicit blanks across categories and restarts", () => InTemp(directory =>
         {

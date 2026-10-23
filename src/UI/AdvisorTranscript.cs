@@ -72,8 +72,12 @@ internal static class AdvisorTranscript
             }
             else if (turn.State == AdvisorTurnState.Incomplete)
             {
-                row.Add(Plain(text[turn.CompletionReason == AdvisorCompletionReason.PayloadLimit
-                    ? "transcript.payload_limit" : "transcript.round_limit"]));
+                var notice = text[turn.CompletionReason == AdvisorCompletionReason.PayloadLimit
+                    ? "transcript.payload_limit" : "transcript.round_limit"];
+                if (turn.CompletionReason == AdvisorCompletionReason.RoundLimit &&
+                    turn.Progress is { MaxRounds: var maxRounds } && maxRounds < AdvisorQueryLimits.DefaultMaxRounds)
+                    notice += text.Format("transcript.round_limit_recommendation", AdvisorQueryLimits.DefaultMaxRounds);
+                row.Add(Plain(notice));
                 if (turn.Proposal?.Orders.Count > 0) row.Add(Plain(text["transcript.proposal_expired"]));
             }
             else row.Add(Plain(text["status.cancelled"]));

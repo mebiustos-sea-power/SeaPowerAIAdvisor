@@ -121,7 +121,7 @@ internal static partial class BattleTests
         });
         check("Battle queries support current IDs and pages while rejecting foreign IDs and bounded invalid calls", () =>
         {
-            var session = new BattleQuerySession(new Fixture().Capture(), "fr", "次の行動は？");
+            var session = new BattleQuerySession(new Fixture().Capture(), "fr", "次の行動は？", maxRounds: 5);
             var first = session.InitialInput();
             Require((string?)first["mode"] == "tactical_battle" && (string?)first["reply_language"] == "fr" &&
                 (string?)first["situation"]!["victory_conditions"]!["objectives"]![0]!["status"] == "pending", "Mandatory mission context is missing");

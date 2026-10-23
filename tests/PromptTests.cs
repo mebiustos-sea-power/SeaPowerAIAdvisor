@@ -224,7 +224,7 @@ internal static class PromptTests
             Require(AdvisorOptions.Parse("{}").CommonPrompt == "", "An existing installation received an unsolicited common preference");
             const string text = "距離は海里で説明する。\nGive reasons. <>&\" 𠮷";
             var saved = AdvisorOptions.Parse(System.Text.Encoding.UTF8.GetString(new AdvisorOptions(commonPrompt: text).Data()));
-            Require(saved.CommonPrompt == text && saved.Information.Key == AdvisorInformation.Default.Key && saved.MaxQueryRounds == 5,
+            Require(saved.CommonPrompt == text && saved.Information.Key == AdvisorInformation.Default.Key && saved.MaxQueryRounds == AdvisorQueryLimits.DefaultMaxRounds,
                 "Shared preferences lost text or changed other settings");
             foreach (var token in new JToken[] { JValue.CreateNull(), new JValue(2), new JValue(new string('x', AdvisorOptions.MaxCommonPromptLength + 1)), new JValue("bad\0text") })
             {

@@ -431,6 +431,8 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
             options.EnsureUserName(text["general.default_user_name"]);
             var execution = prepared ?? backends.Prepare(recording?.AllowFallback ?? true, request.SituationDelivery);
             IAdvisorQuerySession session = source.CreateSession(replyLanguage(), request.Text, options.Current.MaxQueryRounds, options.Current.Information, request.Context);
+            turn.UpdateProgress(new AdvisorProgress(AdvisorStage.Waiting, 0, session.RoundsUsed, session.MaxRounds,
+                model: execution.Model, connectionName: execution.ConnectionName));
             turn.SetUnitReferences(session is IAdvisorUnitReferenceSource references ? references.UnitReferences : AdvisorUnitReferences.Empty);
             var operationReferences = session is IAdvisorOperationReferenceSource operationSource
                 ? operationSource.OperationReferences : new AdvisorOperationReferences(turn.UnitReferences);

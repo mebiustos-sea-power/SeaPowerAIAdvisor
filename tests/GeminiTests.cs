@@ -225,7 +225,7 @@ internal static class GeminiTests
             var result = await new GeminiAdvisor(transport).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None);
             Require(result.QueryRounds == 1 && result.ApiRequests == 2, "Parallel calls consumed extra rounds");
         }));
-        check("Gemini stops after five retrievals without a final tools-disabled request and preserves unknown usage", () => Async(async () =>
+        check("Gemini stops at the default request limit without a final tools-disabled request and preserves unknown usage", () => Async(async () =>
         {
             var session = Session(assembly);
             var transport = new Fake((n, body, cancellation) =>
@@ -238,7 +238,7 @@ internal static class GeminiTests
             });
             var result = await new GeminiAdvisor(transport).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None);
             Require(!result.Completed && result.CompletionReason == AdvisorCompletionReason.RoundLimit && result.Text == "" &&
-                result.ApiRequests == AdvisorQueryLimits.DefaultMaxRounds && transport.Calls == 5 && result.QueryRounds == 5 && result.TotalTokens == null,
+                result.ApiRequests == AdvisorQueryLimits.DefaultMaxRounds && transport.Calls == AdvisorQueryLimits.DefaultMaxRounds && result.QueryRounds == AdvisorQueryLimits.DefaultMaxRounds && result.TotalTokens == null,
                 "An unfinished consultation was completed, retried or reported fabricated usage");
         }));
         check("Saved history limits send only the latest complete exchanges, including zero, without deleting visible conversation", () => Async(async () =>

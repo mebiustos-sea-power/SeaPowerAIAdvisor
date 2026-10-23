@@ -18,7 +18,7 @@ internal interface IAdvisorQuerySession
 
 internal static class AdvisorQueryLimits
 {
-    internal const int DefaultMaxRounds = 5;
+    internal const int DefaultMaxRounds = 15;
     internal const int MaximumRounds = 20;
     internal const int MaxQueriesPerRound = 8;
     internal const int MaxIdsPerQuery = 10;

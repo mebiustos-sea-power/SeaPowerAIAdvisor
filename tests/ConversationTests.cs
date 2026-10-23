@@ -81,6 +81,49 @@ internal static class ConversationTests
             Require(chat.Turns.Count == 2 && chat.Exchanges.Count == 2 && chat.Exchanges[1].Question == "再試行する質問" && !chat.CanRetry(turn),
                 "The successful retry duplicated or changed earlier dialogue");
         });
+        check("Exchange-limit guidance recommends the default only for lower captured limits and stays out of payload limits and successful answers", () =>
+        {
+            foreach (var language in new[] { "en", "ja" })
+            foreach (var limit in new[] { 5, AdvisorQueryLimits.DefaultMaxRounds - 1, AdvisorQueryLimits.DefaultMaxRounds, AdvisorQueryLimits.MaximumRounds })
+            {
+                var text = AdvisorText.Load(language); var chat = new AdvisorConversation();
+                var turn = chat.Begin(new AdvisorQuestion("Limited question"));
+                turn.UpdateProgress(new AdvisorProgress(AdvisorStage.Waiting, 0, 0, limit));
+                turn.Finish(new AdviceResult("", limit, 0, null, completionReason: AdvisorCompletionReason.RoundLimit), null);
+                var expected = text["transcript.round_limit"] + (limit < AdvisorQueryLimits.DefaultMaxRounds
+                    ? text.Format("transcript.round_limit_recommendation", AdvisorQueryLimits.DefaultMaxRounds) : "");
+                var later = chat.Begin(new AdvisorQuestion("Later question"));
+                later.UpdateProgress(new AdvisorProgress(AdvisorStage.Waiting, 0, 0, AdvisorQueryLimits.MaximumRounds));
+                later.Complete("Later answer");
+                var view = XDocument.Parse(AdvisorTranscript.Render(chat, text, "Adviser", "empty"));
+                Require(turn.Progress?.MaxRounds == limit && view.Descendants().Attributes("Text").Any(a => a.Value == expected),
+                    "History used a later request limit or displayed a recommendation for an equal or higher limit");
+                var payload = new AdvisorConversation();
+                var oversized = payload.Begin(new AdvisorQuestion("Payload"));
+                oversized.UpdateProgress(new AdvisorProgress(AdvisorStage.Waiting, 0, 0, 1));
+                oversized.Finish(new AdviceResult("", 1, 1, null, completionReason: AdvisorCompletionReason.PayloadLimit), null);
+                Require(!View(payload, text).Contains(text["transcript.round_limit"], StringComparison.Ordinal) &&
+                    View(payload, text).Contains(text["transcript.payload_limit"], StringComparison.Ordinal),
+                    "An information limit misleadingly advised raising the request limit");
+                var retry = new AdvisorConversation(); var retried = retry.Begin(new AdvisorQuestion("Retry"));
+                retried.UpdateProgress(new AdvisorProgress(AdvisorStage.Waiting, 0, 0, 5));
+                retried.Fail(AdvisorNotice.Connection(new AdvisorConnectionException("request_timeout")));
+                retry.Retry(retried);
+                Require(retried.Progress == null, "Retry retained progress from the previous attempt");
+                retried.UpdateProgress(new AdvisorProgress(AdvisorStage.Waiting, 0, 0, AdvisorQueryLimits.DefaultMaxRounds));
+                retried.Finish(new AdviceResult("", AdvisorQueryLimits.DefaultMaxRounds, 0, null, completionReason: AdvisorCompletionReason.RoundLimit), null);
+                Require(retried.Progress?.MaxRounds == AdvisorQueryLimits.DefaultMaxRounds &&
+                    XDocument.Parse(AdvisorTranscript.Render(retry, text, "Adviser", "empty")).Descendants().Attributes("Text")
+                        .Any(a => a.Value == text["transcript.round_limit"]), "Retry retained its earlier limit");
+                var successful = new AdvisorConversation();
+                var answered = successful.Begin(new AdvisorQuestion("Successful question"));
+                answered.UpdateProgress(new AdvisorProgress(AdvisorStage.Waiting, 0, 0, 5));
+                answered.Complete("Successful answer");
+                Require(!View(successful, text).Contains(text["transcript.round_limit"], StringComparison.Ordinal) &&
+                    !View(successful, text).Contains(text.Format("transcript.round_limit_recommendation", AdvisorQueryLimits.DefaultMaxRounds), StringComparison.Ordinal),
+                    "Limit advice appeared on a successful answer");
+            }
+        });
         check("Cancellation and configuration notices stay out of AI history and clearing removes retry targets", () =>
         {
             var chat = new AdvisorConversation(); var text = AdvisorText.Load("en");
