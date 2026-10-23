@@ -55,9 +55,8 @@ internal sealed class AdvisorMapPreview
 {
     internal static AdvisorMapPreview Empty { get; } = new(Array.Empty<AdvisorMapDrawing>());
     internal IReadOnlyList<AdvisorMapDrawing> Drawings { get; }
-    internal AdvisorMapCoordinate? Center { get; }
-    internal AdvisorMapPreview(IEnumerable<AdvisorMapDrawing> drawings, AdvisorMapCoordinate? center = null)
-    { Drawings = Array.AsReadOnly(drawings.ToArray()); Center = center; }
+    internal AdvisorMapPreview(IEnumerable<AdvisorMapDrawing> drawings)
+    { Drawings = Array.AsReadOnly(drawings.ToArray()); }
 }
 
 internal interface IAdvisorMap

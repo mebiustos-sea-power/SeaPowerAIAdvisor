@@ -24,6 +24,7 @@ internal static class Program
             OperationAmmunitionTests.Run(Check);
             OperationApprovalTests.Run(Check);
             OperationPreviewTests.Run(Check);
+            OperationPlanTests.Run(Check);
             BattleTests.Run(Check);
             InformationTests.Run(Check);
             PromptTests.Run(Check);
@@ -146,6 +147,7 @@ internal static class Program
         OperationAmmunitionTests.Run(Check);
         OperationApprovalTests.Run(Check);
         OperationPreviewTests.Run(Check);
+        OperationPlanTests.Run(Check);
         OptionsTests.Run(args[0], Check);
         InformationTests.Run(Check);
         InformationTests.RunCampaign(args[0], Check);

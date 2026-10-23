@@ -21,12 +21,16 @@
     <Compile Include="..\src\Development\AdvisorLocalDiscovery.cs" Link="AdvisorLocalDiscovery.cs" />
     <Compile Include="..\src\Development\AdvisorLocalApi.cs" Link="AdvisorLocalApi.cs" />
     <Compile Include="..\src\Maps\AdvisorMap.cs" Link="AdvisorMap.cs" />
+    <Compile Include="..\src\UI\AdvisorOperationReviewState.cs" Link="AdvisorOperationReviewState.cs" />
     <Compile Include="..\src\Operations\AdvisorOperationPreview.cs" Link="AdvisorOperationPreview.cs" />
+    <Compile Include="..\src\Operations\AdvisorOperationPlan.cs" Link="AdvisorOperationPlan.cs" />
+    <Compile Include="..\src\Operations\AdvisorOperationSubmissions.cs" Link="AdvisorOperationSubmissions.cs" />
     <Compile Include="..\src\Operations\AdvisorOperationProposal.cs" Link="AdvisorOperationProposal.cs" />
     <Compile Include="..\src\Operations\AdvisorOperations.cs" Link="AdvisorOperations.cs" />
     <Compile Include="..\src\Operations\AdvisorUnitReservations.cs" Link="AdvisorUnitReservations.cs" />
     <Compile Include="..\src\Operations\AdvisorOperationGateway.cs" Link="AdvisorOperationGateway.cs" />
     <Compile Include="..\src\Operations\AdvisorOperationReferences.cs" Link="AdvisorOperationReferences.cs" />
+    <Compile Include="..\src\Game\Battle\Reservations\BattleReservationRoute.cs" Link="BattleReservationRoute.cs" />
     <Compile Include="..\src\Game\Battle\BattleSonobuoyOperation.cs" Link="BattleSonobuoyOperation.cs" />
     <Compile Include="..\src\Development\AdvisorLocalRun.cs" Link="AdvisorLocalRun.cs" />
     <Compile Include="..\src\Development\AdvisorLocalServer.cs" Link="AdvisorLocalServer.cs" />

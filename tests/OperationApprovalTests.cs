@@ -31,17 +31,67 @@ internal static class OperationApprovalTests
             proposal.Orders[0].Arguments["latitude"] = 80;
             unit.Depth = "below_layer";
             var preview = service.PreviewProposal(proposal, "en");
-            Require(preview.Drawings.Count == 12 && preview.Drawings.All(point => point.Kind == AdvisorMapDrawingKind.Point && point.Label.StartsWith("Hobby 1 · ", StringComparison.Ordinal)),
+            var points = preview.Drawings.Where(d => d.Kind == AdvisorMapDrawingKind.Point).ToArray();
+            Require(points.Length == 12 && points.All(point => point.Label.StartsWith("Hobby 1 · ", StringComparison.Ordinal)),
                 "The sonobuoy preview lost accepted drops or their target labels");
+            var route = preview.Drawings.Single(d => d.Kind == AdvisorMapDrawingKind.Line);
+            Require(route.Coordinates.Count == 13 && route.Coordinates[0].Latitude == 26.4 && route.Coordinates[0].Longitude == 127.4 &&
+                route.Coordinates.Skip(1).Select(p => (p.Latitude, p.Longitude)).SequenceEqual(points.Select(p => (p.Coordinates[0].Latitude, p.Coordinates[0].Longitude))),
+                "The preview omitted the queued endpoint or changed the proposed drop order");
             service.Approve(proposal); service.Approve(proposal);
-            Require(preview.Drawings.Select(point => point.Coordinates[0].Latitude).SequenceEqual(unit.Latitudes) &&
-                preview.Drawings.All(point => point.Coordinates[0].Longitude == 127.5),
+            Require(points.Select(point => point.Coordinates[0].Latitude).SequenceEqual(unit.Latitudes) &&
+                points.All(point => point.Coordinates[0].Longitude == 127.5),
                 "The approval preview differed from the registered coordinates or used caller-mutated arguments");
             Require(proposal.State == AdvisorProposalState.Registered && proposal.RegisteredCount == 12 && unit.Queue.Count == 13 &&
                 unit.Queue[0] == "player waypoint" && unit.Latitudes.SequenceEqual(Enumerable.Range(0, 12).Select(i => 26.5 + i * .001)) &&
                 unit.Depths.All(depth => depth == "below_layer"), "Approval lost order, repeated a task, cleared the player route or overwrote depth");
             Require((string?)service.Propose("turn", Request(service, "turn", 0))["status"] == "registered" && unit.Latitudes.Count == 12,
                 "Repeating the same AI request registered it twice");
+        });
+        check("Sonobuoy route previews keep each helicopter's live append point and proposal order without changing reservations", () =>
+        {
+            var first = new Helicopter();
+            var second = new Helicopter { Id = 43, Name = "Hobby 2",
+                ReservationRoute = new BattleReservationRoute(new AdvisorMapCoordinate(28, 128), null) };
+            second.Queue.Clear();
+            var units = new List<IBattleSonobuoyUnit> { first, second };
+            var operation = new BattleSonobuoyOperation(() => units); var service = new AdvisorOperations(() => true);
+            service.Register(operation); service.BeginProposal("routes");
+            var values = new[] { Request(service, "routes", 2), Request(service, "routes", 9), Request(service, "routes", 0), Request(service, "routes", 7) };
+            values[1]["target_ref"] = "unit:43"; values[3]["target_ref"] = "unit:43";
+            foreach (var request in values) service.Propose("routes", request);
+            var proposal = service.FinishProposal("routes", true)!;
+            var preview = service.PreviewProposal(proposal, "en");
+            var lines = preview.Drawings.Where(d => d.Kind == AdvisorMapDrawingKind.Line).ToArray();
+            Require(lines.Length == 2 && lines[0].Coordinates.Select(p => p.Latitude).SequenceEqual(new[] { 26.4, 26.502, 26.5 }) &&
+                lines[1].Coordinates.Select(p => p.Latitude).SequenceEqual(new[] { 28d, 26.509, 26.507 }),
+                "Different helicopters were joined together or their drop order was optimized without permission");
+            Require(lines.All(d => d.Color == 0xFFFFE060 && d.Width == 2) && preview.Drawings.Count == 6 &&
+                first.Queue.Count == 1 && second.Queue.Count == 0,
+                "Routes added an outline, changed focus or registered previewed orders");
+            first.ReservationRoute = new BattleReservationRoute(new AdvisorMapCoordinate(27, 127), new AdvisorMapCoordinate(29, 129));
+            var refreshed = service.PreviewProposal(proposal, "en");
+            Require(refreshed.Drawings.First(d => d.Kind == AdvisorMapDrawingKind.Line).Coordinates[0].Latitude == 29,
+                "Reopening a preview reused an old current position or queued endpoint");
+            units.Remove(second);
+            var removed = service.PreviewProposal(proposal, "en");
+            Require(removed.Drawings.Where(d => d.Kind == AdvisorMapDrawingKind.Point).Count() == 4 &&
+                removed.Drawings.Last(d => d.Kind == AdvisorMapDrawingKind.Line).Coordinates.Count == 2,
+                "A vanished unit erased retained destinations or invented a route origin");
+        });
+        check("One drop still draws an arrival leg, while an unavailable start never becomes a zero coordinate", () =>
+        {
+            var unit = new Helicopter { ReservationRoute = new BattleReservationRoute(new AdvisorMapCoordinate(27, 128), null) };
+            unit.Queue.Clear();
+            var service = Buoys(unit); service.BeginProposal("one"); service.Propose("one", Request(service, "one", 0));
+            var proposal = service.FinishProposal("one", true)!;
+            var preview = service.PreviewProposal(proposal, "en");
+            Require(preview.Drawings.Count == 2 && preview.Drawings[0].Kind == AdvisorMapDrawingKind.Line &&
+                preview.Drawings[0].Coordinates.Select(p => p.Latitude).SequenceEqual(new[] { 27d, 26.5 }), "A single drop omitted its arrival leg");
+            unit.ReservationRoute = null;
+            var unavailable = service.PreviewProposal(proposal, "en");
+            Require(unavailable.Drawings.Count == 1 && unavailable.Drawings[0].Kind == AdvisorMapDrawingKind.Point && unit.Latitudes.Count == 0,
+                "An unavailable start produced a false origin or changed the game");
         });
         check("Proposal controls stay compact under the original answer and become disabled after registration", () =>
         {
@@ -59,7 +109,7 @@ internal static class OperationApprovalTests
             var waiting = chat.Begin(new AdvisorQuestion("Another question"));
             Require((string?)Button().Attribute("IsEnabled") == "false", "Approval stayed active during another consultation");
             waiting.Cancel(); service.Approve(turn.Proposal!);
-            Require((string?)Button().Attribute("Content") == text["operation.registered"] &&
+            Require((string?)Button().Attribute("Content") == text["operation.accept"] &&
                 (string?)Button().Attribute("IsEnabled") == "false" && turn.Exchange!.Answer == "Original AI answer",
                 "Approval added another answer, modified the AI text or left a repeated-execution button active");
         });
@@ -199,11 +249,13 @@ internal static class OperationApprovalTests
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
     private sealed class Helicopter : IBattleSonobuoyUnit
     {
-        public int Id => 42;
-        public string Name => "Hobby 1";
+        public int Id { get; set; } = 42;
+        public string Name { get; set; } = "Hobby 1";
         public string? UnavailableReason => null;
         public string Depth { get; set; } = "alternating";
         public JObject Position => new();
+        public BattleReservationRoute? ReservationRoute { get; set; } =
+            new(new AdvisorMapCoordinate(26.2, 127.2), new AdvisorMapCoordinate(26.4, 127.4));
         internal int Inventory = 12;
         internal List<double> Latitudes = new();
         internal List<string> Depths = new();

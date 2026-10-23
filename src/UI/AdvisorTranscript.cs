@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Xml.Linq;
 using static SeaPowerAIAdvisor.AdvisorMarkup;
@@ -77,16 +78,43 @@ internal static class AdvisorTranscript
             else row.Add(Plain(text["status.cancelled"]));
             if (turn.State != AdvisorTurnState.Incomplete && turn.Proposal is AdvisorOperationProposal proposal && proposal.Orders.Count > 0 && proposal.State != AdvisorProposalState.Collecting)
             {
-                var review = Action("ReviewProposal" + i, text[proposal.CaptionKey], null);
-                review.Add(new XAttribute("Margin", "0,6,0,0"), new XAttribute("IsEnabled", !busy &&
-                    proposal.State is AdvisorProposalState.Pending or AdvisorProposalState.Partial or AdvisorProposalState.Rejected or AdvisorProposalState.Unknown));
-                row.Add(review);
+                var actions = Element("WrapPanel", new XAttribute("Margin", "0,6,0,0"));
+                foreach (var action in ReviewActions(proposal, i, text))
+                {
+                    var review = Action(action.Name, action.Caption, null);
+                    review.Add(new XAttribute("Margin", "0,0,6,6"), new XAttribute("IsEnabled", !busy && proposal.State == AdvisorProposalState.Pending));
+                    if (action.PlanId != null)
+                    {
+                        review.Attribute("Content")!.Remove();
+                        review.Add(Element("TextBlock", Text("Text", action.Caption), new XAttribute("MaxWidth", "280"),
+                            new XAttribute("TextTrimming", "CharacterEllipsis")));
+                    }
+                    actions.Add(review);
+                }
+                row.Add(actions);
+                if (proposal.ErrorCode != null)
+                    row.Add(Error(text.Format("operation.failure", proposal.ErrorCode, proposal.RegisteredCount,
+                        proposal.ExecutionOrders.Count == 0 ? proposal.Orders.Count : proposal.ExecutionOrders.Count)));
             }
             if (conversation.CanRetry(turn)) row.Add(Action("RetryTurn" + i, text["action.retry"], text["transcript.retry_tip"]));
             root.Add(row);
         }
         AdvisorTypography.Apply(root, textSize);
         return root.ToString(SaveOptions.DisableFormatting);
+    }
+
+    // Rendering and event binding share the same button identities and retained plan IDs.
+    internal static IEnumerable<(string Name, string Caption, string? PlanId)> ReviewActions(
+        AdvisorOperationProposal proposal, int turnIndex, AdvisorText text)
+    {
+        var name = "ReviewProposal" + turnIndex;
+        if (proposal.Plans.Count == 1 || proposal.State != AdvisorProposalState.Pending)
+        {
+            yield return (name, text[proposal.State == AdvisorProposalState.Pending ? "operation.review" : "operation.accept"], null);
+            yield break;
+        }
+        for (var i = 0; i < proposal.Plans.Count; i++)
+            yield return (name + "Plan" + i, text.Format("operation.review_plan", i + 1, proposal.Plans[i].Title), proposal.Plans[i].Id);
     }
 
     private static XElement Header(string speaker, string brush, string? copyName, AdvisorText text, string tipKey, string margin, string captionKey = "action.copy")

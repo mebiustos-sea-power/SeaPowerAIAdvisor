@@ -13,6 +13,7 @@ internal interface IBattleSonobuoyUnit
     string? UnavailableReason { get; }
     string Depth { get; }
     JObject Position { get; }
+    BattleReservationRoute? ReservationRoute { get; }
     IReadOnlyList<BattleSonobuoyAmmo> Ammunition();
     void Append(string ammunition, double latitude, double longitude);
 }
@@ -29,7 +30,7 @@ internal sealed class BattleSonobuoyAmmo
 }
 
 // One native compound reservation handles both travel and release. It never waits for deployment.
-internal sealed class BattleSonobuoyOperation : IAdvisorOperation, IAdvisorOperationPreview, IAdvisorOperationArgumentNormalizer
+internal sealed class BattleSonobuoyOperation : IAdvisorOperation, IAdvisorOperationPreview, IAdvisorOperationArgumentNormalizer, IAdvisorOperationPlans
 {
     internal const string OperationId = "seapower.schedule_sonobuoy_drop";
     private readonly Func<IReadOnlyList<IBattleSonobuoyUnit>> units;
@@ -42,6 +43,7 @@ internal sealed class BattleSonobuoyOperation : IAdvisorOperation, IAdvisorOpera
         if (!allowed.Allows(InformationKind.BattleUnits) || !allowed.Allows(InformationKind.BattleWeapons))
             throw new AdvisorOperationException(403, "information_disabled");
     }
+    public AdvisorOperationPlanPolicy PlanPolicy { get; } = new(2, 2, AdvisorPlanSelection.Single);
     public bool RequiresApproval => true;
     public string Id => OperationId;
     public string Description => AdvisorPrompts.Current.Text("battle.json", "operation_sonobuoy_drop");
@@ -125,17 +127,26 @@ internal sealed class BattleSonobuoyOperation : IAdvisorOperation, IAdvisorOpera
     public AdvisorMapPreview Preview(IReadOnlyList<AdvisorOperationOrder> orders, string language)
     {
         var current = units();
-        var points = orders.GroupBy(order => order.Target).SelectMany(group =>
+        var drawings = new List<AdvisorMapDrawing>();
+        foreach (var group in orders.GroupBy(order => order.Target))
         {
             var unit = current.FirstOrDefault(unit => "unit:" + unit.Id.ToString(CultureInfo.InvariantCulture) == group.Key);
-            return group.Select((order, index) =>
+            var drops = group.Select(order =>
             {
                 var arguments = order.Arguments;
-                return AdvisorMapDrawing.Point(new AdvisorMapCoordinate((double)arguments["latitude"]!, (double)arguments["longitude"]!),
-                    (unit?.Name ?? group.Key) + " · " + (index + 1).ToString(CultureInfo.InvariantCulture));
-            });
-        }).ToArray();
-        return new AdvisorMapPreview(points, points.Length == 0 ? null : points[0].Coordinates[0]);
+                return new AdvisorMapCoordinate((double)arguments["latitude"]!, (double)arguments["longitude"]!);
+            }).ToArray();
+            if (drops.Length == 0) continue;
+            var route = new List<AdvisorMapCoordinate>();
+            var existing = unit?.ReservationRoute;
+            if (existing != null) route.Add(existing.EndPosition ?? existing.CurrentPosition);
+            route.AddRange(drops);
+            // Draw beneath the numbered markers; preserve the proposed order separately for each helicopter.
+            if (route.Count > 1) drawings.Add(AdvisorMapDrawing.Line(route));
+            for (var i = 0; i < drops.Length; i++)
+                drawings.Add(AdvisorMapDrawing.Point(drops[i], (unit?.Name ?? group.Key) + " · " + (i + 1).ToString(CultureInfo.InvariantCulture)));
+        }
+        return new AdvisorMapPreview(drawings);
     }
     private (IBattleSonobuoyUnit Unit, string Ammunition, double Latitude, double Longitude) Read(string target, JObject arguments)
     {

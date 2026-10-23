@@ -24,12 +24,12 @@ internal static class AdvisorOperationTools
                 return new JArray(item);
             });
         }
-        yield return new AdvisorToolBinding(Definition(session, "propose_operation", "execute",
+        yield return new AdvisorToolBinding(Definition(session, "propose_operation_plans", "submit",
             prompts.Text("battle.json", "operation_execution_description")), AdvisorOperationGateway.ToolName, (args, cancellation) =>
         {
             if (args["action"] != null || args["source"] != null)
                 return Task.FromResult(new JObject { ["status"] = "error", ["error"] = new JObject { ["code"] = "invalid_operation_request" } });
-            var request = (JObject)args.DeepClone(); request["action"] = "execute";
+            var request = (JObject)args.DeepClone(); request["action"] = "submit";
             return AdvisorOperationGateway.ProposeAsync(session, request, cancellation);
         });
     }

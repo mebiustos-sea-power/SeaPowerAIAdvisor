@@ -184,6 +184,7 @@ internal static class OperationAmmunitionTests
         public string? UnavailableReason => null;
         public string Depth => "alternating";
         public JObject Position => new() { ["latitude_deg"] = 26.5, ["longitude_deg"] = 127.5 };
+        public BattleReservationRoute? ReservationRoute => new(new AdvisorMapCoordinate(26.5, 127.5), null);
         internal readonly List<BattleSonobuoyAmmo> Ammo;
         internal readonly List<string> Orders = new();
         internal Helicopter(int id, string ammunition) { Id = id; Ammo = new() { OperationAmmunitionTests.Ammo(ammunition, "Shared buoy") }; }

@@ -151,6 +151,7 @@ internal static class OperationTargetTests
         public string? UnavailableReason { get; set; }
         public string Depth => "alternating";
         public JObject Position => new() { ["latitude_deg"] = 26.5, ["longitude_deg"] = 127.5 };
+        public BattleReservationRoute? ReservationRoute => new(new AdvisorMapCoordinate(26.5, 127.5), null);
         internal readonly List<(string Ammunition, double Latitude, double Longitude)> Orders = new();
         internal Helicopter(int id) => Id = id;
         public IReadOnlyList<BattleSonobuoyAmmo> Ammunition() => new[] { new BattleSonobuoyAmmo("custom_buoy", "Custom buoy", 12, 12, true) };

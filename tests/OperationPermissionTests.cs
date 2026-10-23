@@ -24,7 +24,7 @@ internal static partial class ProviderTests
                 Require(operations == null && opened == 0, "An advisory shortcut opened a command gateway");
                 Task<AdvisorReply> Send(FakeSession session, int n, bool _, CancellationToken __)
                 {
-                    Require(!session.Input.Tools.Any(t => (string?)t["name"] is "list_operations" or "describe_operation" or "get_operation_candidates" or "propose_operation" or "game_operations"),
+                    Require(!session.Input.Tools.Any(t => (string?)t["name"] is "list_operations" or "describe_operation" or "get_operation_candidates" or "propose_operation_plans" or "game_operations"),
                         "An operation tool was advertised in an advisory consultation");
                     if (n == 1 && delivery != AdvisorSituationDelivery.Upfront)
                         return Task.FromResult(Reply(delivery == AdvisorSituationDelivery.OnRequest ? FullSituationCall("situation", legacy) :
@@ -65,7 +65,7 @@ internal static partial class ProviderTests
                 Require(idle != null, "Manual requests lost operation access");
                 var provider = new FakeProvider("optional", (session, _, _, _) =>
                 {
-                    Require(session.Input.Tools.Any(t => (string?)t["name"] == "propose_operation"), "Permitted tools are missing");
+                    Require(session.Input.Tools.Any(t => (string?)t["name"] == "propose_operation_plans"), "Permitted tools are missing");
                     return Task.FromResult(new AdvisorReply("A normal answer without commands", Array.Empty<AdvisorToolCall>(), 1));
                 });
                 var answer = OperationGatewayTests.Finish(gateway, new AdvisorEngine(provider).ConsultAsync(
@@ -84,8 +84,8 @@ internal static partial class ProviderTests
             var result = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(executor).ConsultAsync(
                 AdvisorContext.Create(DeliveryKnowledge(), Array.Empty<ChatExchange>(), operations: operations), CancellationToken.None)));
             Require(result.Completed && unit.Calls == 0, "Permitted shortcut bypassed approval");
-            var proposal = registry.FinishProposal("custom", true)!; Require(proposal.Orders.Count == 1, "The custom proposal was lost");
-            registry.Approve(proposal); Require(unit.Calls == 1, "Approval did not register exactly one order");
+            var proposal = registry.FinishProposal("custom", true)!; Require(proposal.Plans.Count == 2 && proposal.Orders.Count == 2, "The custom proposal was lost");
+            registry.Approve(proposal, new[] { "a" }); Require(unit.Calls == 1, "Approval did not register exactly one order");
         });
         check("Disabled operation policy survives retry, standard provider switching and independent fallback", () => Async(async () =>
         {
@@ -113,7 +113,7 @@ internal static partial class ProviderTests
             {
                 token.ThrowIfCancellationRequested();
                 Require(context.Operations == null && context.Input.OperationToolJson == null &&
-                    context.Input.ToolsJson.All(t => !t.Contains("propose_operation", StringComparison.Ordinal)), "An independent fallback received disabled commands");
+                    context.Input.ToolsJson.All(t => !t.Contains("propose_operation_plans", StringComparison.Ordinal)), "An independent fallback received disabled commands");
                 return Task.FromResult(new Api.AdvisorAnswer("Independent advice"));
             };
             var settings = NanoDraft(); var ext = ExternalConfiguration(external, "sub"); settings.Put(new AdvisorApiConfigurationDraft(ext)); settings.SubId = ext.Id;

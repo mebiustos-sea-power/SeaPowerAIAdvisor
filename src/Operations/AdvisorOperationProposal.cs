@@ -16,24 +16,27 @@ internal sealed class AdvisorOperationOrder
     internal JObject Request => (JObject)request.DeepClone();
 }
 
-internal enum AdvisorProposalState { Collecting, Pending, Registered, Rejected, Partial, Cancelled, Unknown }
+internal enum AdvisorProposalState { Collecting, Pending, Executing, Registered, Rejected, Partial, Cancelled, Unknown }
 
 // The conversation owns visibility; the battle-scoped operation service owns state and execution.
 internal sealed class AdvisorOperationProposal
 {
-    private readonly List<AdvisorOperationOrder> orders = new();
+    private readonly List<AdvisorOperationPlan> plans = new() { new AdvisorOperationPlan("default", "", "", Array.Empty<AdvisorOperationOrder>()) };
     internal string Owner { get; }
-    internal IReadOnlyList<AdvisorOperationOrder> Orders => orders.AsReadOnly();
+    internal IReadOnlyList<AdvisorOperationPlan> Plans => plans.AsReadOnly();
+    internal IReadOnlyList<AdvisorOperationOrder> Orders => plans.SelectMany(p => p.Orders).ToArray();
+    internal IReadOnlyList<AdvisorOperationOrder> ExecutionOrders { get; set; } = Array.Empty<AdvisorOperationOrder>();
+    internal AdvisorPlanSelection Selection { get; private set; } = AdvisorPlanSelection.Single;
+    internal JObject? Submission { get; private set; }
     internal AdvisorProposalState State { get; set; } = AdvisorProposalState.Collecting;
     internal bool RequiresApproval { get; set; }
     internal string? ErrorCode { get; set; }
     internal int RegisteredCount { get; set; }
     internal AdvisorOperationProposal(string owner) => Owner = owner;
-    internal void Add(AdvisorOperationOrder order) => orders.Add(order);
-    internal string CaptionKey => "operation." + (State switch
+    internal void Add(AdvisorOperationOrder order) => plans[0].Add(order);
+    internal void Submit(JObject submission, IEnumerable<AdvisorOperationPlan> values, AdvisorPlanSelection selection)
     {
-        AdvisorProposalState.Pending => "review", AdvisorProposalState.Registered => "registered",
-        AdvisorProposalState.Partial => "partial", AdvisorProposalState.Cancelled => "cancelled",
-        _ => "rejected"
-    });
+        Submission = (JObject)submission.DeepClone();
+        plans.Clear(); plans.AddRange(values); Selection = selection;
+    }
 }

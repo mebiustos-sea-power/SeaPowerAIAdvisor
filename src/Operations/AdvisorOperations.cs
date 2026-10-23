@@ -32,7 +32,7 @@ internal sealed class AdvisorOperationException : Exception
 }
 
 // Lives for one loaded battle. Never evict request receipts and then risk replaying their side effects.
-internal sealed class AdvisorOperations
+internal sealed partial class AdvisorOperations
 {
     private sealed class Receipt
     {
@@ -69,6 +69,11 @@ internal sealed class AdvisorOperations
     internal JArray PriorOrders(string owner)
     {
         CheckThread();
+        if (planSubmissions.TryGetValue(owner, out var submitted))
+        {
+            var request = (JObject)submitted.Submission!.DeepClone(); request["action"] = "submit";
+            return new JArray(new JObject { ["request"] = request, ["response"] = SubmissionResult(submitted) });
+        }
         var prefix = owner + ".";
         return new JArray(receipts.Where(p => p.Key.StartsWith(prefix, StringComparison.Ordinal)).Select(p => new JObject
         {
@@ -110,6 +115,7 @@ internal sealed class AdvisorOperations
     {
         var definition = (JObject)operation.Definition().DeepClone();
         definition["requires_approval"] = operation.RequiresApproval;
+        definition["plan_policy"] = Policy(operation).Json();
         return definition;
     }
     internal AdvisorOperationProposal? Proposal(string owner)
@@ -139,6 +145,7 @@ internal sealed class AdvisorOperations
         if (receipts.Count >= MaximumReceipts) throw new AdvisorOperationException(409, "operation_receipt_limit");
         var proposal = Proposal(owner);
         if (proposal == null || proposal.State != AdvisorProposalState.Collecting) throw new AdvisorOperationException(409, "proposal_closed");
+        if (proposal.Submission != null) throw new AdvisorOperationException(409, "proposal_already_submitted");
         var receipt = new Receipt(request);
         receipts.Add(id, receipt);
         var order = new AdvisorOperationOrder(request);
@@ -166,36 +173,44 @@ internal sealed class AdvisorOperations
         else if (!proposal.RequiresApproval) Approve(proposal);
         return proposal;
     }
-    internal string DescribeProposal(AdvisorOperationProposal proposal, string language)
+    internal string DescribeProposal(AdvisorOperationProposal proposal, string language, string? planId = null)
     {
         CheckThread(); RequireCurrent(proposal);
-        return string.Join("\n\n", proposal.Orders.GroupBy(o => o.OperationId)
+        return string.Join("\n\n", Plan(proposal, planId).Orders.GroupBy(o => o.OperationId)
             .Select(group => Operation(group.Key).DescribeProposal(group.ToArray(), language)));
     }
-    internal AdvisorMapPreview PreviewProposal(AdvisorOperationProposal proposal, string language)
+    internal AdvisorMapPreview PreviewProposal(AdvisorOperationProposal proposal, string language, string? planId = null)
     {
         CheckThread(); RequireCurrent(proposal);
         if (proposal.State != AdvisorProposalState.Pending || !Enabled) return AdvisorMapPreview.Empty;
-        var previews = proposal.Orders.GroupBy(o => o.OperationId)
+        var previews = Plan(proposal, planId).Orders.GroupBy(o => o.OperationId)
             .Select(group => Operation(group.Key) is IAdvisorOperationPreview operation
                 ? operation.Preview(group.ToArray(), language) : AdvisorMapPreview.Empty).ToArray();
-        return new AdvisorMapPreview(previews.SelectMany(preview => preview.Drawings),
-            previews.FirstOrDefault(preview => preview.Center.HasValue)?.Center);
+        return new AdvisorMapPreview(previews.SelectMany(preview => preview.Drawings));
     }
-    internal void Approve(AdvisorOperationProposal proposal)
+    internal void Approve(AdvisorOperationProposal proposal, IEnumerable<string>? selected = null)
     {
         CheckThread(); RequireCurrent(proposal);
         if (proposal.State != AdvisorProposalState.Pending) return;
+        var orders = SelectedOrders(proposal, selected);
+        proposal.ExecutionOrders = orders;
+        proposal.ErrorCode = null;
         try
         {
             CheckEnabled();
-            foreach (var group in proposal.Orders.GroupBy(o => o.OperationId))
+            foreach (var group in orders.GroupBy(o => o.OperationId))
                 Operation(group.Key).Validate(group.ToArray());
         }
         catch (AdvisorOperationException error)
-        { RejectRemaining(proposal, error.Code); proposal.State = AdvisorProposalState.Rejected; return; }
+        {
+            if (proposal.Submission != null) { proposal.ErrorCode = error.Code; return; }
+            RejectRemaining(proposal, error.Code); proposal.State = AdvisorProposalState.Rejected; return;
+        }
+        proposal.State = AdvisorProposalState.Executing;
+        foreach (var order in proposal.Orders.Except(orders))
+            receipts[order.Id].Result = new JObject { ["request_id"] = order.Id, ["status"] = "not_selected" };
         // Preserve request order. Preflight is not a transaction: native side effects cannot be rolled back.
-        foreach (var order in proposal.Orders)
+        foreach (var order in orders)
         {
             try
             {
@@ -241,7 +256,7 @@ internal sealed class AdvisorOperations
     private void RejectRemaining(AdvisorOperationProposal proposal, string code, string status = "rejected")
     {
         proposal.ErrorCode = code;
-        foreach (var order in proposal.Orders.Skip(proposal.RegisteredCount))
+        foreach (var order in (proposal.State == AdvisorProposalState.Executing ? proposal.ExecutionOrders : proposal.Orders).Skip(proposal.RegisteredCount))
             receipts[order.Id].Result = new JObject { ["request_id"] = order.Id, ["status"] = status, ["code"] = code };
     }
     private void RequireCurrent(AdvisorOperationProposal proposal)

@@ -17,18 +17,15 @@ internal sealed class AdvisorOperationPreview : IDisposable
     private AdvisorOperations? owner;
     private AdvisorOperationProposal? proposal;
     internal AdvisorOperationPreview(IAdvisorMap? map) => this.map = map;
-    internal void Show(AdvisorOperations operations, AdvisorOperationProposal value, string language)
+    internal void Show(AdvisorOperations operations, AdvisorOperationProposal value, string language, string? planId = null)
     {
         Dispose();
         if (map == null) return;
-        var preview = operations.PreviewProposal(value, language);
-        if (preview.Drawings.Count == 0 && !preview.Center.HasValue) return;
+        var preview = operations.PreviewProposal(value, language, planId);
+        if (preview.Drawings.Count == 0) return;
         owner = operations; proposal = value;
-        try
-        {
-            if (preview.Drawings.Count != 0) drawing = map.Draw(preview.Drawings);
-            if (preview.Center is AdvisorMapCoordinate center) map.Center(center);
-        }
+        // Reviewing or switching plans preserves the player's current map position and zoom.
+        try { drawing = map.Draw(preview.Drawings); }
         catch { Dispose(); throw; }
     }
     internal void Tick(AdvisorOperations? operations)

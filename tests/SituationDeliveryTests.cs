@@ -102,7 +102,7 @@ internal static partial class ProviderTests
             var response = OperationGatewayTests.Finish(gateway, context.Reads.ExecuteAsync(batch, CancellationToken.None));
             Require((string?)response["results"]?[0]?["error"]?["code"] == "situation_already_supplied" &&
                 response["results"]?[0]?["data"] == null && (string?)response["results"]?[1]?["status"] == "ok" &&
-                (string?)response["results"]?[2]?["status"] == "ok" && knowledge.RoundsUsed == 0 && operation.Writes == 0 && input.Tools.Any(t => (string?)t["name"] == "propose_operation"),
+                (string?)response["results"]?[2]?["status"] == "ok" && knowledge.RoundsUsed == 0 && operation.Writes == 0 && input.Tools.Any(t => (string?)t["name"] == "propose_operation_plans"),
                 "A duplicate read returned data, blocked operation lookup or executed an order");
         });
         check("An oversized upfront snapshot fails before sending and remains available on demand", () => Async(async () =>

@@ -146,7 +146,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
                 RefreshConfigurationNotice(); ShowConversation(false);
             }, ReturnToConversation, warn);
         operationReview = new AdvisorOperationReview(content, conversationPane, () => OperationService,
-            () => text, guard, () => ShowConversation(false), map);
+            () => text, guard, () => ShowConversation(false), map, navigation);
         Named<Button>(content, "Settings").Click += (_, _) => guard(settings.Open);
         try
         {
@@ -663,10 +663,10 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     private void FinishProposal(AdvisorTurn turn, bool success) =>
         turn.Proposal = OperationService?.FinishProposal(turn.OperationId, success);
 
-    private void ReviewProposal(AdvisorTurn turn)
+    private void ReviewProposal(AdvisorTurn turn, string? planId)
     {
         if (!CanConsult || turn.Proposal == null) return;
-        operationReview.Show(turn.Proposal);
+        operationReview.Show(turn.Proposal, planId);
     }
 
     private void ShowConversation(bool updateStatus = true, string? empty = null)

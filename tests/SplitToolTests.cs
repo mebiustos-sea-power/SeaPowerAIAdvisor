@@ -9,6 +9,8 @@ using Client = SeaPowerAIAdvisor.ExtensionFixture;
 
 internal static partial class ProviderTests
 {
+    private static JObject LegacyPlans()
+    { var request = PlanRequest(BuoyRequest()); request["action"] = "submit"; return request; }
     private static void RunSplitTools(Action<string, Action> check)
     {
         check("Split tool calls batch independent snapshot and operation reads in one round and preserve each call's results", () =>
@@ -122,14 +124,14 @@ internal static partial class ProviderTests
                     Require(session.Input.Tools.Count == (legacyFirst ? 2 : 5), "Main received another tool format");
                     if (send > 1) throw new AdvisorConnectionException("rate_limited", 429);
                     var read = legacyFirst ? new AdvisorToolCall("fact", AdvisorLegacyTools.ReadName, LegacyReadArguments(QueryTests.Q("get_briefing"))) : Call("fact", "get_briefing");
-                    var order = legacyFirst ? new AdvisorToolCall("order", "game_operations", BuoyRequest()) : OperationReply("order", BuoyRequest()).Calls.Single();
+                    var order = legacyFirst ? new AdvisorToolCall("order", "game_operations", LegacyPlans()) : OperationReply("order", BuoyRequest()).Calls.Single();
                     return Task.FromResult(Reply(read, order));
                 }
                 Task<AdvisorReply> Sub(FakeSession session, int send, bool _, CancellationToken token)
                 {
                     Require(session.Input.Tools.Count == (legacyFirst ? 5 : 2) && session.Continuation?.Retrievals.Count == 1 &&
                         session.Continuation.Operations.Count == 1 && session.Continuation.RoundsUsed == 1, "Fallback changed tools or duplicated evidence");
-                    return Task.FromResult(send == 1 ? (legacyFirst ? OperationReply("replay", BuoyRequest()) : Reply(new AdvisorToolCall("replay", "game_operations", BuoyRequest())))
+                    return Task.FromResult(send == 1 ? (legacyFirst ? OperationReply("replay", BuoyRequest()) : Reply(new AdvisorToolCall("replay", "game_operations", LegacyPlans())))
                         : new AdvisorReply("Retained proposal", Array.Empty<AdvisorToolCall>(), 1));
                 }
                 IAdvisorProvider main = legacyFirst ? new LegacyProvider("old", Main) : new FakeProvider("new", Main);
@@ -139,7 +141,7 @@ internal static partial class ProviderTests
                 Require(result.Completed && result.ApiRequests == 4 && result.QueryRounds == 1 && result.TotalTokens == null && unit.Calls == 0,
                     "Format migration changed request accounting or bypassed approval");
                 var proposal = registry.FinishProposal("format-switch", true)!;
-                Require(proposal.Orders.Count == 1, "Replay created a second order"); registry.Approve(proposal);
+                Require(proposal.Plans.Count == 2 && proposal.Orders.Count == 2, "Replay duplicated a plan set"); registry.Approve(proposal, new[] { "a" });
                 Require(unit.Calls == 1, "The migrated proposal did not execute exactly once");
             }
         });
@@ -173,7 +175,7 @@ internal static partial class ProviderTests
             var answer = OperationGatewayTests.Finish(gateway, Task.Run(() => AdvisorConsultation.RunAsync(AdvisorServices.Prepare(ExtensionDraft(extension)),
                 context, "unused-split-log", new AdvisorQuestion("Propose a buoy"), CancellationToken.None)));
             Require(answer.Completed && answer.ApiRequests == 3 && answer.QueryRounds == 1 && unit.Calls == 0, "Public tool-list execution failed");
-            registry.Approve(registry.FinishProposal("public-split", true)!);
+            registry.Approve(registry.FinishProposal("public-split", true)!, new[] { "a" });
             Require(unit.Calls == 1, "The public proposal was not executable");
         });
     }

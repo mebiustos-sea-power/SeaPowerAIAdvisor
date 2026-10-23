@@ -14,6 +14,7 @@ internal sealed class BattleSonobuoyUnit : IBattleSonobuoyUnit
     public int Id => unit.Id;
     public string Name => unit.Name.Value;
     public JObject Position => AdvisorInputBuilder.Position(new MapPosition(unit.Position.Value.Latitude, unit.Position.Value.Longitude));
+    public BattleReservationRoute? ReservationRoute => BattleReservationReader.ReadRoute(unit);
     public string Depth => unit.SonoDeployState.Value switch
     {
         Bomb.SonobuoyDeployState.AboveLayer => "above_layer",

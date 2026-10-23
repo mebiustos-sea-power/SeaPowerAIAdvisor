@@ -20,7 +20,7 @@ internal static partial class ProviderTests
                 var knowledge = DeliveryKnowledge();
                 var provider = new FakeProvider("operation-model", (s, n, allowed, token) =>
                 {
-                    Require(s.Input.Tools.Any(t => (string?)t["name"] == "propose_operation") && !s.Input.Data.ToString().Contains(BattleSonobuoyOperation.OperationId, StringComparison.Ordinal),
+                    Require(s.Input.Tools.Any(t => (string?)t["name"] == "propose_operation_plans") && !s.Input.Data.ToString().Contains(BattleSonobuoyOperation.OperationId, StringComparison.Ordinal),
                         "Operation definition was eagerly embedded in initial context");
                     if (n == 1) return Task.FromResult(OperationReply("list", new JObject { ["action"] = "list" }));
                     var result = s.Results.Single().Data;
@@ -48,38 +48,45 @@ internal static partial class ProviderTests
                 var context = AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations);
                 var result = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(provider, delivery: delivery).ConsultAsync(context, CancellationToken.None)));
                 Require(unit.Calls == 0, "AI bypassed approval");
-                var proposal = registry.FinishProposal("ai", true)!; registry.Approve(proposal);
+                var proposal = registry.FinishProposal("ai", true)!; registry.Approve(proposal, new[] { "a" });
                 Require(result.Text == "One buoy order proposed." && result.ApiRequests == 5 && unit.Calls == 1 && unit.Depth == "alternating" &&
                     unit.Thread == Environment.CurrentManagedThreadId && knowledge.RoundsUsed == 0 && operations.History.Count == 4,
                     "AI execution bypassed the operation service, duplicated registration, changed depth or used the read-only query gateway");
             }
         });
-        check("A single AI response can propose eleven or forty orders and approval registers their sequence", () =>
+        check("One tool call submits two full plans with eleven or forty ordered drops, and only the chosen plan registers", () =>
         {
             foreach (var count in new[] { 11, 40 })
             {
-                var unit = new OperationHelicopter { Inventory = count };
-                var registry = SonobuoyRegistry(unit);
+                var unit = new OperationHelicopter { Inventory = count }; var registry = SonobuoyRegistry(unit);
                 using var gateway = new AdvisorOperationGateway(registry);
                 using var operations = gateway.CreateSession("batch", AdvisorPrompts.Current)!;
-                var calls = Enumerable.Range(0, count).Select(BuoyCall).ToArray();
+                var request = PlanRequest(BuoyRequest());
+                foreach (var plan in ((JArray)request["plans"]!).Cast<JObject>())
+                {
+                    plan["operations"] = new JArray(Enumerable.Range(0, count).Select(i =>
+                    {
+                        var order = BuoyRequest(); order.Remove("action"); order.Remove("request_id");
+                        order["arguments"]!["latitude"] = 26.5 + i * .001; return order;
+                    }));
+                }
                 var provider = new FakeProvider("batch-model", (session, send, _, _) =>
                 {
-                    if (send == 1) return Task.FromResult(Reply(calls));
-                    Require(session.Results.Count == count && session.Results.All(r => (string?)r.Data["status"] == "proposed"),
-                        "Some valid requests were rejected or lost their results");
-                    for (var i = 0; i < count; i++)
-                        Require(session.Results[i].Id == calls[i].Id && unit.Calls == 0,
-                            "Request order changed or native registration ran before approval");
-                    return Task.FromResult(new AdvisorReply("Registered", Array.Empty<AdvisorToolCall>(), 1));
+                    if (send == 1)
+                    {
+                        Require(RequestSchemaFixture.Accepts(session.Input.Tools.Single(t => (string?)t["name"] == "propose_operation_plans")["parameters"]!, request),
+                            "Complete alternative plans did not match the published contract");
+                        return Task.FromResult(Reply(new AdvisorToolCall("plans", "propose_operation_plans", request)));
+                    }
+                    Require(session.Results.Count == 1 && (string?)session.Results[0].Data["status"] == "proposed" && unit.Calls == 0,
+                        "A complete submission was partially accepted or ran before approval");
+                    return Task.FromResult(new AdvisorReply("Plans ready", Array.Empty<AdvisorToolCall>(), 1));
                 });
                 var result = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(provider).ConsultAsync(
                     AdvisorContext.Create(new Knowledge(2), Array.Empty<ChatExchange>(), operations: operations), CancellationToken.None)));
-                Require(unit.Calls == 0, "A batch bypassed approval");
-                var proposal = registry.FinishProposal("batch", true)!; registry.Approve(proposal);
-                Require(unit.Latitudes.SequenceEqual(Enumerable.Range(0, count).Select(i => 26.5 + i * 0.001)), "Approval changed native order");
-                Require(result.ApiRequests == 2 && unit.Calls == count && operations.History.Count == count && unit.Depth == "alternating",
-                    "The response was truncated, registration was duplicated, or the player's depth setting changed");
+                var proposal = registry.FinishProposal("batch", true)!; registry.Approve(proposal, new[] { "b" }); registry.Approve(proposal, new[] { "a" });
+                Require(proposal.Plans.Count == 2 && result.ApiRequests == 2 && operations.History.Count == 1 && unit.Calls == count && unit.Depth == "alternating" &&
+                    unit.Latitudes.SequenceEqual(Enumerable.Range(0, count).Select(i => 26.5 + i * .001)), "Selection lost order, duplicated alternatives, or changed player settings");
             }
         });
         check("Forty-one calls are rejected before dispatch, preserving earlier proposals and a specific user notice", () =>
@@ -153,7 +160,7 @@ internal static partial class ProviderTests
             var context = AdvisorContext.Create(new Knowledge(4), Array.Empty<ChatExchange>(), operations: operations);
             var answer = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(main, sub).ConsultAsync(context, CancellationToken.None)));
             Require(unit.Calls == 0, "A fallback bypassed approval");
-            var proposal = registry.FinishProposal("handoff", true)!; registry.Approve(proposal);
+            var proposal = registry.FinishProposal("handoff", true)!; registry.Approve(proposal, new[] { "a" });
             Require(answer.Text == "Existing reservation retained." && unit.Calls == 1 && operations.History.Count == 2, "A connection handoff duplicated the order");
         });
         check("All built-in wires preserve the complete split tool list and operation schemas without eager command definitions", () => Async(async () =>
@@ -226,16 +233,21 @@ internal static partial class ProviderTests
     {
         var request = BuoyRequest(); request["request_id"] = "buoy-" + index;
         request["arguments"]!["latitude"] = 26.5 + index * 0.001;
-        request.Remove("action");
-        return new AdvisorToolCall("schedule-" + index, "propose_operation", request);
+        return new AdvisorToolCall("schedule-" + index, "propose_operation_plans", PlanRequest(request));
     }
     private static AdvisorReply OperationReply(string id, JObject args)
     {
         var name = (string?)args["action"] switch {
             "list" => "list_operations", "describe" => "describe_operation", "candidates" => "get_operation_candidates",
-            "execute" => "propose_operation", _ => throw new InvalidOperationException("Unknown fixture operation") };
-        var arguments = (JObject)args.DeepClone(); arguments.Remove("action");
+            "execute" => "propose_operation_plans", _ => throw new InvalidOperationException("Unknown fixture operation") };
+        var arguments = (string?)args["action"] == "execute" ? PlanRequest(args) : (JObject)args.DeepClone(); arguments.Remove("action");
         return Reply(new AdvisorToolCall(id, name, arguments));
+    }
+    private static JObject PlanRequest(JObject request)
+    {
+        var order = (JObject)request.DeepClone(); order.Remove("action"); order.Remove("request_id");
+        return new JObject { ["request_id"] = request["request_id"]!.DeepClone(), ["plans"] = new JArray(new[] { "a", "b" }.Select(id =>
+            new JObject { ["plan_id"] = id, ["title"] = "Plan " + id, ["summary"] = "Comparison " + id, ["operations"] = new JArray(order.DeepClone()) })) };
     }
     private static JObject BuoyRequest() => new()
     {
@@ -251,6 +263,7 @@ internal static partial class ProviderTests
         public string? UnavailableReason => null;
         public string Depth => "alternating";
         public JObject Position => new() { ["latitude_deg"] = 26.5, ["longitude_deg"] = 127.5 };
+        public BattleReservationRoute? ReservationRoute => new(new AdvisorMapCoordinate(26.5, 127.5), null);
         internal int Calls, Thread, Inventory = 4;
         internal readonly System.Collections.Generic.List<double> Latitudes = new();
         public System.Collections.Generic.IReadOnlyList<BattleSonobuoyAmmo> Ammunition() => new[] { new BattleSonobuoyAmmo("extra_mod_buoy", "Extra buoy", Inventory, Inventory - Calls, true) };

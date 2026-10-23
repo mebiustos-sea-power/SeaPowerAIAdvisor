@@ -229,6 +229,7 @@ internal static class OperationTests
         public string? UnavailableReason { get; set; }
         public string Depth { get; set; } = "alternating";
         public JObject Position => new() { ["latitude_deg"] = 26.5, ["longitude_deg"] = 127.5 };
+        public BattleReservationRoute? ReservationRoute => new(new AdvisorMapCoordinate(26.5, 127.5), null);
         internal int Calls, Available = 2;
         internal bool SingleDrop = true;
         internal string? LastAmmo;

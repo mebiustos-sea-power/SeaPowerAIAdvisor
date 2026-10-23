@@ -21,7 +21,7 @@ internal static class RequestSchemaFixture
         {
             case "object":
                 if (value is not JObject obj) return false;
-                var fields = (JObject)schema["properties"]!;
+                var fields = schema["properties"] as JObject ?? new JObject();
                 if (schema["required"] is JArray required && required.Values<string>().Any(k => obj[k!] == null)) return false;
                 return obj.Properties().All(p => fields[p.Name] != null ? Accepts(fields[p.Name]!, p.Value) : (bool?)schema["additionalProperties"] != false);
             case "array":
