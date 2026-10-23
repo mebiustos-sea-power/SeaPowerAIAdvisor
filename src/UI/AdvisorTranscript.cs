@@ -91,6 +91,15 @@ internal static class AdvisorTranscript
                     }
                     actions.Add(review);
                 }
+                if (proposal.State is AdvisorProposalState.Registered or AdvisorProposalState.Partial or AdvisorProposalState.Rejected or AdvisorProposalState.Unknown)
+                    for (var planIndex = 0; planIndex < proposal.Plans.Count; planIndex++)
+                    {
+                        var plan = proposal.Plans[planIndex];
+                        if (plan.Title.Length == 0 || !plan.Orders.Any(proposal.ExecutionOrders.Contains)) continue;
+                        actions.Add(Element("TextBlock", Text("Text", text.Format("operation.review_plan", planIndex + 1, plan.Title)),
+                            new XAttribute("FontSize", "12"), new XAttribute("TextWrapping", "Wrap"),
+                            new XAttribute("MaxWidth", "280"), new XAttribute("VerticalAlignment", "Center"), new XAttribute("Margin", "0,0,6,6")));
+                    }
                 row.Add(actions);
                 if (proposal.ErrorCode != null)
                     row.Add(Error(text.Format("operation.failure", proposal.ErrorCode, proposal.RegisteredCount,

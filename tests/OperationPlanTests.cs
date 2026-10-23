@@ -143,6 +143,8 @@ internal static class OperationPlanTests
                     var button = rendered.Descendants().Single(e => (string?)e.Attribute(x + "Name") == "ReviewProposal0");
                     Require((string?)button.Attribute("Content") == text["operation.accept"] && (string?)button.Attribute("IsEnabled") == "false" &&
                         rendered.Descendants().Any(e => (string?)e.Attribute("Text") == text.Format("operation.failure", proposal.ErrorCode!, 1, 3)) &&
+                        button.Parent!.Elements().Where(e => e.Name.LocalName == "TextBlock").Select(e => (string?)e.Attribute("Text"))
+                            .SequenceEqual(new[] { text.Format("operation.review_plan", 1, proposal.Plans[0].Title) }) &&
                         turn.Exchange!.Answer == "Original answer",
                         "A failed adoption offered another execution or hid its error and completed count behind the unified caption");
                 }
@@ -288,8 +290,46 @@ internal static class OperationPlanTests
                 XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
                 var buttons = rendered.Descendants().Where(e => ((string?)e.Attribute(x + "Name"))?.StartsWith("ReviewProposal", StringComparison.Ordinal) == true).ToArray();
                 Require(buttons.Length == 1 && (string?)buttons[0].Attribute("Content") == text["operation.accept"] &&
-                    (string?)buttons[0].Attribute("IsEnabled") == "false" && turn.Exchange!.Answer == "Original answer",
+                    (string?)buttons[0].Attribute("IsEnabled") == "false" &&
+                    buttons[0].Parent!.Elements().Where(e => e.Name.LocalName == "TextBlock").Select(e => (string?)e.Attribute("Text"))
+                        .SequenceEqual(new[] { text.Format("operation.review_plan", 3, proposal.Plans[2].Title) }) &&
+                    turn.Exchange!.Answer == "Original answer",
                     "Accepted alternatives did not collapse to one disabled common action or changed the original answer");
+            }
+        });
+        check("Accepted history keeps original numbers and literal titles for every selected plan and never labels an unsuccessful preflight as adopted", () =>
+        {
+            var log = new List<string>(); var command = new Command("custom.accepted", log);
+            var chat = new AdvisorConversation(); var turn = chat.Begin(new AdvisorQuestion("Create alternatives"));
+            var service = Service(command, turn.OperationId);
+            var first = Plan("a", Order(command, "one", 1), Order(command, "one", 2)); first["title"] = "<第一> & 警戒";
+            service.SubmitPlans(turn.OperationId, Batch(first, Plan("b", Order(command, "two", 3)), Plan("c", Order(command, "three", 4))));
+            turn.Finish(new AdviceResult("Original answer", 1, 0, null), service);
+            var proposal = turn.Proposal!;
+            command.Available = 0; service.Approve(proposal, new[] { "c", "a" });
+            foreach (var language in new[] { "en", "ja" })
+            {
+                var rendered = XDocument.Parse(AdvisorTranscript.Render(chat, AdvisorText.Load(language), "Adviser", "empty"));
+                XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+                var buttons = rendered.Descendants().Where(e => ((string?)e.Attribute(x + "Name"))?.StartsWith("ReviewProposal", StringComparison.Ordinal) == true).ToArray();
+                Require(proposal.State == AdvisorProposalState.Pending && buttons.Length == 3 &&
+                    !buttons[0].Parent!.Elements().Any(e => e.Name.LocalName == "TextBlock") && log.Count == 0,
+                    "Preflight failure mislabeled unexecuted selections as adopted or removed the remaining choices");
+            }
+            command.Available = 100; service.Approve(proposal, new[] { "c", "a" });
+            _ = new AdvisorOperationReviewState(proposal, "b");
+            foreach (var language in new[] { "en", "ja" })
+            {
+                var text = AdvisorText.Load(language); var rendered = XDocument.Parse(AdvisorTranscript.Render(chat, text, "Adviser", "empty"));
+                XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+                var button = rendered.Descendants().Single(e => (string?)e.Attribute(x + "Name") == "ReviewProposal0");
+                var labels = button.Parent!.Elements().Where(e => e.Name.LocalName == "TextBlock").ToArray();
+                Require(proposal.State == AdvisorProposalState.Registered && (string?)button.Attribute("Content") == text["operation.accept"] &&
+                    (string?)button.Attribute("IsEnabled") == "false" && labels.Select(e => (string?)e.Attribute("Text")).SequenceEqual(new[] {
+                        text.Format("operation.review_plan", 1, proposal.Plans[0].Title), text.Format("operation.review_plan", 3, proposal.Plans[2].Title) }) &&
+                    turn.Exchange!.Answer == "Original answer" &&
+                    log.SequenceEqual(new[] { "custom.accepted:one:1", "custom.accepted:one:2", "custom.accepted:three:4" }),
+                    "Accepted history lost original proposal numbers, duplicated a multi-order plan, changed a literal title or followed a different selection");
             }
         });
         check("Batch transport normalizes unit and ammunition aliases before retention and labels corrections with plan and operation identity", () =>

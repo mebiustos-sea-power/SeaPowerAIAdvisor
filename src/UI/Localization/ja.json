@@ -449,7 +449,7 @@
   "connection.situation_delivery_unavailable": "この相談処理は戦況データの一括提供に対応していません。",
   "connection.situation_on_request": "要求時にまとめて送信",
   "progress.topic.situation": "戦況全体",
-  "operation.select_multiple": "採用する提案にチェックしてください。地図は表示中の提案だけを示します。",
+  "operation.select_multiple": "採用する提案にチェックしてください。",
   "operation.previous": "前の提案",
   "operation.next": "次の提案",
   "operation.review_plan": "提案{0}: {1}",

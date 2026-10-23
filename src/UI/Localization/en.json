@@ -449,7 +449,7 @@
   "connection.situation_delivery_unavailable": "This consultation workflow does not support full situation delivery.",
   "connection.situation_on_request": "Send all when requested",
   "progress.topic.situation": "the tactical situation",
-  "operation.select_multiple": "Select the proposals to accept. The map shows the proposal being viewed.",
+  "operation.select_multiple": "Select the proposals to accept.",
   "operation.previous": "Previous proposal",
   "operation.next": "Next proposal",
   "operation.review_plan": "Proposal {0}: {1}",
