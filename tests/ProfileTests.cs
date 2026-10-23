@@ -375,6 +375,12 @@ internal static class ProfileTests
                 Require(Named(control).Ancestors().Contains(Named("ProfileEditor")), "An advisor edit action is not local to its form");
             foreach (var control in new[] { "ApiProvider", "ApiProviderDescription", "ApiProviderFields", "TestConnection", "ConnectionTestStatus", "SaveApiEntry", "CancelApiEntry" })
                 Require(Named(control).Ancestors().Contains(Named("ApiEditor")), "An API edit or test result is not local to its form");
+            var apiList = Named("ApiConnectionList"); var apiEditor = Named("ApiEditor");
+            Require(apiList.Parent == apiEditor.Parent && (string?)apiEditor.Attribute("Visibility") == "Collapsed" &&
+                Named("ApiConnectionCards").Ancestors().Contains(apiList) && !Named("ApiConnectionCards").Ancestors().Contains(apiEditor) &&
+                Named("AddApiConfiguration").Ancestors().Contains(apiList) &&
+                new[] { "DuplicateApiConfiguration", "RemoveApiConfiguration" }.All(id => Named(id).Ancestors().Contains(apiEditor)) &&
+                Named("ApiProvider").Name.LocalName == "ComboBox", "The saved-connection list shares editing space or changes provider selection");
             Require(Named("SettingsConfirmation").Parent == root && (string?)Named("SettingsConfirmation").Attribute("Visibility") == "Collapsed" &&
                 Named("AcceptConfirmation").Ancestors().Contains(Named("SettingsConfirmation")), "Delete and discard confirmations are not available outside the disabled page");
             Require(Named("DeveloperCategory").Name.LocalName == "TabControl" &&

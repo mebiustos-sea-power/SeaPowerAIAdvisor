@@ -148,7 +148,7 @@ internal static class ApiLibraryTests
             Bad("settings_invalid", data => data.Remove("schema_version"));
             Bad("settings_invalid", data => data["api_key"] = "conflicting_legacy_key");
             Bad("settings_invalid", data => data["api_configurations"]![1]!["id"] = data["api_configurations"]![0]!["id"]!.DeepClone());
-            Bad("api_configuration_name_invalid", data => data["api_configurations"]![1]!["name"] = data["api_configurations"]![0]!["name"]!.DeepClone());
+            Bad("api_configuration_name_invalid", data => data["api_configurations"]![1]!["name"] = "");
             Bad("api_selection_invalid", data => data["main_api_id"] = "not-registered");
             Bad("api_selection_same", data => data["sub_api_id"] = data["main_api_id"]!.DeepClone());
             var legacy = Legacy(); legacy.Remove("fallback_api_key"); legacy["fallback_model"] = "gemini-model-only";

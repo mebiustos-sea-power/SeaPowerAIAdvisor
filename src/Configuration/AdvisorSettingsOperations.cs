@@ -17,6 +17,8 @@ internal sealed class AdvisorApiSettingsStore
         if (adding == (current.Find(entry.Id) != null)) throw new AdvisorConnectionException("api_selection_invalid");
         current.Put(entry); Save(current); return Read();
     }
+    internal AdvisorSettingsDraft Duplicate(string id, string nameSuffix)
+    { var current = Read(); current.Duplicate(id, nameSuffix); Save(current); return Read(); }
     internal AdvisorSettingsDraft Remove(string id)
     { var current = Read(); current.Remove(id); Save(current); return Read(); }
     internal AdvisorSettingsDraft Assign(string? main, string? sub)

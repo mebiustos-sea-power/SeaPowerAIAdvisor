@@ -64,7 +64,7 @@ internal sealed class AdvisorSettingsController
         promptEditor = new AdvisorPromptSettingsView(content, text, guard, typing, changed, warn);
         errorHistory = new AdvisorErrorHistoryView(content, text, guard, typing);
         apiStore = new AdvisorApiSettingsStore(settingsPath, () => text()["connection.configuration_name_pattern"]);
-        api = new AdvisorApiSettingsView(content, apiStore, text, guard, typing, ApiChanged, Saved, () => Notice(text()["profile.ime"], true), ApiError, ConfirmDelete);
+        api = new AdvisorApiSettingsView(content, apiStore, text, guard, typing, ApiChanged, Saved, () => Notice(text()["profile.ime"], true), ApiError, ConfirmDelete, ConfirmDuplicate);
         profiles = new AdvisorProfileSettingsView(content, profileDirectory, text, defaultPortrait, guard, typing,
             profile => { profileSaved(profile); Saved(); }, () => Notice(""), ProfileError, ConfirmDelete, warn);
         templates = new AdvisorTemplateSettingsView(content, templateStore, text, guard, typing,
@@ -176,6 +176,7 @@ internal sealed class AdvisorSettingsController
         void Go() { CancelTest(); profiles.Close(); api.Close(); promptEditor.Close(); errorHistory.Close(); templates.Close(); current = null; available = false; releaseInput(); page.Visibility = Visibility.Collapsed; home.Visibility = Visibility.Visible; Named<Button>("OpenGeneralCategory").Focus(); }
         if (HasChanges) Confirm(text()["settings.discard_question"], text()["settings.discard_action"], Go, "settings.continue_editing"); else Go();
     }
+    private void ConfirmDuplicate(Action action) => Confirm(text()["connection.duplicate_discard_question"], text()["settings.duplicate"], action, "settings.continue_editing");
     private void ConfirmDelete(string name, Action action) => Confirm(text().Format("settings.delete_question", name), text()["profile.remove"], action);
     private void Confirm(string message, string caption, Action action, string cancelKey = "settings.cancel")
     {

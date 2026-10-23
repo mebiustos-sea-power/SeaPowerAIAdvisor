@@ -79,8 +79,7 @@ internal sealed class AdvisorApiLibrary
         if (Configurations.Any(c => string.IsNullOrWhiteSpace(c.Provider) || c.Provider.Length > 80 || c.Provider.Any(char.IsControl)) ||
             Configurations.Any(c => string.IsNullOrWhiteSpace(c.Id) || c.Id.Length > 80 || c.Id.Any(char.IsControl)) ||
             Configurations.Select(c => c.Id).Distinct(StringComparer.Ordinal).Count() != Configurations.Count) throw Invalid();
-        if (Configurations.Any(c => c.Name.Length == 0 || c.Name.Length > 80 || c.Name.Any(char.IsControl)) ||
-            Configurations.Select(c => c.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != Configurations.Count)
+        if (Configurations.Any(c => c.Name.Length == 0 || c.Name.Length > 80 || c.Name.Any(char.IsControl)))
             throw new AdvisorConnectionException("api_configuration_name_invalid");
         if ((MainId != null && Find(MainId) == null) || (SubId != null && Find(SubId) == null)) throw new AdvisorConnectionException("api_selection_invalid");
         if (MainId != null && MainId == SubId) throw new AdvisorConnectionException("api_selection_same");

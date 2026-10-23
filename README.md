@@ -37,7 +37,7 @@ Bungalow's Dynamic Campaign Mod is **not required** for battle-screen use. Its c
 ## First use
 
 1. In a mission, open the adviser with **AI** in the bottom-right button row.
-2. Open **Settings → API connections → Registrations**, add a named connection and fill in its provider-specific fields.
+2. Open **Settings → API connections → Registrations**, add a named connection and fill in its provider-specific fields. Saved connections appear as cards with their provider, model and main/sub assignment; select a card to edit it.
 3. Use **Test connection**, then save the registration. A connection test does not save or select it.
 4. In **Selection**, choose the main connection and optionally a different sub connection, then save.
 5. Return to chat and send a message or select a quick action. **Enter** sends; **Shift+Enter** inserts a new line.
@@ -56,6 +56,8 @@ For an unidentified contact, open its information window and use **[adviser name
 Choose a model that supports **tool calling**. These are examples, not a guarantee that every model will interpret the supplied data correctly. OpenRouter and NanoGPT connection tests check a tool-call/result round trip as well as the final response.
 
 Future prompt tuning and evaluation of adviser responses will primarily use **GLM 5.3 through NanoGPT**. Other supported services and models remain available, but response quality and information retrieval behavior may vary by model.
+
+Duplicating a connection immediately saves a separate copy of its saved settings and returns to the card list. Pending edits require confirmation before being discarded. The original connection keeps its main/sub assignments; copies are unassigned. Duplicate names are allowed.
 
 NanoGPT connections also have an **Output token limit (including reasoning)** field. Increase it if a model exhausts its reasoning budget before producing an answer or tool call. Existing connections retain their previous effective limit until edited.
 
