@@ -10,48 +10,63 @@ internal static partial class ProviderTests
 {
     private static void RunOperations(Action<string, Action> check)
     {
-        check("The standard AI engine discovers operation metadata and proposes exactly one buoy until host approval", () =>
+        check("Split and legacy AI workflows get the contract with live candidates and submit plans in four requests before approval", () =>
         {
             foreach (var delivery in new[] { AdvisorSituationDelivery.OnDemand, AdvisorSituationDelivery.Upfront, AdvisorSituationDelivery.OnRequest })
+            foreach (var legacy in new[] { false, true })
             {
                 var unit = new OperationHelicopter(); var registry = SonobuoyRegistry(unit);
                 using var gateway = new AdvisorOperationGateway(registry);
                 using var operations = gateway.CreateSession("ai", AdvisorPrompts.Current)!;
                 var knowledge = DeliveryKnowledge();
-                var provider = new FakeProvider("operation-model", (s, n, allowed, token) =>
+                AdvisorReply Read(string id, JObject args) => legacy
+                    ? Reply(new AdvisorToolCall(id, "query_game", new JObject { ["requests"] = new JArray(new JObject(args) { ["source"] = "operation" }) }))
+                    : OperationReply(id, args);
+                Task<AdvisorReply> Send(FakeSession session, int send, bool allowed, CancellationToken token)
                 {
-                    Require(s.Input.Tools.Any(t => (string?)t["name"] == "propose_operation_plans") && !s.Input.Data.ToString().Contains(BattleSonobuoyOperation.OperationId, StringComparison.Ordinal),
+                    Require(session.Input.Tools.Any(t => (string?)t["name"] == (legacy ? "game_operations" : "propose_operation_plans")) &&
+                        !session.Input.Data.ToString().Contains(BattleSonobuoyOperation.OperationId, StringComparison.Ordinal),
                         "Operation definition was eagerly embedded in initial context");
-                    if (n == 1) return Task.FromResult(OperationReply("list", new JObject { ["action"] = "list" }));
-                    var result = s.Results.Single().Data;
+                    if (send == 1) return Task.FromResult(Read("list", new JObject { ["action"] = "list" }));
+                    var result = session.Results.Single().Data;
                     if (result["results"] is JArray reads) result = (JObject)reads[0]!["data"]!;
-                    if (n == 2)
+                    if (send == 2)
                     {
-                        Require((string?)result["operations"]?[0]?["id"] == BattleSonobuoyOperation.OperationId, "AI could not discover its operation");
-                        return Task.FromResult(OperationReply("detail", new JObject { ["action"] = "describe", ["operation_id"] = BattleSonobuoyOperation.OperationId }));
+                        var id = (string)result["operations"]![0]!["id"]!;
+                        Require(id == BattleSonobuoyOperation.OperationId, "AI could not discover its operation");
+                        return Task.FromResult(Read("candidates", new JObject { ["action"] = "candidates", ["operation_id"] = id }));
                     }
-                    if (n == 3)
+                    if (send == 3)
                     {
-                        Require(result["operation"]?["parameters"]?["properties"]?["depth"] == null, "AI was offered depth control");
-                        return Task.FromResult(OperationReply("candidates", new JObject { ["action"] = "candidates", ["operation_id"] = BattleSonobuoyOperation.OperationId }));
+                        var definition = result["operation"]!; var candidate = result["candidates"]![0]!;
+                        Require(definition["parameters"]!["required"]!.Values<string>().SequenceEqual(new[] { "latitude", "longitude", "ammunition" }) &&
+                            definition["parameters"]!["properties"]!["depth"] == null &&
+                            (bool?)definition["requires_approval"] == true && (int?)definition["plan_policy"]?["minimum"] == 2 &&
+                            (int?)definition["plan_policy"]?["maximum"] == 2 && (string?)definition["plan_policy"]?["selection"] == "single" &&
+                            (double?)candidate["position"]?["latitude_deg"] == 26.5 && (string?)candidate["depth"] == "alternating",
+                            "One candidate lookup did not supply the argument contract, plan/approval policy or live choices");
+                        var order = BuoyRequest(); order["operation_id"] = definition["id"]!.DeepClone();
+                        order["target_ref"] = candidate["target_ref"]!.DeepClone();
+                        order["arguments"]!["ammunition"] = candidate["ammunition"]![0]!["id"]!.DeepClone();
+                        order["arguments"]!["latitude"] = candidate["position"]!["latitude_deg"]!.DeepClone();
+                        order["arguments"]!["longitude"] = candidate["position"]!["longitude_deg"]!.DeepClone();
+                        var request = PlanRequest(order);
+                        if (legacy) request["action"] = "submit";
+                        return Task.FromResult(Reply(new AdvisorToolCall("plans", legacy ? "game_operations" : "propose_operation_plans", request)));
                     }
-                    if (n == 4)
-                    {
-                        Require((double?)result["candidates"]?[0]?["position"]?["latitude_deg"] == 26.5 &&
-                            (string?)result["candidates"]?[0]?["depth"] == "alternating", "Candidate position or user setting was unavailable");
-                        return Task.FromResult(OperationReply("schedule", BuoyRequest()));
-                    }
-                    Require((string?)result["status"] == "proposed" && (bool?)result["registered"] == false && unit.Calls == 0,
-                        "AI was told an unapproved operation was registered");
+                    Require((string?)result["status"] == "proposed" && (bool?)result["registered"] == false &&
+                        (bool?)result["requires_approval"] == true && unit.Calls == 0, "AI bypassed approval or misreported registration");
                     return Task.FromResult(new AdvisorReply("One buoy order proposed.", Array.Empty<AdvisorToolCall>(), 1));
-                });
+                }
+                IAdvisorProvider provider = legacy ? new LegacyProvider("operation-model", Send) : new FakeProvider("operation-model", Send);
                 var context = AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations);
                 var result = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(provider, delivery: delivery).ConsultAsync(context, CancellationToken.None)));
                 Require(unit.Calls == 0, "AI bypassed approval");
                 var proposal = registry.FinishProposal("ai", true)!; registry.Approve(proposal, new[] { "a" });
-                Require(result.Text == "One buoy order proposed." && result.ApiRequests == 5 && unit.Calls == 1 && unit.Depth == "alternating" &&
-                    unit.Thread == Environment.CurrentManagedThreadId && knowledge.RoundsUsed == 0 && operations.History.Count == 4,
-                    "AI execution bypassed the operation service, duplicated registration, changed depth or used the read-only query gateway");
+                Require(result.Text == "One buoy order proposed." && result.ApiRequests == 4 && unit.Calls == 1 && unit.Depth == "alternating" &&
+                    unit.Thread == Environment.CurrentManagedThreadId && knowledge.RoundsUsed == 0 && operations.History.Count == 3 &&
+                    operations.History.All(row => (string?)row["request"]?["action"] != "describe"),
+                    "Combined lookup needed an extra definition request, bypassed approval or changed native order behavior");
             }
         });
         check("One tool call submits two full plans with eleven or forty ordered drops, and only the chosen plan registers", () =>

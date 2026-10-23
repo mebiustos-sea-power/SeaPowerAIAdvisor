@@ -512,12 +512,13 @@ WIPチェックは開発APIだけでなくAI経由の操作全体へ適用する
 
 query_situationは従来のrequests配列とqueryごとのanyOfを保持する。操作ツールは用途ごとの引数だけを公開し、source／actionをAIに設定させない。操作定義・候補のoperation_id等の必須項目は維持する。propose_operation_plansは第15節の一括提出から承認・再検証へ委譲し、読み取りからは提案を作成しない。strictは有効化せず、モデルでの遵守率や往復削減は別途検証する。
 
+操作を計画する場合はget_operation_candidatesで、対象操作の定義（引数・plan_policy・承認条件）とライブ候補を同じ応答へ返す。既存の候補・ページング項目は維持し、operationへdescribe_operationと同じ定義を追加する。空の候補や後続ページにも定義を含め、送信済み管理や新しい引数・ツールは増やさない。定義だけの照会にはdescribe_operationを残す。AdvisorOperationsが登録済み操作のDefinitionとCandidatesを組み合わせ、各コマンドの契約・承認と実行時の検証・プロバイダーの責務は変えない。旧action=candidatesにも同じ結果を返すが、開発APIの直接候補取得は既存形式を維持する。
+
 同じAI応答での呼び出し例（各IDは同じ相談で取得済み、API固有の外側の形式は省略）:
 
 ```json
 [
   {"name":"query_situation","arguments":{"requests":[{"query":"get_movement_plans","ids":["own_unit_1","own_unit_2"]}]}},
-  {"name":"describe_operation","arguments":{"operation_id":"seapower.schedule_sonobuoy_drop"}},
   {"name":"get_operation_candidates","arguments":{"operation_id":"seapower.schedule_sonobuoy_drop","target_ref":"unit:1029"}},
   {"name":"get_operation_candidates","arguments":{"operation_id":"seapower.schedule_sonobuoy_drop","target_ref":"unit:1030"}}
 ]
@@ -598,7 +599,7 @@ AIはユーザーの目的と取得した状況から各案の内容・違い・
 ### 責務と操作ごとの条件
 
 - `AdvisorOperationPlanBatch`はスキーマと外形検証、`AdvisorOperationGateway`は非同期ゲームスレッド受付と相談内ID正規化、`AdvisorOperations`は保管・承認・登録を所有する。新しい案管理と個別操作の引数処理をプロバイダーへ分散させない。
-- コマンドは任意の`IAdvisorOperationPlans`から最小・最大案数と選択方式を宣言する。`describe_operation`の`plan_policy`へ提示し、未指定は1案・単数選択。ソノブイは今回2案・単数選択とする。単なる照会・助言に案作成を強制しない。
+- コマンドは任意の`IAdvisorOperationPlans`から最小・最大案数と選択方式を宣言する。`describe_operation`および`get_operation_candidates`の操作定義にある`plan_policy`へ提示し、未指定は1案・単数選択。ソノブイは今回2案・単数選択とする。単なる照会・助言に案作成を強制しない。
 - 条件の適用単位は、同じ対象への予約数ではなく、提出全体。含まれる全操作の最小値の最大と、最大値の最小を使う。両立しない宣言は`incompatible_plan_policies`、提出数の不一致は`plan_count_out_of_range`で全体を拒否する。
 - 選択方式が混在する場合は単数選択を優先し、全操作が複数選択を認めた場合だけ複数選択を許可する。特定の操作を別案から省いて、その操作の条件を回避する扱いにはしない。複数の独立した提案グループや案間依存のDSLは今回追加しない。
 - 共通側は各案を独立して操作種別ごとに検証し、代替案どうしの弾薬を合算しない。選択後には選ばれた全操作を操作種別ごとにまとめ、各コマンドが現在の対象・合計必要数を再検証する。コマンドは他の種類の引数を解釈しない。

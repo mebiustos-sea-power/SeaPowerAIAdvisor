@@ -33,8 +33,17 @@ internal static class OperationGatewayTests
             Require((string?)detail["operation"]?["parameters"]?["type"] == "object" && entries[37].Definitions == 1 &&
                 entries.Where((_, i) => i != 37).All(o => o.Definitions == 0), "Describe did not isolate the selected definition");
             var candidates = Send(gateway, session, new JObject { ["action"] = "candidates", ["operation_id"] = entries[37].Id, ["target_ref"] = "custom:7" });
-            Require((int?)candidates["total_count"] == 1 && (string?)candidates["candidates"]![0]!["target_ref"] == "custom:7" && entries.All(o => o.Calls == 0),
-                "Candidate filtering changed game state or assumed sonobuoy/unit names");
+            Require((int?)candidates["total_count"] == 1 && (string?)candidates["candidates"]![0]!["target_ref"] == "custom:7" &&
+                JToken.DeepEquals(candidates["operation"], detail["operation"]) &&
+                entries.Where((_, i) => i != 37).All(o => o.Definitions == 0) && entries.All(o => o.Calls == 0),
+                "Candidate lookup lost its matching definition, queried another operation or changed game state");
+            var nextPage = Send(gateway, session, new JObject { ["action"] = "candidates", ["operation_id"] = entries[37].Id, ["offset"] = 1, ["limit"] = 1 });
+            var empty = Send(gateway, session, new JObject { ["action"] = "candidates", ["operation_id"] = entries[37].Id, ["target_ref"] = "custom:missing" });
+            Require((int?)nextPage["total_count"] == 2 && (int?)nextPage["offset"] == 1 && (bool?)nextPage["has_more"] == false &&
+                (string?)nextPage["candidates"]?[0]?["target_ref"] == "custom:8" &&
+                (int?)empty["total_count"] == 0 && empty["candidates"]!.Count() == 0 &&
+                JToken.DeepEquals(nextPage["operation"], detail["operation"]) && JToken.DeepEquals(empty["operation"], detail["operation"]),
+                "Paging or an empty candidate set removed the operation contract or changed candidate filtering");
         });
         check("AI operation requests run on the owning game thread and recheck WIP after enqueue", () =>
         {

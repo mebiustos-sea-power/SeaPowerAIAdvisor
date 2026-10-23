@@ -106,9 +106,13 @@ internal sealed partial class AdvisorOperations
     internal JObject CandidatePage(string id, string? target, int offset, int limit)
     {
         CheckEnabled();
-        var rows = Operation(id).Candidates();
+        var operation = Operation(id);
+        var rows = operation.Candidates();
         if (target != null) rows = new JArray(rows.Where(c => (string?)c["target_ref"] == target));
-        return Page(rows, offset, limit, "candidates");
+        var result = Page(rows, offset, limit, "candidates");
+        // Supply the contract with live choices so a plan needs no separate definition lookup.
+        result["operation"] = Definition(operation);
+        return result;
     }
     private static JObject Page(JArray rows, int offset, int limit, string field) => new()
     {
