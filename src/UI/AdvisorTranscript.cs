@@ -134,16 +134,16 @@ internal static class AdvisorTranscript
     private static XElement Header(string speaker, string brush, string? copyName, AdvisorText text, string tipKey, string margin,
         string captionKey = "action.copy", TimeSpan? elapsed = null)
     {
-        var label = Label(speaker, brush);
-        if (elapsed.HasValue)
-            label = Element("WrapPanel", label, Element("TextBlock",
-                Text("Text", ((long)elapsed.Value.TotalSeconds).ToString(CultureInfo.InvariantCulture) + "s"),
-                new XAttribute("FontSize", "12"), new XAttribute("Foreground", "#AAB7C4"),
-                new XAttribute("VerticalAlignment", "Center"), new XAttribute("Margin", "6,0,0,5")));
         var header = Element("Grid", new XAttribute("Margin", margin),
             Element("Grid.ColumnDefinitions", Element("ColumnDefinition", new XAttribute("Width", "*")),
-                Element("ColumnDefinition", new XAttribute("Width", "Auto"))), label);
-        if (copyName != null) header.Add(Action(copyName, text[captionKey], text[tipKey], 1));
+                Element("ColumnDefinition", new XAttribute("Width", "Auto")),
+                Element("ColumnDefinition", new XAttribute("Width", "Auto"))), Label(speaker, brush));
+        if (elapsed.HasValue)
+            header.Add(Element("TextBlock",
+                Text("Text", ((long)elapsed.Value.TotalSeconds).ToString(CultureInfo.InvariantCulture) + "s"),
+                new XAttribute("FontSize", "12"), new XAttribute("Foreground", "#8996A3"), new XAttribute("Grid.Column", "1"),
+                new XAttribute("VerticalAlignment", "Center"), new XAttribute("Margin", "8,0,8,0")));
+        if (copyName != null) header.Add(Action(copyName, text[captionKey], text[tipKey], 2));
         return header;
     }
 

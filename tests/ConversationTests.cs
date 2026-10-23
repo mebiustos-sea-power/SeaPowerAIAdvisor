@@ -28,7 +28,7 @@ internal static class ConversationTests
                     "Completion duplicated the player message or left the waiting state behind");
             }
         });
-        check("Only completed replies show stable elapsed seconds beside the original adviser without changing copied or AI dialogue", () =>
+        check("Only completed replies show stable elapsed seconds in the adviser header without changing copied or AI dialogue", () =>
         {
             var chat = new AdvisorConversation();
             var turn = chat.Begin(new AdvisorQuestion("Original question"), "Alice <>&", "alice");
@@ -51,7 +51,7 @@ internal static class ConversationTests
                 Require(labels.Select(e => (string?)e.Attribute("Text")).SequenceEqual(new[] { "Alice <>&", expected }) &&
                     (double)labels[1].Attribute("FontSize")! < (double)labels[0].Attribute("FontSize")! &&
                     header.Descendants().Any(e => (string?)e.Attribute(x + "Name") == "CopyAnswer0") && turn.Elapsed == elapsed,
-                    "Elapsed time moved away from the adviser, changed after completion, or disrupted answer copying and text sizing");
+                    "Elapsed time left the adviser header, changed after completion, or disrupted answer copying and text sizing");
             }
             var next = chat.Begin(new AdvisorQuestion("Retry question"), "Bob", "bob");
             next.Fail(AdvisorNotice.Connection(new AdvisorConnectionException("request_timeout")));
