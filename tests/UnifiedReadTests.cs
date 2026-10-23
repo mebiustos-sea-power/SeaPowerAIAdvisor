@@ -224,6 +224,7 @@ internal static partial class ProviderTests
         internal string Detail = "Current details";
         internal Action? OnCandidates;
         public string Id => "example.inspect";
+        public AdvisorOperationText Documentation => OperationDocumentationTests.Example;
         public string Description => "An externally defined example operation";
         public bool RequiresApproval => true;
         public JObject Definition() => new() { ["id"] = Id, ["parameters"] = new JObject { ["type"] = "object" } };

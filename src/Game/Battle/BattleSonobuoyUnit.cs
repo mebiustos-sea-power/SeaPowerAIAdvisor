@@ -9,8 +9,11 @@ namespace SeaPowerAIAdvisor;
 // Constructed only from the current player's taskforce. All reads and writes run on the game thread.
 internal sealed class BattleSonobuoyUnit : IBattleSonobuoyUnit
 {
-    private readonly Helicopter unit;
-    internal BattleSonobuoyUnit(Helicopter unit) => this.unit = unit;
+    private readonly ObjectBase unit;
+    internal BattleSonobuoyUnit(ObjectBase unit) => this.unit = unit;
+    internal static bool Supports(ObjectBase unit) => unit.AmmunitionNameToAmmunitionDictionary.Values.Any(IsSonobuoy);
+    private static bool IsSonobuoy(SeaPower.Ammunition ammunition) =>
+        ammunition._ap._type == SeaPower.Ammunition.Type.Bomb && ammunition._ap._subType == SeaPower.Ammunition.Type.Sonobuoy;
     public int Id => unit.Id;
     public string Name => unit.Name.Value;
     public JObject Position => AdvisorInputBuilder.Position(new MapPosition(unit.Position.Value.Latitude, unit.Position.Value.Longitude));
@@ -20,10 +23,11 @@ internal sealed class BattleSonobuoyUnit : IBattleSonobuoyUnit
         Bomb.SonobuoyDeployState.AboveLayer => "above_layer",
         Bomb.SonobuoyDeployState.BelowLayer => "below_layer",
         Bomb.SonobuoyDeployState.Intermittent => "alternating",
-        _ => throw new InvalidOperationException("The helicopter sonobuoy depth setting is unsupported.")
+        _ => throw new InvalidOperationException("The unit sonobuoy depth setting is unsupported.")
     };
     public string? UnavailableReason => unit.IsDestroyed || unit.Disabled ? "target_unavailable"
-        : !unit._isInFlight ? "helicopter_not_airborne"
+        : (unit is Helicopter helicopter && !helicopter._isInFlight) ||
+            (unit is Aircraft aircraft && !aircraft._isInFlight) ? "unit_not_airborne"
         : !unit.AcceptsOrdersFromPlayer ? "target_not_controllable"
         : unit._userRoot == null ? "target_not_ready"
         : unit.FollowingFormation && !unit.IsFormationLeader ? "following_formation"
@@ -34,8 +38,8 @@ internal sealed class BattleSonobuoyUnit : IBattleSonobuoyUnit
         var result = new List<BattleSonobuoyAmmo>();
         foreach (var pair in unit.AmmunitionNameToAmmunitionDictionary)
         {
+            if (!IsSonobuoy(pair.Value)) continue;
             var ammo = pair.Value._ap;
-            if (ammo._type != SeaPower.Ammunition.Type.Bomb || ammo._subType != SeaPower.Ammunition.Type.Sonobuoy) continue;
             var remaining = unit.getAmmunitionAmountByName(pair.Key);
             var reserved = unit._userRoot == null ? 0 : unit._userRoot.TaskViewModels
                 .Where(v => v?.Task is AttackAtWaypoint attack && attack._ammunitionName == pair.Key)

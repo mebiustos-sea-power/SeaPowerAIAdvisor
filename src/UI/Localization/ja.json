@@ -444,8 +444,6 @@
   "operation.accept": "採用",
   "operation.back": "戻る",
   "operation.failure": "操作を完了できませんでした ({0})。完了: {1} / {2}件。",
-  "operation.sonobuoy_summary": "{0}にソノブイ投下予約を{1}件追加します。",
-  "operation.sonobuoy_append": "既存の予約は残します。深度は現在のゲーム設定を使用します。",
   "connection.situation_delivery": "戦況データの渡し方",
   "connection.situation_on_demand": "必要に応じて取得",
   "connection.situation_upfront": "最初にまとめて送信",
@@ -473,5 +471,18 @@
   "settings.error.templates_write_failed": "定型文を保存できません。",
   "settings.error.template_name_invalid": "名前を1～80文字で入力してください。",
   "settings.error.template_text_invalid": "送信可能な文字数の範囲で、空欄ではない文章を入力してください。",
-  "settings.error.template_selection_invalid": "定型文の登録状態が変わりました。設定画面を開き直してください。"
+  "settings.error.template_selection_invalid": "定型文の登録状態が変わりました。設定画面を開き直してください。",
+  "commands.category": "コマンド",
+  "commands.empty": "現在の画面に登録されているコマンドはありません。",
+  "commands.details": "詳細",
+  "commands.overview": "概要",
+  "commands.requirements": "利用条件",
+  "commands.approval_required": "実行前にユーザーの承認が必要です。",
+  "commands.approval_not_required": "実行前のユーザー承認は不要です。",
+  "commands.tools": "共通ツール定義",
+  "commands.tools_help": "コマンドの一覧・定義・候補を取得し、提案を提出するための共通ツールです。標準の相談エンジンが操作を許可した相談で使用する現在の定義を表示します。閲覧によってコマンドが実行されることはありません。",
+  "commands.about": "説明",
+  "commands.prompt": "AIへの指示",
+  "commands.definition": "定義JSON",
+  "commands.back": "一覧に戻る"
 }

@@ -9,6 +9,8 @@
     <FileVersion>0.16.0.0</FileVersion>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Operations\SonobuoyDrop\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.SonobuoyDrop.Localization.%(Filename).json" />
+
     <Reference Include="AnchorChain" HintPath="$(AnchorChainDir)\AnchorChain.dll" Private="false" ExternallyResolved="true" />
     <Reference Include="BepInEx" HintPath="$(SeaPowerDir)\BepInEx\core\BepInEx.dll" Private="false" ExternallyResolved="true" />
     <Reference Include="0Harmony" HintPath="$(SeaPowerDir)\BepInEx\core\0Harmony.dll" Private="false" ExternallyResolved="true" />

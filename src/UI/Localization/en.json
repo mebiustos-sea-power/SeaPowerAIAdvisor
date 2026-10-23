@@ -444,8 +444,6 @@
   "operation.accept": "Accept",
   "operation.back": "Back",
   "operation.failure": "Could not complete the operations ({0}). Completed: {1} / {2}.",
-  "operation.sonobuoy_summary": "Add {1} sonobuoy drop reservations for {0}.",
-  "operation.sonobuoy_append": "Existing reservations will be preserved. The current in-game depth setting will be used.",
   "connection.situation_delivery": "How to provide situation data",
   "connection.situation_on_demand": "Retrieve as needed",
   "connection.situation_upfront": "Send all at the start",
@@ -473,5 +471,18 @@
   "settings.error.templates_write_failed": "The text templates could not be saved.",
   "settings.error.template_name_invalid": "Enter a name of 1–80 characters.",
   "settings.error.template_text_invalid": "Enter a nonblank message within the message length limit.",
-  "settings.error.template_selection_invalid": "The text template library has changed. Reopen its settings."
+  "settings.error.template_selection_invalid": "The text template library has changed. Reopen its settings.",
+  "commands.category": "Commands",
+  "commands.empty": "No commands are registered for this screen.",
+  "commands.details": "Details",
+  "commands.overview": "Overview",
+  "commands.requirements": "Requirements",
+  "commands.approval_required": "User approval is required before execution.",
+  "commands.approval_not_required": "User approval is not required before execution.",
+  "commands.tools": "Shared tool definitions",
+  "commands.tools_help": "Shared tools discover commands, read their definitions and candidates, and submit proposals. These are the current definitions used by the built-in consultation engine when operations are allowed. Viewing them does not execute commands.",
+  "commands.about": "Description",
+  "commands.prompt": "AI instructions",
+  "commands.definition": "Definition JSON",
+  "commands.back": "Back to list"
 }

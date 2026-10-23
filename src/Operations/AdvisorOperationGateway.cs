@@ -184,6 +184,32 @@ internal sealed class AdvisorOperationGateway : IDisposable
         }
     }
 
+    internal static JObject ToolDefinition(AdvisorPrompts prompts)
+    {
+        var batch = AdvisorOperationPlanBatch.Schema(new JObject { ["type"] = "string", ["minLength"] = 1, ["maxLength"] = 200,
+            ["description"] = prompts.Text("battle.json", "operation_target_ref") }, prompts.Text("battle.json", "operation_request_id"));
+        return new JObject
+        {
+            ["name"] = ToolName, ["description"] = prompts.Text("battle.json", "operation_tool_description"),
+            ["parameters"] = new JObject
+            {
+                ["type"] = "object", ["additionalProperties"] = false, ["required"] = new JArray("action"),
+                ["properties"] = new JObject
+                {
+                    ["action"] = new JObject { ["type"] = "string", ["enum"] = new JArray("list", "describe", "candidates", "submit", "execute") },
+                    ["search"] = new JObject { ["type"] = "string", ["description"] = prompts.Text("battle.json", "operation_search") },
+                    ["offset"] = new JObject { ["type"] = "integer", ["minimum"] = 0 },
+                    ["limit"] = new JObject { ["type"] = "integer", ["minimum"] = 1, ["maximum"] = 20 },
+                    ["operation_id"] = new JObject { ["type"] = "string" },
+                    ["target_ref"] = new JObject { ["type"] = "string", ["description"] = prompts.Text("battle.json", "operation_target_ref") },
+                    ["request_id"] = batch["properties"]!["request_id"]!.DeepClone(),
+                    ["arguments"] = new JObject { ["type"] = "object" },
+                    ["plans"] = batch["properties"]!["plans"]!.DeepClone()
+                }
+            }
+        };
+    }
+
     private sealed class Session : IAdvisorOperationSession
     {
         private readonly AdvisorOperationGateway gateway;
@@ -198,28 +224,7 @@ internal sealed class AdvisorOperationGateway : IDisposable
         internal Session(AdvisorOperationGateway gateway, string owner, AdvisorPrompts prompts, JArray prior, AdvisorOperationReferences references)
         {
             this.gateway = gateway; this.owner = owner; this.references = references; history = (JArray)prior.DeepClone();
-            var batch = AdvisorOperationPlanBatch.Schema(new JObject { ["type"] = "string", ["minLength"] = 1, ["maxLength"] = 200,
-                ["description"] = prompts.Text("battle.json", "operation_target_ref") }, prompts.Text("battle.json", "operation_request_id"));
-            Tool = new JObject
-            {
-                ["name"] = ToolName, ["description"] = prompts.Text("battle.json", "operation_tool_description"),
-                ["parameters"] = new JObject
-                {
-                    ["type"] = "object", ["additionalProperties"] = false, ["required"] = new JArray("action"),
-                    ["properties"] = new JObject
-                    {
-                        ["action"] = new JObject { ["type"] = "string", ["enum"] = new JArray("list", "describe", "candidates", "submit", "execute") },
-                        ["search"] = new JObject { ["type"] = "string", ["description"] = prompts.Text("battle.json", "operation_search") },
-                        ["offset"] = new JObject { ["type"] = "integer", ["minimum"] = 0 },
-                        ["limit"] = new JObject { ["type"] = "integer", ["minimum"] = 1, ["maximum"] = 20 },
-                        ["operation_id"] = new JObject { ["type"] = "string" },
-                        ["target_ref"] = new JObject { ["type"] = "string", ["description"] = prompts.Text("battle.json", "operation_target_ref") },
-                        ["request_id"] = batch["properties"]!["request_id"]!.DeepClone(),
-                        ["arguments"] = new JObject { ["type"] = "object" },
-                        ["plans"] = batch["properties"]!["plans"]!.DeepClone()
-                    }
-                }
-            };
+            Tool = ToolDefinition(prompts);
         }
         public async Task<JObject> ExecuteAsync(JObject request, CancellationToken cancellation)
         {

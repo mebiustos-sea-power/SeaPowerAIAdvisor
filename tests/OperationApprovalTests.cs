@@ -266,6 +266,7 @@ internal static class OperationApprovalTests
     private sealed class Extension : IAdvisorOperation
     {
         public string Id { get; }
+        public AdvisorOperationText Documentation => OperationDocumentationTests.Example;
         public string Description => "Custom operation";
         public bool RequiresApproval { get; }
         private readonly List<string> log;

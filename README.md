@@ -87,6 +87,8 @@ The AI receives coordinates, **not terrain or bathymetric map data**. Its geogra
 
 ## Troubleshooting and feedback
 
+Open **Settings → Commands** to browse commands registered for the current screen. Details show their identifiers, requirements, approval policy, current AI instructions and definition JSON. Shared tool definitions are also available. Browsing works with WIP unit operations disabled and does not send an AI request or inspect live candidates.
+
 For provider failures, open **Settings → API connections → API errors**. The plain-text details can be selected and copied with **Ctrl+C**, including failures before a successful switch to the sub connection. This history remains when chat is cleared or the adviser is restarted, and is cleared when the enabled mod initializes on the next game run. Its file is `%TEMP%/SeaPowerAIAdvisor/provider-errors.log`.
 
 Full request/response JSON logging is a separate developer option, **off by default**. When enabled, it writes to `%USERPROFILE%/AppData/LocalLow/Triassic Games/Sea Power/SeaPowerAIAdvisor/logs/ai-communication.jsonl`. Declared API secrets are redacted, but logs can contain conversation and game information; review them before sharing.

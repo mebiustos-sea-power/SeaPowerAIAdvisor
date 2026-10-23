@@ -372,6 +372,7 @@ internal static class OperationPlanTests
     private sealed class Command : IAdvisorOperation, IAdvisorOperationPlans, IAdvisorOperationPreview
     {
         public string Id { get; }
+        public AdvisorOperationText Documentation => OperationDocumentationTests.Example;
         public string Description => "Example";
         public bool RequiresApproval => Approval;
         public AdvisorOperationPlanPolicy PlanPolicy { get; }

@@ -83,10 +83,10 @@ internal sealed class AdvisorOperationReview
         if (review == null) return;
         var service = Service(); var plan = review.Current;
         counter.Text = text().Format("operation.plan_counter", review.Index + 1, review.Proposal.Plans.Count);
-        details.Text = (plan.Title.Length == 0 ? "" : plan.Title + "\n" + plan.Summary + "\n\n") + service.DescribeProposal(review.Proposal, text().Language, plan.Id);
+        details.Text = (plan.Title.Length == 0 ? "" : plan.Title + "\n" + plan.Summary + "\n\n") + service.DescribeProposal(review.Proposal, text().RequestedLanguage, plan.Id);
         detailScroll.ScrollToVerticalOffset(0, false);
         UpdateTargets();
-        try { preview.Show(service, review.Proposal, text().Language, plan.Id); }
+        try { preview.Show(service, review.Proposal, text().RequestedLanguage, plan.Id); }
         catch { Close(); throw; }
     }
     private void UpdateTargets()

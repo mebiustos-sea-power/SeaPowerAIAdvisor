@@ -154,8 +154,8 @@ internal static class OperationTests
             var unit = new Unit(); var current = new List<IBattleSonobuoyUnit> { unit };
             var operations = new AdvisorOperations(() => true); operations.Register(new BattleSonobuoyOperation(() => current));
             _ = operations.Candidates(BattleSonobuoyOperation.OperationId);
-            unit.UnavailableReason = "helicopter_not_airborne";
-            Require((string?)operations.Execute(Request(operations, "landed"))["code"] == "helicopter_not_airborne", "Landed candidate was still registered");
+            unit.UnavailableReason = "unit_not_airborne";
+            Require((string?)operations.Execute(Request(operations, "landed"))["code"] == "unit_not_airborne", "Landed candidate was still registered");
             unit.UnavailableReason = "following_formation";
             Require((string?)operations.Execute(Request(operations, "formation"))["code"] == "following_formation", "Follower's control mode was silently changed");
             unit.UnavailableReason = null; unit.Available = 0;
@@ -244,6 +244,7 @@ internal static class OperationTests
         public bool RequiresApproval => false;
         public void Validate(IReadOnlyList<AdvisorOperationOrder> orders) { }
         public string DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => "Custom operation";
+        public AdvisorOperationText Documentation => OperationDocumentationTests.Example;
         public string Description => "Test failure";
         internal int Calls;
         public string Id => "extension.test";

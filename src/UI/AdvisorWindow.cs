@@ -153,7 +153,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
             {
                 conversation.UseInformationPolicy(options.Current.Information.Key);
                 RefreshConfigurationNotice(); ShowConversation(false);
-            }, ReturnToConversation, warn);
+            }, ReturnToConversation, warn, () => OperationService);
         operationReview = new AdvisorOperationReview(content, conversationPane, () => OperationService,
             () => text, guard, () => ShowConversation(false), map, navigation);
         Named<Button>(content, "Settings").Click += (_, _) => guard(settings.Open);

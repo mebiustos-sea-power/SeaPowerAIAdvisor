@@ -145,7 +145,7 @@ internal sealed class BattleIntegration
         operationGateway?.Dispose(); operationGateway = null; operations = null; reservations = null;
     }
 
-    private IReadOnlyList<IBattleSonobuoyUnit> OperationUnits() => OperationObjects().OfType<Helicopter>()
+    private IReadOnlyList<IBattleSonobuoyUnit> OperationUnits() => OperationObjects().Where(BattleSonobuoyUnit.Supports)
         .Select(unit => (IBattleSonobuoyUnit)new BattleSonobuoyUnit(unit)).ToArray();
 
     private IReadOnlyList<ObjectBase> OperationObjects()

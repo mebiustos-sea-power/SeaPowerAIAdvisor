@@ -89,6 +89,7 @@ internal static class OperationPreviewTests
     private class TextOperation : IAdvisorOperation
     {
         public string Id { get; }
+        public AdvisorOperationText Documentation => OperationDocumentationTests.Example;
         public string Description => "Example operation";
         public bool RequiresApproval => true;
         internal int Executions;

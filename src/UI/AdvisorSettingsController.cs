@@ -9,7 +9,7 @@ namespace SeaPowerAIAdvisor;
 // Navigation owns no global draft. Each page saves through its own persistence boundary.
 internal sealed class AdvisorSettingsController
 {
-    private enum Category { General, Profile, Templates, Api, Consultation, Information, Developer, Wip }
+    private enum Category { General, Profile, Templates, Api, Consultation, Information, Developer, Wip, Commands }
     private readonly FrameworkElement content, pane, home, page, chat, confirmation;
     private readonly FrameworkElement[] pages;
     private readonly Func<AdvisorText> text;
@@ -18,6 +18,7 @@ internal sealed class AdvisorSettingsController
     private readonly AdvisorApiSettingsView api;
     private readonly AdvisorProfileSettingsView profiles;
     private readonly AdvisorTemplateSettingsView templates;
+    private readonly AdvisorCommandSettingsView commands;
     private readonly AdvisorInformationView information;
     private readonly AdvisorLocalConnectionsView localConnections;
     private readonly AdvisorPromptSettingsView promptEditor;
@@ -41,7 +42,7 @@ internal sealed class AdvisorSettingsController
     internal AdvisorSettingsController(FrameworkElement content, Func<AdvisorText> text, AdvisorOptionsStore options,
         string profileDirectory, string settingsPath, AdvisorTextTemplateStore templateStore, Func<byte[]> defaultPortrait, Action<Action> guard, TypingScope typing,
         Action releaseInput, Func<bool> consultationBusy, Action<AdvisorProfile> profileSaved, Action changed,
-        Action back, Action<string> warn)
+        Action back, Action<string> warn, Func<AdvisorOperations?> operations)
     {
         this.content = content; this.text = text; this.options = options; this.guard = guard;
         this.releaseInput = releaseInput; this.consultationBusy = consultationBusy; this.changed = changed; this.back = back; this.warn = warn;
@@ -63,15 +64,16 @@ internal sealed class AdvisorSettingsController
         test = Named<Button>("TestConnection"); testStatus = Named<TextBlock>("ConnectionTestStatus"); testError = Named<TextBlock>("ConnectionTestError");
         promptEditor = new AdvisorPromptSettingsView(content, text, guard, typing, changed, warn);
         errorHistory = new AdvisorErrorHistoryView(content, text, guard, typing);
+        commands = new AdvisorCommandSettingsView(content, operations, text, typing, guard);
         apiStore = new AdvisorApiSettingsStore(settingsPath, () => text()["connection.configuration_name_pattern"]);
         api = new AdvisorApiSettingsView(content, apiStore, text, guard, typing, ApiChanged, Saved, () => Notice(text()["profile.ime"], true), ApiError, ConfirmDelete, ConfirmDuplicate);
         profiles = new AdvisorProfileSettingsView(content, profileDirectory, text, defaultPortrait, guard, typing,
             profile => { profileSaved(profile); Saved(); }, () => Notice(""), ProfileError, ConfirmDelete, warn);
         templates = new AdvisorTemplateSettingsView(content, templateStore, text, guard, typing,
             Saved, () => Notice(""), () => Notice(text()["profile.ime"], true), TemplateError, ConfirmDelete);
-        pages = new[] { "GeneralCategory", "ProfileCategory", "TemplatesCategory", "ApiCategory", "ConsultationCategory", "InformationCategory", "DeveloperCategory", "WipCategory" }
+        pages = new[] { "GeneralCategory", "ProfileCategory", "TemplatesCategory", "ApiCategory", "ConsultationCategory", "InformationCategory", "DeveloperCategory", "WipCategory", "CommandsCategory" }
             .Select(Named<FrameworkElement>).ToArray();
-        var buttons = new[] { "OpenGeneralCategory", "OpenProfileCategory", "OpenTemplatesCategory", "OpenApiCategory", "OpenConsultationCategory", "OpenInformationCategory", "OpenDeveloperCategory", "OpenWipCategory" };
+        var buttons = new[] { "OpenGeneralCategory", "OpenProfileCategory", "OpenTemplatesCategory", "OpenApiCategory", "OpenConsultationCategory", "OpenInformationCategory", "OpenDeveloperCategory", "OpenWipCategory", "OpenCommandsCategory" };
         for (var i = 0; i < buttons.Length; i++) { var category = (Category)i; Bind(buttons[i], () => OpenCategory(category)); }
         Bind("BackToSettings", BackToHome); Bind("BackToConversation", () => { Close(); back(); });
         Bind("SaveGeneral", () => Save(() => options.SaveGeneral((AdvisorTextSize)size.SelectedIndex, campaign.IsChecked == true, userName.Text ?? "", linkOwnUnits.IsChecked == true, linkContacts.IsChecked == true)));
@@ -102,7 +104,7 @@ internal sealed class AdvisorSettingsController
     }
     internal void Close()
     {
-        CancelTest(); HideConfirmation(); profiles.Close(); api.Close(); promptEditor.Close(); errorHistory.Close(); templates.Close(); current = null; available = false;
+        CancelTest(); HideConfirmation(); profiles.Close(); api.Close(); promptEditor.Close(); errorHistory.Close(); templates.Close(); commands.Close(); current = null; available = false;
         Notice(""); pane.Visibility = Visibility.Collapsed; chat.Visibility = Visibility.Visible;
     }
     private void OpenCategory(Category category)
@@ -110,7 +112,7 @@ internal sealed class AdvisorSettingsController
         releaseInput(); current = category; available = false; Notice(""); ClearTest();
         home.Visibility = Visibility.Collapsed; page.Visibility = Visibility.Visible;
         for (var i = 0; i < pages.Length; i++) { pages[i].Visibility = i == (int)category ? Visibility.Visible : Visibility.Collapsed; pages[i].IsEnabled = true; }
-        title.Text = text()[new[] { "general.tab", "profile.tab", "templates.category", "settings.api_category", "ai.consultation", "information.tab", "diagnostics.heading", "wip.category" }[(int)category]];
+        title.Text = text()[new[] { "general.tab", "profile.tab", "templates.category", "settings.api_category", "ai.consultation", "information.tab", "diagnostics.heading", "wip.category", "commands.category" }[(int)category]];
         try
         {
             if (category == Category.Profile) { Named<TabControl>("ProfileCategory").SelectedIndex = 0; profiles.Open(); profiles.Focus(); }
@@ -121,6 +123,7 @@ internal sealed class AdvisorSettingsController
                 Named<TabItem>("ApiUseTab").IsEnabled = Named<TabItem>("ApiEditTab").IsEnabled = true;
                 api.Open(); api.Focus();
             }
+            else if (category == Category.Commands) { commands.Open(); commands.Focus(); }
             else if (category == Category.Developer)
             {
                 Named<TabControl>("DeveloperCategory").SelectedIndex = 0;
@@ -173,7 +176,7 @@ internal sealed class AdvisorSettingsController
     });
     private void BackToHome()
     {
-        void Go() { CancelTest(); profiles.Close(); api.Close(); promptEditor.Close(); errorHistory.Close(); templates.Close(); current = null; available = false; releaseInput(); page.Visibility = Visibility.Collapsed; home.Visibility = Visibility.Visible; Named<Button>("OpenGeneralCategory").Focus(); }
+        void Go() { CancelTest(); profiles.Close(); api.Close(); promptEditor.Close(); errorHistory.Close(); templates.Close(); commands.Close(); current = null; available = false; releaseInput(); page.Visibility = Visibility.Collapsed; home.Visibility = Visibility.Visible; Named<Button>("OpenGeneralCategory").Focus(); }
         if (HasChanges) Confirm(text()["settings.discard_question"], text()["settings.discard_action"], Go, "settings.continue_editing"); else Go();
     }
     private void ConfirmDuplicate(Action action) => Confirm(text()["connection.duplicate_discard_question"], text()["settings.duplicate"], action, "settings.continue_editing");

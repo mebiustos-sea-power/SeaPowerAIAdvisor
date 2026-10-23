@@ -11,12 +11,9 @@ internal static class AdvisorOperationTools
 {
     internal static IEnumerable<AdvisorToolBinding> Create(IAdvisorOperationSession session, AdvisorPrompts prompts)
     {
-        foreach (var (name, action, description) in new[] {
-            ("list_operations", "list", "operation_list_description"),
-            ("describe_operation", "describe", "operation_describe_description"),
-            ("get_operation_candidates", "candidates", "operation_candidates_description") })
+        foreach (var (name, action, description) in reads)
         {
-            var definition = Definition(session, name, action, prompts.Text("battle.json", description));
+            var definition = Definition(session.Tool, name, action, prompts.Text("battle.json", description));
             yield return new AdvisorToolBinding(definition, args =>
             {
                 if (args["action"] != null || args["source"] != null) return null;
@@ -24,7 +21,7 @@ internal static class AdvisorOperationTools
                 return new JArray(item);
             });
         }
-        yield return new AdvisorToolBinding(Definition(session, "propose_operation_plans", "submit",
+        yield return new AdvisorToolBinding(Definition(session.Tool, "propose_operation_plans", "submit",
             prompts.Text("battle.json", "operation_execution_description")), AdvisorOperationGateway.ToolName, (args, cancellation) =>
         {
             if (args["action"] != null || args["source"] != null)
@@ -33,9 +30,20 @@ internal static class AdvisorOperationTools
             return AdvisorOperationGateway.ProposeAsync(session, request, cancellation);
         });
     }
-    private static JObject Definition(IAdvisorOperationSession session, string name, string action, string description)
+    private static readonly (string Name, string Action, string Description)[] reads = {
+            ("list_operations", "list", "operation_list_description"),
+            ("describe_operation", "describe", "operation_describe_description"),
+            ("get_operation_candidates", "candidates", "operation_candidates_description") };
+
+    internal static JArray Definitions(AdvisorPrompts prompts)
     {
-        var schema = AdvisorOperationGateway.ActionSchema(session.Tool, action);
+        var tool = AdvisorOperationGateway.ToolDefinition(prompts);
+        return new JArray(reads.Select(item => Definition(tool, item.Name, item.Action, prompts.Text("battle.json", item.Description)))
+            .Concat(new[] { Definition(tool, "propose_operation_plans", "submit", prompts.Text("battle.json", "operation_execution_description")) }));
+    }
+    private static JObject Definition(JObject tool, string name, string action, string description)
+    {
+        var schema = AdvisorOperationGateway.ActionSchema(tool, action);
         ((JObject)schema["properties"]!).Remove("action");
         var required = (JArray)schema["required"]!;
         required.Remove(required.Single(t => (string?)t == "action"));

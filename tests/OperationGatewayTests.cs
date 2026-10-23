@@ -140,6 +140,7 @@ internal static class OperationGatewayTests
         public void Validate(IReadOnlyList<AdvisorOperationOrder> orders) { }
         public string DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => "Custom operation";
         public string Id { get; }
+        public AdvisorOperationText Documentation => OperationDocumentationTests.Example;
         public string Description => "Custom extension action";
         internal int Calls, Definitions, Thread;
         internal bool Fail;

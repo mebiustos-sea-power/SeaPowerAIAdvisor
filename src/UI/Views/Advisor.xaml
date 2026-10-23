@@ -133,15 +133,17 @@
           <RowDefinition Height="Auto" />
           <RowDefinition Height="Auto" />
           <RowDefinition Height="Auto" />
+          <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <Button x:Name="OpenGeneralCategory" Grid.Row="0" Grid.Column="0" Content="{DynamicResource Advisor.general.tab}" Height="64" Margin="4" FontSize="15" />
         <Button x:Name="OpenProfileCategory" Grid.Row="0" Grid.Column="1" Content="{DynamicResource Advisor.profile.tab}" Height="64" Margin="4" FontSize="15" />
         <Button x:Name="OpenTemplatesCategory" Grid.Row="1" Grid.Column="0" Content="{DynamicResource Advisor.templates.category}" Height="64" Margin="4" FontSize="15" />
         <Button x:Name="OpenApiCategory" Grid.Row="1" Grid.Column="1" Content="{DynamicResource Advisor.settings.api_category}" Height="64" Margin="4" FontSize="15" />
         <Button x:Name="OpenConsultationCategory" Grid.Row="2" Grid.Column="0" Content="{DynamicResource Advisor.ai.consultation}" Height="64" Margin="4" FontSize="15" />
-        <Button x:Name="OpenInformationCategory" Grid.Row="2" Grid.Column="1" Content="{DynamicResource Advisor.information.tab}" Height="64" Margin="4" FontSize="15" />
-        <Button x:Name="OpenDeveloperCategory" Grid.Row="3" Grid.Column="0" Content="{DynamicResource Advisor.diagnostics.heading}" Height="64" Margin="4" FontSize="15" />
-        <Button x:Name="OpenWipCategory" Grid.Row="3" Grid.Column="1" Content="{DynamicResource Advisor.wip.category}" Height="64" Margin="4" FontSize="15" />
+        <Button x:Name="OpenCommandsCategory" Grid.Row="2" Grid.Column="1" Content="{DynamicResource Advisor.commands.category}" Height="64" Margin="4" FontSize="15" />
+        <Button x:Name="OpenInformationCategory" Grid.Row="3" Grid.Column="0" Content="{DynamicResource Advisor.information.tab}" Height="64" Margin="4" FontSize="15" />
+        <Button x:Name="OpenDeveloperCategory" Grid.Row="3" Grid.Column="1" Content="{DynamicResource Advisor.diagnostics.heading}" Height="64" Margin="4" FontSize="15" />
+        <Button x:Name="OpenWipCategory" Grid.Row="4" Grid.Column="0" Content="{DynamicResource Advisor.wip.category}" Height="64" Margin="4" FontSize="15" />
       </Grid>
       <Button x:Name="BackToConversation" Grid.Row="2" Content="{DynamicResource Advisor.settings.back_chat}" Height="30" Padding="12,0" HorizontalAlignment="Right" Margin="0,12,0,0" />
     </Grid>
@@ -380,6 +382,43 @@
               </WrapPanel>
             </StackPanel>
           </ScrollViewer>
+        </Grid>
+        <Grid x:Name="CommandsCategory" Visibility="Collapsed">
+          <Grid x:Name="CommandList">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <Button x:Name="CommandTools" Content="{DynamicResource Advisor.commands.tools}" Height="30" Padding="12,0" HorizontalAlignment="Right" Margin="0,0,0,10" />
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+              <StackPanel x:Name="CommandEntries" Margin="0,0,8,0" />
+            </ScrollViewer>
+          </Grid>
+          <Grid x:Name="CommandDetails" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <StackPanel Margin="0,0,0,12">
+              <TextBlock x:Name="CommandTitle" FontSize="16" FontWeight="Bold" TextWrapping="Wrap" />
+              <TextBlock x:Name="CommandId" FontSize="11" TextWrapping="Wrap" Opacity="0.75" Margin="0,4,0,0" />
+            </StackPanel>
+            <TabControl x:Name="CommandDetailTabs" Grid.Row="1" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+              <TabItem Header="{DynamicResource Advisor.commands.about}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,8,8,0">
+                  <TextBlock x:Name="CommandHelp" FontSize="13" TextWrapping="Wrap" />
+                </ScrollViewer>
+              </TabItem>
+              <TabItem Header="{DynamicResource Advisor.commands.prompt}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+                <TextBox x:Name="CommandPrompt" Margin="0,8,0,0" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" FontSize="13" Padding="7" />
+              </TabItem>
+              <TabItem Header="{DynamicResource Advisor.commands.definition}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+                <TextBox x:Name="CommandDefinition" Margin="0,8,0,0" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" FontSize="13" Padding="7" />
+              </TabItem>
+            </TabControl>
+            <Button x:Name="BackToCommands" Grid.Row="2" Content="{DynamicResource Advisor.commands.back}" Height="30" Padding="12,0" HorizontalAlignment="Right" Margin="0,12,0,0" />
+          </Grid>
         </Grid>
         <Grid x:Name="InformationCategory" Visibility="Collapsed">
           <Grid.RowDefinitions>

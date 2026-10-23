@@ -194,6 +194,7 @@ internal static class OperationAmmunitionTests
     private sealed class CustomOperation : IAdvisorOperation
     {
         public string Id => "custom.keep_arguments";
+        public AdvisorOperationText Documentation => OperationDocumentationTests.Example;
         public string Description => "Unrelated arguments";
         public bool RequiresApproval => false;
         internal string? Value;

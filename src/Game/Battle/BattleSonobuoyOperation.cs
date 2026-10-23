@@ -46,6 +46,9 @@ internal sealed class BattleSonobuoyOperation : IAdvisorOperation, IAdvisorOpera
     public AdvisorOperationPlanPolicy PlanPolicy { get; } = new(2, 2, AdvisorPlanSelection.Single);
     public bool RequiresApproval => true;
     public string Id => OperationId;
+    private static readonly Lazy<AdvisorOperationText> documentation = new(() => AdvisorOperationText.FromResources(
+        typeof(BattleSonobuoyOperation).Assembly, "SeaPowerAIAdvisor.Commands.SonobuoyDrop.Localization.", "en", "ja"));
+    public AdvisorOperationText Documentation => documentation.Value;
     public string Description => AdvisorPrompts.Current.Text("battle.json", "operation_sonobuoy_drop");
     public JObject Definition() => new()
     {
@@ -108,12 +111,12 @@ internal sealed class BattleSonobuoyOperation : IAdvisorOperation, IAdvisorOpera
     }
     public string DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language)
     {
-        var text = AdvisorText.Load(language);
+        var text = Documentation.For(language);
         var current = units();
         return string.Join("\n\n", orders.GroupBy(o => o.Target).Select(group =>
         {
             var unit = current.FirstOrDefault(u => "unit:" + u.Id.ToString(CultureInfo.InvariantCulture) == group.Key);
-            var summary = text.Format("operation.sonobuoy_summary", unit?.Name ?? group.Key, group.Count()) + "\n" + text["operation.sonobuoy_append"];
+            var summary = text.Format("proposal_summary", unit?.Name ?? group.Key, group.Count()) + "\n" + text["proposal_append"];
             return summary + "\n\n" + string.Join("\n", group.Select((order, i) =>
             {
                 var args = order.Arguments;
@@ -141,7 +144,7 @@ internal sealed class BattleSonobuoyOperation : IAdvisorOperation, IAdvisorOpera
             var existing = unit?.ReservationRoute;
             if (existing != null) route.Add(existing.EndPosition ?? existing.CurrentPosition);
             route.AddRange(drops);
-            // Draw beneath the numbered markers; preserve the proposed order separately for each helicopter.
+            // Draw beneath the numbered markers; preserve the proposed order separately for each unit.
             if (route.Count > 1) drawings.Add(AdvisorMapDrawing.Line(route));
             for (var i = 0; i < drops.Length; i++)
                 drawings.Add(AdvisorMapDrawing.Point(drops[i], (unit?.Name ?? group.Key) + " · " + (i + 1).ToString(CultureInfo.InvariantCulture)));

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
 
@@ -16,11 +17,12 @@ internal sealed class AdvisorText
     private readonly IReadOnlyDictionary<string, string> english;
     private readonly IReadOnlyDictionary<string, string> selected;
     internal string Language { get; }
+    internal string RequestedLanguage { get; }
     internal IEnumerable<KeyValuePair<string, string>> Entries =>
         english.Keys.Select(k => new KeyValuePair<string, string>(k, this[k]));
 
-    private AdvisorText(string language, IReadOnlyDictionary<string, string> english, IReadOnlyDictionary<string, string> selected)
-    { Language = language; this.english = english; this.selected = selected; }
+    private AdvisorText(string language, string requestedLanguage, IReadOnlyDictionary<string, string> english, IReadOnlyDictionary<string, string> selected)
+    { RequestedLanguage = requestedLanguage; Language = language; this.english = english; this.selected = selected; }
 
     internal string this[string key] => english.ContainsKey(key)
         ? selected.TryGetValue(key, out var value) ? value : english[key]
@@ -45,7 +47,7 @@ internal sealed class AdvisorText
             resolved = candidate;
             break;
         }
-        return new AdvisorText(resolved, english, selected);
+        return new AdvisorText(resolved, code, english, selected);
     }
 
     private static IReadOnlyDictionary<string, string> Parse(string json, string language)
@@ -71,19 +73,24 @@ internal sealed class AdvisorText
 
     private static IReadOnlyDictionary<string, string> ReadBundled()
     {
-        var assembly = typeof(AdvisorText).Assembly;
-        var files = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var name in assembly.GetManifestResourceNames().Where(n => n.StartsWith(Prefix, StringComparison.Ordinal) && n.EndsWith(".json", StringComparison.Ordinal)))
-        {
-            using var stream = assembly.GetManifestResourceStream(name)
-                ?? throw new FileNotFoundException("The bundled advisor translation is missing: " + name);
-            using var reader = new StreamReader(stream);
-            files.Add(name.Substring(Prefix.Length, name.Length - Prefix.Length - 5), reader.ReadToEnd());
-        }
-        foreach (var required in new[] { "en", "ja" })
-            if (!files.ContainsKey(required)) throw new FileNotFoundException("The bundled advisor translation is missing: " + required);
+        var files = ReadResources(typeof(AdvisorText).Assembly, Prefix, "en", "ja");
         // Validate every bundled translation, even if it is not currently selected.
         foreach (var language in files.Keys) FromJson(language, files);
+        return files;
+    }
+
+    internal static IReadOnlyDictionary<string, string> ReadResources(Assembly assembly, string prefix, params string[] requiredLanguages)
+    {
+        var files = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var name in assembly.GetManifestResourceNames().Where(n => n.StartsWith(prefix, StringComparison.Ordinal) && n.EndsWith(".json", StringComparison.Ordinal)))
+        {
+            using var stream = assembly.GetManifestResourceStream(name)
+                ?? throw new FileNotFoundException("The bundled translation is missing: " + name);
+            using var reader = new StreamReader(stream, System.Text.Encoding.UTF8);
+            files.Add(name.Substring(prefix.Length, name.Length - prefix.Length - 5), reader.ReadToEnd());
+        }
+        foreach (var required in requiredLanguages)
+            if (!files.ContainsKey(required)) throw new FileNotFoundException("The bundled translation is missing: " + prefix + required);
         return files;
     }
 }

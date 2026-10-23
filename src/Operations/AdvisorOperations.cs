@@ -10,9 +10,11 @@ internal interface IAdvisorOperation
 {
     string Id { get; }
     string Description { get; }
+    AdvisorOperationText Documentation { get; }
     bool RequiresApproval { get; }
     void Validate(IReadOnlyList<AdvisorOperationOrder> orders);
     string DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language);
+    // Metadata is read without querying live candidates or changing game state.
     JObject Definition();
     JArray Candidates();
     JObject Execute(string target, JObject arguments);
@@ -58,7 +60,15 @@ internal sealed partial class AdvisorOperations
         if (operation == null) throw new ArgumentNullException(nameof(operation));
         if (!Identifier(operation.Id) || operations.ContainsKey(operation.Id))
             throw new InvalidOperationException("Invalid or duplicate operation ID: " + operation.Id);
+        if (operation.Documentation == null) throw new InvalidOperationException("Command text is missing: " + operation.Id);
         operations.Add(operation.Id, operation);
+    }
+    // Reading documentation does not enable commands or create an execution session.
+    internal IReadOnlyList<(string Id, AdvisorText Text, JObject Definition)> Inspect(string language)
+    {
+        CheckThread();
+        if (retired) throw new AdvisorOperationException(409, "operation_scope_changed");
+        return operations.Values.Select(operation => (operation.Id, operation.Documentation.For(language), Definition(operation))).ToArray();
     }
     internal JObject Catalog()
     {
