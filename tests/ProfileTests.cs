@@ -367,7 +367,7 @@ internal static class ProfileTests
             XElement Named(string name) => root.Descendants().Single(e => (string?)e.Attribute(x + "Name") == name);
             var settings = Named("SettingsPane"); var home = Named("SettingsHome"); var conversation = Named("ConversationPane");
             Require(settings.Parent == root && conversation.Parent == root && (string?)settings.Attribute("Visibility") == "Collapsed", "Settings do not replace the whole conversation");
-            foreach (var button in new[] { "OpenGeneralCategory", "OpenProfileCategory", "OpenTemplatesCategory", "OpenApiCategory", "OpenConsultationCategory", "OpenCommandsCategory", "OpenInformationCategory", "OpenDeveloperCategory" })
+            foreach (var button in new[] { "OpenGeneralCategory", "OpenProfileCategory", "OpenTemplatesCategory", "OpenApiCategory", "OpenConsultationCategory", "OpenCommandsCategory", "OpenInformationCategory", "OpenDeveloperCategory", "OpenWipCategory" })
                 Require(Named(button).Ancestors().Contains(home), "A category is inaccessible from the settings home");
             foreach (var control in new[] { "Portrait", "Question", "Transcript", "Send", "Status" })
                 Require(Named(control).Ancestors().Contains(conversation), "Conversation controls leak into settings");
@@ -380,6 +380,9 @@ internal static class ProfileTests
                 Named("CommandEntries").Ancestors().Contains(Named("CommandList")) &&
                 new[] { "CommandPrompt", "CommandDefinition" }.All(id => Named(id).Ancestors().Contains(Named("CommandDetails")) &&
                     (string?)Named(id).Attribute("IsReadOnly") == "True"), "Command browsing overlaps the list or permits editing AI definitions");
+            Require(new[] { "EnableUnitOperations", "SaveCommands" }.All(id => Named(id).Ancestors().Contains(Named("CommandList"))) &&
+                !Named("WipCategory").Descendants().Any(e => e.Name.LocalName is "CheckBox" or "Button" or "TextBox"),
+                "Command permission is unavailable on its page or still editable under WIP");
             var apiList = Named("ApiConnectionList"); var apiEditor = Named("ApiEditor");
             Require(apiList.Parent == apiEditor.Parent && (string?)apiEditor.Attribute("Visibility") == "Collapsed" &&
                 Named("ApiConnectionCards").Ancestors().Contains(apiList) && !Named("ApiConnectionCards").Ancestors().Contains(apiEditor) &&

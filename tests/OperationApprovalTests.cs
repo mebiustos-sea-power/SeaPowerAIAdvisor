@@ -167,7 +167,7 @@ internal static class OperationApprovalTests
             Require(service.FinishProposal("automatic", true)!.State == AdvisorProposalState.Registered && log.Count == 4,
                 "A proposal without approval-required operations demanded a user confirmation");
         });
-        check("Approval revalidates combined inventory, ownership, disclosure and WIP before any native write", () =>
+        check("Approval revalidates combined inventory, ownership, disclosure and command permission before any native write", () =>
         {
             foreach (var change in new[] { "inventory", "target", "permission", "information" })
             {

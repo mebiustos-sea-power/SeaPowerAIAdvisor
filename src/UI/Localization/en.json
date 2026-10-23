@@ -1,7 +1,7 @@
 {
   "wip.category": "WIP (experimental)",
-  "wip.unit_operations": "Enable unit order scheduling",
-  "wip.unit_operations_note": "Currently supports scheduling sonobuoy drops by airborne helicopters.",
+  "wip.empty": "There are currently no experimental features.",
+  "commands.enabled": "Enable commands",
   "failure.restart": "Restart advisor",
   "developer.throw_exception": "Throw test exception",
   "developer.throw_exception_note": "Clears the conversation and discards unsaved edits.",

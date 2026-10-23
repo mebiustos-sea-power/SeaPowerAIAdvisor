@@ -2,7 +2,7 @@
 
 **This is a prototype with limited real-play testing. Advice may be inaccurate, incomplete or unhelpful.**
 
-An in-game operations adviser for **Sea Power: Naval Combat in the Missile Age**. Ask what to do next, discuss tactical risks, or request a more detailed assessment while playing. The adviser uses player-known game information and does not issue game commands or offer unsolicited advice.
+An in-game operations adviser for **Sea Power: Naval Combat in the Missile Age**. Ask what to do next, discuss tactical risks, or request a more detailed assessment while playing. The adviser uses player-known game information and can propose supported game commands for you to review and approve. It does not offer unsolicited advice.
 
 [Download releases](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/releases) · [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3821064016) · [Report an issue](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/issues)
 
@@ -87,7 +87,7 @@ The AI receives coordinates, **not terrain or bathymetric map data**. Its geogra
 
 ## Troubleshooting and feedback
 
-Open **Settings → Commands** to browse commands registered for the current screen. Details show their identifiers, requirements, approval policy, current AI instructions and definition JSON. Shared tool definitions are also available. Browsing works with WIP unit operations disabled and does not send an AI request or inspect live candidates.
+Open **Settings → Commands** to browse commands registered for the current screen. Details show their identifiers, requirements, approval policy, current AI instructions and definition JSON. Shared tool definitions are also available. Enable commands on this page to let the adviser propose supported operations. Commands are on by default, and the built-in sonobuoy command requires your approval before registration. Browsing works with commands disabled and does not send an AI request or inspect live candidates.
 
 For provider failures, open **Settings → API connections → API errors**. The plain-text details can be selected and copied with **Ctrl+C**, including failures before a successful switch to the sub connection. This history remains when chat is cleared or the adviser is restarted, and is cleared when the enabled mod initializes on the next game run. Its file is `%TEMP%/SeaPowerAIAdvisor/provider-errors.log`.
 

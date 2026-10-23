@@ -50,7 +50,7 @@ internal static class ReservationTests
                 Require(Send(api, "POST", "/v1/units/42/reservations/clear", invalid).Status == 400, "Malformed reset was accepted");
             Require(Send(api, "GET", "/v1/units/-1/reservations").Status == 400 && Send(api, "GET", "/v1/units/999/reservations").Status == 409, "Invalid or missing unit was accepted");
             var queued = api.Enqueue("POST", "/v1/units/42/reservations/clear", Scope(ops)); enabled = false; api.Pump();
-            Require(queued.GetAwaiter().GetResult().Status == 403 && unit.Clears == 1, "Queued reset bypassed current WIP permission");
+            Require(queued.GetAwaiter().GetResult().Status == 403 && unit.Clears == 1, "Queued reset bypassed current command permission");
             enabled = true;
             var old = api.Enqueue("POST", "/v1/units/42/reservations/clear", Scope(ops));
             var fresh = new AdvisorOperations(() => true); api.Attach(new object(), "tactical_battle", () => target, fresh, Service(fresh, unit)); api.Pump();

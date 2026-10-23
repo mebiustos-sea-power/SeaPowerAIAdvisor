@@ -40,7 +40,7 @@ Each command has its own `--help`:
 | `consult` | Submit exactly one consultation and normally wait for its result. |
 | `result ID [--wait]` | Fetch or continue waiting for an existing consultation; never submit it again. |
 | `cancel` | Explicitly cancel active consultation work. |
-| `operations list` | Read the WIP operation catalog and current battle scope. |
+| `operations list` | Read the operation catalog and current battle scope. |
 | `operations candidates OPERATION` | Read current own-unit candidates and available ammunition. |
 | `operations execute --request-file FILE` | Submit one explicit reservation request without AI; preserves the supplied scope and request ID. |
 | `reservations list --unit-id ID` | Inspect this own unit’s current native reservations in queue order. |
@@ -48,9 +48,9 @@ Each command has its own `--help`:
 
 All commands except `consult` accept `--output FILE` to save the response as UTF-8 JSON. `prompts get --id` saves raw UTF-8 text, preserving leading/trailing newlines. `consult --output DIRECTORY` creates a **new** result directory; an existing directory is rejected before any HTTP operation. Without `--quiet`, responses also go to stdout. Errors go to stderr and return nonzero. An incomplete/failed/cancelled consultation also returns nonzero while preserving its result JSON.
 
-## WIP operation trial
+## Operation trial
 
-Operation commands require **Settings → WIP (experimental) → Enable unit order scheduling**, as well as the local API switch. They need no AI connection and make no provider requests. See [native-order trial](../docs/developer-local-api.md#wip-native-order-trial-no-ai) for the request format, limitations and confirmation procedure.
+Operation commands require **Settings → Commands → Enable commands**, as well as the local API switch. They need no AI connection and make no provider requests. See [native-order trial](../docs/developer-local-api.md#native-order-trial-no-ai) for the request format, limitations and confirmation procedure.
 
 ```sh
 python3 tools/advisor_dev.py operations list
@@ -60,7 +60,7 @@ python3 tools/advisor_dev.py operations execute --request-file artifacts/order.j
 
 The request file must explicitly contain its current `scope_id`, `request_id`, operation, target and arguments. Sonobuoy candidates and registration results report the player-controlled `depth` (`above_layer`, `below_layer`, or `alternating`). The first release does not advertise depth control and ignores any supplied `arguments.depth`, preserving a player's setting change while the AI is responding. The tool does not generate new identities, rebind stale targets, or retry a POST. A `registered` result only acknowledges a native reservation; it does not wait for the unit or sonobuoy.
 
-For repeated paused-game trials, `reservations list` returns the numeric unit ID, current battle scope, order sequence and sonobuoy coordinates/ammunition/count. Use that scope explicitly with `reservations clear` to reset the unit before the next consultation. Clearing uses the game's native removal method and verifies the queue is empty; it does not undo consumed ammunition or deployment already underway. Both commands require WIP order scheduling. Clear is rejected while a consultation or settings editing is active, never retries automatically and does not infer a different battle scope. These are developer commands, not AI-advertised operations.
+For repeated paused-game trials, `reservations list` returns the numeric unit ID, current battle scope, order sequence and sonobuoy coordinates/ammunition/count. Use that scope explicitly with `reservations clear` to reset the unit before the next consultation. Clearing uses the game's native removal method and verifies the queue is empty; it does not undo consumed ammunition or deployment already underway. Both commands require commands to be enabled. Clear is rejected while a consultation or settings editing is active, never retries automatically and does not infer a different battle scope. These are developer commands, not AI-advertised operations.
 
 ```sh
 python3 tools/advisor_dev.py reservations list --unit-id 1029 --output /tmp/queue.json
@@ -78,7 +78,7 @@ Choose exactly one of `--question TEXT`, `--question-file FILE`, `--shortcut ID`
 
 Omitting `--connection-id` uses the saved **developer default**, not the normal main assignment. Fallback defaults to **false**; use `--allow-fallback` to permit it explicitly or `--no-fallback` to override a request file. History is preserved unless `--clear-history` is supplied. Each `consult` starts one consultation; its internal provider requests remain controlled by the MOD.
 
-Use `--no-operations` to disable operation lookup/proposal tools for one consultation, or `--allow-operations` to permit them. Permission still requires WIP scheduling and retains approval; it never forces execution. With neither flag, the request file's `allow_operations` boolean applies if present, otherwise built-in advice/list shortcuts default to OFF and typed questions default to permission. An explicit flag overrides the file. Invalid file values are rejected before history clearing or API access. The accepted/result JSON records the resolved policy.
+Use `--no-operations` to disable operation lookup/proposal tools for one consultation, or `--allow-operations` to permit them. Permission still requires commands to be enabled and retains approval; it never forces execution. With neither flag, the request file's `allow_operations` boolean applies if present, otherwise built-in advice/list shortcuts default to OFF and typed questions default to permission. An explicit flag overrides the file. Invalid file values are rejected before history clearing or API access. The accepted/result JSON records the resolved policy.
 
 ```sh
 python3 tools/advisor_dev.py consult --shortcut key_risks --no-operations --no-fallback --output artifacts/prompt-tests/advice-only
@@ -115,7 +115,7 @@ The same option can be supplied as `"plain_advisor": true` in a request file. `-
 
 Explicit connection/fallback/plain-adviser flags override their fields in the file. The tool uses registered game connections; it does not read API-key settings or authenticate directly with providers.
 
-Result directories contain `request.json`, `status-before.json`, `accepted.json`, `latest.json`, changed `progress.jsonl` entries, the complete `result.json` (including separate operation request/receipt records when WIP is used), and `answer.md` when answered. Explicit history clearing also saves `clear-response.json`; operational failures save `error.txt`. The final JSON retains the API's captured effective input, retrievals, progress and reported usage without rewriting their content.
+Result directories contain `request.json`, `status-before.json`, `accepted.json`, `latest.json`, changed `progress.jsonl` entries, the complete `result.json` (including separate operation request/receipt records when commands are used), and `answer.md` when answered. Explicit history clearing also saves `clear-response.json`; operational failures save `error.txt`. The final JSON retains the API's captured effective input, retrievals, progress and reported usage without rewriting their content.
 
 By default, polling runs every 0.8 seconds with no overall wait deadline. Configure `--poll-interval SECONDS`, optional `--wait-timeout SECONDS`, and `--progress` to print changed progress to stderr. `--answer-only` prints only the final Markdown reply.
 

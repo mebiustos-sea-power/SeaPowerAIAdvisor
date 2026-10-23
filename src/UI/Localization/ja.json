@@ -1,7 +1,7 @@
 {
   "wip.category": "WIP（試験的機能）",
-  "wip.unit_operations": "ユニット操作の予約を有効にする",
-  "wip.unit_operations_note": "現在は、発艦済みヘリのソノブイ投下予約にのみ対応しています。",
+  "wip.empty": "現在、試験的な機能はありません。",
+  "commands.enabled": "コマンドを有効にする",
   "failure.restart": "アドバイザーを再起動",
   "developer.throw_exception": "例外を発生させる",
   "developer.throw_exception_note": "会話履歴と編集中の設定は破棄されます。",

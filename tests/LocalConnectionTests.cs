@@ -164,7 +164,7 @@ internal static partial class LocalApiTests
                 var policy = new AdvisorLocalConnections(new[] { "local" }, "local", true);
                 store.SaveDeveloper(true, () => { }, policy);
                 store.EnsureUserName("Commander"); store.SaveGeneral(AdvisorTextSize.Small, false, "Commander");
-                store.SaveConsultation(4, 2, ""); store.SaveInformation(AdvisorInformation.Default); store.SaveWip(true);
+                store.SaveConsultation(4, 2, ""); store.SaveInformation(AdvisorInformation.Default); store.SaveUnitOperations(true);
                 var reopened = new AdvisorOptionsStore(store.Path);
                 Require(reopened.Current.LocalConnections.AllowModelOverride && reopened.Current.LocalConnections.DefaultId == "local" && reopened.Current.LocalConnections.AllowedIds.SequenceEqual(new[] { "local" }),
                     "Another category or restart lost permitted/default connection choices");

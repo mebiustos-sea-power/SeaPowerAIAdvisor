@@ -5,7 +5,7 @@ using Newtonsoft.Json.Linq;
 
 namespace SeaPowerAIAdvisor;
 
-// Internal trial contract. Game-specific implementations own applicability, validation and order creation.
+// Internal command contract. Game-specific implementations own applicability, validation and order creation.
 internal interface IAdvisorOperation
 {
     string Id { get; }

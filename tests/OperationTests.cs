@@ -11,32 +11,44 @@ internal static class OperationTests
 {
     internal static void Run(Action<string, Action> check)
     {
-        check("WIP unit orders default off, round-trip, and survive saves from every other category", () =>
+        check("Command permission defaults on, preserves legacy choices, and survives saves from every other category", () =>
         {
             var directory = Path.Combine(Path.GetTempPath(), "advisor-operation-options-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(directory);
             try
             {
                 var store = new AdvisorOptionsStore(Path.Combine(directory, "options.json"));
-                Require(!store.Current.UnitOperationsEnabled && !AdvisorOptions.Parse("{}").UnitOperationsEnabled && !File.Exists(store.Path), "Orders started enabled or reading persisted a default");
-                store.SaveWip(true); store.EnsureUserName("Commander");
+                Require(store.Current.UnitOperationsEnabled && AdvisorOptions.Parse("{}").UnitOperationsEnabled && !File.Exists(store.Path), "New or unspecified command permission was disabled or reading persisted a default");
+                foreach (var enabled in new[] { false, true })
+                {
+                    var path = Path.Combine(directory, "legacy-" + enabled + ".json");
+                    var original = new JObject { ["wip_unit_operations_enabled"] = enabled }.ToString();
+                    File.WriteAllText(path, original);
+                    var legacy = new AdvisorOptionsStore(path);
+                    Require(legacy.Current.UnitOperationsEnabled == enabled && File.ReadAllText(path) == original,
+                        "Loading a legacy command permission changed its value or rewrote the settings");
+                    legacy.SaveUnitOperations(enabled);
+                    Require(new AdvisorOptionsStore(path).Current.UnitOperationsEnabled == enabled,
+                        "Saving command settings changed a legacy permission");
+                }
+                store.SaveUnitOperations(true); store.EnsureUserName("Commander");
                 store.SaveGeneral(AdvisorTextSize.Large, true, "Captain", false, true);
                 store.SaveInformation(AdvisorInformation.Default); store.SaveConsultation(3, 1, "brief"); store.SaveDeveloper(true, () => { });
                 var reopened = new AdvisorOptionsStore(store.Path);
-                Require(reopened.Current.UnitOperationsEnabled && reopened.Current.DeveloperApiEnabled && reopened.Current.CommonPrompt == "brief" && !reopened.Current.LinkOwnUnits, "Another category lost the WIP choice");
-                reopened.SaveWip(false);
+                Require(reopened.Current.UnitOperationsEnabled && reopened.Current.DeveloperApiEnabled && reopened.Current.CommonPrompt == "brief" && !reopened.Current.LinkOwnUnits, "Another category lost the command choice");
+                reopened.SaveUnitOperations(false);
                 Require(!new AdvisorOptionsStore(store.Path).Current.UnitOperationsEnabled && reopened.Current.DeveloperApiEnabled && reopened.Current.UserName == "Captain", "Disabling changed unrelated settings");
                 foreach (var value in new JToken[] { new JValue(1), new JValue("true"), JValue.CreateNull() })
                 {
                     try { _ = AdvisorOptions.Parse(new JObject { ["wip_unit_operations_enabled"] = value }.ToString()); }
                     catch (AdvisorOptionsException error) when (error.Code == "options_invalid") { continue; }
-                    throw new InvalidOperationException("Malformed WIP permission was accepted");
+                    throw new InvalidOperationException("Malformed command permission was accepted");
                 }
                 Directory.Delete(directory, true); File.WriteAllText(directory, "blocked parent");
-                try { reopened.SaveWip(true); }
+                try { reopened.SaveUnitOperations(true); }
                 catch (AdvisorOptionsException error) when (error.Code == "options_write_failed")
-                { Require(!reopened.Current.UnitOperationsEnabled, "Failed WIP save changed runtime permission"); return; }
-                throw new InvalidOperationException("WIP save should have failed");
+                { Require(!reopened.Current.UnitOperationsEnabled, "Failed command save changed runtime permission"); return; }
+                throw new InvalidOperationException("Command save should have failed");
             }
             finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); else if (File.Exists(directory)) File.Delete(directory); }
         });
@@ -52,7 +64,7 @@ internal static class OperationTests
             enabled = true; Require(operations.Catalog()["operations"]!.Count() == 1, "Enabled operation was not registered");
             Require((string?)operations.Execute(request)["status"] == "registered" && unit.Calls == 1, "Enabled request failed");
             enabled = false; Expect(() => operations.Execute(Request(operations, "after-disable")), "unit_operations_disabled");
-            Require(unit.Queue.Count == 2 && unit.Calls == 1, "Turning WIP off cancelled a native order or added another one");
+            Require(unit.Queue.Count == 2 && unit.Calls == 1, "Turning commands off cancelled a native order or added another one");
         });
         check("Repeated operation requests are idempotent, conflicting IDs and old battle scopes are rejected", () =>
         {
@@ -193,7 +205,7 @@ internal static class OperationTests
             Require(candidates.Status == 200 && (string?)candidates.Data["scope_id"] == operations.ScopeId, "Candidates lost battle scope");
             var request = Request(operations);
             var pending = api.Enqueue("POST", "/v1/operations", request); enabled = false; api.Pump();
-            Require(pending.GetAwaiter().GetResult().Status == 403 && unit.Calls == 0, "A queued request bypassed the saved WIP switch");
+            Require(pending.GetAwaiter().GetResult().Status == 403 && unit.Calls == 0, "A queued request bypassed the saved command switch");
             enabled = true;
             Require(Send(api, "POST", "/v1/operations", request).Status == 200 && unit.Calls == 1, "Offline registration failed");
             Require(Send(api, "POST", "/v1/operations", request).Status == 200 && unit.Calls == 1, "HTTP retry duplicated the reservation");

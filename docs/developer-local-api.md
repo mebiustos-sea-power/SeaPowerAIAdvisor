@@ -1,6 +1,6 @@
 # Developer local API
 
-The local API drives the same conversation, selected connections, adviser, information policy and consultation workflow as the in-game UI. It is a temporary investigation interface for experiments against a loaded game situation, not a stable public integration contract. Consultations can request supported native orders when the separate WIP unit-scheduling option is enabled. They do not select map units, load saves or expose API credentials. The direct WIP operation endpoint below exercises the same reservation service without an AI provider.
+The local API drives the same conversation, selected connections, adviser, information policy and consultation workflow as the in-game UI. It is a temporary investigation interface for experiments against a loaded game situation, not a stable public integration contract. Consultations can request supported native orders when commands are enabled. They do not select map units, load saves or expose API credentials. The direct operation endpoint below exercises the same reservation service without an AI provider.
 
 ## Command-line tool
 
@@ -39,9 +39,9 @@ All responses are JSON. These endpoints are experimental and separate from the p
 | GET | `/v1/prompts` | All editable prompt fields, using the same `file.json:key` IDs as the temporary prompt editor. |
 | PATCH | `/v1/prompts` | Merge supplied text into the temporary prompt overrides. |
 | POST | `/v1/prompts/reset` | Restore the prompt bundle loaded at startup. |
-| GET | `/v1/operations` | Current battle scope and WIP operation catalog; empty when scheduling is disabled. |
+| GET | `/v1/operations` | Current battle scope and operation catalog; empty when commands are disabled. |
 | GET | `/v1/operations/{operation}/candidates` | Current player-owned candidates and ammunition availability for an operation. |
-| POST | `/v1/operations` | Register a WIP operation without calling an AI provider. |
+| POST | `/v1/operations` | Register an operation without calling an AI provider. |
 
 Question bodies specify exactly one of `question` and `shortcut`:
 
@@ -85,7 +85,7 @@ With the default, a selected-connection failure ends the consultation. When expl
 {"shortcut":"key_risks","allow_operations":false,"allow_fallback":false}
 ```
 
-`false` withholds all operation lookup/proposal tools and the host operation service from standard, legacy and independent backends. Situation retrieval and written advice remain available. `true` permits operation tools only when WIP scheduling and the game source allow them; it does not force a command or bypass approval. The accepted response and retained result report the resolved `allow_operations` policy, which is preserved on retry and fallback and is not saved as a global preference. Null/non-boolean values return HTTP 400 `invalid_operation_policy` before execution. Existing direct developer operation/reservation endpoints retain their separate WIP rules.
+`false` withholds all operation lookup/proposal tools and the host operation service from standard, legacy and independent backends. Situation retrieval and written advice remain available. `true` permits operation tools only when commands are enabled and the game source allows them; it does not force a command or bypass approval. The accepted response and retained result report the resolved `allow_operations` policy, which is preserved on retry and fallback and is not saved as a global preference. Null/non-boolean values return HTTP 400 `invalid_operation_policy` before execution. Existing direct developer operation/reservation endpoints retain their separate command permissions.
 
 `plain_advisor` is an optional boolean, default **false**. Set it to true to use **Michael Reed with empty personality/tone and empty user-configured Common instructions for this consultation only**:
 
@@ -134,11 +134,11 @@ Invoke-RestMethod "$base/v1/prompts" -Method Patch -Headers $headers -ContentTyp
 
 These consultation requests use the configured provider and can incur the same charges as clicking a consultation in game. Reading status, prompts and completed results makes no AI request.
 
-## AI-driven WIP reservations
+## AI-driven reservations
 
-With **Settings → WIP (experimental) → Enable unit order scheduling** enabled, normal and developer-API consultations can use `list_operations`, `describe_operation`, `get_operation_candidates` and `propose_operation_plans`. This switch applies to both paths; enabling the developer listener is not required for in-game AI operations. The standard situation tool is `query_situation`; its `requests` array batches snapshot queries. Independent read calls across the split tools are still combined within one AI response and share the existing budgets. `propose_operation_plans` submits complete alternatives together (`request_id`, `plans` with `plan_id`, `title`, `summary` and ordered `operations`). Each operation declares its plan-count and selection policy. The sonobuoy operation currently requires two alternatives and single selection; approval revalidates and registers only the selected plan. No developer endpoint approves plans on the user’s behalf. Legacy external standard adapters retain `query_game` and execution-only `game_operations`; independent backends retain the separate knowledge and operation services. Individual operation definitions are not included in the initial input.
+With **Settings → Commands → Enable commands** enabled, normal and developer-API consultations can use `list_operations`, `describe_operation`, `get_operation_candidates` and `propose_operation_plans`. This switch applies to both paths; enabling the developer listener is not required for in-game AI operations. The standard situation tool is `query_situation`; its `requests` array batches snapshot queries. Independent read calls across the split tools are still combined within one AI response and share the existing budgets. `propose_operation_plans` submits complete alternatives together (`request_id`, `plans` with `plan_id`, `title`, `summary` and ordered `operations`). Each operation declares its plan-count and selection policy. The sonobuoy operation currently requires two alternatives and single selection; approval revalidates and registers only the selected plan. No developer endpoint approves plans on the user’s behalf. Legacy external standard adapters retain `query_game` and execution-only `game_operations`; independent backends retain the separate knowledge and operation services. Individual operation definitions are not included in the initial input.
 
-The retained consultation result includes `input.tools` (the actual prepared definition list) and an `operations` array with request/response pairs. These are separate from read-only snapshot `retrievals`. Operation records use the operation-service action envelope after tool-argument translation; the full communication log retains the original wire calls. Operation candidates and validation use live game-thread state. Sonobuoy scheduling requires own-unit basic information and ammunition information to remain enabled in Data for AI; otherwise it returns `information_disabled`. Setting WIP off, cancelling or leaving the battle blocks unregistered queued work. A successful registration remains a game-owned order; it is not a deployment-completion report.
+The retained consultation result includes `input.tools` (the actual prepared definition list) and an `operations` array with request/response pairs. These are separate from read-only snapshot `retrievals`. Operation records use the operation-service action envelope after tool-argument translation; the full communication log retains the original wire calls. Operation candidates and validation use live game-thread state. Sonobuoy scheduling requires own-unit basic information and ammunition information to remain enabled in Data for AI; otherwise it returns `information_disabled`. Disabling commands, cancelling or leaving the battle blocks unregistered queued work. A successful registration remains a game-owned order; it is not a deployment-completion report.
 
 AI `execute` calls now return `status: "proposed"` and `registered: false` without changing the game. The host groups requests from one successful consultation into a proposal. If any operation requires approval (including sonobuoy scheduling), the player must use **Review proposal… → Execute** in the conversation window. The command implementation supplies the review text; approval revalidates live conditions and combined inventory. Failed/cancelled consultations and discarded history invalidate unapproved proposals. A custom consultation backend uses this same host-controlled path. The developer API has no approval endpoint. The status response includes `advisor.proposal_review_open`; a new consultation or developer reservation reset is rejected while that review is open.
 
@@ -146,11 +146,11 @@ During AI consultations, operation target aliases `own_unit_N` and `unit:own_uni
 
 Use a capability question such as “What game operations can you perform?” to check discovery without issuing an order. For a controlled execution test, explicitly name an airborne helicopter and coordinates and request one sonobuoy reservation. Normal connection selection and the API's explicit fallback policy still apply.
 
-## WIP native-order trial (no AI)
+## Native-order trial (no AI)
 
-Enable **Settings → WIP (experimental) → Enable unit order scheduling** and save. The developer local API must also be enabled. No AI connection, API key, or developer default connection is needed for these operation endpoints. AI consultation requests use the proposal-and-approval flow above; these explicit developer operation requests register directly for testing.
+Enable **Settings → Commands → Enable commands** and save. The developer local API must also be enabled. No AI connection, API key, or developer default connection is needed for these operation endpoints. AI consultation requests use the proposal-and-approval flow above; these explicit developer operation requests register directly for testing.
 
-The current operation is `seapower.schedule_sonobuoy_drop`: append one native travel-and-drop reservation for one friendly airborne helicopter. It does not replace existing waypoints or expand the request to other formation members. The trial rejects a unit following formation or carrying a conflicting active order rather than changing that control state. Candidates expose `available`, `unavailable_reason`, the helicopter's current `position` and `depth`, and each sonobuoy's internal `id`, `remaining_count`, `available_count` and `single_drop_supported`.
+The current operation is `seapower.schedule_sonobuoy_drop`: append one native travel-and-drop reservation for one eligible player-controlled unit. It does not replace existing waypoints or expand the request to other formation members. The trial rejects a unit following formation or carrying a conflicting active order rather than changing that control state. Candidates expose `available`, `unavailable_reason`, the unit's current `position` and `depth`, and each sonobuoy's internal `id`, `remaining_count`, `available_count` and `single_drop_supported`.
 
 From the repository root:
 
@@ -193,20 +193,20 @@ A successful response has `status: "registered"`. It acknowledges registration, 
 
 Keep the same request file/ID when checking a lost acknowledgement: an identical repeated request returns the retained result without registering again. Reusing an ID with changed arguments returns `request_id_conflict`. A new intended operation requires a new ID. A changed battle scope returns `operation_scope_changed`; fetch new candidates after loading a save or mission. The CLI never automatically retries or substitutes a new scope. Receipts live in memory for the loaded battle, with a limit of 1,024; the host rejects further new requests instead of evicting receipts and permitting duplicate orders.
 
-WIP OFF rejects new registrations, including already queued local-API requests. It preserves orders registered in the game. A condition rejection returns HTTP 409 with `status: "rejected"` and a reason `code`; disabled scheduling returns HTTP 403 (`unit_operations_disabled`). Unexpected implementation errors are logged through the local API's existing error path. Their request IDs remain unresolved (`operation_outcome_unknown` on retry) because an exception does not prove that no order was registered. Inspect the game before deliberately submitting a replacement request.
+Disabling commands rejects new registrations, including already queued local-API requests. It preserves orders registered in the game. A condition rejection returns HTTP 409 with `status: "rejected"` and a reason `code`; disabled scheduling returns HTTP 403 (`unit_operations_disabled`). Unexpected implementation errors are logged through the local API's existing error path. Their request IDs remain unresolved (`operation_outcome_unknown` on retry) because an exception does not prove that no order was registered. Inspect the game before deliberately submitting a replacement request.
 
 These operation contracts are an internal prototype, separate from the public provider-extension SDK. There is no operation-progress monitor, completion callback or automatic follow-up consultation.
 
 ## Inspect and clear native reservations (developer only)
 
-These endpoints inspect the current native queue of a player-controllable own unit. The WIP order option must be enabled. They are separate from the AI operation catalog and do not call an AI provider or change the selected map unit.
+These endpoints inspect the current native queue of a player-controllable own unit. Commands must be enabled. They are separate from the AI operation catalog and do not call an AI provider or change the selected map unit.
 
 | Method | Path | Result |
 | --- | --- | --- |
 | GET | `/v1/units/{unit_id}/reservations` | Current battle `scope_id`, unit identity, `count` and ordered `reservations`. |
 | POST | `/v1/units/{unit_id}/reservations/clear` | Remove every queued reservation of this unit, including manual orders; return `removed_count`, remaining `count` and queue. |
 
-`unit_id` is the game's numeric unit ID, as supplied by a badge or operation candidate, rather than a consultation-local `own_unit_N`. For a reset, send exactly `{"scope_id":"<scope from the current reservation list>"}`. A stale battle scope is rejected. A missing/uncontrollable unit, disabled WIP, active consultation or open settings also rejects the reset; no confirmation dialog or automatic retry is used.
+`unit_id` is the game's numeric unit ID, as supplied by a badge or operation candidate, rather than a consultation-local `own_unit_N`. For a reset, send exactly `{"scope_id":"<scope from the current reservation list>"}`. A stale battle scope is rejected. A missing/uncontrollable unit, disabled commands, active consultation or open settings also rejects the reset; no confirmation dialog or automatic retry is used.
 
 Each reservation includes its `sequence`, native `task_type`, `kind` and applicable `position`. Attack/sonobuoy reservations also include `ammunition`, `count` and `attack_position`. Other task kinds remain in the list. Relative waypoints and destinations calculated at execution time have a null position rather than an invented geographic point. Full native objects are not serialized.
 

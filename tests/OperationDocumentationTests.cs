@@ -55,7 +55,7 @@ internal static class OperationDocumentationTests
                 ((JArray)operation.Definition()["parameters"]!["required"]!).Values<string>().SequenceEqual(new[] { "latitude", "longitude", "ammunition" }),
                 "UI localization translated identifiers, changed arguments or replaced the actual AI instruction");
         });
-        check("Documentation inspection works with WIP off and never reads candidates, creates proposals or enables execution", () =>
+        check("Documentation inspection works with commands disabled and never reads candidates, creates proposals or enables execution", () =>
         {
             var operation = Command(); var operations = new AdvisorOperations(() => false); operations.Register(operation);
             var english = operations.Inspect("en").Single(); var japanese = operations.Inspect("ja").Single();

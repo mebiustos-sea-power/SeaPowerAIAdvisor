@@ -388,11 +388,20 @@
             <Grid.RowDefinitions>
               <RowDefinition Height="Auto" />
               <RowDefinition Height="*" />
+              <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
-            <Button x:Name="CommandTools" Content="{DynamicResource Advisor.commands.tools}" Height="30" Padding="12,0" HorizontalAlignment="Right" Margin="0,0,0,10" />
+            <Grid Margin="0,0,0,10">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <CheckBox x:Name="EnableUnitOperations" Content="{DynamicResource Advisor.commands.enabled}" VerticalAlignment="Center" Margin="0,0,8,0" />
+              <Button x:Name="CommandTools" Grid.Column="1" Content="{DynamicResource Advisor.commands.tools}" Height="30" Padding="12,0" />
+            </Grid>
             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
               <StackPanel x:Name="CommandEntries" Margin="0,0,8,0" />
             </ScrollViewer>
+            <Button x:Name="SaveCommands" Grid.Row="2" Content="{DynamicResource Advisor.settings.save_form}" HorizontalAlignment="Right" Height="30" Padding="12,0" Margin="0,10,0,0" />
           </Grid>
           <Grid x:Name="CommandDetails" Visibility="Collapsed">
             <Grid.RowDefinitions>
@@ -439,17 +448,7 @@
           </Grid>
         </Grid>
         <Grid x:Name="WipCategory" Visibility="Collapsed">
-          <Grid.RowDefinitions>
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-          </Grid.RowDefinitions>
-          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-            <StackPanel Margin="0,8,8,0">
-              <CheckBox x:Name="EnableUnitOperations" Content="{DynamicResource Advisor.wip.unit_operations}" Margin="0,0,0,8" />
-              <TextBlock Text="{DynamicResource Advisor.wip.unit_operations_note}" FontSize="12" TextWrapping="Wrap" />
-            </StackPanel>
-          </ScrollViewer>
-          <Button x:Name="SaveWip" Grid.Row="1" Content="{DynamicResource Advisor.settings.save_form}" HorizontalAlignment="Right" Height="30" Padding="12,0" Margin="0,10,0,0" />
+          <TextBlock Text="{DynamicResource Advisor.wip.empty}" FontSize="13" TextWrapping="Wrap" Margin="0,8,8,0" />
         </Grid>
         <TabControl x:Name="DeveloperCategory" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
           <TabItem Header="{DynamicResource Advisor.developer.diagnostics}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">

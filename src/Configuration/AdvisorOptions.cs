@@ -26,7 +26,7 @@ internal sealed class AdvisorOptions
     internal AdvisorTextSize TextSize { get; }
     internal bool LinkOwnUnits { get; }
     internal bool LinkContacts { get; }
-    internal AdvisorOptions(int maxQueryRounds = AdvisorQueryLimits.DefaultMaxRounds, bool campaignEnabled = false, AdvisorInformation? information = null, string commonPrompt = "", AdvisorTextSize textSize = AdvisorTypography.DefaultSize, int historyExchanges = DefaultHistoryExchanges, string? userName = null, bool developerApiEnabled = false, AdvisorLocalConnections? localConnections = null, bool linkOwnUnits = true, bool linkContacts = true, bool unitOperationsEnabled = false)
+    internal AdvisorOptions(int maxQueryRounds = AdvisorQueryLimits.DefaultMaxRounds, bool campaignEnabled = false, AdvisorInformation? information = null, string commonPrompt = "", AdvisorTextSize textSize = AdvisorTypography.DefaultSize, int historyExchanges = DefaultHistoryExchanges, string? userName = null, bool developerApiEnabled = false, AdvisorLocalConnections? localConnections = null, bool linkOwnUnits = true, bool linkContacts = true, bool unitOperationsEnabled = true)
     {
         if (maxQueryRounds < 1 || maxQueryRounds > AdvisorQueryLimits.MaximumRounds)
             throw new AdvisorOptionsException("query_rounds_invalid");
@@ -71,6 +71,7 @@ internal sealed class AdvisorOptions
             ["conversation_text_size"] = TextSize.ToString().ToLowerInvariant(),
             ["link_own_units"] = LinkOwnUnits, ["link_contacts"] = LinkContacts,
             ["developer_local_api_enabled"] = DeveloperApiEnabled,
+            // Preserve the legacy key so existing command permissions remain unchanged.
             ["wip_unit_operations_enabled"] = UnitOperationsEnabled,
             ["developer_local_api_connections"] = LocalConnections.Json(),
             ["history_exchanges"] = HistoryExchanges
@@ -111,7 +112,7 @@ internal sealed class AdvisorOptions
                 throw new AdvisorOptionsException("information_invalid");
             var information = value["information_selection"] == null ? AdvisorInformation.Parse(value["disabled_information"])
                 : AdvisorInformation.ParseSelections(value["information_selection"]);
-            return new AdvisorOptions(rounds, (bool?)value["campaign_advisor_enabled"] ?? false, information, (string?)value["common_prompt"] ?? "", ParseTextSize(value["conversation_text_size"]), historyExchanges, (string?)value["user_name"], (bool?)value["developer_local_api_enabled"] ?? false, AdvisorLocalConnections.Parse(value["developer_local_api_connections"]), (bool?)value["link_own_units"] ?? true, (bool?)value["link_contacts"] ?? true, (bool?)value["wip_unit_operations_enabled"] ?? false);
+            return new AdvisorOptions(rounds, (bool?)value["campaign_advisor_enabled"] ?? false, information, (string?)value["common_prompt"] ?? "", ParseTextSize(value["conversation_text_size"]), historyExchanges, (string?)value["user_name"], (bool?)value["developer_local_api_enabled"] ?? false, AdvisorLocalConnections.Parse(value["developer_local_api_connections"]), (bool?)value["link_own_units"] ?? true, (bool?)value["link_contacts"] ?? true, (bool?)value["wip_unit_operations_enabled"] ?? true);
         }
         catch (JsonException) { throw new AdvisorOptionsException("options_invalid"); }
     }
@@ -191,7 +192,7 @@ internal sealed class AdvisorOptionsStore
         catch { Restore(before); throw; }
         Apply(next);
     }
-    internal void SaveWip(bool unitOperationsEnabled)
+    internal void SaveUnitOperations(bool unitOperationsEnabled)
     {
         var saved = Read();
         Save(new AdvisorOptions(saved.MaxQueryRounds, saved.CampaignEnabled, saved.Information, saved.CommonPrompt,
