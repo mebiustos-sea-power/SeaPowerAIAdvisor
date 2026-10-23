@@ -14,6 +14,7 @@ internal static partial class ProviderTests
         {
             foreach (var delivery in new[] { AdvisorSituationDelivery.OnDemand, AdvisorSituationDelivery.Upfront, AdvisorSituationDelivery.OnRequest })
             foreach (var legacy in new[] { false, true })
+            foreach (var planCount in new[] { 1, 2 })
             {
                 var unit = new OperationHelicopter(); var registry = SonobuoyRegistry(unit);
                 using var gateway = new AdvisorOperationGateway(registry);
@@ -41,7 +42,8 @@ internal static partial class ProviderTests
                         var definition = result["operation"]!; var candidate = result["candidates"]![0]!;
                         Require(definition["parameters"]!["required"]!.Values<string>().SequenceEqual(new[] { "latitude", "longitude", "ammunition" }) &&
                             definition["parameters"]!["properties"]!["depth"] == null &&
-                            (bool?)definition["requires_approval"] == true && (int?)definition["plan_policy"]?["minimum"] == 2 &&
+                            (bool?)definition["requires_approval"] == true && (int?)definition["plan_policy"]?["target"] == 2 &&
+                            (int?)definition["plan_policy"]?["minimum"] == 1 &&
                             (int?)definition["plan_policy"]?["maximum"] == 2 && (string?)definition["plan_policy"]?["selection"] == "single" &&
                             (double?)candidate["position"]?["latitude_deg"] == 26.5 && (string?)candidate["depth"] == "alternating",
                             "One candidate lookup did not supply the argument contract, plan/approval policy or live choices");
@@ -51,18 +53,23 @@ internal static partial class ProviderTests
                         order["arguments"]!["latitude"] = candidate["position"]!["latitude_deg"]!.DeepClone();
                         order["arguments"]!["longitude"] = candidate["position"]!["longitude_deg"]!.DeepClone();
                         var request = PlanRequest(order);
+                        if (planCount == 1) ((JArray)request["plans"]!).RemoveAt(1);
                         if (legacy) request["action"] = "submit";
                         return Task.FromResult(Reply(new AdvisorToolCall("plans", legacy ? "game_operations" : "propose_operation_plans", request)));
                     }
                     Require((string?)result["status"] == "proposed" && (bool?)result["registered"] == false &&
-                        (bool?)result["requires_approval"] == true && unit.Calls == 0, "AI bypassed approval or misreported registration");
+                        (bool?)result["requires_approval"] == true && result["plans"]!.Count() == planCount && unit.Calls == 0,
+                        "AI submission below target was rejected, padded, bypassed approval or misreported registration");
                     return Task.FromResult(new AdvisorReply("One buoy order proposed.", Array.Empty<AdvisorToolCall>(), 1));
                 }
                 IAdvisorProvider provider = legacy ? new LegacyProvider("operation-model", Send) : new FakeProvider("operation-model", Send);
                 var context = AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations);
                 var result = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(provider, delivery: delivery).ConsultAsync(context, CancellationToken.None)));
                 Require(unit.Calls == 0, "AI bypassed approval");
-                var proposal = registry.FinishProposal("ai", true)!; registry.Approve(proposal, new[] { "a" });
+                var proposal = registry.FinishProposal("ai", true)!;
+                Require(proposal.State == AdvisorProposalState.Pending && proposal.Plans.Count == planCount,
+                    "An accepted smaller submission was lost, padded or executed without approval");
+                registry.Approve(proposal, new[] { "a" });
                 Require(result.Text == "One buoy order proposed." && result.ApiRequests == 4 && unit.Calls == 1 && unit.Depth == "alternating" &&
                     unit.Thread == Environment.CurrentManagedThreadId && knowledge.RoundsUsed == 0 && operations.History.Count == 3 &&
                     operations.History.All(row => (string?)row["request"]?["action"] != "describe"),

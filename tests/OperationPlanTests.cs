@@ -94,6 +94,35 @@ internal static class OperationPlanTests
                 (int?)service.Describe(b.Id)["operation"]?["plan_policy"]?["minimum"] == 2, "Published command policy was not applied to the set");
             var strict = new Command("custom.three", log, 3, 3); service.Register(strict); service.BeginProposal("incompatible");
             Expect("incompatible_plan_policies", () => service.SubmitPlans("incompatible", Batch(Plan("a", Order(b, "one", 1), Order(strict, "two", 2)))));
+            var flexible = new Command("custom.flexible", log, 1, 2, AdvisorPlanSelection.Single, target: 2); service.Register(flexible);
+            Require((int?)service.Describe(a.Id)["operation"]?["plan_policy"]?["target"] == 3 &&
+                (int?)service.Describe(flexible.Id)["operation"]?["plan_policy"]?["target"] == 2,
+                "Different generation targets were lost from the published contracts");
+            foreach (var count in new[] { 1, 2 })
+            {
+                var owner = "flexible-" + count; service.BeginProposal(owner);
+                JObject Alternative(string id) => Plan(id, Order(a, "one", 1), Order(flexible, "two", 2));
+                Expect("plan_count_out_of_range", () => service.SubmitPlans(owner, Batch(Alternative("a"), Alternative("b"), Alternative("c"))));
+                var invalid = Batch(Alternative("a")); invalid["plans"]![0]!["operations"]![1]!["arguments"]!["index"] = -1;
+                Expect("invalid_command_argument", () => service.SubmitPlans(owner, invalid));
+                Require(service.PriorOrders(owner).Count == 0 && service.Proposal(owner)!.Orders.Count == 0 && log.Count == 0,
+                    "An invalid single plan or excessive plan set retained partial work");
+                var request = Batch(Enumerable.Range(0, count).Select(i => Alternative("plan" + i)).ToArray());
+                service.SubmitPlans(owner, request);
+                var proposal = service.FinishProposal(owner, true)!;
+                Require(proposal.State == AdvisorProposalState.Pending && proposal.Plans.Count == count &&
+                    proposal.Selection == AdvisorPlanSelection.Single && log.Count == 0,
+                    "Compatible accepted ranges were narrowed by generation targets or bypassed approval");
+            }
+        });
+        check("Invalid generation targets fail explicitly instead of silently changing command policies", () =>
+        {
+            foreach (var target in new[] { 0, 3 })
+            {
+                try { _ = new AdvisorOperationPlanPolicy(target, 1, 2, AdvisorPlanSelection.Single); }
+                catch (ArgumentOutOfRangeException error) when (error.ParamName == "target") { continue; }
+                throw new InvalidOperationException("An out-of-range generation target was accepted");
+            }
         });
         check("Alternative plans require user selection even when their individual commands allow automatic execution", () =>
         {
@@ -379,8 +408,8 @@ internal static class OperationPlanTests
         internal bool Approval = true, Unknown;
         internal int Available = 100, FailAt = -1;
         private readonly List<string> log;
-        internal Command(string id, List<string> log, int minimum = 1, int maximum = 3, AdvisorPlanSelection selection = AdvisorPlanSelection.Multiple)
-        { Id = id; this.log = log; PlanPolicy = new(minimum, maximum, selection); }
+        internal Command(string id, List<string> log, int minimum = 1, int maximum = 3, AdvisorPlanSelection selection = AdvisorPlanSelection.Multiple, int? target = null)
+        { Id = id; this.log = log; PlanPolicy = new(target ?? maximum, minimum, maximum, selection); }
         public JObject Definition() => new() { ["id"] = Id };
         public JArray Candidates() => new();
         public void Validate(IReadOnlyList<AdvisorOperationOrder> orders)

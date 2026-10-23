@@ -15,17 +15,20 @@ internal interface IAdvisorOperationPlans
 
 internal sealed class AdvisorOperationPlanPolicy
 {
-    internal static readonly AdvisorOperationPlanPolicy Default = new(1, 1, AdvisorPlanSelection.Single);
+    internal static readonly AdvisorOperationPlanPolicy Default = new(1, 1, 1, AdvisorPlanSelection.Single);
+    internal int Target { get; }
     internal int Minimum { get; }
     internal int Maximum { get; }
     internal AdvisorPlanSelection Selection { get; }
-    internal AdvisorOperationPlanPolicy(int minimum, int maximum, AdvisorPlanSelection selection)
+    internal AdvisorOperationPlanPolicy(int target, int minimum, int maximum, AdvisorPlanSelection selection)
     {
         if (minimum < 1 || maximum < minimum || maximum > AdvisorOperationPlanBatch.MaximumPlans || !Enum.IsDefined(typeof(AdvisorPlanSelection), selection))
             throw new ArgumentOutOfRangeException(nameof(minimum), "Invalid operation plan policy.");
-        Minimum = minimum; Maximum = maximum; Selection = selection;
+        if (target < minimum || target > maximum)
+            throw new ArgumentOutOfRangeException(nameof(target), "Plan target must be within the accepted range.");
+        Target = target; Minimum = minimum; Maximum = maximum; Selection = selection;
     }
-    internal JObject Json() => new() { ["minimum"] = Minimum, ["maximum"] = Maximum,
+    internal JObject Json() => new() { ["target"] = Target, ["minimum"] = Minimum, ["maximum"] = Maximum,
         ["selection"] = Selection == AdvisorPlanSelection.Single ? "single" : "multiple" };
 }
 

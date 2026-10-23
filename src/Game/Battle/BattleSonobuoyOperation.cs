@@ -43,7 +43,7 @@ internal sealed class BattleSonobuoyOperation : IAdvisorOperation, IAdvisorOpera
         if (!allowed.Allows(InformationKind.BattleUnits) || !allowed.Allows(InformationKind.BattleWeapons))
             throw new AdvisorOperationException(403, "information_disabled");
     }
-    public AdvisorOperationPlanPolicy PlanPolicy { get; } = new(2, 2, AdvisorPlanSelection.Single);
+    public AdvisorOperationPlanPolicy PlanPolicy { get; } = new(target: 2, minimum: 1, maximum: 2, AdvisorPlanSelection.Single);
     public bool RequiresApproval => true;
     public string Id => OperationId;
     private static readonly Lazy<AdvisorOperationText> documentation = new(() => AdvisorOperationText.FromResources(
