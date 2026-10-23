@@ -165,7 +165,7 @@ internal static class OptionsTests
             {
                 ["captured_at_utc"] = "1985-06-01T00:00:00Z", ["mission_display_name"] = "Test mission",
                 ["friendly_bases"] = new JArray(), ["hosted_air_units"] = new JArray(), ["aviation_hosts"] = new JArray(),
-        ["public_objectives"] = new JArray(), ["friendly_units"] = new JArray(),
+        ["public_objectives"] = new JArray(), ["mission_map_areas"] = new JArray(), ["friendly_units"] = new JArray(),
                 ["unit_capabilities"] = new JArray(), ["contact_threat_references"] = new JArray(), ["weapon_references"] = new JArray(),
                 ["observed_contacts"] = new JArray(), ["published_reports"] = new JArray(), ["mission_briefing"] = "Known briefing"
             });

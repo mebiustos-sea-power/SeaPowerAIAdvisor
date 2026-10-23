@@ -72,6 +72,7 @@ internal sealed partial class BattleQuerySession : IAdvisorQuerySession, IAdviso
                 ["source"] = "public_mission_objectives",
                 ["objectives"] = snapshot["public_objectives"]!.DeepClone()
             },
+            ["mission_map_areas"] = snapshot["mission_map_areas"]!.DeepClone(),
             ["overview"] = new JObject
             {
                 ["friendly_unit_count"] = Rows("friendly_units").Count,

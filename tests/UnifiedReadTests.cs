@@ -214,7 +214,7 @@ internal static partial class ProviderTests
             ["observed_contacts"] = new JArray(new JObject { ["id"] = "observed_contact_1", ["kind"] = "surface", ["posture"] = "enemy" },
                 new JObject { ["id"] = "observed_contact_2", ["kind"] = "air", ["posture"] = "enemy" })
         };
-        foreach (var name in new[] { "public_objectives", "friendly_bases", "hosted_air_units", "aviation_hosts", "contact_threat_references", "published_reports" })
+        foreach (var name in new[] { "public_objectives", "mission_map_areas", "friendly_bases", "hosted_air_units", "aviation_hosts", "contact_threat_references", "published_reports" })
             snapshot[name] = new JArray();
         return new BattleQuerySession(new BattleSnapshot(snapshot), "ja", "Plan", maxRounds: 10);
     }

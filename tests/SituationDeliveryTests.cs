@@ -231,7 +231,7 @@ internal static partial class ProviderTests
             ["observed_contacts"] = new JArray(Enumerable.Range(1, 25).Select(i => new JObject { ["id"] = "observed_contact_" + i,
                 ["kind"] = "surface", ["posture"] = i == 24 ? "neutral" : "enemy", ["destroyed"] = i == 25 }))
         };
-        foreach (var name in new[] { "public_objectives", "friendly_bases", "hosted_air_units", "aviation_hosts", "contact_threat_references", "published_reports" }) snapshot[name] = new JArray();
+        foreach (var name in new[] { "public_objectives", "mission_map_areas", "friendly_bases", "hosted_air_units", "aviation_hosts", "contact_threat_references", "published_reports" }) snapshot[name] = new JArray();
         return new BattleQuerySession(new BattleSnapshot(snapshot), "ja", "Question", maxRounds: 10, information: policy ?? AdvisorInformation.All);
     }
 }

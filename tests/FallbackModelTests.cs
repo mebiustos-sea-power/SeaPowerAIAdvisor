@@ -106,7 +106,7 @@ internal static class FallbackModelTests
     }
     private static BattleQuerySession Session() => new(new BattleSnapshot(new JObject {
         ["captured_at_utc"]="1985-06-01T00:00:00Z",["mission_display_name"]="Mission",["friendly_bases"] = new JArray(), ["hosted_air_units"] = new JArray(), ["aviation_hosts"] = new JArray(),
-        ["public_objectives"]=new JArray(),
+        ["public_objectives"]=new JArray(),["mission_map_areas"]=new JArray(),
         ["friendly_units"]=new JArray(),["unit_capabilities"]=new JArray(),
         ["observed_contacts"]=new JArray(new JObject { ["id"]="observed_contact_1",["posture"]="enemy",["kind"]="surface" }),
         ["contact_threat_references"]=new JArray(new JObject { ["id"]="observed_contact_1",["possible_weapon_reference_ids"]=new JArray("weapon_reference_1") }),

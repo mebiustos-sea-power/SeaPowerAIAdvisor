@@ -24,6 +24,7 @@ internal static partial class BattleTests
         RunWeapons(check);
         RunSensors(check);
         RunMovement(check);
+        RunMissionAreas(check);
         RunUnitMentions(check);
         RunUnitDraft(check);
         check("Battle capture excludes hidden objectives, future reports and actual enemy details", () =>
@@ -551,6 +552,7 @@ internal static partial class BattleTests
         internal readonly List<OwnUnit> OwnUnits = new();
         internal readonly List<OwnWeapon> OwnWeapons = new();
         internal readonly List<object> ExtraMapUnits = new();
+        internal readonly List<object> MissionAreas = new();
         internal readonly List<PublicWeapon> PublicWeapons = new() { new PublicWeapon() };
         internal readonly List<PublicClass> PublicClasses = new();
         internal bool Ready = true;
@@ -567,7 +569,7 @@ internal static partial class BattleTests
             OwnUnits.Cast<object>().Concat(OwnWeapons).Select((u, i) => (object)new { Unit = new { Object = u, Id = 1001 + i } }).Concat(new object[] {
                 new { Unit = Track, ObjectViewModel = ContactDisplay, VisualType = ContactKind, VisualPosture = ContactPosture }
             }).Concat(ExtraMapUnits).ToArray(), new { TaskforceObjects = OwnUnits.Cast<object>().Concat(OwnWeapons).ToArray() },
-            new object[] { new { IsHidden = false, Text = "輸送船を保護する", Status = 0 }, Hidden },
+            new object[] { new { IsHidden = false, Text = "輸送船を保護する", Status = 0 }, Hidden }, MissionAreas,
             new
             {
                 MissionBriefing = new Reactive<string>("公開済みの任務説明"),

@@ -10,7 +10,7 @@ namespace SeaPowerAIAdvisor;
 // Reads the player's map projection and published mission UI, never scenario definitions.
 internal sealed class BattleSituationReader
 {
-    internal BattleSnapshot Capture(object knownUnits, object player, object objectives, object eventLog,
+    internal BattleSnapshot Capture(object knownUnits, object player, object objectives, object missionAreas, object eventLog,
         DateTime now, string missionName, bool enemyControl, BattleCapabilityReader knowledge,
         string xmlBriefing = "", bool briefingUnavailable = false, bool briefingFromBase = false)
     {
@@ -158,6 +158,7 @@ internal sealed class BattleSituationReader
             ["mission_display_name"] = missionName,
             ["player_side"] = "player",
             ["public_objectives"] = visibleObjectives,
+            ["mission_map_areas"] = BattleMissionAreaReader.Capture(missionAreas),
             ["mission_briefing"] = BattleBriefingReader.Combine(Reactive<string>(eventLog, "MissionBriefing"), xmlBriefing),
             ["mission_briefing_unavailable"] = briefingUnavailable,
             ["mission_briefing_source"] = string.IsNullOrWhiteSpace(xmlBriefing) ? "event_log" :

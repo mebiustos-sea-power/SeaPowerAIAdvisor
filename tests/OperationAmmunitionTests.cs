@@ -147,7 +147,7 @@ internal static class OperationAmmunitionTests
             ["weapon_references"] = new JArray(Reference("weapon_reference_18", "mod_buoy"), Reference("weapon_reference_19", "foreign_buoy"),
                 Reference("weapon_reference_20", "enemy_weapon"))
         };
-        foreach (var name in new[] { "public_objectives", "friendly_bases", "hosted_air_units", "aviation_hosts", "contact_threat_references", "published_reports", "observed_contacts" })
+        foreach (var name in new[] { "public_objectives", "mission_map_areas", "friendly_bases", "hosted_air_units", "aviation_hosts", "contact_threat_references", "published_reports", "observed_contacts" })
             data[name] = new JArray();
         return new BattleSnapshot(data, References().Units);
     }

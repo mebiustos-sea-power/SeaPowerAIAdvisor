@@ -199,7 +199,7 @@ internal static class FallbackTests
         ["api_key"] = Main, ["fallback_api_key"] = fallback, ["model"] = "gemini-test-model", ["log_ai_json"] = log }.ToString());
     private static BattleQuerySession Session(int maxRounds = 1) => new(new BattleSnapshot(new JObject {
         ["captured_at_utc"] = "1985-06-01T00:00:00Z", ["mission_display_name"] = "Mission", ["friendly_bases"] = new JArray(), ["hosted_air_units"] = new JArray(), ["aviation_hosts"] = new JArray(),
-        ["public_objectives"] = new JArray(),
+        ["public_objectives"] = new JArray(), ["mission_map_areas"] = new JArray(),
         ["friendly_units"] = new JArray(), ["observed_contacts"] = new JArray(), ["unit_capabilities"] = new JArray(),
         ["contact_threat_references"] = new JArray(), ["weapon_references"] = new JArray(), ["published_reports"] = new JArray(), ["mission_briefing"] = "Briefing"
     }), "ja", "Question", maxRounds: maxRounds);

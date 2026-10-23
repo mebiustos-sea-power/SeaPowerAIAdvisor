@@ -204,7 +204,7 @@ internal sealed class BattleIntegration
             briefingUnavailable = true;
             warn("Public mission briefing unavailable: " + error);
         }
-        return reader.Capture(map.MapKnownUnits.AllUnits, player!, MissionManager.Instance.Objectives, EventLog.Instance,
+        return reader.Capture(map.MapKnownUnits.AllUnits, player!, MissionManager.Instance.Objectives, MissionManager.Instance.OnMapAreas, EventLog.Instance,
             now, SceneCreator.Instance.CurrentMissionName,
             (bool)BattleValue.Member(typeof(Globals).GetProperty("AllowControlOfEnemyUnits")!.GetValue(null)!, "Value")!,
             new BattleCapabilityReader(references), xmlBriefing, briefingUnavailable, briefingFromBase);
