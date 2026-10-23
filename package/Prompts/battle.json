@@ -53,7 +53,7 @@
   "operation_search": "Optional text matched against operation IDs and descriptions; omit to browse.",
   "operation_target_ref": "Candidate target_ref; unit:N uses the game's unit_id.",
   "operation_request_id": "Unique request ID of letters, digits, dots, underscores or hyphens. Reuse for an identical retry.",
-  "operation_execution_description": "Submit distinct complete plans together using each operation's definition and live candidates. Aim for the highest plan_policy.target, constrained to the shared minimum/maximum range; valid submissions anywhere in that range are accepted. Each plan contains ordered operations and may use multiple targets and operation types. Present submitted plans as proposals with the returned approval requirements.",
+  "operation_execution_description": "Submit distinct complete plans together using each operation's definition and live candidates. plan_policy specifies counts of complete alternative plans: aim for the highest target within the shared accepted minimum/maximum range. Each plan contains ordered operations and may use multiple targets and operation types. Present submitted plans as proposals with the returned approval requirements.",
   "operation_list_description": "List available game operations. Use search to filter the catalog.",
   "operation_describe_description": "Get an operation definition without querying live candidates.",
   "operation_candidates_description": "Get an operation's definition, plan policy, live eligible targets and argument choices."
