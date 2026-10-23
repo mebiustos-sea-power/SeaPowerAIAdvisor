@@ -23,7 +23,7 @@ internal static partial class LocalApiTests
                 var path = Path.Combine(directory, "options.json"); var options = new AdvisorOptionsStore(path);
                 Require(!options.Current.DeveloperApiEnabled && !File.Exists(path), "Developer listener was implicitly enabled");
                 options.SaveDeveloper(true, () => { }); options.EnsureUserName("司令官");
-                options.SaveGeneral(AdvisorTextSize.Large, true, "Captain");
+                options.SaveGeneral(AdvisorTextSize.Large, "Captain"); options.SaveCampaign(true);
                 options.SaveConsultation(3, 2, "Test"); options.SaveInformation(AdvisorInformation.Default);
                 Require(new AdvisorOptionsStore(path).Current.DeveloperApiEnabled, "Another category disabled the API");
                 var before = File.ReadAllBytes(path);

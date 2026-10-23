@@ -119,7 +119,7 @@ internal static class SettingsOperationsTests
             var apiPath = Path.Combine(directory, "gemini.json"); File.WriteAllText(apiPath, "broken unrelated API JSON");
             var store = new AdvisorOptionsStore(Path.Combine(directory, "options.json"));
             var profilePath = AdvisorProfile.SettingsPath(directory); Directory.CreateDirectory(profilePath);
-            store.SaveGeneral(AdvisorTextSize.Large, true, "Commander"); store.SaveConsultation(7, 0, "Common preference");
+            store.SaveGeneral(AdvisorTextSize.Large, "Commander"); store.SaveCampaign(true); store.SaveConsultation(7, 0, "Common preference");
             Require(store.Current.CampaignEnabled && store.Current.HistoryExchanges == 0 && File.ReadAllText(apiPath) == "broken unrelated API JSON" && Directory.Exists(profilePath),
                 "A category save required or rewrote unrelated settings");
             File.Delete(apiPath); Directory.Delete(profilePath);

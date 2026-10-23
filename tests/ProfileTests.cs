@@ -381,8 +381,11 @@ internal static class ProfileTests
                 new[] { "CommandPrompt", "CommandDefinition" }.All(id => Named(id).Ancestors().Contains(Named("CommandDetails")) &&
                     (string?)Named(id).Attribute("IsReadOnly") == "True"), "Command browsing overlaps the list or permits editing AI definitions");
             Require(new[] { "EnableUnitOperations", "SaveCommands" }.All(id => Named(id).Ancestors().Contains(Named("CommandList"))) &&
-                !Named("WipCategory").Descendants().Any(e => e.Name.LocalName is "CheckBox" or "Button" or "TextBox"),
+                !Named("EnableUnitOperations").Ancestors().Contains(Named("WipCategory")),
                 "Command permission is unavailable on its page or still editable under WIP");
+            Require(new[] { "EnableCampaignAdvisor", "SaveWip" }.All(id => Named(id).Ancestors().Contains(Named("WipCategory"))) &&
+                !Named("EnableCampaignAdvisor").Ancestors().Contains(Named("GeneralCategory")),
+                "Campaign alpha settings or their save action are still placed under General");
             var apiList = Named("ApiConnectionList"); var apiEditor = Named("ApiEditor");
             Require(apiList.Parent == apiEditor.Parent && (string?)apiEditor.Attribute("Visibility") == "Collapsed" &&
                 Named("ApiConnectionCards").Ancestors().Contains(apiList) && !Named("ApiConnectionCards").Ancestors().Contains(apiEditor) &&

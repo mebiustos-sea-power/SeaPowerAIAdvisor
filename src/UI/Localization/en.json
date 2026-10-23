@@ -1,6 +1,6 @@
 {
   "wip.category": "WIP (experimental)",
-  "wip.empty": "There are currently no experimental features.",
+  "wip.campaign_alpha": "Enable AI on the campaign screen of Bungalow's Dynamic Campaign Mod (alpha)",
   "commands.enabled": "Enable commands",
   "failure.restart": "Restart advisor",
   "developer.throw_exception": "Throw test exception",
@@ -248,8 +248,6 @@
   "general.text_size_small": "Small",
   "general.text_size_standard": "Medium",
   "general.text_size_large": "Large",
-  "general.experimental": "Experimental features",
-  "general.campaign_alpha": "Enable AI on the campaign screen of Bungalow's Dynamic Campaign Mod (alpha)",
   "ai.consultation": "AI settings",
   "ai.max_query_rounds": "Maximum API requests per consultation",
   "ai.max_query_rounds_tip": "1–20 requests; default: 15. The information size limit may end the consultation sooner.",

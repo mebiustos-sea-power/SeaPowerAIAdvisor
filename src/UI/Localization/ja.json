@@ -1,6 +1,6 @@
 {
   "wip.category": "WIP（試験的機能）",
-  "wip.empty": "現在、試験的な機能はありません。",
+  "wip.campaign_alpha": "Bungalow's Dynamic Campaign Mod のキャンペーン画面でAIを有効にする（アルファ版）",
   "commands.enabled": "コマンドを有効にする",
   "failure.restart": "アドバイザーを再起動",
   "developer.throw_exception": "例外を発生させる",
@@ -248,8 +248,6 @@
   "general.text_size_small": "小",
   "general.text_size_standard": "中",
   "general.text_size_large": "大",
-  "general.experimental": "試験的な機能",
-  "general.campaign_alpha": "Bungalow's Dynamic Campaign Mod のキャンペーン画面でAIを有効にする（アルファ版）",
   "ai.consultation": "AI設定",
   "ai.max_query_rounds": "1回の相談でのAPI通信回数の上限",
   "ai.max_query_rounds_tip": "1～20回。初期値は15回です。情報量の上限に達すると、指定回数より前に相談を終了します。",

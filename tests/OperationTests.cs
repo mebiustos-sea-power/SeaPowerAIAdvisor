@@ -32,7 +32,7 @@ internal static class OperationTests
                         "Saving command settings changed a legacy permission");
                 }
                 store.SaveUnitOperations(true); store.EnsureUserName("Commander");
-                store.SaveGeneral(AdvisorTextSize.Large, true, "Captain", false, true);
+                store.SaveGeneral(AdvisorTextSize.Large, "Captain", false, true); store.SaveCampaign(true);
                 store.SaveInformation(AdvisorInformation.Default); store.SaveConsultation(3, 1, "brief"); store.SaveDeveloper(true, () => { });
                 var reopened = new AdvisorOptionsStore(store.Path);
                 Require(reopened.Current.UnitOperationsEnabled && reopened.Current.DeveloperApiEnabled && reopened.Current.CommonPrompt == "brief" && !reopened.Current.LinkOwnUnits, "Another category lost the command choice");

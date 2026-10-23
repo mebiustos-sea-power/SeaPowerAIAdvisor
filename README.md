@@ -32,7 +32,7 @@ Choose one installation method for AI Advisor:
 
 Enable AI Advisor in the game's Mod Manager, then completely restart Sea Power. Use either the Workshop copy or the manual copy to avoid loading duplicate installations. Keep the package's DLLs and `Prompts` folder together when updating.
 
-Bungalow's Dynamic Campaign Mod is **not required** for battle-screen use. Its campaign screen has optional **alpha** support, disabled by default and enabled in **Settings → General**.
+Bungalow's Dynamic Campaign Mod is **not required** for battle-screen use. Its campaign screen has optional **alpha** support, disabled by default and enabled in **Settings → WIP (experimental)**.
 
 ## First use
 
