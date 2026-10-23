@@ -45,7 +45,7 @@ internal sealed class AdvisorInformation
         new InformationItem(InformationKind.BattleDamage, "battle_damage", "damage", InformationKind.BattleUnits),
         new InformationItem(InformationKind.BattleWeapons, "battle_weapons", "weapons", InformationKind.BattleUnits),
         new InformationItem(InformationKind.BattleSensors, "battle_sensors", "sensor_status", InformationKind.BattleUnits),
-        new InformationItem(InformationKind.BattleSensorPerformance, "battle_sensor_performance", "sensor_performance", InformationKind.BattleUnits, defaultEnabled: false),
+        new InformationItem(InformationKind.BattleSensorPerformance, "battle_sensor_performance", "sensor_performance", InformationKind.BattleUnits),
         new InformationItem(InformationKind.BattleLaunchedWeapons, "battle_launched_weapons", "launched_weapons", InformationKind.BattleUnits),
         new InformationItem(InformationKind.BattleContacts, "battle_contacts", "contacts"),
         new InformationItem(InformationKind.BattleWeaponContacts, "battle_weapon_contacts", "weapon_contacts", InformationKind.BattleContacts),

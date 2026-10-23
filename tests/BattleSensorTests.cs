@@ -20,7 +20,8 @@ internal static partial class BattleTests
             f.OwnUnits.Add(aircraft);
             var snapshot = f.Capture();
             air.IsOn.Value = false; air.DisplayName.Value = "Changed"; sonar._sonar.IsActive.Value = true;
-            var session = new BattleQuerySession(snapshot, "ja", "Sensor operation", 20);
+            var session = new BattleQuerySession(snapshot, "ja", "Sensor operation", 20,
+                AdvisorInformation.Default.With(InformationKind.BattleSensorPerformance, false));
             var initial = session.InitialInput();
             Require(initial["knowledge_catalog"]!["unit_capabilities"]!["available_sections"]!.Values<string>().Contains("sensors") &&
                 !initial.ToString().Contains("Added radar", StringComparison.Ordinal), "Sensor status is unavailable or was sent before being requested");
@@ -32,7 +33,7 @@ internal static partial class BattleTests
                 (string?)data["units"]![1]!["sensors"]![0]!["display_name"] == "Aircraft radar",
                 "Individual operation, inoperability, passive sonar mode, aircraft equipment or frozen state was lost");
             Require(data["units"]![0]!["sensor_performance"] == null && data["sensor_references"] == null,
-                "Default-off sensor performance was disclosed");
+                "Disabled sensor performance was disclosed");
             var fuel = SensorQuery(session, new[] { "own_unit_1" }, "fuel");
             Require(fuel["units"]![0]!["sensors"] == null, "A fuel-only request also returned sensor status");
         });
@@ -72,7 +73,7 @@ internal static partial class BattleTests
             var snapshot = f.Capture();
             var oldSelections = AdvisorInformation.Default.Data(); oldSelections.Remove("battle_sensors"); oldSelections.Remove("battle_sensor_performance");
             var defaults = AdvisorInformation.ParseSelections(oldSelections);
-            Require(defaults.Allows(InformationKind.BattleSensors) && !defaults.Allows(InformationKind.BattleSensorPerformance), "New defaults were not applied to existing selections");
+            Require(defaults.Allows(InformationKind.BattleSensors) && defaults.Allows(InformationKind.BattleSensorPerformance), "New defaults were not applied to existing selections");
             foreach (var status in new[] { false, true })
             foreach (var performance in new[] { false, true })
             {
