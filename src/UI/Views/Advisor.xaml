@@ -142,8 +142,8 @@
         <Button x:Name="OpenConsultationCategory" Grid.Row="2" Grid.Column="0" Content="{DynamicResource Advisor.ai.consultation}" Height="64" Margin="4" FontSize="15" />
         <Button x:Name="OpenCommandsCategory" Grid.Row="2" Grid.Column="1" Content="{DynamicResource Advisor.commands.category}" Height="64" Margin="4" FontSize="15" />
         <Button x:Name="OpenInformationCategory" Grid.Row="3" Grid.Column="0" Content="{DynamicResource Advisor.information.tab}" Height="64" Margin="4" FontSize="15" />
-        <Button x:Name="OpenDeveloperCategory" Grid.Row="3" Grid.Column="1" Content="{DynamicResource Advisor.diagnostics.heading}" Height="64" Margin="4" FontSize="15" />
-        <Button x:Name="OpenWipCategory" Grid.Row="4" Grid.Column="0" Content="{DynamicResource Advisor.wip.category}" Height="64" Margin="4" FontSize="15" />
+        <Button x:Name="OpenWipCategory" Grid.Row="3" Grid.Column="1" Content="{DynamicResource Advisor.wip.category}" Height="64" Margin="4" FontSize="15" />
+        <Button x:Name="OpenDeveloperCategory" Grid.Row="4" Grid.Column="0" Content="{DynamicResource Advisor.diagnostics.heading}" Height="64" Margin="4" FontSize="15" />
       </Grid>
       <Button x:Name="BackToConversation" Grid.Row="2" Content="{DynamicResource Advisor.settings.back_chat}" Height="30" Padding="12,0" HorizontalAlignment="Right" Margin="0,12,0,0" />
     </Grid>
