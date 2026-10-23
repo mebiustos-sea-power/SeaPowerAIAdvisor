@@ -71,6 +71,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         using var reader = new StreamReader(viewSource, Encoding.UTF8);
         content = GUI.ParseXaml(reader.ReadToEnd()) as FrameworkElement
             ?? throw new InvalidOperationException("The advisor view is not a FrameworkElement.");
+        AdvisorUiResources.Apply(content);
         ApplyTextResources();
         question = Named<TextBox>(content, "Question");
         transcriptScroll = Named<ScrollViewer>(content, "Transcript");

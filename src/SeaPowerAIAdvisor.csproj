@@ -32,6 +32,7 @@
   <ItemGroup>
     <EmbeddedResource Include="$(PkgMarkdig)\lib\netstandard2.1\Markdig.dll" LogicalName="SeaPowerAIAdvisor.Markdig.dll" />
     <EmbeddedResource Include="UI\Views\Advisor.xaml" LogicalName="SeaPowerAIAdvisor.Advisor.xaml" />
+    <EmbeddedResource Include="UI\Views\AdvisorControls.xaml" LogicalName="SeaPowerAIAdvisor.AdvisorControls.xaml" />
     <EmbeddedResource Include="UI\Views\AdvisorHudButton.xaml" LogicalName="SeaPowerAIAdvisor.AdvisorHudButton.xaml" />
     <EmbeddedResource Include="UI\Views\AdvisorError.xaml" LogicalName="SeaPowerAIAdvisor.AdvisorError.xaml" />
     <EmbeddedResource Include="UI\Assets\advisor-default.png" LogicalName="SeaPowerAIAdvisor.DefaultPortrait.png" />
