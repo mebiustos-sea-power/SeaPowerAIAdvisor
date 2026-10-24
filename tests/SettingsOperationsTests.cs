@@ -39,7 +39,7 @@ internal static class SettingsOperationsTests
                 var settings = provider == "ollama"
                     ? new JObject { ["base_url"] = "http://localhost:11434/proxy", ["model"] = "qwen3:8b", ["num_ctx"] = "32768" }
                     : new JObject { ["api_key"] = "mock_source_secret", ["model"] = provider == "openrouter" ? "vendor/source" : provider == "gemini" ? "gemini-source" : "source-model" };
-                var original = new AdvisorApiConfiguration("source", "Original", provider, settings, 75, AdvisorSituationDelivery.OnRequest);
+                var original = new AdvisorApiConfiguration("source", "Original", provider, settings, 75, AdvisorSituationDelivery.OnRequest, 32768);
                 store.SaveEntry(new AdvisorApiConfigurationDraft(original), true);
                 var sub = new AdvisorApiConfiguration("sub", "Existing sub", "mock_sub_secret", "gemini-sub");
                 store.SaveEntry(new AdvisorApiConfigurationDraft(sub), true); store.Assign(original.Id, sub.Id); store.SaveLogging(true);
@@ -50,7 +50,7 @@ internal static class SettingsOperationsTests
                 if (provider != "ollama") unsaved.ApiKey = "mock_unsaved_secret";
                 var saved = store.Duplicate(original.Id, " - コピー"); var copy = saved.Configurations.Last();
                 Require(store.Read().Configurations.Count == 3 && copy.Id != original.Id && copy.Name == original.Name + " - コピー" &&
-                    copy.Provider == original.Provider && copy.RequestTimeoutSeconds == 75 && copy.SituationDelivery == AdvisorSituationDelivery.OnRequest &&
+                    copy.Provider == original.Provider && copy.RequestTimeoutSeconds == 75 && copy.MaxOutputTokens == 32768 && copy.SituationDelivery == AdvisorSituationDelivery.OnRequest &&
                     JToken.DeepEquals(copy.Settings, original.Settings), "Duplication used unsaved values, lost fields or did not persist immediately");
                 Require(saved.MainId == original.Id && saved.SubId == sub.Id && saved.LogAiJson &&
                     JToken.DeepEquals(saved.Main.Settings, original.Settings) && saved.Sub!.ApiKey == "mock_sub_secret",

@@ -23,6 +23,7 @@ internal static partial class ProviderTests
         RunNanoGpt(check);
         RunErrorHistory(check);
         RunRequestTimeouts(check);
+        RunOutputTokens(check);
         RunExtensions(check);
         RunOperations(check);
         RunOperationPermission(check);

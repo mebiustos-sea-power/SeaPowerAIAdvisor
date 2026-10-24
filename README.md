@@ -54,7 +54,7 @@ For an unidentified contact, open its information window and use **[adviser name
 | Gemini | API key, Gemini model ID | `gemini-3.5-flash-lite` |
 | Ollama | Server URL, installed model, context length | `qwen3:8b` |
 | OpenRouter | API key, model ID in `provider/model` form | `google/gemini-3.5-flash-lite` |
-| NanoGPT | API key, subscription-included model ID, output token limit | `z-ai/glm-5.3` |
+| NanoGPT | API key, subscription-included model ID | `z-ai/glm-5.3` |
 
 Choose a model that supports **tool calling**. These are examples, not a guarantee that every model will interpret the supplied data correctly. OpenRouter and NanoGPT connection tests check a tool-call/result round trip as well as the final response.
 
@@ -62,7 +62,7 @@ Future prompt tuning and evaluation of adviser responses will primarily use **GL
 
 Duplicating a connection immediately saves a separate copy of its saved settings and returns to the card list. Pending edits require confirmation before being discarded. The original connection keeps its main/sub assignments; copies are unassigned. Duplicate names are allowed.
 
-NanoGPT connections also have an **Output token limit (including reasoning)** field. Increase it if a model exhausts its reasoning budget before producing an answer or tool call. Existing connections retain their previous effective limit until edited.
+Each connection has an **Output token limit (including reasoning)** field, defaulting to **8192**. Increase it if a model exhausts its output budget before producing an answer or complete tool call. The limit is applied to each API response, including connection tests. Previously saved NanoGPT connection limits are retained; connections without their own limit use the new default rather than the retired shared setting.
 
 Connection settings are stored in `api-settings.json`. On the first startup after this update, an existing `gemini.json` is renamed automatically if the new file does not exist. Its contents are preserved.
 

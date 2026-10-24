@@ -29,7 +29,7 @@ internal abstract class ChatCompletionProvider : IAdvisorProvider
         var body = new JObject
         {
             ["model"] = configuration.Model, ["messages"] = messages.DeepClone(), ["stream"] = false,
-            ["max_tokens"] = options.MaxOutputTokens
+            ["max_tokens"] = configuration.MaxOutputTokens
         };
         var tools = new JArray();
         foreach (var definition in definitions)

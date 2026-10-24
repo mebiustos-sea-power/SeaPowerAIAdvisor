@@ -19,7 +19,7 @@ internal static class GeminiTests
         var assembly = Assembly.LoadFrom(campaignPath);
         check("Local Gemini settings reject malformed data without including secret values in errors", () =>
         {
-            Require(Settings().Model == AdvisorSettings.DefaultModel, "Default Lite model missing");
+            Require(Settings().Model == AdvisorSettings.DefaultModel && Settings().MaxOutputTokens == 8192, "Default model or output limit missing");
             foreach (var json in new[] {
                 "{\"api_key\":\"" + MockKey + "\",\"api_key\":\"duplicate\"}", "{\"api_key\":\"" + MockKey + "\",",
                 "{\"api_key\":\"" + MockKey + "\",\"model\":\"https://other-host\"}",

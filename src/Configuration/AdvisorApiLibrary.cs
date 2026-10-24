@@ -13,15 +13,16 @@ internal sealed class AdvisorApiConfiguration
     internal string Name { get; }
     internal string Provider { get; }
     internal int RequestTimeoutSeconds { get; }
+    internal int MaxOutputTokens { get; }
     internal JObject Settings { get; }
     internal AdvisorSituationDelivery SituationDelivery { get; }
     internal string ApiKey => (string?)Settings["api_key"] ?? "";
     internal string Model => (string?)Settings["model"] ?? "";
-    internal AdvisorApiConfiguration(string id, string name, string key, string model, int requestTimeoutSeconds = AdvisorRequestTimeout.DefaultSeconds)
-        : this(id, name, "gemini", new JObject { ["api_key"] = key.Trim(), ["model"] = model.Trim() }, requestTimeoutSeconds) { }
-    internal AdvisorApiConfiguration(string id, string name, string provider, JObject settings, int requestTimeoutSeconds = AdvisorRequestTimeout.DefaultSeconds, AdvisorSituationDelivery situationDelivery = AdvisorSituationDelivery.OnDemand)
-    { SituationDelivery = situationDelivery; _ = situationDelivery.Code(); Id = id; Name = name.Trim(); Provider = provider; Settings = (JObject)settings.DeepClone(); RequestTimeoutSeconds = AdvisorRequestTimeout.Validate(requestTimeoutSeconds); }
-    internal JObject Json() => new() { ["id"] = Id, ["name"] = Name, ["provider"] = Provider, ["settings"] = Settings.DeepClone(), ["request_timeout_seconds"] = RequestTimeoutSeconds, ["situation_delivery"] = SituationDelivery.Code() };
+    internal AdvisorApiConfiguration(string id, string name, string key, string model, int requestTimeoutSeconds = AdvisorRequestTimeout.DefaultSeconds, int maxOutputTokens = AdvisorOutputTokens.Default)
+        : this(id, name, "gemini", new JObject { ["api_key"] = key.Trim(), ["model"] = model.Trim() }, requestTimeoutSeconds, maxOutputTokens: maxOutputTokens) { }
+    internal AdvisorApiConfiguration(string id, string name, string provider, JObject settings, int requestTimeoutSeconds = AdvisorRequestTimeout.DefaultSeconds, AdvisorSituationDelivery situationDelivery = AdvisorSituationDelivery.OnDemand, int maxOutputTokens = AdvisorOutputTokens.Default)
+    { MaxOutputTokens = AdvisorOutputTokens.Validate(maxOutputTokens); SituationDelivery = situationDelivery; _ = situationDelivery.Code(); Id = id; Name = name.Trim(); Provider = provider; Settings = (JObject)settings.DeepClone(); RequestTimeoutSeconds = AdvisorRequestTimeout.Validate(requestTimeoutSeconds); }
+    internal JObject Json() => new() { ["id"] = Id, ["name"] = Name, ["provider"] = Provider, ["settings"] = Settings.DeepClone(), ["request_timeout_seconds"] = RequestTimeoutSeconds, ["max_output_tokens"] = MaxOutputTokens, ["situation_delivery"] = SituationDelivery.Code() };
 }
 
 internal sealed class AdvisorApiLibrary
@@ -63,11 +64,27 @@ internal sealed class AdvisorApiLibrary
         {
             var legacy = (int)source["schema_version"]! == 2;
             var fields = legacy ? new[] { "id", "name", "api_key", "model" } : new[] { "id", "name", "provider", "settings" };
-            if (entry is not JObject item || item.Properties().Any(p => !fields.Contains(p.Name) && (legacy || (p.Name != "request_timeout_seconds" && p.Name != "situation_delivery"))) ||
+            if (entry is not JObject item || item.Properties().Any(p => !fields.Contains(p.Name) && (legacy || (p.Name != "request_timeout_seconds" && p.Name != "situation_delivery" && p.Name != "max_output_tokens"))) ||
                 fields.Any(f => item[f]?.Type != (f == "settings" ? JTokenType.Object : JTokenType.String))) throw Invalid();
-            items.Add(legacy
-                ? new AdvisorApiConfiguration((string)item["id"]!, (string)item["name"]!, (string)item["api_key"]!, (string)item["model"]!, legacyTimeout)
-                : new AdvisorApiConfiguration((string)item["id"]!, (string)item["name"]!, (string)item["provider"]!, (JObject)item["settings"]!, AdvisorRequestTimeout.Read(item, legacyTimeout), AdvisorSituationDeliverySetting.Read(item)));
+            if (legacy)
+            {
+                items.Add(new AdvisorApiConfiguration((string)item["id"]!, (string)item["name"]!, (string)item["api_key"]!, (string)item["model"]!, legacyTimeout));
+                continue;
+            }
+            var settings = (JObject)item["settings"]!.DeepClone();
+            var outputTokens = AdvisorOutputTokens.Read(item);
+            // Move the former NanoGPT field into connection metadata; never inherit the old shared budget.
+            if ((string)item["provider"]! == "nanogpt" && settings.TryGetValue("max_output_tokens", out var oldOutput))
+            {
+                if (item["max_output_tokens"] == null)
+                {
+                    if (oldOutput.Type != JTokenType.String) throw new AdvisorConnectionException("output_tokens_invalid");
+                    outputTokens = AdvisorOutputTokens.Parse(oldOutput.ToString());
+                }
+                settings.Remove("max_output_tokens");
+            }
+            items.Add(new AdvisorApiConfiguration((string)item["id"]!, (string)item["name"]!, (string)item["provider"]!, settings,
+                AdvisorRequestTimeout.Read(item, legacyTimeout), AdvisorSituationDeliverySetting.Read(item), outputTokens));
         }
         var result = new AdvisorApiLibrary(items, (string?)source["main_api_id"], (string?)source["sub_api_id"]);
         result.ValidateAssignments();
@@ -101,6 +118,7 @@ internal sealed class AdvisorApiLibrary
     {
         var result = Shared(source);
         result["request_timeout_seconds"] = main.RequestTimeoutSeconds;
+        result["max_output_tokens"] = main.MaxOutputTokens;
         result["fallback_request_timeout_seconds"] = sub?.RequestTimeoutSeconds ?? main.RequestTimeoutSeconds;
         result["api_key"] = main.ApiKey;
         result["model"] = main.Model;
@@ -110,7 +128,7 @@ internal sealed class AdvisorApiLibrary
     }
 
     private static JObject Shared(JObject source) => new(source.Properties()
-        .Where(p => p.Name is "request_timeout_seconds" or "consultation_timeout_seconds" or "max_output_tokens" or "log_ai_json")
+        .Where(p => p.Name is "request_timeout_seconds" or "consultation_timeout_seconds" or "log_ai_json")
         .Select(p => new JProperty(p.Name, p.Value.DeepClone())));
     private static AdvisorConnectionException Invalid() => new("settings_invalid");
 }
@@ -121,11 +139,12 @@ internal sealed class AdvisorApiConfigurationDraft
     internal string Name { get; set; }
     internal string Provider { get; set; }
     internal int RequestTimeoutSeconds { get; set; }
+    internal int MaxOutputTokens { get; set; }
     internal JObject Settings { get; set; }
     internal AdvisorSituationDelivery SituationDelivery { get; set; }
     internal string ApiKey { get => (string?)Settings["api_key"] ?? ""; set => Settings["api_key"] = value.Trim(); }
     internal string Model { get => (string?)Settings["model"] ?? ""; set => Settings["model"] = value.Trim(); }
     internal AdvisorApiConfigurationDraft(AdvisorApiConfiguration value)
-    { Id = value.Id; Name = value.Name; Provider = value.Provider; Settings = (JObject)value.Settings.DeepClone(); RequestTimeoutSeconds = value.RequestTimeoutSeconds; SituationDelivery = value.SituationDelivery; }
-    internal AdvisorApiConfiguration Build() => new(Id, Name, Provider, Settings, RequestTimeoutSeconds, SituationDelivery);
+    { Id = value.Id; Name = value.Name; Provider = value.Provider; Settings = (JObject)value.Settings.DeepClone(); RequestTimeoutSeconds = value.RequestTimeoutSeconds; MaxOutputTokens = value.MaxOutputTokens; SituationDelivery = value.SituationDelivery; }
+    internal AdvisorApiConfiguration Build() => new(Id, Name, Provider, Settings, RequestTimeoutSeconds, SituationDelivery, MaxOutputTokens);
 }

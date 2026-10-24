@@ -323,6 +323,8 @@
                     </Border>
                     <StackPanel x:Name="ApiProviderFields" />
                     <TextBlock x:Name="ApiProviderError" Foreground="{DynamicResource AdvisorErrorBrush}" TextWrapping="Wrap" Margin="0,8,0,0" Visibility="Collapsed" />
+                    <TextBlock Text="{DynamicResource Advisor.connection.output_tokens}" FontSize="12" Margin="0,12,0,4" />
+                    <TextBox x:Name="OutputTokens" Width="140" HorizontalAlignment="Left" FontSize="14" Padding="7" MaxLength="10" />
                     <TextBlock Text="{DynamicResource Advisor.connection.request_timeout_label}" FontSize="12" Margin="0,12,0,4" />
                     <TextBox x:Name="RequestTimeout" Width="100" HorizontalAlignment="Left" FontSize="14" Padding="7" MaxLength="5" />
                     <StackPanel x:Name="SituationDeliveryPanel" Margin="0,12,0,0">

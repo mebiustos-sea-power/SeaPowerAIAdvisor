@@ -20,10 +20,11 @@ internal sealed class GeminiService : AdvisorService
     });
     internal override void Validate(JObject settings)
     { ValidateFields(settings); _ = Resolve(settings, new AdvisorConnectionOptions(new JObject()), false); }
-    private static AdvisorSettings Resolve(JObject settings, AdvisorConnectionOptions options, bool fallback, int? timeout = null)
+    private static AdvisorSettings Resolve(JObject settings, AdvisorConnectionOptions options, bool fallback, int? timeout = null, int maxOutputTokens = AdvisorOutputTokens.Default)
     {
         var document = (JObject)options.Json.DeepClone();
         if (timeout.HasValue) document["request_timeout_seconds"] = timeout.Value;
+        document["max_output_tokens"] = maxOutputTokens;
         document["api_key"] = settings["api_key"]!.DeepClone(); document["model"] = settings["model"]!.DeepClone();
         if (fallback)
         {
@@ -33,11 +34,11 @@ internal sealed class GeminiService : AdvisorService
         return fallback ? result.ForFallback() : result;
     }
     internal override IAdvisorProvider Open(AdvisorApiConfiguration configuration, AdvisorConnectionOptions options,
-        bool fallback, AdvisorHttpTransport transport) => new GeminiProvider(new GeminiTransport(transport), Resolve(configuration.Settings, options, fallback, configuration.RequestTimeoutSeconds));
+        bool fallback, AdvisorHttpTransport transport) => new GeminiProvider(new GeminiTransport(transport), Resolve(configuration.Settings, options, fallback, configuration.RequestTimeoutSeconds, configuration.MaxOutputTokens));
     internal override async Task<AdviceResult> TestAsync(AdvisorApiConfiguration configuration, AdvisorConnectionOptions options,
         AdvisorHttpTransport transport, string request, CancellationToken cancellation)
     {
-        var settings = Resolve(configuration.Settings, options, false, configuration.RequestTimeoutSeconds);
+        var settings = Resolve(configuration.Settings, options, false, configuration.RequestTimeoutSeconds, configuration.MaxOutputTokens);
         var body = GeminiInteraction.Request(settings, new JArray(new JObject { ["type"] = "user_input",
             ["content"] = new JArray(new JObject { ["type"] = "text", ["text"] = request }) }), store: false);
         var response = await new GeminiTransport(transport).GenerateAsync(settings, body, cancellation).ConfigureAwait(false);

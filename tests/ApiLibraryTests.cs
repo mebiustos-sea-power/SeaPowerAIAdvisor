@@ -33,7 +33,7 @@ internal static class ApiLibraryTests
                 Require(path == destination && !File.Exists(legacy) && File.ReadAllBytes(path).SequenceEqual(before),
                     "Filename migration transformed, duplicated or lost the existing settings");
                 var saved = AdvisorSettings.Edit(path);
-                Require(saved.Main.ApiKey == MainKey && saved.Options.MaxOutputTokens == 2048 && saved.LogAiJson,
+                Require(saved.Main.ApiKey == MainKey && saved.Main.MaxOutputTokens == 8192 && saved.LogAiJson,
                     "Renaming lost the registered connection, output budget or logging preference");
                 Require(AdvisorSettings.MigrateFileName(dataPath) == path && File.ReadAllBytes(path).SequenceEqual(before), "Repeated startup rewrote the migrated settings");
                 new AdvisorApiSettingsStore(path, () => "API {0}").SaveLogging(false);
@@ -72,7 +72,7 @@ internal static class ApiLibraryTests
             var saved = AdvisorSettings.Load(path); var loaded = AdvisorSettings.Edit(path, "Different language {0}");
             Require(saved.ApiKey == MainKey && saved.ForFallback().RequestApiKey == SubKey && saved.Model == "gemini-main" &&
                 saved.ForFallback().RequestModel == "gemini-sub" && saved.RequestTimeoutSeconds == 45 &&
-                saved.MaxOutputTokens == 2048 && saved.LogAiJson &&
+                saved.MaxOutputTokens == 8192 && saved.LogAiJson &&
                 loaded.Main.Name == "API設定1" && loaded.Sub!.Name == "API設定2", "Saving migration reset credentials, labels or advanced settings");
             var json = JObject.Parse(File.ReadAllText(path));
             Require(json["api_key"] == null && json["fallback_api_key"] == null && json["model"] == null && json["fallback_model"] == null,

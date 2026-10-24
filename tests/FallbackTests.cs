@@ -17,7 +17,7 @@ internal static class FallbackTests
     private const string Backup = "mock_fallback_never_sent_to_real_API";
     internal static void Run(Action<string, Action> check)
     {
-        check("The main key stays required while the optional fallback persists, clears and discards without changing advanced settings", () => InTemp(directory =>
+        check("The main key stays required while the optional fallback persists, clears and discards without changing credentials or deadlines", () => InTemp(directory =>
         {
             var path = Path.Combine(directory, "settings.json");
             var original = new JObject { ["api_key"] = Main, ["model"] = "gemini-test-model", ["max_output_tokens"] = 2048,
@@ -28,7 +28,7 @@ internal static class FallbackTests
             Require(File.ReadAllBytes(path).SequenceEqual(before) && AdvisorSettings.Edit(path).SubId == null, "Editing enabled fallback before Save");
             AdvisorSettings.WriteBytes(path, draft.Data()); var saved = AdvisorSettings.Load(path);
             Require(saved.ApiKey == Main && saved.FallbackApiKey == Backup && saved.ForFallback().RequestApiKey == Backup &&
-                saved.ForFallback().ApiKey == Main && saved.MaxOutputTokens == 2048 && saved.RequestTimeoutSeconds == 45,
+                saved.ForFallback().ApiKey == Main && saved.MaxOutputTokens == 8192 && saved.RequestTimeoutSeconds == 45,
                 "Saving fallback changed the primary or advanced settings");
             draft = AdvisorSettings.Edit(path); draft.SubId = null; AdvisorSettings.WriteBytes(path, draft.Data());
             Require(AdvisorSettings.Load(path).FallbackApiKey == "", "Clearing the optional key did not disable fallback");

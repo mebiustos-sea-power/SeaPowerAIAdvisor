@@ -24,7 +24,7 @@ internal sealed class OllamaProvider : IAdvisorProvider
         var request = new JObject
         {
             ["model"] = configuration.Model, ["messages"] = messages.DeepClone(), ["stream"] = false,
-            ["options"] = new JObject { ["num_ctx"] = OllamaService.ContextLength(configuration.Settings), ["num_predict"] = options.MaxOutputTokens }
+            ["options"] = new JObject { ["num_ctx"] = OllamaService.ContextLength(configuration.Settings), ["num_predict"] = configuration.MaxOutputTokens }
         };
         var tools = new JArray((definitions ?? Enumerable.Empty<JObject>()).Select(definition => new JObject { ["type"] = "function", ["function"] = definition.DeepClone() }));
         if (tools.Count > 0) request["tools"] = tools;

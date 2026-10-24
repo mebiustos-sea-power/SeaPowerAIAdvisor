@@ -14,7 +14,7 @@ internal sealed class AdvisorApiSettingsView
     private readonly ComboBox main, sub, provider, delivery;
     private readonly AdvisorApiConnectionListView cards;
     private readonly FrameworkElement deliveryPanel;
-    private readonly TextBox name, timeout;
+    private readonly TextBox name, timeout, outputTokens;
     private readonly StackPanel fields;
     private readonly TextBlock providerDescription, providerError;
     private readonly AdvisorServiceCatalog services = AdvisorServiceCatalog.BuiltIn;
@@ -52,6 +52,7 @@ internal sealed class AdvisorApiSettingsView
         listPane = Named<FrameworkElement>("ApiConnectionList");
         cards = new AdvisorApiConnectionListView(Named<StackPanel>("ApiConnectionCards"), services, text, id => Run(() => Edit(id)), guard);
         name = Named<TextBox>("ApiConfigurationName"); timeout = Named<TextBox>("RequestTimeout"); provider = Named<ComboBox>("ApiProvider");
+        outputTokens = Named<TextBox>("OutputTokens");
         delivery = Named<ComboBox>("SituationDelivery"); deliveryPanel = Named<FrameworkElement>("SituationDeliveryPanel");
         delivery.SelectionChanged += (_, _) => guard(NotifyChanged);
         fields = Named<StackPanel>("ApiProviderFields"); providerError = Named<TextBlock>("ApiProviderError");
@@ -63,6 +64,8 @@ internal sealed class AdvisorApiSettingsView
         Bind(add, Add); Bind(duplicate, Duplicate); Bind(remove, Remove); Bind(saveEntry, SaveEntry); Bind(cancelEntry, CancelEntry); Bind(saveAssignments, SaveAssignments);
         name.TextChanged += (_, _) => guard(NotifyChanged);
         timeout.TextChanged += (_, _) => guard(NotifyChanged);
+        outputTokens.TextChanged += (_, _) => guard(NotifyChanged);
+        outputTokens.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(outputTokens)); outputTokens.LostKeyboardFocus += (_, _) => guard(() => typing.Release(outputTokens));
         timeout.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(timeout)); timeout.LostKeyboardFocus += (_, _) => guard(() => typing.Release(timeout));
         name.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(name)); name.LostKeyboardFocus += (_, _) => guard(() => typing.Release(name));
         provider.SelectionChanged += (_, _) => guard(() =>
@@ -83,19 +86,23 @@ internal sealed class AdvisorApiSettingsView
     { ReadEditor(); return (editor ?? throw new AdvisorConnectionException("api_selection_invalid")).Build(); }
     internal AdvisorConnectionOptions TestOptions() => store.TestOptions();
     private readonly Action renderFields;
-    private void ReadEditor(bool includeTimeout = true)
+    private void ReadEditor(bool includeLimits = true)
     {
         if (editor == null) return;
         editor.Name = name.Text ?? "";
         if (delivery.SelectedIndex >= 0) editor.SituationDelivery = deliveryChoices[delivery.SelectedIndex];
-        if (includeTimeout) editor.RequestTimeoutSeconds = AdvisorRequestTimeout.Parse(timeout.Text ?? "");
+        if (includeLimits)
+        {
+            editor.RequestTimeoutSeconds = AdvisorRequestTimeout.Parse(timeout.Text ?? "");
+            editor.MaxOutputTokens = AdvisorOutputTokens.Parse(outputTokens.Text ?? "");
+        }
         foreach (var field in fieldValues) editor.Settings[field.Key] = field.Value().Trim();
     }
     // Compare raw editable values so invalid/incomplete input can still be discarded without validation.
     private JObject EditorValues() => new()
     {
         ["name"] = name.Text ?? "", ["provider"] = editor!.Provider, ["timeout"] = timeout.Text ?? "",
-        ["delivery"] = delivery.SelectedIndex,
+        ["output_tokens"] = outputTokens.Text ?? "", ["delivery"] = delivery.SelectedIndex,
         ["fields"] = new JObject(fieldValues.Select(field => new JProperty(field.Key, field.Value())))
     };
     private void ShowFields(Action<Action> guard)
@@ -118,7 +125,6 @@ internal sealed class AdvisorApiSettingsView
         }
         finally { updating = wasUpdating; }
         if (service == null) return;
-        editor!.Settings = service.EditSettings(editor.Settings, store.TestOptions());
         foreach (var field in service.Fields)
         {
             fields.Children.Add(new TextBlock { Text = field.Caption(text()), FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 4) });
@@ -146,7 +152,7 @@ internal sealed class AdvisorApiSettingsView
         main.IsEnabled = sub.IsEnabled = saveAssignments.IsEnabled = useTab.IsEnabled = data != null && !busy && !Editing;
         listPane.IsEnabled = add.IsEnabled = data != null && !busy && !Editing;
         duplicate.IsEnabled = remove.IsEnabled = Editing && !adding && !busy;
-        name.IsEnabled = timeout.IsEnabled = provider.IsEnabled = delivery.IsEnabled = fields.IsEnabled = saveEntry.IsEnabled = cancelEntry.IsEnabled = Editing && !busy;
+        name.IsEnabled = timeout.IsEnabled = outputTokens.IsEnabled = provider.IsEnabled = delivery.IsEnabled = fields.IsEnabled = saveEntry.IsEnabled = cancelEntry.IsEnabled = Editing && !busy;
     }
     private void Refresh(AdvisorSettingsDraft? value, bool keepAssignments)
     {
@@ -164,7 +170,7 @@ internal sealed class AdvisorApiSettingsView
             main.SelectedIndex = Array.IndexOf(ids, selectedMain) + 1; sub.SelectedIndex = Array.IndexOf(ids, selectedSub) + 1;
             cards.Show(value?.Configurations.Select(c => c.Build()).ToArray() ?? Array.Empty<AdvisorApiConfiguration>(), value?.MainId, value?.SubId);
             typing.Release(); editorBaseline = null; listPane.Visibility = Visibility.Visible;
-            editorPane.Visibility = Visibility.Collapsed; name.Text = timeout.Text = ""; provider.Items.Clear(); fields.Children.Clear(); fieldValues.Clear(); providerDrafts.Clear();
+            editorPane.Visibility = Visibility.Collapsed; name.Text = timeout.Text = outputTokens.Text = ""; provider.Items.Clear(); fields.Children.Clear(); fieldValues.Clear(); providerDrafts.Clear();
             providerDescription.Text = ""; providerDescriptionBox.Visibility = Visibility.Collapsed;
         }
         finally { updating = false; }
@@ -176,7 +182,8 @@ internal sealed class AdvisorApiSettingsView
         editor = value; adding = isNew; updating = true;
         try
         {
-            name.Text = value.Name; timeout.Text = value.RequestTimeoutSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture); providerDrafts.Clear(); provider.Items.Clear();
+            name.Text = value.Name; timeout.Text = value.RequestTimeoutSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            outputTokens.Text = value.MaxOutputTokens.ToString(System.Globalization.CultureInfo.InvariantCulture); providerDrafts.Clear(); provider.Items.Clear();
             providerChoices = services.Services;
             foreach (var service in providerChoices) provider.Items.Add(new ComboBoxItem { Content = service.Caption(text()) });
             var index = providerChoices.ToList().FindIndex(s => s.Id == value.Provider);

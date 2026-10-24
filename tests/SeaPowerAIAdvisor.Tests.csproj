@@ -99,6 +99,7 @@
     <Compile Include="..\src\Providers\Gemini\GeminiAdvisor.cs" Link="GeminiAdvisor.cs" />
     <Compile Include="..\src\Providers\Gemini\GeminiInteraction.cs" Link="GeminiInteraction.cs" />
     <Compile Include="..\src\Configuration\AdvisorRequestTimeout.cs" Link="AdvisorRequestTimeout.cs" />
+    <Compile Include="..\src\Configuration\AdvisorOutputTokens.cs" Link="AdvisorOutputTokens.cs" />
     <Compile Include="..\src\Providers\AdvisorServices.cs" Link="AdvisorServices.cs" />
     <Compile Include="..\src\Infrastructure\AdvisorHttpTransport.cs" Link="AdvisorHttpTransport.cs" />
     <Compile Include="..\src\Providers\Gemini\GeminiService.cs" Link="GeminiService.cs" />

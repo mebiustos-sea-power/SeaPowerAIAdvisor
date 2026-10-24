@@ -36,8 +36,6 @@ internal abstract class AdvisorService
         throw new InvalidOperationException("This provider uses the standard engine.");
     internal abstract IReadOnlyList<AdvisorConnectionField> Fields { get; }
     internal JObject Defaults() => new(Fields.Select(f => new JProperty(f.Key, f.DefaultValue)));
-    // Providers can add missing fields from shared legacy defaults without rewriting saved settings.
-    internal virtual JObject EditSettings(JObject settings, AdvisorConnectionOptions defaults) => (JObject)settings.DeepClone();
     internal abstract void Validate(JObject settings);
     internal abstract IAdvisorProvider Open(AdvisorApiConfiguration configuration, AdvisorConnectionOptions options,
         bool fallback, AdvisorHttpTransport transport);
@@ -85,29 +83,20 @@ internal sealed class AdvisorServiceCatalog
     internal AdvisorService Require(string id) => Find(id) ?? throw new AdvisorConnectionException("provider_unavailable");
 }
 
-// Shared defaults remain separate from each registered provider's settings.
+// Logging and legacy request deadlines are shared; generation limits belong to each connection.
 internal sealed class AdvisorConnectionOptions
 {
     internal int RequestTimeoutSeconds { get; }
-    internal int MaxOutputTokens { get; }
     internal bool LogAiJson { get; }
     internal JObject Json { get; }
     internal AdvisorConnectionOptions(JObject source)
     {
         RequestTimeoutSeconds = AdvisorRequestTimeout.Read(source);
-        MaxOutputTokens = Number(source, "max_output_tokens", 4096, 256, 8192);
         if (source["log_ai_json"] != null && source["log_ai_json"]!.Type != JTokenType.Boolean)
             throw new AdvisorConnectionException("settings_invalid");
         LogAiJson = (bool?)source["log_ai_json"] ?? false;
         Json = new JObject { ["request_timeout_seconds"] = RequestTimeoutSeconds,
-            ["max_output_tokens"] = MaxOutputTokens, ["log_ai_json"] = LogAiJson };
-    }
-    private static int Number(JObject value, string name, int fallback, int min, int max)
-    {
-        if (value[name] == null) return fallback;
-        if (value[name]!.Type != JTokenType.Integer || !int.TryParse(value[name]!.ToString(), out var n) || n < min || n > max)
-            throw new AdvisorConnectionException("settings_invalid");
-        return n;
+            ["log_ai_json"] = LogAiJson };
     }
 }
 
@@ -150,7 +139,7 @@ internal static class AdvisorServices
         }, main.Name, sub?.Name ?? "", mainService.Independent ? null : main.SituationDelivery);
     }
     private static AdvisorApiConfiguration Delivery(AdvisorApiConfiguration configuration, AdvisorSituationDelivery? mode) => !mode.HasValue ? configuration :
-        new(configuration.Id, configuration.Name, configuration.Provider, configuration.Settings, configuration.RequestTimeoutSeconds, mode.Value);
+        new(configuration.Id, configuration.Name, configuration.Provider, configuration.Settings, configuration.RequestTimeoutSeconds, mode.Value, configuration.MaxOutputTokens);
 
     internal static void ValidateDelivery(AdvisorService service, AdvisorApiConfiguration configuration)
     {

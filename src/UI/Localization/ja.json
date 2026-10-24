@@ -411,7 +411,7 @@
   "connection.ollama_description": "接続仕様：会話履歴をAPI要求ごとに再送します。Ollamaを起動し、ツール呼び出しに対応したモデルを指定してください。",
   "connection.openrouter_description": "接続仕様：会話履歴をAPI要求ごとに再送します。ツール呼び出しに対応したモデルを「プロバイダー/モデル名」で指定してください。",
   "connection.output_tokens": "出力トークン上限（推論を含む）",
-  "connection.nanogpt_output_tokens_invalid": "出力トークン上限は1以上の整数で指定してください。",
+  "connection.output_tokens_invalid": "出力トークン上限は1以上の整数で指定してください。",
   "settings.error.settings_migration_failed": "gemini.jsonをapi-settings.jsonへ名前変更できません。アクセス権限や同名のフォルダを確認してください。",
   "connection.nanogpt_name": "NanoGPT（定額制）",
   "connection.nanogpt_description": "接続仕様：会話履歴をAPI要求ごとに再送します。定額枠対象で、ツール呼び出しに対応したモデルを指定してください。",

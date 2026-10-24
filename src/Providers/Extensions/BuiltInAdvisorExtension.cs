@@ -24,9 +24,9 @@ internal sealed class BuiltInAdvisorExtension : Api.IAdvisorToolListExtension, A
     public void ValidateSettings(string settingsJson) => Service.Validate(AdvisorExtensionBridge.Object(settingsJson, "settings_invalid"));
     public string GetModel(string settingsJson) => (string?)AdvisorExtensionBridge.Object(settingsJson, "settings_invalid")["model"] ?? "";
     private AdvisorApiConfiguration Configuration(Api.ConnectionSettings c) => new(c.Id, c.Name, c.ProviderId,
-        AdvisorExtensionBridge.Object(c.SettingsJson, "settings_invalid"), c.RequestTimeoutSeconds);
+        AdvisorExtensionBridge.Object(c.SettingsJson, "settings_invalid"), c.RequestTimeoutSeconds, maxOutputTokens: c.MaxOutputTokens);
     private AdvisorConnectionOptions Options(Api.ConnectionSettings c) => new(new JObject
-    { ["request_timeout_seconds"] = c.RequestTimeoutSeconds, ["max_output_tokens"] = c.MaxOutputTokens });
+    { ["request_timeout_seconds"] = c.RequestTimeoutSeconds });
     public async Task<Api.AdvisorAnswer> TestAsync(Api.ConnectionSettings connection, Api.IAdvisorConnectionServices services,
         string testMessage, CancellationToken cancellation)
     {

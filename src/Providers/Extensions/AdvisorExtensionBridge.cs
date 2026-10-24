@@ -35,8 +35,8 @@ internal static class AdvisorExtensionBridge
             input.Tools.Count > 0 ? Json(input.Tools[0]) : null, input.Tools.Count > 1 ? Json(input.Tools[1]) : null);
     internal static Api.RetrievalHistory? History(AdvisorContinuation? value) => value == null ? null : new(Json(value.Retrievals), value.RoundsUsed, value.MaxRounds, Json(value.Operations));
     internal static Api.ConnectionSettings Configuration(AdvisorService service, AdvisorApiConfiguration configuration,
-        AdvisorConnectionOptions options, bool fallback) => new(configuration.Id, configuration.Name, configuration.Provider,
-        Json(configuration.Settings), service.Model(configuration), configuration.RequestTimeoutSeconds, options.MaxOutputTokens, fallback);
+        bool fallback) => new(configuration.Id, configuration.Name, configuration.Provider,
+        Json(configuration.Settings), service.Model(configuration), configuration.RequestTimeoutSeconds, configuration.MaxOutputTokens, fallback);
     internal static AdvisorConnectionException Error(Api.AdvisorException error) => new(error.Code, error.HttpStatus);
     internal static T Invoke<T>(Func<T> action)
     { try { return action(); } catch (Api.AdvisorException error) { throw Error(error); } }
@@ -129,13 +129,13 @@ internal sealed class ExternalAdvisorService : AdvisorService
         bool fallback, AdvisorHttpTransport transport)
     {
         if (extension is not Api.IStandardAdvisorExtension standard) throw new InvalidOperationException("The extension owns its consultation workflow.");
-        var settings = AdvisorExtensionBridge.Configuration(this, configuration, options, fallback);
+        var settings = AdvisorExtensionBridge.Configuration(this, configuration, fallback);
         return new Provider(standard, settings, new AdvisorExtensionServices(transport, settings));
     }
     internal override IAdvisorBackend OpenIndependent(AdvisorApiConfiguration configuration, AdvisorConnectionOptions options,
         bool fallback, AdvisorHttpTransport transport, AdvisorContinuation continuation)
     {
-        var settings = AdvisorExtensionBridge.Configuration(this, configuration, options, fallback);
+        var settings = AdvisorExtensionBridge.Configuration(this, configuration, fallback);
         var execution = AdvisorExtensionBridge.Invoke(() => ((Api.IIndependentAdvisorExtension)extension)
             .OpenConsultation(settings, new AdvisorExtensionServices(transport, settings)))
             ?? throw new InvalidOperationException("The extension returned no consultation.");
@@ -144,7 +144,7 @@ internal sealed class ExternalAdvisorService : AdvisorService
     internal override async Task<AdviceResult> TestAsync(AdvisorApiConfiguration configuration, AdvisorConnectionOptions options,
         AdvisorHttpTransport transport, string request, CancellationToken cancellation)
     {
-        var settings = AdvisorExtensionBridge.Configuration(this, configuration, options, false);
+        var settings = AdvisorExtensionBridge.Configuration(this, configuration, false);
         var answer = await AdvisorExtensionBridge.InvokeAsync(() => extension.TestAsync(settings,
             new AdvisorExtensionServices(transport, settings), request, cancellation)).ConfigureAwait(false);
         cancellation.ThrowIfCancellationRequested(); return AdvisorExtensionBridge.Answer(answer);

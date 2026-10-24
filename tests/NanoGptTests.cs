@@ -44,7 +44,7 @@ internal static partial class ProviderTests
                 await Task.CompletedTask;
             });
         }));
-        check("NanoGPT output limits inherit legacy values and persist independently through editing and duplication", () => Async(async () =>
+        check("Connection output limits use the shared default and persist independently through editing and duplication", () => Async(async () =>
         {
             await InServiceDirectory(async directory =>
             {
@@ -54,22 +54,24 @@ internal static partial class ProviderTests
                 var path = Path.Combine(directory, "settings.json"); AdvisorSettings.WriteBytes(path, draft.Data());
                 var before = File.ReadAllBytes(path); var store = new AdvisorApiSettingsStore(path, () => "API");
                 var loaded = store.Read();
-                var editable = AdvisorServiceCatalog.BuiltIn.Require("nanogpt").EditSettings(loaded.Main.Settings, loaded.Options);
-                Require((string?)editable["max_output_tokens"] == "2048" && loaded.Main.Settings["max_output_tokens"] == null && loaded.Options.MaxOutputTokens == 2048 &&
-                    File.ReadAllBytes(path).SequenceEqual(before), "Preparing an old NanoGPT connection for editing reset its effective limit or rewrote its stored settings");
-                var changed = loaded.Main; changed.Settings["max_output_tokens"] = "32768"; store.SaveEntry(changed, false);
-                var copy = store.Read().Duplicate(changed.Id); copy.Name = "Independent budget"; copy.Settings["max_output_tokens"] = "8192";
+                Require(loaded.Main.MaxOutputTokens == 8192 && loaded.Main.Settings["max_output_tokens"] == null &&
+                    File.ReadAllBytes(path).SequenceEqual(before), "An unset connection inherited the retired shared limit or rewrote storage");
+                var changed = loaded.Main; changed.MaxOutputTokens = 32768; store.SaveEntry(changed, false);
+                var copy = store.Read().Duplicate(changed.Id); copy.Name = "Independent budget";
+                Require(copy.MaxOutputTokens == 32768, "Duplicating a connection lost its output limit");
+                copy.MaxOutputTokens = 8192;
                 store.SaveEntry(copy, true);
                 var saved = store.Read();
-                Require((string?)saved.Main.Settings["max_output_tokens"] == "32768" && (string?)saved.Find(copy.Id)!.Settings["max_output_tokens"] == "8192" &&
-                    saved.Options.MaxOutputTokens == 2048 && saved.Main.ApiKey == existing.ApiKey && saved.Main.Model == existing.Model &&
+                Require(saved.Main.MaxOutputTokens == 32768 && saved.Find(copy.Id)!.MaxOutputTokens == 8192 &&
+                    JObject.Parse(File.ReadAllText(path))["max_output_tokens"] == null && saved.Main.ApiKey == existing.ApiKey && saved.Main.Model == existing.Model &&
                     saved.Main.RequestTimeoutSeconds == existing.RequestTimeoutSeconds, "Per-connection editing changed another limit, credentials, model or timeout");
                 var accepted = File.ReadAllBytes(path);
-                foreach (var bad in new JToken[] { new JValue(""), new JValue("0"), new JValue("-1"), new JValue("1.5"),
-                    new JValue("1e4"), new JValue("2147483648"), JValue.CreateNull(), new JValue(8192) })
+                foreach (var bad in new[] { "", "0", "-1", "1.5", "1e4", "2147483648" })
+                    ExpectServiceError("output_tokens_invalid", () => AdvisorOutputTokens.Parse(bad));
+                foreach (var bad in new[] { 0, -1 })
                 {
-                    var invalid = store.Read().Main; invalid.Settings["max_output_tokens"] = bad;
-                    ExpectServiceError("nanogpt_output_tokens_invalid", () => store.SaveEntry(invalid, false));
+                    var invalid = store.Read().Main; invalid.MaxOutputTokens = bad;
+                    ExpectServiceError("output_tokens_invalid", () => store.SaveEntry(invalid, false));
                     Require(File.ReadAllBytes(path).SequenceEqual(accepted), "An invalid output budget changed saved settings");
                 }
                 await Task.CompletedTask;
@@ -81,7 +83,7 @@ internal static partial class ProviderTests
             {
                 var sends = 0; var knowledge = new Knowledge(2, AdvisorInformation.Default.With(InformationKind.BattleBriefing, includeBriefing));
                 var draft = NanoDraft(); var limit = includeBriefing ? 16384 : 8192;
-                draft.Main.Settings["max_output_tokens"] = limit.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                draft.Main.MaxOutputTokens = limit;
                 var handler = new BackendHttpHandler(async (request, token) =>
                 {
                     var body = JObject.Parse(await request.Content!.ReadAsStringAsync(token));
@@ -91,7 +93,7 @@ internal static partial class ProviderTests
                         var data = JObject.Parse((string)body["messages"]![1]!["content"]!);
                         Require((string?)data["reply_language"] == "ja" && (string?)data["user_name"] == "Commander" &&
                             (string?)body["tool_choice"] == "auto", "NanoGPT lost current context or disabled initial tools");
-                        draft.Main.Settings["max_output_tokens"] = "65536";
+                        draft.Main.MaxOutputTokens = 65536;
                         var reply = NanoReply("", NanoCall("catalog-call", "catalog"), NanoCall("briefing-call", "get_briefing"));
                         reply["choices"]![0]!["message"]!["reasoning_content"] = "PRIVATE_NANO_CONTEXT";
                         return JsonResponse(reply);
@@ -118,7 +120,7 @@ internal static partial class ProviderTests
         {
             await InServiceDirectory(async directory =>
             {
-                var draft = NanoDraft(); draft.LogAiJson = true; draft.Main.Settings["max_output_tokens"] = "8192";
+                var draft = NanoDraft(); draft.LogAiJson = true; draft.Main.MaxOutputTokens = 8192;
                 var path = Path.Combine(directory, "settings.json"); AdvisorSettings.WriteBytes(path, draft.Data()); var original = File.ReadAllBytes(path);
                 foreach (var compatible in new[] { true, false })
                 {
@@ -179,7 +181,7 @@ internal static partial class ProviderTests
         }));
         check("Fallback to NanoGPT keeps executed evidence without carrying another provider's private history", () => Async(async () =>
         {
-            var draft = RouterDraft(); var nano = NanoConfiguration(); nano.Settings["max_output_tokens"] = "32768";
+            var draft = RouterDraft(); var nano = NanoConfiguration(); nano = new AdvisorApiConfiguration(nano.Id, nano.Name, nano.Provider, nano.Settings, nano.RequestTimeoutSeconds, maxOutputTokens: 32768);
             draft.Put(new AdvisorApiConfigurationDraft(nano)); draft.SubId = nano.Id;
             var sends = 0; var handler = new BackendHttpHandler(async (request, token) =>
             {
@@ -203,7 +205,7 @@ internal static partial class ProviderTests
                 "NanoGPT fallback repeated queries, lost usage uncertainty or leaked transport resources");
         }));
     }
-    private static void CheckNanoRequest(HttpRequestMessage request, JObject body, int maxOutputTokens = 4096) => Require(
+    private static void CheckNanoRequest(HttpRequestMessage request, JObject body, int maxOutputTokens = 8192) => Require(
         request.RequestUri!.AbsoluteUri == "https://nano-gpt.com/api/subscription/v1/chat/completions" &&
         request.Headers.Authorization?.Scheme == "Bearer" && request.Headers.Authorization.Parameter == "mock_nano_secret" &&
         !request.Headers.Contains("x-goog-api-key") && (bool?)body["stream"] == false && (int?)body["max_tokens"] == maxOutputTokens &&

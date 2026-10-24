@@ -48,7 +48,7 @@ internal static partial class ProviderTests
                     Require(request.RequestUri!.AbsoluteUri == "https://openrouter.ai/api/v1/chat/completions" &&
                         request.Headers.Authorization?.Scheme == "Bearer" && request.Headers.Authorization.Parameter == "mock_router_secret" &&
                         !request.Headers.Contains("x-goog-api-key") && (bool?)body["stream"] == false &&
-                        (bool?)body["provider"]?["require_parameters"] == true && (int?)body["max_tokens"] == 4096 &&
+                        (bool?)body["provider"]?["require_parameters"] == true && (int?)body["max_tokens"] == 8192 &&
                         (string?)body["tools"]?[0]?["function"]?["name"] == ToolName,
                         "OpenRouter used the wrong endpoint, authentication, capability routing or tool schema");
                     if (++sends == 1)

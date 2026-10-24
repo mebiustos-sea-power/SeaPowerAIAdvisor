@@ -38,7 +38,7 @@ internal static partial class ProviderTests
                         var body = JObject.Parse(await request.Content!.ReadAsStringAsync(token));
                         Require(request.RequestUri!.Host == "generativelanguage.googleapis.com" && request.RequestUri.AbsolutePath == "/v1beta/interactions" &&
                             request.Headers.GetValues("x-goog-api-key").Single() == "mock_migration_main" && (string?)body["model"] == "gemini-original" &&
-                            (int?)body["generation_config"]?["max_output_tokens"] == 2048, "Existing Gemini connection changed after migration");
+                            (int?)body["generation_config"]?["max_output_tokens"] == 8192, "Existing Gemini connection changed after migration");
                         return JsonResponse(InteractionFixture.Reply(new JObject { ["text"] = "Original connection" }));
                     });
                     var registry = AdvisorServices.CreateRegistry(path, transportFactory: trace => new AdvisorHttpTransport(handler, trace));
@@ -47,7 +47,7 @@ internal static partial class ProviderTests
                     File.WriteAllBytes(path, draft.Data()); var after = AdvisorSettings.Edit(path);
                     Require(after.Main.Id == before.Id && after.Main.Name == before.Name && after.Main.ApiKey == before.ApiKey && after.Main.Model == before.Model &&
                         after.Main.Provider == "gemini" && after.Sub!.ApiKey == "mock_migration_sub" && after.Sub.Model == "gemini-original-sub" &&
-                        after.Options.RequestTimeoutSeconds == 45 && after.Options.MaxOutputTokens == 2048,
+                        after.Options.RequestTimeoutSeconds == 45 && after.Main.MaxOutputTokens == 8192,
                         "Saving migration lost a credential, identity, assignment or numeric option");
                 }
             });
@@ -97,7 +97,7 @@ internal static partial class ProviderTests
                 var body = JObject.Parse(await request.Content!.ReadAsStringAsync(token)); sent.Add(body);
                 Require(request.RequestUri!.AbsoluteUri == "http://localhost:11434/api/chat" && !request.Headers.Contains("x-goog-api-key") &&
                     !request.Headers.Contains("Authorization") && (bool?)body["stream"] == false &&
-                    (int?)body["options"]?["num_ctx"] == 8192 && (int?)body["options"]?["num_predict"] == 4096,
+                    (int?)body["options"]?["num_ctx"] == 8192 && (int?)body["options"]?["num_predict"] == 8192,
                     "Ollama received credentials, an incorrect endpoint or unusable generation options");
                 if (sent.Count == 1)
                 {

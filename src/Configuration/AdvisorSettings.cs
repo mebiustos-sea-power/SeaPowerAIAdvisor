@@ -195,14 +195,7 @@ internal sealed class AdvisorSettings
         var request = AdvisorRequestTimeout.Read(value);
         var fallbackTimeout = value["fallback_request_timeout_seconds"] == null ? request :
             AdvisorRequestTimeout.Parse(value["fallback_request_timeout_seconds"]!.Type == JTokenType.Integer ? value["fallback_request_timeout_seconds"]!.ToString() : "");
-        return new AdvisorSettings(key, model, request, Number(value, "max_output_tokens", 4096, 256, 8192), Logging(value), fallbackKey, fallbackModel, fallbackRequestTimeout: fallbackTimeout);
+        return new AdvisorSettings(key, model, request, AdvisorOutputTokens.Read(value), Logging(value), fallbackKey, fallbackModel, fallbackRequestTimeout: fallbackTimeout);
     }
 
-    private static int Number(JObject value, string name, int fallback, int min, int max)
-    {
-        if (value[name] == null) return fallback;
-        if (value[name]!.Type != JTokenType.Integer || !int.TryParse(value[name]!.ToString(), out var number) || number < min || number > max)
-            throw new AdvisorConnectionException("settings_invalid");
-        return number;
-    }
 }
