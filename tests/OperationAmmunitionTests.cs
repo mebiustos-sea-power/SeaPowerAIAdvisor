@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using Newtonsoft.Json.Linq;
 using SeaPowerAIAdvisor;
+using SeaPowerAIAdvisor.Api;
 
 internal static class OperationAmmunitionTests
 {
@@ -127,7 +128,7 @@ internal static class OperationAmmunitionTests
             trial.Service.FinishProposal("custom", true);
             Require(custom.Value == "Shared buoy", "The host interpreted an arbitrary command's ammunition field");
             var direct = new JObject { ["scope_id"] = trial.Service.ScopeId, ["request_id"] = "manual",
-                ["operation"] = BattleSonobuoyOperation.OperationId, ["target_ref"] = "unit:42", ["arguments"] = request["arguments"]!.DeepClone() };
+                ["operation"] = SonobuoyDropExtension.OperationId, ["target_ref"] = "unit:42", ["arguments"] = request["arguments"]!.DeepClone() };
             Require(Code(trial.Service.Execute(direct)) == "sonobuoy_not_carried" && trial.Main.Orders.Count == 0,
                 "The explicit developer registration silently acquired AI argument normalization");
         });
@@ -157,7 +158,7 @@ internal static class OperationAmmunitionTests
     private static BattleSonobuoyAmmo Ammo(string id, string name, int available = 12) => new(id, name, available, available, true);
     private static JObject Request(string ammunition, string id = "order-1") => new()
     {
-        ["action"] = "execute", ["operation_id"] = BattleSonobuoyOperation.OperationId, ["request_id"] = id, ["target_ref"] = "unit:own_unit_8",
+        ["action"] = "execute", ["operation_id"] = SonobuoyDropExtension.OperationId, ["request_id"] = id, ["target_ref"] = "unit:own_unit_8",
         ["arguments"] = new JObject { ["ammunition"] = ammunition, ["latitude"] = 26.5, ["longitude"] = 127.5 }
     };
     private static JObject Send(Trial trial, IAdvisorOperationSession session, JObject request) =>
@@ -172,7 +173,7 @@ internal static class OperationAmmunitionTests
         internal readonly AdvisorOperationGateway Gateway;
         internal Trial()
         {
-            Service.Register(new BattleSonobuoyOperation(() => new IBattleSonobuoyUnit[] { Main, Other }, () => Information));
+            Service.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { Main, Other }, () => Information));
             Gateway = new AdvisorOperationGateway(Service);
         }
         public void Dispose() => Gateway.Dispose();
@@ -184,7 +185,7 @@ internal static class OperationAmmunitionTests
         public string? UnavailableReason => null;
         public string Depth => "alternating";
         public JObject Position => new() { ["latitude_deg"] = 26.5, ["longitude_deg"] = 127.5 };
-        public BattleReservationRoute? ReservationRoute => new(new AdvisorMapCoordinate(26.5, 127.5), null);
+        public ReservationRoute? ReservationRoute => new(new AdvisorMapCoordinate(26.5, 127.5), null);
         internal readonly List<BattleSonobuoyAmmo> Ammo;
         internal readonly List<string> Orders = new();
         internal Helicopter(int id, string ammunition) { Id = id; Ammo = new() { OperationAmmunitionTests.Ammo(ammunition, "Shared buoy") }; }

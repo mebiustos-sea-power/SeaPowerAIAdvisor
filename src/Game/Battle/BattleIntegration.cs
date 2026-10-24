@@ -133,7 +133,9 @@ internal sealed class BattleIntegration
         if (operationGateway == null)
         {
             operations = new AdvisorOperations(() => options.Current.UnitOperationsEnabled);
-            operations.Register(new BattleSonobuoyOperation(OperationUnits, () => options.Current.Information));
+            mapNavigation ??= new BattleMapNavigation(() => model?.Map);
+            var support = new BattleOperationSupport(OperationObjects, () => options.Current.Information);
+            foreach (var command in AdvisorOperationCatalog.BuiltIn.CreateOperations(support, mapNavigation)) operations.Register(command);
             operationGateway = new AdvisorOperationGateway(operations);
             reservations = new AdvisorUnitReservations(operations, () => OperationObjects()
                 .Select(unit => (IAdvisorReservationUnit)new BattleReservationUnit(unit)).ToArray());
@@ -142,11 +144,9 @@ internal sealed class BattleIntegration
     }
     private void ClearOperations()
     {
-        operationGateway?.Dispose(); operationGateway = null; operations = null; reservations = null;
+        var previous = operationGateway; operationGateway = null; operations = null; reservations = null;
+        previous?.Dispose();
     }
-
-    private IReadOnlyList<IBattleSonobuoyUnit> OperationUnits() => OperationObjects().Where(BattleSonobuoyUnit.Supports)
-        .Select(unit => (IBattleSonobuoyUnit)new BattleSonobuoyUnit(unit)).ToArray();
 
     private IReadOnlyList<ObjectBase> OperationObjects()
     {
@@ -262,16 +262,12 @@ internal sealed class BattleIntegration
 
     internal void Stop()
     {
-        Plugin.LocalApi?.Detach(this);
-        ClearOperations();
-        contactAssessments?.Suspend();
-        var previous = advisor; advisor = null;
-        try { previous?.Stop(); }
-        finally
-        {
-            var navigation = mapNavigation; mapNavigation = null;
-            navigation?.Dispose();
-        }
+        AdvisorRuntime.CleanupAll(
+            () => Plugin.LocalApi?.Detach(this),
+            ClearOperations,
+            () => contactAssessments?.Suspend(),
+            () => { var previous = advisor; advisor = null; previous?.Stop(); },
+            () => { var navigation = mapNavigation; mapNavigation = null; navigation?.Dispose(); });
     }
 
     internal void Reset()

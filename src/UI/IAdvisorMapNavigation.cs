@@ -1,4 +1,5 @@
 namespace SeaPowerAIAdvisor;
+using SeaPowerAIAdvisor.Api;
 
 internal interface IAdvisorMapNavigation : IAdvisorMap
 {

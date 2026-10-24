@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using SeaPowerAIAdvisor;
 using Api = SeaPowerAIAdvisor.Api;
+using SeaPowerAIAdvisor.Api;
 
 internal static partial class ProviderTests
 {
@@ -27,7 +28,7 @@ internal static partial class ProviderTests
                 Task<AdvisorReply> Send(FakeSession session, int send, bool allowed, CancellationToken token)
                 {
                     Require(session.Input.Tools.Any(t => (string?)t["name"] == (legacy ? "game_operations" : "propose_operation_plans")) &&
-                        !session.Input.Data.ToString().Contains(BattleSonobuoyOperation.OperationId, StringComparison.Ordinal),
+                        !session.Input.Data.ToString().Contains(SonobuoyDropExtension.OperationId, StringComparison.Ordinal),
                         "Operation definition was eagerly embedded in initial context");
                     if (send == 1) return Task.FromResult(Read("list", new JObject { ["action"] = "list" }));
                     var result = session.Results.Single().Data;
@@ -35,7 +36,7 @@ internal static partial class ProviderTests
                     if (send == 2)
                     {
                         var id = (string)result["operations"]![0]!["id"]!;
-                        Require(id == BattleSonobuoyOperation.OperationId, "AI could not discover its operation");
+                        Require(id == SonobuoyDropExtension.OperationId, "AI could not discover its operation");
                         return Task.FromResult(Read("candidates", new JObject { ["action"] = "candidates", ["operation_id"] = id }));
                     }
                     if (send == 3)
@@ -281,7 +282,7 @@ internal static partial class ProviderTests
                     : new OpenRouterProvider(transport, RouterConfiguration("router"), new AdvisorConnectionOptions(new JObject()), false);
                 var body = provider.Request(new JArray(), input.Tools, new JValue("auto"));
                 CheckWire((JArray)body["tools"]!, true);
-                Require(!body.ToString().Contains(BattleSonobuoyOperation.OperationId, StringComparison.Ordinal), "Commands were eagerly embedded");
+                Require(!body.ToString().Contains(SonobuoyDropExtension.OperationId, StringComparison.Ordinal), "Commands were eagerly embedded");
             }
             var old = new Api.ConsultationInput("{}", "system", "{}");
             Require(old.OperationToolJson == null && old.ToolsJson.Count == 1 && new Api.RetrievalHistory("[]", 0, 1).OperationsJson == "[]", "Legacy constructors changed");
@@ -344,11 +345,11 @@ internal static partial class ProviderTests
     }
     private static JObject BuoyRequest() => new()
     {
-        ["action"] = "execute", ["operation_id"] = BattleSonobuoyOperation.OperationId, ["request_id"] = "buoy-1", ["target_ref"] = "unit:42",
+        ["action"] = "execute", ["operation_id"] = SonobuoyDropExtension.OperationId, ["request_id"] = "buoy-1", ["target_ref"] = "unit:42",
         ["arguments"] = new JObject { ["latitude"] = 26.5, ["longitude"] = 127.5, ["ammunition"] = "extra_mod_buoy", ["depth"] = "below_layer" }
     };
     private static AdvisorOperations SonobuoyRegistry(OperationHelicopter unit)
-    { var registry = new AdvisorOperations(() => true); registry.Register(new BattleSonobuoyOperation(() => new IBattleSonobuoyUnit[] { unit })); return registry; }
+    { var registry = new AdvisorOperations(() => true); registry.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { unit })); return registry; }
     private sealed class OperationHelicopter : IBattleSonobuoyUnit
     {
         public int Id => 42;
@@ -356,7 +357,7 @@ internal static partial class ProviderTests
         public string? UnavailableReason => null;
         public string Depth => "alternating";
         public JObject Position => new() { ["latitude_deg"] = 26.5, ["longitude_deg"] = 127.5 };
-        public BattleReservationRoute? ReservationRoute => new(new AdvisorMapCoordinate(26.5, 127.5), null);
+        public ReservationRoute? ReservationRoute => new(new AdvisorMapCoordinate(26.5, 127.5), null);
         internal int Calls, Thread, Inventory = 4;
         internal readonly System.Collections.Generic.List<double> Latitudes = new();
         public System.Collections.Generic.IReadOnlyList<BattleSonobuoyAmmo> Ammunition() => new[] { new BattleSonobuoyAmmo("extra_mod_buoy", "Extra buoy", Inventory, Inventory - Calls, true) };

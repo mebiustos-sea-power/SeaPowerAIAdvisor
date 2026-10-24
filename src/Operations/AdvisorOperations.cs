@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json.Linq;
+using SeaPowerAIAdvisor.Api;
 
 namespace SeaPowerAIAdvisor;
 
@@ -258,8 +259,13 @@ internal sealed partial class AdvisorOperations
     }
     internal void Retire()
     {
-        CheckThread(); retired = true;
+        CheckThread(); if (retired) return;
+        retired = true;
         foreach (var proposal in proposals.Values) CancelProposal(proposal);
+        var errors = new List<Exception>();
+        foreach (var operation in operations.Values.OfType<IDisposable>())
+            try { operation.Dispose(); } catch (Exception error) { errors.Add(error); }
+        if (errors.Count != 0) throw new AggregateException("Command sessions could not be fully disposed.", errors);
     }
     private void CancelProposal(AdvisorOperationProposal proposal)
     {

@@ -1,3 +1,5 @@
+using IAdvisorOperationPreview = SeaPowerAIAdvisor.IAdvisorOperationPreview;
+using SeaPowerAIAdvisor.Api;
 using System;
 using System.Collections.Generic;
 using System.Linq;

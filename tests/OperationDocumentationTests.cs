@@ -51,7 +51,7 @@ internal static class OperationDocumentationTests
                 Require(new[] { "name", "summary", "requirements", "proposal_append" }.All(key => !string.IsNullOrWhiteSpace(text[key])) &&
                     text.Format("proposal_summary", "Hobby 1", 2).Contains("Hobby 1", StringComparison.Ordinal), "A standard language cannot render its explanation or approval summary");
             Require((string?)operation.Definition()["description"] == operation.Description &&
-                (string?)operation.Definition()["id"] == BattleSonobuoyOperation.OperationId &&
+                (string?)operation.Definition()["id"] == SonobuoyDropExtension.OperationId &&
                 ((JArray)operation.Definition()["parameters"]!["required"]!).Values<string>().SequenceEqual(new[] { "latitude", "longitude", "ammunition" }),
                 "UI localization translated identifiers, changed arguments or replaced the actual AI instruction");
         });
@@ -84,7 +84,7 @@ internal static class OperationDocumentationTests
                 operations.Proposal("docs")!.Orders.Count == 0, "The displayed tool schemas differ from sent definitions or viewing changed a consultation");
         });
     }
-    private static BattleSonobuoyOperation Command() => new(() => throw new InvalidOperationException("Documentation must not inspect live units"));
+    private static AdvisorRegisteredOperation Command() => SonobuoyFixture.Create(() => throw new InvalidOperationException("Documentation must not inspect live units"));
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
     private static void Throws<T>(Action action) where T : Exception
     { try { action(); } catch (T) { return; } throw new InvalidOperationException("Expected " + typeof(T).Name); }

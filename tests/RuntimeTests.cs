@@ -46,6 +46,36 @@ internal static class RuntimeTests
             runtime.Guard(() => throw new Exception("must remain stopped"));
             Require(cleanups == 1 && ticks == 2 && runtime.Report == report, "Scene cleanup was blocked, failed to reset presentation, or restarted normal adviser work");
         });
+        check("Command disposal failures cannot skip adviser and map cleanup, and every original failure reaches runtime reporting", () =>
+        {
+            foreach (var failing in new[] { Array.Empty<int>(), new[] { 1 }, new[] { 1, 3 } })
+            {
+                var visited = new List<int>();
+                var failures = new Dictionary<int, Exception>();
+                foreach (var index in failing) failures.Add(index, new InvalidOperationException("teardown-stage-" + index));
+                var callbacks = new Action[5];
+                for (var i = 0; i < callbacks.Length; i++)
+                {
+                    var index = i;
+                    callbacks[i] = () => { visited.Add(index); if (failures.TryGetValue(index, out var error)) throw error; };
+                }
+                AggregateException? caught = null;
+                try { AdvisorRuntime.CleanupAll(callbacks); }
+                catch (AggregateException error) { caught = error; }
+                Require(visited.Count == 5 && visited[0] == 0 && visited[1] == 1 && visited[2] == 2 && visited[3] == 3 && visited[4] == 4,
+                    "API, command, contact, adviser or map teardown was skipped or reordered after a failure");
+                if (failing.Length == 0)
+                { Require(caught == null, "Successful cleanup reported a failure"); continue; }
+                Require(caught != null && caught.InnerExceptions.Count == failures.Count, "Cleanup lost or duplicated a failure");
+                foreach (var failure in failures.Values)
+                    Require(caught!.InnerExceptions.Contains(failure) && failure.StackTrace != null, "Cleanup replaced the original exception or its stack");
+                var messages = new List<string>(); var runtime = new AdvisorRuntime("tactical_battle", messages.Add, () => { });
+                runtime.Cleanup(() => throw caught!);
+                Require(runtime.Failed && messages.Count == 1, "Cleanup failure did not reach the existing error boundary");
+                foreach (var failure in failures.Values)
+                    Require(runtime.Report!.Contains(failure.Message, StringComparison.Ordinal), "Runtime reporting hid a teardown failure");
+            }
+        });
         check("Failure notification is deferred and shown once, manual reopen stays available, and failed display does not loop", () =>
         {
             foreach (var mode in new[] { "tactical_battle", "dynamic_campaign" })

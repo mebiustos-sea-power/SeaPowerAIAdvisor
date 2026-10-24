@@ -45,8 +45,7 @@ internal sealed class BattleSituationReader
                 var kind = Code(Required(identity, "_type"));
                 var parameters = Required(identity, "_obp");
                 var subtype = kind == "landunit" ? Code(Required(parameters, "_landUnitSubType")) : null;
-                var category = subtype == null ? "mobile_platform" :
-                    new[] { "airbase", "port", "installation", "bridge", "oilrig" }.Contains(subtype) ? "base" : "ground_unit";
+                var category = BattleInformation.UnitCategory(subtype);
                 var deck = Member(parameters, "_flightDeck");
                 units.Add(new JObject
                 {

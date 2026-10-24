@@ -2,14 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SeaPowerAIAdvisor;
+namespace SeaPowerAIAdvisor.Api;
 
 // Map data is independent of Noesis, the game and the operation that requested it.
-internal readonly struct AdvisorMapCoordinate
+public readonly struct AdvisorMapCoordinate
 {
-    internal double Latitude { get; }
-    internal double Longitude { get; }
-    internal AdvisorMapCoordinate(double latitude, double longitude)
+    public double Latitude { get; }
+    public double Longitude { get; }
+    public AdvisorMapCoordinate(double latitude, double longitude)
     {
         if (double.IsNaN(latitude) || double.IsInfinity(latitude) || Math.Abs(latitude) > 90 ||
             double.IsNaN(longitude) || double.IsInfinity(longitude) || Math.Abs(longitude) > 180)
@@ -18,16 +18,16 @@ internal readonly struct AdvisorMapCoordinate
     }
 }
 
-internal enum AdvisorMapDrawingKind { Point, Line, Circle }
+public enum AdvisorMapDrawingKind { Point, Line, Circle }
 
-internal sealed class AdvisorMapDrawing
+public sealed class AdvisorMapDrawing
 {
-    internal AdvisorMapDrawingKind Kind { get; }
-    internal IReadOnlyList<AdvisorMapCoordinate> Coordinates { get; }
-    internal double RadiusNauticalMiles { get; }
-    internal string Label { get; }
-    internal uint Color { get; }
-    internal float Width { get; }
+    public AdvisorMapDrawingKind Kind { get; }
+    public IReadOnlyList<AdvisorMapCoordinate> Coordinates { get; }
+    public double RadiusNauticalMiles { get; }
+    public string Label { get; }
+    public uint Color { get; }
+    public float Width { get; }
     private AdvisorMapDrawing(AdvisorMapDrawingKind kind, IEnumerable<AdvisorMapCoordinate> coordinates,
         double radius, string label, uint color, float width)
     {
@@ -35,15 +35,15 @@ internal sealed class AdvisorMapDrawing
         Kind = kind; Coordinates = Array.AsReadOnly(coordinates.ToArray()); RadiusNauticalMiles = radius;
         Label = label; Color = color; Width = width;
     }
-    internal static AdvisorMapDrawing Point(AdvisorMapCoordinate position, string label = "", uint color = 0xFFFFE060, float width = 2) =>
+    public static AdvisorMapDrawing Point(AdvisorMapCoordinate position, string label = "", uint color = 0xFFFFE060, float width = 2) =>
         new(AdvisorMapDrawingKind.Point, new[] { position }, 0, label, color, width);
-    internal static AdvisorMapDrawing Line(IEnumerable<AdvisorMapCoordinate> positions, uint color = 0xFFFFE060, float width = 2)
+    public static AdvisorMapDrawing Line(IEnumerable<AdvisorMapCoordinate> positions, uint color = 0xFFFFE060, float width = 2)
     {
         var line = new AdvisorMapDrawing(AdvisorMapDrawingKind.Line, positions, 0, "", color, width);
         if (line.Coordinates.Count < 2) throw new ArgumentException("A map line needs at least two coordinates.", nameof(positions));
         return line;
     }
-    internal static AdvisorMapDrawing Circle(AdvisorMapCoordinate center, double radiusNauticalMiles, uint color = 0xFFFFE060, float width = 2)
+    public static AdvisorMapDrawing Circle(AdvisorMapCoordinate center, double radiusNauticalMiles, uint color = 0xFFFFE060, float width = 2)
     {
         if (double.IsNaN(radiusNauticalMiles) || double.IsInfinity(radiusNauticalMiles) || radiusNauticalMiles <= 0 || radiusNauticalMiles > float.MaxValue / 1852d)
             throw new ArgumentOutOfRangeException(nameof(radiusNauticalMiles));
@@ -51,15 +51,15 @@ internal sealed class AdvisorMapDrawing
     }
 }
 
-internal sealed class AdvisorMapPreview
+public sealed class AdvisorMapPreview
 {
-    internal static AdvisorMapPreview Empty { get; } = new(Array.Empty<AdvisorMapDrawing>());
-    internal IReadOnlyList<AdvisorMapDrawing> Drawings { get; }
-    internal AdvisorMapPreview(IEnumerable<AdvisorMapDrawing> drawings)
+    public static AdvisorMapPreview Empty { get; } = new(Array.Empty<AdvisorMapDrawing>());
+    public IReadOnlyList<AdvisorMapDrawing> Drawings { get; }
+    public AdvisorMapPreview(IEnumerable<AdvisorMapDrawing> drawings)
     { Drawings = Array.AsReadOnly(drawings.ToArray()); }
 }
 
-internal interface IAdvisorMap
+public interface IAdvisorMap
 {
     void Center(AdvisorMapCoordinate location);
     // Each lease owns only its own drawings. Disposing it never clears other map content.

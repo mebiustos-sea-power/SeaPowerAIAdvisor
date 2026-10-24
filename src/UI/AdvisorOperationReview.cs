@@ -1,5 +1,6 @@
 using System;
 using Noesis;
+using SeaPowerAIAdvisor.Api;
 
 namespace SeaPowerAIAdvisor;
 

@@ -58,8 +58,11 @@ internal static class BattleInformation
         foreach (var reference in ((JArray)snapshot["contact_threat_references"]!).OfType<JObject>()
             .Where(r => !contactIds.Contains((string)r["id"]!)).ToArray()) reference.Remove();
     }
-    private static bool Permitted(JObject unit, AdvisorInformation information) =>
-        information.Allows(InformationKind.BattleUnits) && ((string?)unit["unit_category"] switch
+    internal static string UnitCategory(string? landSubtype) => landSubtype == null ? "mobile_platform" :
+        new[] { "airbase", "port", "installation", "bridge", "oilrig" }.Contains(landSubtype) ? "base" : "ground_unit";
+    private static bool Permitted(JObject unit, AdvisorInformation information) => Permitted((string?)unit["unit_category"], information);
+    internal static bool Permitted(string? category, AdvisorInformation information) =>
+        information.Allows(InformationKind.BattleUnits) && (category switch
         {
             "ground_unit" => information.Allows(InformationKind.BattleGroundUnits),
             "base" => information.Allows(InformationKind.BattleBases),

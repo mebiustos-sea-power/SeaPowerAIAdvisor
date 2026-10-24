@@ -50,7 +50,7 @@ internal static partial class ProviderTests
         check("Permitted custom shortcuts retain approval, manual requests remain permitted and neither can override WIP or force execution", () =>
         {
             var enabled = false; var unit = new OperationHelicopter();
-            var registry = new AdvisorOperations(() => enabled); registry.Register(new BattleSonobuoyOperation(() => new IBattleSonobuoyUnit[] { unit }));
+            var registry = new AdvisorOperations(() => enabled); registry.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { unit }));
             using var gateway = new AdvisorOperationGateway(registry);
             var source = new BattleAdvisorSource(() => throw new InvalidOperationException("Unexpected capture"), () => gateway);
             var custom = new AdvisorShortcut("custom.drop", "next_steps", allowOperations: true).Prepare("Drop buoys");
@@ -78,7 +78,7 @@ internal static partial class ProviderTests
             using var operations = AdvisorConsultation.CreateOperations(custom, source, "custom", knowledge.Prompts, AdvisorOperationReferences.Empty);
             Require(operations != null, "A custom shortcut could not opt into operations");
             var executor = new FakeProvider("custom", (session, n, _, _) => Task.FromResult(n switch {
-                1 => OperationReply("definition", new JObject { ["action"] = "describe", ["operation_id"] = BattleSonobuoyOperation.OperationId }),
+                1 => OperationReply("definition", new JObject { ["action"] = "describe", ["operation_id"] = SonobuoyDropExtension.OperationId }),
                 2 => OperationReply("drop", BuoyRequest()),
                 _ => new AdvisorReply("Awaiting approval", Array.Empty<AdvisorToolCall>(), 1) }));
             var result = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(executor).ConsultAsync(

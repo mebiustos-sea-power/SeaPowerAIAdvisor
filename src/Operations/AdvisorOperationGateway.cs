@@ -177,10 +177,14 @@ internal sealed class AdvisorOperationGateway : IDisposable
     {
         lock (gate)
         {
+            if (disposed) return;
             disposed = true;
-            operations.Retire();
-            while (commands.TryDequeue(out var command))
-            { Interlocked.Decrement(ref queued); command.Completion.TrySetResult(Error("operation_scope_changed")); }
+            try { operations.Retire(); }
+            finally
+            {
+                while (commands.TryDequeue(out var command))
+                { Interlocked.Decrement(ref queued); command.Completion.TrySetResult(Error("operation_scope_changed")); }
+            }
         }
     }
 

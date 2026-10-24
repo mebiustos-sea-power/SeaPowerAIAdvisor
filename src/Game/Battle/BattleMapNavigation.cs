@@ -7,6 +7,7 @@ using MapControl;
 using Noesis;
 using SeaPower;
 using SeapowerUI.ViewModels;
+using SeaPowerAIAdvisor.Api;
 
 namespace SeaPowerAIAdvisor;
 

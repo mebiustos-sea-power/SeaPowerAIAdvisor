@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using SeaPowerAIAdvisor;
+using SeaPowerAIAdvisor.Api;
 
 internal static class OperationTests
 {
@@ -57,7 +58,7 @@ internal static class OperationTests
             var enabled = false; var unit = new Unit();
             var operations = Service(() => enabled, unit);
             Require(!((JArray)operations.Catalog()["operations"]!).Any(), "Disabled operations were advertised");
-            Expect(() => operations.Candidates(BattleSonobuoyOperation.OperationId), "unit_operations_disabled");
+            Expect(() => operations.Candidates(SonobuoyDropExtension.OperationId), "unit_operations_disabled");
             var request = Request(operations);
             Expect(() => operations.Execute(request), "unit_operations_disabled");
             Require(unit.Calls == 0, "Disabled request reached the native bridge");
@@ -99,22 +100,22 @@ internal static class OperationTests
         {
             var unit = new Unit(); var information = AdvisorInformation.Default;
             var operations = new AdvisorOperations(() => true);
-            operations.Register(new BattleSonobuoyOperation(() => new IBattleSonobuoyUnit[] { unit }, () => information));
+            operations.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { unit }, () => information));
             foreach (var kind in new[] { InformationKind.BattleUnits, InformationKind.BattleWeapons })
             {
                 information = AdvisorInformation.Default.With(kind, false);
-                Expect(() => operations.Candidates(BattleSonobuoyOperation.OperationId), "information_disabled");
+                Expect(() => operations.Candidates(SonobuoyDropExtension.OperationId), "information_disabled");
                 Require((string?)operations.Execute(Request(operations, "blocked-" + kind))["code"] == "information_disabled" && unit.Calls == 0,
                     "Operation bypassed excluded data or registered while information was disabled");
             }
             information = AdvisorInformation.Default;
-            Require(operations.Candidates(BattleSonobuoyOperation.OperationId)["candidates"]!.Any() &&
+            Require(operations.Candidates(SonobuoyDropExtension.OperationId)["candidates"]!.Any() &&
                 (string?)operations.Execute(Request(operations, "enabled"))["status"] == "registered", "Restoring information did not restore the operation");
         });
         check("Sonobuoy registration appends one native order with an unfamiliar ammunition key and preserves prior orders", () =>
         {
             var unit = new Unit(); var operations = Service(() => true, unit);
-            var candidate = operations.Candidates(BattleSonobuoyOperation.OperationId)["candidates"]![0]!;
+            var candidate = operations.Candidates(SonobuoyDropExtension.OperationId)["candidates"]![0]!;
             Require((string?)candidate["target_ref"] == "unit:42" && (int?)candidate["ammunition"]![0]!["available_count"] == 2, "Candidate identity or available inventory was lost");
             var culture = CultureInfo.CurrentCulture;
             try
@@ -135,15 +136,15 @@ internal static class OperationTests
             {
                 var unit = new Unit { Depth = "above_layer" }; var other = new Unit(43) { Depth = "below_layer" };
                 var operations = new AdvisorOperations(() => true);
-                operations.Register(new BattleSonobuoyOperation(() => new IBattleSonobuoyUnit[] { unit, other }));
+                operations.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { unit, other }));
                 var definition = operations.Catalog()["operations"]![0]!["parameters"]!;
                 Require(definition["properties"]!["depth"] == null, "The first release advertised depth control");
-                var observed = operations.Candidates(BattleSonobuoyOperation.OperationId)["candidates"]![0]!;
+                var observed = operations.Candidates(SonobuoyDropExtension.OperationId)["candidates"]![0]!;
                 Require((string?)observed["depth"] == "above_layer", "The current setting was not exposed");
                 unit.Depth = "alternating";
                 var request = Request(operations); request["arguments"]!["depth"] = requestedDepth;
                 var result = operations.Execute(request);
-                var current = operations.Candidates(BattleSonobuoyOperation.OperationId)["candidates"]![0]!;
+                var current = operations.Candidates(SonobuoyDropExtension.OperationId)["candidates"]![0]!;
                 Require((string?)result["status"] == "registered" && (string?)result["data"]!["depth"] == "alternating" &&
                     unit.Depth == "alternating" && (string?)current["depth"] == "alternating" && unit.Queue.Count == 2,
                     "A supplied or stale depth overwrote the player's live setting, or the reservation was lost");
@@ -164,8 +165,8 @@ internal static class OperationTests
         check("Sonobuoy requests recheck the current unit, flight state, available inventory and single-drop support", () =>
         {
             var unit = new Unit(); var current = new List<IBattleSonobuoyUnit> { unit };
-            var operations = new AdvisorOperations(() => true); operations.Register(new BattleSonobuoyOperation(() => current));
-            _ = operations.Candidates(BattleSonobuoyOperation.OperationId);
+            var operations = new AdvisorOperations(() => true); operations.Register(SonobuoyFixture.Create(() => current));
+            _ = operations.Candidates(SonobuoyDropExtension.OperationId);
             unit.UnavailableReason = "unit_not_airborne";
             Require((string?)operations.Execute(Request(operations, "landed"))["code"] == "unit_not_airborne", "Landed candidate was still registered");
             unit.UnavailableReason = "following_formation";
@@ -201,7 +202,7 @@ internal static class OperationTests
                 () => throw new InvalidOperationException("Connection access"), (_, _, _, _) => throw new InvalidOperationException("AI preparation"));
             var owner = new object();
             api.Attach(owner, "tactical_battle", () => throw new InvalidOperationException("Conversation access"), operations); api.Enable();
-            var candidates = Send(api, "GET", "/v1/operations/" + BattleSonobuoyOperation.OperationId + "/candidates");
+            var candidates = Send(api, "GET", "/v1/operations/" + SonobuoyDropExtension.OperationId + "/candidates");
             Require(candidates.Status == 200 && (string?)candidates.Data["scope_id"] == operations.ScopeId, "Candidates lost battle scope");
             var request = Request(operations);
             var pending = api.Enqueue("POST", "/v1/operations", request); enabled = false; api.Pump();
@@ -217,11 +218,11 @@ internal static class OperationTests
     }
     private static AdvisorOperations Service(Func<bool> enabled, Unit unit)
     {
-        var operations = new AdvisorOperations(enabled); operations.Register(new BattleSonobuoyOperation(() => new IBattleSonobuoyUnit[] { unit })); return operations;
+        var operations = new AdvisorOperations(enabled); operations.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { unit })); return operations;
     }
     private static JObject Request(AdvisorOperations operations, string id = "request-1") => new()
     {
-        ["scope_id"] = operations.ScopeId, ["request_id"] = id, ["operation"] = BattleSonobuoyOperation.OperationId, ["target_ref"] = "unit:42",
+        ["scope_id"] = operations.ScopeId, ["request_id"] = id, ["operation"] = SonobuoyDropExtension.OperationId, ["target_ref"] = "unit:42",
         ["arguments"] = new JObject { ["latitude"] = 26.5, ["longitude"] = 127.5, ["ammunition"] = "custom_mod_sonobuoy", ["count"] = 1, ["placement"] = "append" }
     };
     private static AdvisorLocalResponse Send(AdvisorLocalApi api, string method, string path, JObject? body = null)
@@ -241,7 +242,7 @@ internal static class OperationTests
         public string? UnavailableReason { get; set; }
         public string Depth { get; set; } = "alternating";
         public JObject Position => new() { ["latitude_deg"] = 26.5, ["longitude_deg"] = 127.5 };
-        public BattleReservationRoute? ReservationRoute => new(new AdvisorMapCoordinate(26.5, 127.5), null);
+        public ReservationRoute? ReservationRoute => new(new AdvisorMapCoordinate(26.5, 127.5), null);
         internal int Calls, Available = 2;
         internal bool SingleDrop = true;
         internal string? LastAmmo;

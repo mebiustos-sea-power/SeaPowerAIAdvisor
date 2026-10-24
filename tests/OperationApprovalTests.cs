@@ -5,6 +5,7 @@ using System.Linq;
 using System.Xml.Linq;
 using Newtonsoft.Json.Linq;
 using SeaPowerAIAdvisor;
+using SeaPowerAIAdvisor.Api;
 
 internal static class OperationApprovalTests
 {
@@ -52,10 +53,10 @@ internal static class OperationApprovalTests
         {
             var first = new Helicopter();
             var second = new Helicopter { Id = 43, Name = "Hobby 2",
-                ReservationRoute = new BattleReservationRoute(new AdvisorMapCoordinate(28, 128), null) };
+                ReservationRoute = new ReservationRoute(new AdvisorMapCoordinate(28, 128), null) };
             second.Queue.Clear();
             var units = new List<IBattleSonobuoyUnit> { first, second };
-            var operation = new BattleSonobuoyOperation(() => units); var service = new AdvisorOperations(() => true);
+            var operation = SonobuoyFixture.Create(() => units); var service = new AdvisorOperations(() => true);
             service.Register(operation); service.BeginProposal("routes");
             var values = new[] { Request(service, "routes", 2), Request(service, "routes", 9), Request(service, "routes", 0), Request(service, "routes", 7) };
             values[1]["target_ref"] = "unit:43"; values[3]["target_ref"] = "unit:43";
@@ -69,7 +70,7 @@ internal static class OperationApprovalTests
             Require(lines.All(d => d.Color == 0xFFFFE060 && d.Width == 2) && preview.Drawings.Count == 6 &&
                 first.Queue.Count == 1 && second.Queue.Count == 0,
                 "Routes added an outline, changed focus or registered previewed orders");
-            first.ReservationRoute = new BattleReservationRoute(new AdvisorMapCoordinate(27, 127), new AdvisorMapCoordinate(29, 129));
+            first.ReservationRoute = new ReservationRoute(new AdvisorMapCoordinate(27, 127), new AdvisorMapCoordinate(29, 129));
             var refreshed = service.PreviewProposal(proposal, "en");
             Require(refreshed.Drawings.First(d => d.Kind == AdvisorMapDrawingKind.Line).Coordinates[0].Latitude == 29,
                 "Reopening a preview reused an old current position or queued endpoint");
@@ -79,9 +80,29 @@ internal static class OperationApprovalTests
                 removed.Drawings.Last(d => d.Kind == AdvisorMapDrawingKind.Line).Coordinates.Count == 2,
                 "A vanished unit erased retained destinations or invented a route origin");
         });
+        check("Sonobuoy previews respect the movement-plan disclosure setting without disabling the proposed drops", () =>
+        {
+            var unit = new Helicopter();
+            var information = AdvisorInformation.Default.With(InformationKind.BattleMovementPlans, false);
+            var service = new AdvisorOperations(() => true);
+            service.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { unit }, () => information));
+            service.BeginProposal("hidden-route");
+            service.Propose("hidden-route", Request(service, "hidden-route", 0));
+            service.Propose("hidden-route", Request(service, "hidden-route", 1));
+            var proposal = service.FinishProposal("hidden-route", true)!;
+            var line = service.PreviewProposal(proposal, "en").Drawings.Single(d => d.Kind == AdvisorMapDrawingKind.Line);
+            Require(line.Coordinates.Select(p => p.Latitude).SequenceEqual(new[] { 26.5, 26.501 }) && unit.Queue.Count == 1,
+                "An excluded reservation endpoint was disclosed or previewing changed the queue");
+            information = AdvisorInformation.Default;
+            Require(service.PreviewProposal(proposal, "en").Drawings.Single(d => d.Kind == AdvisorMapDrawingKind.Line).Coordinates[0].Latitude == 26.4,
+                "Restoring movement disclosure kept using an old permission or route");
+            service.Approve(proposal);
+            Require(proposal.RegisteredCount == 2 && unit.Queue.Count == 3, "Movement disclosure changed reservation acceptance");
+            service.Retire();
+        });
         check("One drop still draws an arrival leg, while an unavailable start never becomes a zero coordinate", () =>
         {
-            var unit = new Helicopter { ReservationRoute = new BattleReservationRoute(new AdvisorMapCoordinate(27, 128), null) };
+            var unit = new Helicopter { ReservationRoute = new ReservationRoute(new AdvisorMapCoordinate(27, 128), null) };
             unit.Queue.Clear();
             var service = Buoys(unit); service.BeginProposal("one"); service.Propose("one", Request(service, "one", 0));
             var proposal = service.FinishProposal("one", true)!;
@@ -173,7 +194,7 @@ internal static class OperationApprovalTests
             {
                 var enabled = true; var information = AdvisorInformation.Default; var unit = new Helicopter();
                 var units = new List<IBattleSonobuoyUnit> { unit }; var service = new AdvisorOperations(() => enabled);
-                service.Register(new BattleSonobuoyOperation(() => units, () => information)); service.BeginProposal("check");
+                service.Register(SonobuoyFixture.Create(() => units, () => information)); service.BeginProposal("check");
                 for (var i = 0; i < 3; i++) service.Propose("check", Request(service, "check", i));
                 var proposal = service.FinishProposal("check", true)!;
                 if (change == "inventory") unit.Inventory = 2;
@@ -238,11 +259,11 @@ internal static class OperationApprovalTests
         });
     }
     private static AdvisorOperations Buoys(Helicopter unit)
-    { var service = new AdvisorOperations(() => true); service.Register(new BattleSonobuoyOperation(() => new IBattleSonobuoyUnit[] { unit })); return service; }
-    private static JObject Request(AdvisorOperations service, string owner, int index, string operation = BattleSonobuoyOperation.OperationId)
+    { var service = new AdvisorOperations(() => true); service.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { unit })); return service; }
+    private static JObject Request(AdvisorOperations service, string owner, int index, string operation = SonobuoyDropExtension.OperationId)
     {
         var args = new JObject { ["latitude"] = 26.5 + index * .001, ["longitude"] = 127.5, ["ammunition"] = "mod_buoy" };
-        if (operation != BattleSonobuoyOperation.OperationId) args["index"] = index;
+        if (operation != SonobuoyDropExtension.OperationId) args["index"] = index;
         return new JObject { ["scope_id"] = service.ScopeId, ["request_id"] = owner + "." + index,
             ["operation"] = operation, ["target_ref"] = "unit:42", ["arguments"] = args };
     }
@@ -254,7 +275,7 @@ internal static class OperationApprovalTests
         public string? UnavailableReason => null;
         public string Depth { get; set; } = "alternating";
         public JObject Position => new();
-        public BattleReservationRoute? ReservationRoute { get; set; } =
+        public ReservationRoute? ReservationRoute { get; set; } =
             new(new AdvisorMapCoordinate(26.2, 127.2), new AdvisorMapCoordinate(26.4, 127.4));
         internal int Inventory = 12;
         internal List<double> Latitudes = new();

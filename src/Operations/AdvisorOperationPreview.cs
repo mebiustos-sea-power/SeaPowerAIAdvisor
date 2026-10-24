@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using SeaPowerAIAdvisor.Api;
 
 namespace SeaPowerAIAdvisor;
 

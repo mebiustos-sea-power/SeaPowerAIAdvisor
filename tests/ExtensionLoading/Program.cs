@@ -82,7 +82,7 @@ internal static class Program
         var type = host.GetType("SeaPowerAIAdvisor.AdvisorServiceCatalog", true)!;
         catalog = type.GetProperty("BuiltIn", HiddenStatic)!.GetValue(null);
         register = type.GetMethod("Register", BindingFlags.NonPublic | BindingFlags.Instance)!;
-        var attach = api.GetType("SeaPowerAIAdvisor.Api.AdvisorApi", true)!.GetMethod("Attach", HiddenStatic)!;
+        var attach = api.GetType("SeaPowerAIAdvisor.Api.AdvisorApi", true)!.GetMethods(HiddenStatic).Single(m => m.Name == "Attach" && m.GetParameters().Length == 1);
         var callback = Delegate.CreateDelegate(attach.GetParameters()[0].ParameterType,
             typeof(Program).GetMethod(nameof(Register), HiddenStatic)!);
         attach.Invoke(null, new object[] { callback });

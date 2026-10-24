@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using Newtonsoft.Json.Linq;
 using SeaPowerAIAdvisor;
+using SeaPowerAIAdvisor.Api;
 
 internal static class OperationTargetTests
 {
@@ -120,10 +121,10 @@ internal static class OperationTargetTests
         });
     }
     private static AdvisorOperationReferences References() => new(new AdvisorUnitReferences(new[] { ("own_unit_8", 42), ("own_unit_9", 8) }).Only(new[] { "own_unit_8" }));
-    private static JObject Candidates(string target) => new() { ["action"] = "candidates", ["operation_id"] = BattleSonobuoyOperation.OperationId, ["target_ref"] = target };
+    private static JObject Candidates(string target) => new() { ["action"] = "candidates", ["operation_id"] = SonobuoyDropExtension.OperationId, ["target_ref"] = target };
     private static JObject Execute(string target, string id = "order-1") => new()
     {
-        ["action"] = "execute", ["operation_id"] = BattleSonobuoyOperation.OperationId, ["request_id"] = id, ["target_ref"] = target,
+        ["action"] = "execute", ["operation_id"] = SonobuoyDropExtension.OperationId, ["request_id"] = id, ["target_ref"] = target,
         ["arguments"] = new JObject { ["latitude"] = 26.5, ["longitude"] = 127.5, ["ammunition"] = "custom_buoy" }
     };
     private static JObject Send(Trial trial, IAdvisorOperationSession session, JObject request) =>
@@ -139,7 +140,7 @@ internal static class OperationTargetTests
         internal Trial()
         {
             Service = new AdvisorOperations(() => Enabled);
-            Service.Register(new BattleSonobuoyOperation(() => new IBattleSonobuoyUnit[] { Main, Other }));
+            Service.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { Main, Other }));
             Gateway = new AdvisorOperationGateway(Service);
         }
         public void Dispose() => Gateway.Dispose();
@@ -151,7 +152,7 @@ internal static class OperationTargetTests
         public string? UnavailableReason { get; set; }
         public string Depth => "alternating";
         public JObject Position => new() { ["latitude_deg"] = 26.5, ["longitude_deg"] = 127.5 };
-        public BattleReservationRoute? ReservationRoute => new(new AdvisorMapCoordinate(26.5, 127.5), null);
+        public ReservationRoute? ReservationRoute => new(new AdvisorMapCoordinate(26.5, 127.5), null);
         internal readonly List<(string Ammunition, double Latitude, double Longitude)> Orders = new();
         internal Helicopter(int id) => Id = id;
         public IReadOnlyList<BattleSonobuoyAmmo> Ammunition() => new[] { new BattleSonobuoyAmmo("custom_buoy", "Custom buoy", 12, 12, true) };

@@ -1,12 +1,13 @@
 using System;
 using SeaPower;
+using SeaPowerAIAdvisor.Api;
 
 namespace SeaPowerAIAdvisor;
 
 // Read current-player units on the game thread. No reservation or simulation updates are issued here.
 internal static class BattleReservationReader
 {
-    internal static BattleReservationRoute? ReadRoute(ObjectBase unit)
+    internal static ReservationRoute? ReadRoute(ObjectBase unit)
     {
         var root = unit._userRoot;
         if (root == null) return null;
@@ -20,6 +21,6 @@ internal static class BattleReservationReader
             var position = route[route.Count - 1];
             end = new AdvisorMapCoordinate(position.Latitude, position.Longitude);
         }
-        return new BattleReservationRoute(new AdvisorMapCoordinate(current.Latitude, current.Longitude), end);
+        return new ReservationRoute(new AdvisorMapCoordinate(current.Latitude, current.Longitude), end);
     }
 }

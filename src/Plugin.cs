@@ -60,6 +60,13 @@ public sealed class Plugin : IAnchorChainMod
                 AdvisorServiceCatalog.BuiltIn.Register(extension);
                 Log.LogInfo("Registered AI extension: " + extension.Id);
                 return true;
+            }, extension =>
+            {
+                var owner = extension.GetType().Assembly;
+                if (!ModActivation.IsEnabled(files, Path.GetDirectoryName(owner.Location)!)) return false;
+                var id = AdvisorOperationCatalog.BuiltIn.Register(extension);
+                Log.LogInfo("Registered operation extension: " + id);
+                return true;
             });
             LocalApi = new AdvisorLocalApi(() => AdvisorPromptOverrides.Session, error => Log.LogError("Developer local API failed: " + error),
                 () => options.Current.LocalConnections.Describe(AdvisorSettings.Edit(settingsPath)), (id, allowFallback, model, delivery) =>

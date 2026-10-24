@@ -1,3 +1,5 @@
+using IAdvisorOperationPreview = SeaPowerAIAdvisor.IAdvisorOperationPreview;
+using SeaPowerAIAdvisor.Api;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -363,7 +365,7 @@ internal static class OperationPlanTests
         });
         check("Batch transport normalizes unit and ammunition aliases before retention and labels corrections with plan and operation identity", () =>
         {
-            var unit = new BuoyUnit(); var command = new BattleSonobuoyOperation(() => new IBattleSonobuoyUnit[] { unit });
+            var unit = new BuoyUnit(); var command = SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { unit });
             var service = new AdvisorOperations(() => true); service.Register(command);
             using var gateway = new AdvisorOperationGateway(service);
             var references = new AdvisorOperationReferences(new AdvisorUnitReferences(new[] { ("own_unit_1", 42) }),
@@ -434,7 +436,7 @@ internal static class OperationPlanTests
         public string? UnavailableReason => null;
         public string Depth => "alternating";
         public JObject Position => new();
-        public BattleReservationRoute? ReservationRoute => new(new AdvisorMapCoordinate(26.5, 127.5), null);
+        public ReservationRoute? ReservationRoute => new(new AdvisorMapCoordinate(26.5, 127.5), null);
         internal int Count;
         public IReadOnlyList<BattleSonobuoyAmmo> Ammunition() => new[] { new BattleSonobuoyAmmo("mod_buoy", "Custom buoy", 1, 1 - Count, true) };
         public void Append(string ammunition, double latitude, double longitude) => Count++;

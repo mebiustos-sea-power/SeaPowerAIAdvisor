@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Text.RegularExpressions;
 
@@ -67,6 +68,15 @@ internal sealed class AdvisorRuntime
             else Secondary(error);
         }
         finally { presentationStopped = false; }
+    }
+
+    // Attempt every teardown stage; the existing runtime boundary reports all original failures.
+    internal static void CleanupAll(params Action[] actions)
+    {
+        var errors = new List<Exception>();
+        foreach (var action in actions)
+            try { action(); } catch (Exception error) { errors.Add(error); }
+        if (errors.Count != 0) throw new AggregateException("Advisor cleanup failed.", errors);
     }
 
     internal bool Restart(Action initialize)
