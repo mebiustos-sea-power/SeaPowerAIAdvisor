@@ -54,8 +54,11 @@ internal sealed class QuestionInputController
         Reset();
         // Allow the game's input update to consume release before entering typing mode again.
         typing.Release(question);
-        question.Keyboard.ClearFocus();
-        focusOrigin = question.Keyboard.FocusedElement;
+        // Hidden or detached inputs have no keyboard and do not need focus restoration.
+        if (question.View == null || !question.IsVisible) return;
+        var keyboard = question.Keyboard ?? throw new InvalidOperationException("The visible question input has no keyboard.");
+        keyboard.ClearFocus();
+        focusOrigin = keyboard.FocusedElement;
         focus.Request(Time.frameCount);
     }
 

@@ -400,12 +400,12 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         if (situationDelivery.HasValue) request = request.WithSituationDelivery(situationDelivery);
         var execution = prepare(request.SituationDelivery);
         var run = new AdvisorLocalRun(allowFallback, plainAdvisor, request.AllowOperations, execution);
-        guard(() => { if (!IsOpen) Toggle(); StartConsultation(request, recording: run, prepared: execution); });
+        AdvisorLocalApi.InvokeGuarded(guard, () => { if (!IsOpen) Toggle(); StartConsultation(request, recording: run, prepared: execution); });
         if (!run.Attached) throw new AdvisorLocalApiException(409, "advisor_unavailable");
         return run;
     }
-    void IAdvisorLocalTarget.LocalClear() { RequireLocalReady(); guard(Clear); }
-    void IAdvisorLocalTarget.LocalCancel() { guard(CancelActive); }
+    void IAdvisorLocalTarget.LocalClear() { RequireLocalReady(); AdvisorLocalApi.InvokeGuarded(guard, Clear); }
+    void IAdvisorLocalTarget.LocalCancel() { AdvisorLocalApi.InvokeGuarded(guard, CancelActive); }
     private void RequireLocalReady()
     {
         if (operationReview.IsOpen) throw new AdvisorLocalApiException(409, "proposal_review_open");

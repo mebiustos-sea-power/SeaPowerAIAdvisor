@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -59,6 +60,20 @@ internal sealed class AdvisorLocalApi
     internal AdvisorLocalApi(Func<AdvisorPromptOverrides> prompts, Action<Exception> unexpected,
         Func<JObject> connections, Func<string, bool, string?, AdvisorSituationDelivery?, AdvisorBackendSetup> prepareConnection)
     { this.prompts = prompts; this.unexpected = unexpected; this.connections = connections; this.prepareConnection = prepareConnection; }
+    // UI guards still record and stop a broken adviser; API callers must also receive the failure.
+    internal static void InvokeGuarded(Action<Action> guard, Action action)
+    {
+        ExceptionDispatchInfo? failure = null;
+        var invoked = false;
+        guard(() =>
+        {
+            invoked = true;
+            try { action(); }
+            catch (Exception error) { failure = ExceptionDispatchInfo.Capture(error); throw; }
+        });
+        failure?.Throw();
+        if (!invoked) throw new AdvisorLocalApiException(409, "advisor_unavailable");
+    }
     internal JObject ConnectionInfo() => connections();
     internal void Attach(object owner, string mode, Func<IAdvisorLocalTarget> target, AdvisorOperations? operations = null, AdvisorUnitReservations? reservations = null)
     { this.owner = owner; this.mode = mode; this.target = target; this.operations = operations; this.reservations = reservations; }

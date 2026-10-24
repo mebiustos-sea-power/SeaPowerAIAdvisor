@@ -85,6 +85,31 @@ internal static partial class LocalApiTests
             var pending = api.Enqueue("POST", "/v1/conversation/clear", new()); api.Disable();
             Require(pending.GetAwaiter().GetResult().Status == 503, "Disabling left queued commands pending");
         });
+        check("Guarded API work reports failures after preserving runtime cleanup and never reports skipped work as success", () =>
+        {
+            var logs = new System.Collections.Generic.List<string>(); var unexpected = new System.Collections.Generic.List<Exception>();
+            var stops = 0; var calls = 0; var fail = false; var original = new InvalidOperationException("API clear post-processing failed");
+            var runtime = new AdvisorRuntime("tactical_battle", logs.Add, () => stops++);
+            var target = new GuardedTarget(runtime.Guard, () => { calls++; if (fail) throw original; });
+            var api = new AdvisorLocalApi(() => AdvisorPromptOverrides.Session, unexpected.Add, () => new JObject(),
+                (_, _, _, _) => throw new InvalidOperationException("Unexpected connection preparation"));
+            api.Attach(new object(), "tactical_battle", () => target); api.Enable();
+            try
+            {
+                Require(Send(api, "POST", "/v1/conversation/clear").Status == 200 && calls == 1 && !runtime.Failed,
+                    "Normal guarded work did not complete");
+                fail = true;
+                var failed = Send(api, "POST", "/v1/conversation/clear");
+                Require(failed.Status == 500 && (string?)failed.Data["error"] == "unexpected_error" && calls == 2 &&
+                    runtime.Failed && stops == 1 && logs.Count == 1 && ReferenceEquals(unexpected.Single(), original) &&
+                    original.StackTrace!.Contains(nameof(AdvisorLocalApi.InvokeGuarded), StringComparison.Ordinal),
+                    "A runtime guard hid the original failure from the API or lost its diagnostic/cleanup");
+                var skipped = Send(api, "POST", "/v1/conversation/clear");
+                Require(skipped.Status == 409 && (string?)skipped.Data["error"] == "advisor_unavailable" && calls == 2 &&
+                    stops == 1 && unexpected.Count == 1, "A stopped runtime reported unexecuted work as successful");
+            }
+            finally { api.Disable(); }
+        });
         check("Plain adviser is an explicit consultation choice and is retained without becoming a global setting", () =>
         {
             var target = new Target(); var api = Api();
@@ -181,6 +206,17 @@ internal static partial class LocalApiTests
     { var task = api.Enqueue(method, path, body ?? new()); api.Pump(); return task.GetAwaiter().GetResult(); }
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
 
+    private sealed class GuardedTarget : IAdvisorLocalTarget
+    {
+        private readonly Action<Action> guard;
+        private readonly Action clear;
+        internal GuardedTarget(Action<Action> guard, Action clear) { this.guard = guard; this.clear = clear; }
+        public JObject LocalStatus() => new();
+        public void LocalClear() => AdvisorLocalApi.InvokeGuarded(guard, clear);
+        public void LocalCancel() => throw new InvalidOperationException("Unexpected cancellation");
+        public AdvisorLocalRun LocalConsult(string? question, string? shortcut, bool fallback, Func<AdvisorSituationDelivery?, AdvisorBackendSetup> prepare,
+            bool plain, bool? allowOperations, AdvisorSituationDelivery? delivery) => throw new InvalidOperationException("Unexpected consultation");
+    }
     private sealed class Target : IAdvisorLocalTarget
     {
         internal bool Called, Busy, Cleared, Editing;
