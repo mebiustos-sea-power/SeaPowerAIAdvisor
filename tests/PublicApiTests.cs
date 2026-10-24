@@ -23,12 +23,17 @@ internal static partial class ProviderTests
                 "The external client depends on host implementation types");
             Require(typeof(Api.AdvisorApi).Assembly.GetReferencedAssemblies().All(a => a.Name == "netstandard"), "Public contracts depend on the game or a JSON library");
             var external = new Client.StandardExtension();
+            external.Fields = external.Fields.Concat(new[] { new Api.ConnectionField("context", "Context length", numeric: true, defaultValue: "8192") }).ToArray();
             Require(!Api.AdvisorApi.IsAvailable, "Registration was active before host initialization");
             ThrowsPublic<InvalidOperationException>(() => Api.AdvisorApi.Register(external));
             using var host = new PublicHost(external);
             Require(Api.AdvisorApi.IsAvailable && AdvisorServiceCatalog.BuiltIn.Find(external.Id) != null &&
                 AdvisorServiceCatalog.BuiltIn.Require(external.Id).Fields[1].Caption(AdvisorText.Load("ja")) == "認証情報",
                 "Registered fields did not reach the same catalog used by settings");
+            var fields = AdvisorServiceCatalog.BuiltIn.Require(external.Id).Fields;
+            Require(!fields[0].Numeric && fields[2].Numeric && fields[2].DefaultValue == "8192" &&
+                new BuiltInAdvisorExtension(new OllamaService()).Fields.Single(f => f.Key == "num_ctx").Numeric,
+                "Provider field layout metadata was lost or legacy text fields changed their layout");
             Require(AdvisorServiceCatalog.BuiltIn.Require(external.Id).Description(AdvisorText.Load("ja")) == "",
                 "An extension without a description acquired a required implementation or a placeholder message");
             var count = AdvisorServiceCatalog.BuiltIn.Services.Count;

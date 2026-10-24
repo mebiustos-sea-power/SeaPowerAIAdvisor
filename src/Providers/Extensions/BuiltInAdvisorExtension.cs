@@ -20,7 +20,7 @@ internal sealed class BuiltInAdvisorExtension : Api.IAdvisorToolListExtension, A
     public string GetDescription(string uiLanguage) => Service.Description(AdvisorText.Load(uiLanguage));
     public IReadOnlyList<Api.ConnectionField> Fields { get; }
     internal BuiltInAdvisorExtension(AdvisorService service)
-    { Service = service; Fields = Array.AsReadOnly(service.Fields.Select(f => new Api.ConnectionField(f.Key, f.Label, f.DefaultValue, f.Secret)).ToArray()); }
+    { Service = service; Fields = Array.AsReadOnly(service.Fields.Select(f => new Api.ConnectionField(f.Key, f.Label, f.Numeric, f.DefaultValue, f.Secret)).ToArray()); }
     public void ValidateSettings(string settingsJson) => Service.Validate(AdvisorExtensionBridge.Object(settingsJson, "settings_invalid"));
     public string GetModel(string settingsJson) => (string?)AdvisorExtensionBridge.Object(settingsJson, "settings_invalid")["model"] ?? "";
     private AdvisorApiConfiguration Configuration(Api.ConnectionSettings c) => new(c.Id, c.Name, c.ProviderId,

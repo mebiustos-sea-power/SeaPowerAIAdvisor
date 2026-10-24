@@ -12,11 +12,15 @@ public sealed class ConnectionField
     public string Label { get; }
     public string DefaultValue { get; }
     public bool Secret { get; }
+    public bool Numeric { get; }
     private readonly IReadOnlyDictionary<string, string> translations;
     public ConnectionField(string key, string label, string defaultValue = "", bool secret = false,
         IReadOnlyDictionary<string, string>? translations = null)
+        : this(key, label, false, defaultValue, secret, translations) { }
+    public ConnectionField(string key, string label, bool numeric, string defaultValue = "", bool secret = false,
+        IReadOnlyDictionary<string, string>? translations = null)
     {
-        Key = key; Label = label; DefaultValue = defaultValue; Secret = secret;
+        Key = key; Label = label; DefaultValue = defaultValue; Secret = secret; Numeric = numeric;
         this.translations = new ReadOnlyDictionary<string, string>(translations == null
             ? new Dictionary<string, string>() : new Dictionary<string, string>(translations));
     }

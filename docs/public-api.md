@@ -50,7 +50,7 @@ Gemini, Ollama, OpenRouter and NanoGPT pass through the same catalog registratio
 
 ## Settings and connection tests
 
-Declare fields with `ConnectionField`: key, English label, default string, secret flag and optional translated labels. The current form supports text and password inputs. The extension owns numeric conversion and validation. Missing translations use the English label.
+Declare fields with `ConnectionField`: key, English label, default string, secret flag and optional translated labels. The form supports text and password inputs. Use the `ConnectionField` overload with `numeric: true` for a compact numeric field aligned with the host's numeric settings; the original constructor retains full-width input. `Numeric` is a layout hint only: values remain strings, and the extension owns numeric conversion and validation. Missing translations use the English label.
 
 Providers can optionally also implement `IAdvisorExtensionDescription.GetDescription(string uiLanguage)`. Return a plain-text description of the connection method; the host displays it below provider selection and above all provider-specific fields, updating it when the provider changes. Return an empty string for no description; blank text occupies no display area. Supply English text when a translation is unavailable, and perform no I/O. Both execution interfaces support this optional metadata. Existing extensions need no changes and the contract/assembly version remains 1.
 

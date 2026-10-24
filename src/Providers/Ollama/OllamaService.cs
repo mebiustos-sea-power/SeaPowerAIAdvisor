@@ -19,7 +19,7 @@ internal sealed class OllamaService : AdvisorService
     {
         new AdvisorConnectionField("base_url", "connection.server_url", DefaultUrl),
         new AdvisorConnectionField("model", "connection.model", DefaultModel),
-        new AdvisorConnectionField("num_ctx", "connection.context_length", "8192")
+        new AdvisorConnectionField("num_ctx", "connection.context_length", "8192", numeric: true)
     });
     internal override void Validate(JObject settings)
     {

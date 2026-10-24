@@ -115,7 +115,7 @@ internal sealed class ExternalAdvisorService : AdvisorService
     {
         this.extension = extension; id = extension.Id; name = extension.Name; protocol = extension.Protocol;
         Fields = Array.AsReadOnly(extension.Fields.Select(field =>
-            new AdvisorConnectionField(field.Key, field.Label, field.DefaultValue, field.Secret, field.GetLabel)).ToArray());
+            new AdvisorConnectionField(field.Key, field.Label, field.DefaultValue, field.Secret, field.GetLabel, field.Numeric)).ToArray());
     }
     internal override void Validate(JObject settings) => AdvisorExtensionBridge.Invoke(() =>
     { extension.ValidateSettings(AdvisorExtensionBridge.Json(settings)); return true; });

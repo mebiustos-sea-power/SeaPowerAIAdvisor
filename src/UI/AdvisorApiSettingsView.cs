@@ -53,6 +53,7 @@ internal sealed class AdvisorApiSettingsView
         cards = new AdvisorApiConnectionListView(Named<StackPanel>("ApiConnectionCards"), services, text, id => Run(() => Edit(id)), guard);
         name = Named<TextBox>("ApiConfigurationName"); timeout = Named<TextBox>("RequestTimeout"); provider = Named<ComboBox>("ApiProvider");
         outputTokens = Named<TextBox>("OutputTokens");
+        SetNumericLayout(outputTokens); SetNumericLayout(timeout);
         delivery = Named<ComboBox>("SituationDelivery"); deliveryPanel = Named<FrameworkElement>("SituationDeliveryPanel");
         delivery.SelectionChanged += (_, _) => guard(NotifyChanged);
         fields = Named<StackPanel>("ApiProviderFields"); providerError = Named<TextBlock>("ApiProviderError");
@@ -133,6 +134,7 @@ internal sealed class AdvisorApiSettingsView
             {
                 var input = new PasswordBox { FontSize = 14, Padding = new Thickness(7), MaxLength = 512, ShowLastCharacterDuration = 0,
                     Background = (Brush)fields.FindResource("Brush.TextBox.Background"), CaretBrush = (Brush)fields.FindResource("Brush.TextBox.ForegroundFocus"), Password = value };
+                if (field.Numeric) SetNumericLayout(input);
                 input.PasswordChanged += (_, _) => guard(NotifyChanged);
                 input.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(input)); input.LostKeyboardFocus += (_, _) => guard(() => typing.Release(input));
                 fieldValues.Add(field.Key, () => input.Password); fields.Children.Add(input);
@@ -140,11 +142,17 @@ internal sealed class AdvisorApiSettingsView
             else
             {
                 var input = new TextBox { FontSize = 14, Padding = new Thickness(7), MaxLength = 2048, Text = value };
+                if (field.Numeric) SetNumericLayout(input);
                 input.TextChanged += (_, _) => guard(NotifyChanged);
                 input.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(input)); input.LostKeyboardFocus += (_, _) => guard(() => typing.Release(input));
                 fieldValues.Add(field.Key, () => input.Text ?? ""); fields.Children.Add(input);
             }
         }
+    }
+    private static void SetNumericLayout(FrameworkElement input)
+    {
+        input.Width = 140;
+        input.HorizontalAlignment = HorizontalAlignment.Left;
     }
     internal void SetBusy(bool value)
     {

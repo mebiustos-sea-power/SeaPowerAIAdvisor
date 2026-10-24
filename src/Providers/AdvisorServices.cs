@@ -14,11 +14,12 @@ internal sealed class AdvisorConnectionField
     internal string Label { get; }
     internal string DefaultValue { get; }
     internal bool Secret { get; }
+    internal bool Numeric { get; }
     private readonly Func<string, string>? label;
     internal string Caption(AdvisorText text) => label == null ? text[Label] : label(text.Language);
     internal AdvisorConnectionField(string key, string label, string defaultValue = "", bool secret = false,
-        Func<string, string>? caption = null)
-    { Key = key; Label = label; DefaultValue = defaultValue; Secret = secret; this.label = caption; }
+        Func<string, string>? caption = null, bool numeric = false)
+    { Key = key; Label = label; DefaultValue = defaultValue; Secret = secret; Numeric = numeric; this.label = caption; }
 }
 
 // Provider definitions own fields, validation and wire adapters. The form only renders their declarations.
