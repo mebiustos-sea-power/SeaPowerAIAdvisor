@@ -6,6 +6,19 @@ An in-game operations adviser for **Sea Power: Naval Combat in the Missile Age**
 
 [Download releases](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/releases) · [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3821064016) · [Report an issue](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/issues)
 
+## What's new in v0.17.1
+
+Output token limits are now easier to adjust when the AI reaches its limit before completing an answer or operation proposal.
+
+- **Output token limits can now be configured for every API connection.**
+  Gemini, Ollama and OpenRouter connections now offer this setting in the connection editor, alongside NanoGPT.
+
+- **The default output token limit is now 8192.**
+  This applies to new connections and connections without a saved limit. Existing limits saved for NanoGPT connections are retained.
+
+- **Added update notices.**
+  Versions with an announcement display it the first time you open the main adviser window. Once dismissed, that notice will not appear again.
+
 ## Features
 
 - **Gemini, Ollama, OpenRouter and NanoGPT connections.** Register named connections and choose a main connection and an optional sub connection. Duplicate a connection to reuse its settings with another model.
@@ -108,7 +121,7 @@ Bug reports are welcome through [GitHub issues](https://github.com/mebiustos-sea
 
 ## For developers
 
-The host ships `SeaPowerAIAdvisor.Api.dll` for external Anchor Chain mods. Extensions can use the standard retrieval engine or implement an independent consultation workflow. See the [public API guide](docs/public-api.md) and [offline example](examples/ExternalAdvisor/Examples.cs). The public API remains experimental.
+The host ships `SeaPowerAIAdvisor.Api.dll` for external Anchor Chain mods. Extensions can use the standard retrieval engine or implement an independent consultation workflow. See the [public API guide](docs/public-api.md) and [offline example](examples/ExternalAdvisor/Examples.cs). The public API remains experimental. Developer-authored update announcements are configured as described in the [update notice guide](docs/update-notices.md).
 
 To build on Windows, install Python 3 and the .NET SDK specified by `global.json`. Copy `Directory.Build.local.props.example` to `Directory.Build.local.props` and set your Sea Power and Anchor Chain directories. The full test script also expects Bungalow's Dynamic Campaign Mod's Workshop files for campaign tests; it remains optional at runtime.
 
