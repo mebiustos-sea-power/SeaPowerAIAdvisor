@@ -22,6 +22,7 @@
   "action.send": "送信",
   "action.cancel": "中止",
   "action.copy": "コピー",
+  "action.paste": "貼り付け",
   "transcript.copy_tip": "回答のMarkdown原文をコピーします。",
   "action.clear": "消去",
   "action.clear_input": "入力を消去",

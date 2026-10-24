@@ -95,7 +95,14 @@
       </Grid>
     </Grid>
     <Grid Grid.Row="2">
-      <TextBox x:Name="Question" AcceptsReturn="True" AcceptsTab="False" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" FontSize="15" Padding="8" />
+      <TextBox x:Name="Question" AcceptsReturn="True" AcceptsTab="False" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" FontSize="15" Padding="8">
+        <TextBox.ContextMenu>
+          <ContextMenu>
+            <MenuItem Header="{DynamicResource Advisor.action.copy}" Command="{x:Static ApplicationCommands.Copy}" InputGestureText="Ctrl+C" />
+            <MenuItem Header="{DynamicResource Advisor.action.paste}" Command="{x:Static ApplicationCommands.Paste}" InputGestureText="Ctrl+V" />
+          </ContextMenu>
+        </TextBox.ContextMenu>
+      </TextBox>
       <ScrollViewer x:Name="UnitBadgeArea" VerticalAlignment="Top" Margin="8,6,8,0" MaxHeight="48" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False" Visibility="Collapsed">
         <WrapPanel x:Name="UnitBadges" />
       </ScrollViewer>

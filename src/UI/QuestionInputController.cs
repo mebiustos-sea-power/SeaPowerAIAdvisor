@@ -22,6 +22,14 @@ internal sealed class QuestionInputController
         this.question = question; this.typing = typing;
         this.busy = busy;
         this.submit = submit;
+        var menu = question.ContextMenu ?? throw new InvalidOperationException("The question context menu is missing.");
+        foreach (MenuItem item in menu.Items) item.CommandTarget = question;
+        menu.Closed += (_, _) => guard(RequestFocus);
+        question.PreviewGotKeyboardFocus += (_, e) => guard(() =>
+        {
+            // Native focus restoration must not bypass a pending input-release wait.
+            if (focus.Pending) e.Handled = true;
+        });
         question.PreviewKeyDown += (_, e) => guard(() => KeyDown(e));
         question.PreviewTextInput += (_, e) => guard(() =>
         {

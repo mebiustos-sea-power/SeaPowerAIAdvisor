@@ -22,6 +22,7 @@
   "action.send": "Send",
   "action.cancel": "Cancel",
   "action.copy": "Copy",
+  "action.paste": "Paste",
   "transcript.copy_tip": "Copy the original Markdown answer.",
   "action.clear": "Clear",
   "action.clear_input": "Clear input",
