@@ -22,7 +22,9 @@
       <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type TextBlock}}}" />
     </Style>
     <Style x:Key="AdvisorWeaponLinkStyle" TargetType="{x:Type Hyperlink}" BasedOn="{StaticResource AdvisorPlainLinkStyle}" />
-    <Style x:Key="AdvisorUnitBadgeLinkStyle" TargetType="{x:Type Hyperlink}" BasedOn="{StaticResource AdvisorPlainLinkStyle}" />
+    <Style x:Key="AdvisorUnitBadgeLinkStyle" TargetType="{x:Type Hyperlink}" BasedOn="{StaticResource AdvisorPlainLinkStyle}">
+      <Setter Property="TextDecorations" Value="None" />
+    </Style>
   </Grid.Resources>
   <Grid x:Name="ConversationPane">
     <Grid.RowDefinitions>

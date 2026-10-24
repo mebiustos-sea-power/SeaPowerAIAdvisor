@@ -103,8 +103,13 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         question.TextChanged += (_, _) => guard(UpdateInputClear);
         var conversationBackground = content.Resources["AdvisorConversationBackgroundBrush"] as Brush
             ?? throw new InvalidOperationException("The advisor conversation background brush is missing.");
+        var badgeLinkStyle = content.Resources["AdvisorUnitBadgeLinkStyle"] as Style
+            ?? throw new InvalidOperationException("The advisor badge link style is missing.");
         draftBadges = new AdvisorDraftBadgeView(question, Named<ScrollViewer>(content, "UnitBadgeArea"),
-            Named<WrapPanel>(content, "UnitBadges"), conversationBackground, RemoveUnit, RemoveLocation, guard);
+            Named<WrapPanel>(content, "UnitBadges"), conversationBackground, badgeLinkStyle,
+            navigation == null ? null : navigation.Focus,
+            map == null ? null : location => map.Focus(location.Coordinate.Latitude, location.Coordinate.Longitude),
+            RemoveUnit, RemoveLocation, guard);
         draftMap = new AdvisorDraftMapPreview(map);
         captureAction = Named<Button>(content, "Capture");
         captureAction.Click += (_, _) => guard(() => Preview(false));
