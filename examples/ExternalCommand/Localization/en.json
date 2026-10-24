@@ -1,0 +1,6 @@
+{
+  "name": "Example: sonobuoy drop reservation",
+  "summary": "External command sample: append movement and sonobuoy drop reservations through the public SDK.",
+  "requirements": "Enable own-unit and weapon information in Data for AI. Use a controllable unit carrying available, single-drop sonobuoys; aircraft must be airborne. Supply coordinates and an ammunition ID from candidates. Existing reservations and the current depth setting are preserved.",
+  "proposal": "Add {1} sonobuoy drop reservations for {0}. Existing reservations and the current depth setting are preserved."
+}

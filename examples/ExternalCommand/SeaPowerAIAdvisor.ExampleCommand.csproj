@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>SeaPowerAIAdvisor.ExampleCommand</AssemblyName>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="SeaPowerAIAdvisor.Api" HintPath="$(AdvisorApiPath)" Private="false" />
+    <Reference Include="AnchorChain" HintPath="$(AnchorChainDir)\AnchorChain.dll" Private="false" ExternallyResolved="true" />
+    <Reference Include="Newtonsoft.Json" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\Newtonsoft.Json.dll" Private="false" />
+    <EmbeddedResource Include="Localization\*.json" LogicalName="SeaPowerAIAdvisor.ExampleCommand.Localization.%(Filename).json" />
+    <Compile Remove="tests\**\*.cs" />
+    <None Update="_info.ini" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <Target Name="CheckSdkReferences" BeforeTargets="ResolveReferences">
+    <Error Condition="'$(AdvisorApiPath)' == '' Or !Exists('$(AdvisorApiPath)')" Text="Set AdvisorApiPath to a built command-SDK SeaPowerAIAdvisor.Api.dll. Published v0.17.1 does not include the command SDK." />
+    <Error Condition="!Exists('$(AnchorChainDir)\AnchorChain.dll')" Text="Set AnchorChainDir to the Anchor Chain MOD directory." />
+    <Error Condition="!Exists('$(SeaPowerDir)\Sea Power_Data\Managed\Newtonsoft.Json.dll')" Text="Set SeaPowerDir to the Sea Power installation directory." />
+  </Target>
+</Project>

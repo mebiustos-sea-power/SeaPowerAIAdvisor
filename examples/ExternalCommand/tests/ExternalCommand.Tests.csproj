@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="SeaPowerAIAdvisor.Api" HintPath="$(AdvisorApiPath)" />
+    <Reference Include="SeaPowerAIAdvisor.ExampleCommand" HintPath="$(SampleDllPath)" />
+    <Reference Include="Newtonsoft.Json" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\Newtonsoft.Json.dll" />
+  </ItemGroup>
+  <Target Name="CheckSampleReferences" BeforeTargets="ResolveReferences">
+    <Error Condition="!Exists('$(AdvisorApiPath)') Or !Exists('$(SampleDllPath)')" Text="Set AdvisorApiPath and SampleDllPath to the already-built SDK and sample DLLs." />
+  </Target>
+</Project>
