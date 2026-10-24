@@ -12,7 +12,9 @@ internal sealed class AdvisorCoordinateLinks
     private readonly List<(string Name, double Latitude, double Longitude)> links = new();
     internal IReadOnlyList<(string Name, double Latitude, double Longitude)> Links => links;
 
-    internal XElement Reference(string destination, XElement label)
+    internal XElement Reference(string destination, XElement label) => Reference(destination, label, false);
+    internal XElement BadgeReference(string destination, XElement label) => Reference(destination, label, true);
+    private XElement Reference(string destination, XElement label, bool badge)
     {
         var parts = destination.Split(',');
         if (parts.Length != 2 ||
@@ -25,7 +27,7 @@ internal sealed class AdvisorCoordinateLinks
         links.Add((name, latitude, longitude));
         return Element("Hyperlink",
             new XAttribute(XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml") + "Name", name),
-            new XAttribute("Style", "{DynamicResource AdvisorWeaponLinkStyle}"),
-            new XAttribute("TextDecorations", "Underline"), new XAttribute("Focusable", "False"), label);
+            new XAttribute("Style", badge ? "{DynamicResource AdvisorPlainLinkStyle}" : "{DynamicResource AdvisorWeaponLinkStyle}"),
+            new XAttribute("TextDecorations", badge ? "None" : "Underline"), new XAttribute("Focusable", "False"), label);
     }
 }

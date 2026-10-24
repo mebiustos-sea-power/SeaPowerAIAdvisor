@@ -54,7 +54,7 @@ internal static partial class ProviderTests
             using var gateway = new AdvisorOperationGateway(registry);
             var source = new BattleAdvisorSource(() => throw new InvalidOperationException("Unexpected capture"), () => gateway);
             var custom = new AdvisorShortcut("custom.drop", "next_steps", allowOperations: true).Prepare("Drop buoys");
-            var manual = new AdvisorUnitDraft(); manual.Add(42, unit.Name); var manualRequest = manual.Prepare("Drop one buoy");
+            var manual = new AdvisorDraft(); manual.Add(42, unit.Name); var manualRequest = manual.Prepare("Drop one buoy");
             var knowledge = DeliveryKnowledge();
             foreach (var request in new[] { custom, manualRequest })
                 Require(AdvisorConsultation.CreateOperations(request, source, "wip-off", knowledge.Prompts, AdvisorOperationReferences.Empty) == null,

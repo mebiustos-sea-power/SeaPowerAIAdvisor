@@ -30,6 +30,7 @@ internal sealed class BattleIntegration
     private AdvisorUnitReservations? reservations;
     private BattleContactAssessments? contactAssessments;
     private BattleMapNavigation? mapNavigation;
+    private BattleMapPointInput? mapInput;
     private AdvisorErrorWindow? errorWindow;
     private Action? showError;
 
@@ -124,9 +125,15 @@ internal sealed class BattleIntegration
         var host = FindHost(model.RootControl) ?? throw new InvalidOperationException("The battle window host is unavailable.");
         mapNavigation ??= new BattleMapNavigation(() => model?.Map);
         EnsureOperations();
-        return advisor ??= new AdvisorWindow(view, host, guard, new BattleAdvisorSource(Capture, () => operationGateway), GameLanguage.Read, warn, options, backends,
-            new BattleUnitNavigation(() => model?.Map, () => this.view), new BattleWeaponNavigation(() => this.view, guard),
-            mapNavigation);
+        if (advisor == null)
+        {
+            advisor = new AdvisorWindow(view, host, guard, new BattleAdvisorSource(Capture, () => operationGateway), GameLanguage.Read, warn, options, backends,
+                new BattleUnitNavigation(() => model?.Map, () => this.view), new BattleWeaponNavigation(() => this.view, guard), mapNavigation);
+            mapInput = new BattleMapPointInput(view, () => model?.Map?.DisplayMap,
+                () => model?.StateManager.CurrentState.Value, () => advisor?.CanInsertLocation == true,
+                advisor.InsertLocation, guard);
+        }
+        return advisor;
     }
 
     private AdvisorOperationGateway EnsureOperations()
@@ -266,6 +273,7 @@ internal sealed class BattleIntegration
         AdvisorRuntime.CleanupAll(
             () => Plugin.LocalApi?.Detach(this),
             ClearOperations,
+            () => { var input = mapInput; mapInput = null; input?.Dispose(); },
             () => contactAssessments?.Suspend(),
             () => { var previous = advisor; advisor = null; previous?.Stop(); },
             () => { var navigation = mapNavigation; mapNavigation = null; navigation?.Dispose(); });

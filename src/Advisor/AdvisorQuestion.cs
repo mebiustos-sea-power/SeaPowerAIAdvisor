@@ -11,7 +11,8 @@ internal sealed class AdvisorQuestion
     internal string Text { get; }
     internal string DisplayText { get; }
     internal IReadOnlyList<(int Id, string Name)> Units { get; }
-    internal string DisplayBody => Units.Count == 0 ? DisplayText : draftText;
+    internal IReadOnlyList<AdvisorLocation> Locations { get; }
+    internal string DisplayBody => Units.Count == 0 && Locations.Count == 0 ? DisplayText : draftText;
     internal bool IsShortcut { get; }
     internal bool AllowOperations { get; }
     internal AdvisorSituationDelivery? SituationDelivery { get; }
@@ -21,20 +22,21 @@ internal sealed class AdvisorQuestion
     internal JObject? Context => context == null ? null : (JObject)context.DeepClone();
     internal AdvisorQuestion(string text, bool allowOperations = true) : this(text, text, false, allowOperations: allowOperations) { }
     internal AdvisorQuestion(string text, string caption, bool shortcut, JObject? context = null, string? draftText = null,
-        IEnumerable<(int Id, string Name)>? units = null, bool allowOperations = true, AdvisorSituationDelivery? situationDelivery = null)
+        IEnumerable<(int Id, string Name)>? units = null, bool allowOperations = true, AdvisorSituationDelivery? situationDelivery = null, IEnumerable<AdvisorLocation>? locations = null)
     {
         Text = text; DisplayText = caption; IsShortcut = shortcut; AllowOperations = allowOperations;
         if (situationDelivery.HasValue) _ = situationDelivery.Value.Code();
         SituationDelivery = situationDelivery;
         this.context = context == null ? null : (JObject)context.DeepClone(); this.draftText = draftText ?? text;
         Units = Array.AsReadOnly((units ?? Array.Empty<(int, string)>()).ToArray());
+        Locations = Array.AsReadOnly((locations ?? Array.Empty<AdvisorLocation>()).ToArray());
     }
 
     internal AdvisorQuestion WithOperations(bool allowed) => allowed == AllowOperations ? this :
-        new(Text, DisplayText, IsShortcut, context, draftText, Units, allowed, SituationDelivery);
+        new(Text, DisplayText, IsShortcut, context, draftText, Units, allowed, SituationDelivery, Locations);
 
     internal AdvisorQuestion WithSituationDelivery(AdvisorSituationDelivery? mode) => mode == SituationDelivery ? this :
-        new(Text, DisplayText, IsShortcut, context, draftText, Units, AllowOperations, mode);
+        new(Text, DisplayText, IsShortcut, context, draftText, Units, AllowOperations, mode, Locations);
 
     internal bool ConsumesDraft(string draft) => !IsShortcut && draft == draftText;
 }

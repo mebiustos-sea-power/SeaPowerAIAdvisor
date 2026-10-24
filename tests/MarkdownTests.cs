@@ -123,7 +123,7 @@ internal static class MarkdownTests
         });
         check("Submitted targets appear as history badges between the speaker and typed message without editing controls", () =>
         {
-            var draft = new AdvisorUnitDraft(); draft.Add(1005, "S61 オリオン"); draft.Add(7018, "Contact 7018");
+            var draft = new AdvisorDraft(); draft.Add(1005, "S61 オリオン"); draft.Add(7018, "Contact 7018");
             var request = draft.Prepare("現在深度は？");
             var chat = new AdvisorConversation(); chat.Begin(request).Complete("回答"); draft.Clear();
             var rendered = XDocument.Parse(AdvisorTranscript.Render(chat, AdvisorText.Load("ja"), "ゆきな", "empty")).Root!;
@@ -137,7 +137,7 @@ internal static class MarkdownTests
                 request.Text == "現在深度は？\n\nS61 オリオン (unit_id: 1005)\nContact 7018 (unit_id: 7018)" &&
                 chat.Exchanges.Single().Question == request.Text,
                 "History badges acquired removal controls or rendering changed the copyable AI question");
-            var onlyTargets = new AdvisorUnitDraft(); onlyTargets.Add(1005, "S61 オリオン");
+            var onlyTargets = new AdvisorDraft(); onlyTargets.Add(1005, "S61 オリオン");
             var targetChat = new AdvisorConversation(); targetChat.Begin(onlyTargets.Prepare("")).Complete("回答");
             var targetRow = XDocument.Parse(AdvisorTranscript.Render(targetChat, AdvisorText.Load("en"), "Adviser", "empty"))
                 .Root!.Elements().Single().Elements().ToArray();
@@ -147,7 +147,7 @@ internal static class MarkdownTests
         });
         check("History badge actions use exact target identities and obey independent link settings and target availability", () =>
         {
-            var draft = new AdvisorUnitDraft();
+            var draft = new AdvisorDraft();
             draft.Add(1001, "同名"); draft.Add(1002, "同名"); draft.Add(7018, "Contact 7018");
             var chat = new AdvisorConversation(); chat.Begin(draft.Prepare("確認")).Complete("回答");
             var known = new System.Collections.Generic.HashSet<int> { 1001, 1002, 7018 };

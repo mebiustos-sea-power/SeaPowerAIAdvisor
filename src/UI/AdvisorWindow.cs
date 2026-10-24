@@ -5,6 +5,7 @@ using System.Text;
 using Noesis;
 using Newtonsoft.Json.Linq;
 using SeapowerUI;
+using SeaPowerAIAdvisor.Api;
 
 namespace SeaPowerAIAdvisor;
 
@@ -21,8 +22,9 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     private readonly AdvisorConversation conversation = new();
     private readonly TypingScope typing = new();
     private readonly QuestionInputController questionInput;
-    private readonly AdvisorUnitDraft unitDraft = new();
-    private readonly AdvisorUnitBadgeView unitBadges;
+    private readonly AdvisorDraft draft = new();
+    private readonly AdvisorDraftBadgeView draftBadges;
+    private readonly AdvisorDraftMapPreview draftMap;
     private readonly Window window;
     private readonly AdvisorSettingsController settings;
     private readonly AdvisorConsultationMenu consultationMenu;
@@ -101,8 +103,9 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         question.TextChanged += (_, _) => guard(UpdateInputClear);
         var conversationBackground = content.Resources["AdvisorConversationBackgroundBrush"] as Brush
             ?? throw new InvalidOperationException("The advisor conversation background brush is missing.");
-        unitBadges = new AdvisorUnitBadgeView(question, Named<ScrollViewer>(content, "UnitBadgeArea"),
-            Named<WrapPanel>(content, "UnitBadges"), conversationBackground, RemoveUnit, guard);
+        draftBadges = new AdvisorDraftBadgeView(question, Named<ScrollViewer>(content, "UnitBadgeArea"),
+            Named<WrapPanel>(content, "UnitBadges"), conversationBackground, RemoveUnit, RemoveLocation, guard);
+        draftMap = new AdvisorDraftMapPreview(map);
         captureAction = Named<Button>(content, "Capture");
         captureAction.Click += (_, _) => guard(() => Preview(false));
         inputAction = Named<Button>(content, "Input");
@@ -175,6 +178,16 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
 
     internal bool IsOpen => host.Windows.Contains(window);
     internal bool IsConsulting => active != null;
+    private bool DraftMapVisible => IsOpen && question.IsVisible && question.IsEnabled && !consultationMenu.IsOpen;
+    internal bool CanInsertLocation => DraftMapVisible && CanConsult && !question.IsReadOnly && !QuestionInputController.IsComposing;
+    internal void InsertLocation(AdvisorMapCoordinate coordinate)
+    {
+        if (!CanInsertLocation) return;
+        questionInput.Reset();
+        draft.AddLocation(coordinate, text["input.location_label"]);
+        RefreshDraftBadges();
+        questionInput.RequestFocus();
+    }
     internal bool HasUnreadResult { get; private set; }
     internal string DisplayName => appliedProfile?.DisplayName ?? speakerName;
     internal bool CanConsult => active == null && !operationReview.IsOpen && conversationPane.Visibility == Visibility.Visible;
@@ -215,9 +228,10 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     {
         CompleteActive();
         UpdateActiveProgress();
-        if (!IsOpen) { updateNotice.Hide(); operationReview.Close(); questionInput.Reset(); typing.Release(); ReleasePortrait(); return; }
+        if (!IsOpen) { draftMap.Dispose(); updateNotice.Hide(); operationReview.Close(); questionInput.Reset(); typing.Release(); ReleasePortrait(); return; }
         settings.Tick();
         operationReview.Tick();
+        draftMap.Update(draft.Locations, DraftMapVisible);
         UpdateUnitInsertion();
         questionInput.Tick();
         transcript.Tick();
@@ -239,6 +253,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     internal void Stop()
     {
         HasUnreadResult = false;
+        draftMap.Dispose();
         updateNotice.Hide();
         var job = active; active = null;
         if (pendingTurn?.State == AdvisorTurnState.Waiting)
@@ -270,6 +285,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
 
     private void OnWindowClosed()
     {
+        draftMap.Dispose();
         updateNotice.Dismiss();
         consultationMenu.Close();
         operationReview.Close();
@@ -302,7 +318,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     {
         if (!CanEditDraft() || !selected.HasValue) return;
         questionInput.Reset();
-        if (unitDraft.Add(selected.Value.Id, selected.Value.Name)) RefreshUnitBadges();
+        if (draft.Add(selected.Value.Id, selected.Value.Name)) RefreshDraftBadges();
         questionInput.RequestFocus();
     }
 
@@ -310,20 +326,34 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     {
         if (!CanEditDraft()) return;
         questionInput.Reset();
-        unitDraft.Remove(unitId);
-        RefreshUnitBadges();
+        draft.Remove(unitId);
+        RefreshDraftBadges();
         questionInput.RequestFocus();
     }
 
-    private void RefreshUnitBadges() { unitBadges.Show(unitDraft.Units); UpdateInputClear(); }
+    private void RemoveLocation(AdvisorLocation location)
+    {
+        if (!CanEditDraft()) return;
+        questionInput.Reset();
+        draft.RemoveLocation(location);
+        RefreshDraftBadges();
+        questionInput.RequestFocus();
+    }
+
+    private void RefreshDraftBadges()
+    {
+        draftBadges.Show(draft.Units, draft.Locations);
+        draftMap.Update(draft.Locations, DraftMapVisible);
+        UpdateInputClear();
+    }
     private void UpdateInputClear() => clearInput.IsEnabled = active == null &&
-        (!string.IsNullOrEmpty(question.Text) || unitDraft.Units.Count > 0);
+        (!string.IsNullOrEmpty(question.Text) || draft.Units.Count > 0 || draft.Locations.Count > 0);
 
     private void ClearDraft()
     {
         question.Text = string.Empty;
-        unitDraft.Clear();
-        RefreshUnitBadges();
+        draft.Clear();
+        RefreshDraftBadges();
     }
 
     private void ClearInput()
@@ -413,7 +443,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         if (conversationPane.Visibility != Visibility.Visible) throw new AdvisorLocalApiException(409, "settings_open");
     }
 
-    private void StartConsultation() => StartConsultation(unitDraft.Prepare(question.Text ?? string.Empty));
+    private void StartConsultation() => StartConsultation(draft.Prepare(question.Text ?? string.Empty));
 
     private void RetryConsultation(AdvisorTurn turn)
     {
@@ -607,7 +637,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     {
         send.Content = text[busy ? "action.cancel" : "action.send"];
         question.IsReadOnly = busy;
-        unitBadges.SetBusy(busy);
+        draftBadges.SetBusy(busy);
         UpdateUnitInsertion();
         UpdateInputClear();
         captureAction.IsEnabled = !busy;
@@ -657,7 +687,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
             diagnosticStatus.Text = text["diagnostics.ime"];
             return;
         }
-        var draftQuestion = structured ? unitDraft.Prepare(question.Text ?? string.Empty).Text : string.Empty;
+        var draftQuestion = structured ? draft.Prepare(question.Text ?? string.Empty).Text : string.Empty;
         if (structured && draftQuestion.Length > AdvisorConversation.MaxQuestionLength)
         {
             diagnosticStatus.Text = ValidationMessage("validation.question_too_long");

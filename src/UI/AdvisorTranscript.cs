@@ -19,7 +19,7 @@ internal static class AdvisorTranscript
         if (conversation.Turns.Count == 0 && configurationNotice == null)
         {
             root.Add(Plain(empty));
-            if (links != null) root.Add(Plain(text["transcript.track_navigation"]));
+            if (links != null || coordinateLinks != null) root.Add(Plain(text["transcript.track_navigation"]));
         }
         for (var i = 0; i < conversation.Turns.Count; i++)
         {
@@ -28,9 +28,10 @@ internal static class AdvisorTranscript
             var copyTip = turn.Request.IsShortcut ? "transcript.copy_prompt_tip" : "transcript.copy_question_tip";
             var row = Element("StackPanel", new XAttribute("Margin", "0,0,0,20"),
                 Header(text["speaker.you"], "AdvisorPlayerNameBrush", "CopyQuestion" + i, text, copyTip, "0,0,0,6", copyCaption));
-            if (turn.Request.Units.Count > 0)
+            if (turn.Request.Units.Count > 0 || turn.Request.Locations.Count > 0)
                 row.Add(Element("WrapPanel", new XAttribute("Margin", "0,0,0,6"),
-                    turn.Request.Units.Select(unit => AdvisorUnitBadge.Render(unit.Id, unit.Name, links))));
+                    turn.Request.Units.Select(unit => AdvisorBadge.Render(unit.Id, unit.Name, links))
+                        .Concat(turn.Request.Locations.Select(location => AdvisorBadge.Render(location, coordinateLinks)))));
             if (turn.Request.DisplayBody.Length > 0)
                 row.Add(links?.Decorate(Plain(turn.Request.DisplayBody)) ?? Plain(turn.Request.DisplayBody));
             if (turn.State == AdvisorTurnState.Waiting || turn.State == AdvisorTurnState.Answered)

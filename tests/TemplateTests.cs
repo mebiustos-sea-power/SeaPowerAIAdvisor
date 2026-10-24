@@ -66,7 +66,7 @@ internal static class TemplateTests
         {
             var store = new AdvisorTextTemplateStore(directory);
             store.SaveEntry(new AdvisorTextTemplate("patrol", "Patrol", "指定したヘリで対潜哨戒網を構築して。\nまず状況を確認して。"), true);
-            var selected = store.Read().Single(); var units = new AdvisorUnitDraft(); units.Add(1029, "Hobby 1"); units.Add(1040, "Hobby 2");
+            var selected = store.Read().Single(); var units = new AdvisorDraft(); units.Add(1029, "Hobby 1"); units.Add(1040, "Hobby 2");
             var edited = selected.Text + "\n既存予約は維持して。";
             var request = units.Prepare(edited);
             Require(!request.IsShortcut && request.AllowOperations && request.SituationDelivery == null && request.DisplayBody == edited &&

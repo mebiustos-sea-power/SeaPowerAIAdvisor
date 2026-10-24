@@ -9,7 +9,7 @@ internal static partial class BattleTests
     {
         check("Badge targets deduplicate by identity, remove independently and freeze into submitted questions", () =>
         {
-            var draft = new AdvisorUnitDraft();
+            var draft = new AdvisorDraft();
             const string text = "この2隻を比較して。";
             Require(draft.Add(1001, "同じ表示名") && !draft.Add(1001, "再追加") && draft.Add(2002, "同じ表示名"),
                 "Targets were deduplicated by name or the same target acquired duplicate badges");
@@ -31,7 +31,7 @@ internal static partial class BattleTests
         });
         check("Badge questions clear only their matching draft and do not alter quick-consultation draft preservation", () =>
         {
-            var draft = new AdvisorUnitDraft(); draft.Add(1001, "対象");
+            var draft = new AdvisorDraft(); draft.Add(1001, "対象");
             var request = draft.Prepare("質問");
             Require(request.ConsumesDraft("質問") && !request.ConsumesDraft("変更済み"),
                 "Hidden target metadata prevented clearing the sent draft or cleared an independently edited message");
@@ -50,7 +50,7 @@ internal static partial class BattleTests
         check("Badge-generated requests retain the current permitted unit bindings without sending removed targets", () =>
         {
             var f = new Fixture(); f.Track.Id = 7018;
-            var draft = new AdvisorUnitDraft(); draft.Add(1001, "自軍"); draft.Add(7018, "Contact 7018");
+            var draft = new AdvisorDraft(); draft.Add(1001, "自軍"); draft.Add(7018, "Contact 7018");
             var snapshot = f.Capture();
             var request = draft.Prepare("どう対処する？");
             var session = new BattleQuerySession(snapshot, "ja", request.Text);
