@@ -486,5 +486,10 @@
   "commands.about": "説明",
   "commands.prompt": "AIへの指示",
   "commands.definition": "定義JSON",
-  "commands.back": "一覧に戻る"
+  "commands.back": "一覧に戻る",
+  "update_notice.output_tokens.title": "(お知らせ) 出力トークン上限の設定について",
+  "update_notice.output_tokens.body": "すべてのAPI接続で、出力トークン上限を設定できるようになりました。\n\n新しい接続と、上限が未設定の接続の初期値は8192です。NanoGPT接続に保存済みの上限値は引き継がれます。\n\n上限を調整する場合は、設定 > API接続で接続を編集してください。",
+  "update_notice.error.notice_state_invalid": "お知らせの既読情報が不正です。次回も表示される場合があります。",
+  "update_notice.error.notice_state_unreadable": "お知らせの既読情報を読み取れませんでした。次回も表示される場合があります。",
+  "update_notice.error.notice_state_write_failed": "お知らせを既読として保存できませんでした。次回も表示される場合があります。"
 }

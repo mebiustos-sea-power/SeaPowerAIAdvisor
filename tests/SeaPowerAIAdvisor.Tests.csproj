@@ -82,6 +82,9 @@
     <Compile Include="..\src\Configuration\AdvisorApiLibrary.cs" Link="AdvisorApiLibrary.cs" />
     <Compile Include="..\src\Configuration\AdvisorSettingsOperations.cs" Link="AdvisorSettingsOperations.cs" />
     <Compile Include="..\src\Configuration\AdvisorConfigFile.cs" Link="AdvisorConfigFile.cs" />
+    <Compile Include="..\src\Notifications\AdvisorUpdateNotice.cs" Link="AdvisorUpdateNotice.cs" />
+    <Compile Include="..\src\Notifications\AdvisorUpdateNoticeStore.cs" Link="AdvisorUpdateNoticeStore.cs" />
+    <EmbeddedResource Include="..\src\UI\Updates\current.json" LogicalName="SeaPowerAIAdvisor.UpdateNotice.json" />
     <Compile Include="..\src\Configuration\AdvisorOptions.cs" Link="AdvisorOptions.cs" />
     <Compile Include="..\src\Configuration\AdvisorInformation.cs" Link="AdvisorInformation.cs" />
     <Compile Include="..\src\Game\Campaign\CampaignInformation.cs" Link="CampaignInformation.cs" />

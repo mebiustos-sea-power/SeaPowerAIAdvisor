@@ -486,5 +486,10 @@
   "commands.about": "Description",
   "commands.prompt": "AI instructions",
   "commands.definition": "Definition JSON",
-  "commands.back": "Back to list"
+  "commands.back": "Back to list",
+  "update_notice.output_tokens.title": "(Notice) Output token limit settings",
+  "update_notice.output_tokens.body": "You can now set an output token limit for every API connection.\n\nThe default is 8192 for new connections and connections without a saved limit. Existing limits saved for NanoGPT connections are retained.\n\nTo adjust a limit, edit the connection under Settings > API connections.",
+  "update_notice.error.notice_state_invalid": "The notice read history is invalid. This notice may appear again.",
+  "update_notice.error.notice_state_unreadable": "The notice read history could not be read. This notice may appear again.",
+  "update_notice.error.notice_state_write_failed": "The notice could not be marked as read. It may appear again."
 }

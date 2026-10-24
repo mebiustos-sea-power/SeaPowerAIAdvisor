@@ -33,6 +33,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     private readonly ScrollViewer transcriptScroll;
     private readonly AdvisorTranscriptView transcript;
     private readonly AdvisorOperationReview operationReview;
+    private readonly AdvisorUpdateNoticeWindow updateNotice;
     private AdvisorOperations? OperationService => (source as IAdvisorOperationSource)?.Operations;
     private readonly TextBlock advisorName, advisorRole, activity, portraitError, status, diagnosticStatus, unitNavigationHint;
     private readonly IAdvisorUnitNavigation? navigation;
@@ -156,6 +157,12 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
             }, ReturnToConversation, warn, () => OperationService);
         operationReview = new AdvisorOperationReview(content, conversationPane, () => OperationService,
             () => text, guard, () => ShowConversation(false), map, navigation);
+        updateNotice = new AdvisorUpdateNoticeWindow(view, host, window, new AdvisorUpdateNoticeStore(profileDirectory),
+            () => text, guard, ReleaseInput, questionInput.RequestFocus, error =>
+            {
+                status.Text = text["update_notice.error." + error.Code];
+                warn("Update notice read receipts failed: " + error);
+            });
         Named<Button>(content, "Settings").Click += (_, _) => guard(settings.Open);
         try
         {
@@ -195,13 +202,13 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         ShowConversation(false);
         WindowHostCommands.OpenWindowCommand.Execute(window, view);
         if (!IsOpen) throw new InvalidOperationException("The game window host did not open the advisor.");
-        // Reopen the conversation with its history and message text intact.
-        questionInput.RequestFocus();
+        // Reopen the conversation intact; offer the current notice only after the host has displayed it.
+        if (!updateNotice.Show()) questionInput.RequestFocus();
     }
 
     internal void Tick()
     {
-        if (!IsOpen) { operationReview.Close(); CancelActive(); questionInput.Reset(); typing.Release(); ReleasePortrait(); return; }
+        if (!IsOpen) { updateNotice.Hide(); operationReview.Close(); CancelActive(); questionInput.Reset(); typing.Release(); ReleasePortrait(); return; }
         settings.Tick();
         operationReview.Tick();
         UpdateUnitInsertion();
@@ -226,6 +233,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     // Fault teardown must cancel work and release input without rendering the broken conversation again.
     internal void Stop()
     {
+        updateNotice.Hide();
         var job = active; active = null;
         if (pendingTurn?.State == AdvisorTurnState.Waiting)
         { FinishProposal(pendingTurn, false); pendingTurn.Cancel(); }
@@ -256,6 +264,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
 
     private void OnWindowClosed()
     {
+        updateNotice.Dismiss();
         consultationMenu.Close();
         operationReview.Close();
         CancelActive();

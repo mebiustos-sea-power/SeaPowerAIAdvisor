@@ -141,6 +141,7 @@ internal static class Program
         ProfileTests.Run(args[1], Check);
         SettingsOperationsTests.Run(Check);
         TemplateTests.Run(Check);
+        UpdateNoticeTests.Run(Check);
         TemplateTests.RunInstalled(args[1], Check);
         LocalApiTests.Run(Check);
         OperationTests.Run(Check);

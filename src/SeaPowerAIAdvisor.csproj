@@ -37,8 +37,10 @@
     <EmbeddedResource Include="UI\Views\AdvisorControls.xaml" LogicalName="SeaPowerAIAdvisor.AdvisorControls.xaml" />
     <EmbeddedResource Include="UI\Views\AdvisorHudButton.xaml" LogicalName="SeaPowerAIAdvisor.AdvisorHudButton.xaml" />
     <EmbeddedResource Include="UI\Views\AdvisorError.xaml" LogicalName="SeaPowerAIAdvisor.AdvisorError.xaml" />
+    <EmbeddedResource Include="UI\Views\AdvisorUpdateNotice.xaml" LogicalName="SeaPowerAIAdvisor.AdvisorUpdateNotice.xaml" />
     <EmbeddedResource Include="UI\Assets\advisor-default.png" LogicalName="SeaPowerAIAdvisor.DefaultPortrait.png" />
     <EmbeddedResource Include="UI\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Localization.%(Filename).json" />
+    <EmbeddedResource Include="UI\Updates\current.json" LogicalName="SeaPowerAIAdvisor.UpdateNotice.json" />
   </ItemGroup>
   <Target Name="CheckGameReferences" BeforeTargets="ResolveReferences">
     <Error Condition="!Exists('$(SeaPowerDir)\Sea Power_Data\Managed\Seapower-Scripts.dll')" Text="Set SeaPowerDir in Directory.Build.local.props." />
