@@ -5,7 +5,7 @@ using SeaPowerAIAdvisor.Api;
 namespace SeaPowerAIAdvisor;
 
 // Revokes retained SDK services on battle retirement; never exports native objects or permits worker-thread game access.
-internal sealed class AdvisorOperationContext : IAdvisorOperationContext, IAdvisorGameSupport, IAdvisorMap, IAdvisorOperationText, IDisposable
+internal sealed class AdvisorOperationContext : IAdvisorOperationContext, IAdvisorGameSupport, IAdvisorReservationSupport, IAdvisorMap, IAdvisorOperationText, IDisposable
 {
     private readonly IAdvisorGameSupport game;
     private readonly IAdvisorMap map;
@@ -27,6 +27,13 @@ internal sealed class AdvisorOperationContext : IAdvisorOperationContext, IAdvis
     public IReadOnlyList<AmmunitionInfo> GetAmmunition(string target) { Check(); return game.GetAmmunition(target); }
     public ReservationRoute? GetReservationRoute(string target) { Check(); return game.GetReservationRoute(target); }
     public string GetSonobuoyDepth(string target) { Check(); return game.GetSonobuoyDepth(target); }
+    public void ClearReservations(string target)
+    {
+        Check();
+        var reservations = game as IAdvisorReservationSupport
+            ?? throw new InvalidOperationException("The game adapter does not provide reservation control.");
+        reservations.ClearReservations(target);
+    }
     public void AppendSonobuoyDrop(string target, string ammunition, AdvisorMapCoordinate position)
     { Check(); game.AppendSonobuoyDrop(target, ammunition, position); }
     public string Get(string language, string key) { Check(); return text.For(language)[key]; }

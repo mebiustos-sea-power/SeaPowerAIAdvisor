@@ -93,7 +93,7 @@ The built-in command schedules **sonobuoy drops** using airborne friendly aircra
 
 Before any orders are added, open the proposal review window. Compare the planned drop locations and travel routes on the map, and switch between proposals when alternatives are available. The adviser aims to provide two alternatives; one valid proposal can also be accepted. Choose one proposal and select **Adopt** to approve it. Its number and title remain in conversation history.
 
-Sonobuoy orders are appended to existing reservations and use the aircraft's current sonobuoy depth setting without changing it. The game handles the queued movement and deployment. This feature creates reservations; it does not continuously monitor or replan their execution.
+For each aircraft, the adviser chooses whether to append its drop plan to existing reservations or replace that aircraft's entire existing reservation queue. The approval description shows the choice, and the map preview starts at the corresponding route origin. The aircraft's current sonobuoy depth setting is preserved. The game handles the queued movement and deployment. This feature creates reservations; it does not continuously monitor or replan their execution.
 
 ## Information, token usage and response time
 

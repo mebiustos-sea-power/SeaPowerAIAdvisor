@@ -42,7 +42,7 @@ internal static partial class ProviderTests
                     if (send == 3)
                     {
                         var definition = result["operation"]!; var candidate = result["candidates"]![0]!;
-                        Require(definition["parameters"]!["required"]!.Values<string>().SequenceEqual(new[] { "latitude", "longitude", "ammunition" }) &&
+                        Require(definition["parameters"]!["required"]!.Values<string>().SequenceEqual(new[] { "placement", "drops" }) &&
                             definition["parameters"]!["properties"]!["depth"] == null &&
                             (bool?)definition["requires_approval"] == true && (int?)definition["plan_policy"]?["target"] == 2 &&
                             (int?)definition["plan_policy"]?["minimum"] == 1 &&
@@ -51,9 +51,9 @@ internal static partial class ProviderTests
                             "One candidate lookup did not supply the argument contract, plan/approval policy or live choices");
                         var order = BuoyRequest(); order["operation_id"] = definition["id"]!.DeepClone();
                         order["target_ref"] = candidate["target_ref"]!.DeepClone();
-                        order["arguments"]!["ammunition"] = candidate["ammunition"]![0]!["id"]!.DeepClone();
-                        order["arguments"]!["latitude"] = candidate["position"]!["latitude_deg"]!.DeepClone();
-                        order["arguments"]!["longitude"] = candidate["position"]!["longitude_deg"]!.DeepClone();
+                        order["arguments"]!["drops"]![0]!["ammunition"] = candidate["ammunition"]![0]!["id"]!.DeepClone();
+                        order["arguments"]!["drops"]![0]!["latitude"] = candidate["position"]!["latitude_deg"]!.DeepClone();
+                        order["arguments"]!["drops"]![0]!["longitude"] = candidate["position"]!["longitude_deg"]!.DeepClone();
                         var request = PlanRequest(order);
                         if (planCount == 1) ((JArray)request["plans"]!).RemoveAt(1);
                         if (legacy) request["action"] = "submit";
@@ -118,7 +118,7 @@ internal static partial class ProviderTests
                     if (send == 4)
                     {
                         var request = BuoyRequest(); request["request_id"] = "rejected-order";
-                        request["arguments"]!["ammunition"] = "PRIVATE_INVALID_AMMUNITION";
+                        request["arguments"]!["drops"]![0]!["ammunition"] = "PRIVATE_INVALID_AMMUNITION";
                         return Task.FromResult(legacy ? Reply(new AdvisorToolCall("rejected", "game_operations", request)) : OperationReply("rejected", request));
                     }
                     if (send == 5)
@@ -158,11 +158,8 @@ internal static partial class ProviderTests
                 var request = PlanRequest(BuoyRequest());
                 foreach (var plan in ((JArray)request["plans"]!).Cast<JObject>())
                 {
-                    plan["operations"] = new JArray(Enumerable.Range(0, count).Select(i =>
-                    {
-                        var order = BuoyRequest(); order.Remove("action"); order.Remove("request_id");
-                        order["arguments"]!["latitude"] = 26.5 + i * .001; return order;
-                    }));
+                    plan["operations"]![0]!["arguments"]!["drops"] = new JArray(Enumerable.Range(0, count).Select(i =>
+                        new JObject { ["latitude"] = 26.5 + i * .001, ["longitude"] = 127.5, ["ammunition"] = "extra_mod_buoy" }));
                 }
                 var provider = new FakeProvider("batch-model", (session, send, _, _) =>
                 {
@@ -326,7 +323,7 @@ internal static partial class ProviderTests
     private static AdvisorToolCall BuoyCall(int index)
     {
         var request = BuoyRequest(); request["request_id"] = "buoy-" + index;
-        request["arguments"]!["latitude"] = 26.5 + index * 0.001;
+        request["arguments"]!["drops"]![0]!["latitude"] = 26.5 + index * 0.001;
         return new AdvisorToolCall("schedule-" + index, "propose_operation_plans", PlanRequest(request));
     }
     private static AdvisorReply OperationReply(string id, JObject args)
@@ -346,7 +343,7 @@ internal static partial class ProviderTests
     private static JObject BuoyRequest() => new()
     {
         ["action"] = "execute", ["operation_id"] = SonobuoyDropExtension.OperationId, ["request_id"] = "buoy-1", ["target_ref"] = "unit:42",
-        ["arguments"] = new JObject { ["latitude"] = 26.5, ["longitude"] = 127.5, ["ammunition"] = "extra_mod_buoy", ["depth"] = "below_layer" }
+        ["arguments"] = SonobuoyFixture.Arguments("extra_mod_buoy")
     };
     private static AdvisorOperations SonobuoyRegistry(OperationHelicopter unit)
     { var registry = new AdvisorOperations(() => true); registry.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { unit })); return registry; }
@@ -361,6 +358,7 @@ internal static partial class ProviderTests
         internal int Calls, Thread, Inventory = 4;
         internal readonly System.Collections.Generic.List<double> Latitudes = new();
         public System.Collections.Generic.IReadOnlyList<BattleSonobuoyAmmo> Ammunition() => new[] { new BattleSonobuoyAmmo("extra_mod_buoy", "Extra buoy", Inventory, Inventory - Calls, true) };
+        public void ClearReservations() => throw new InvalidOperationException("unused");
         public void Append(string ammunition, double latitude, double longitude) { Latitudes.Add(latitude); Calls++; Thread = Environment.CurrentManagedThreadId; }
     }
 }

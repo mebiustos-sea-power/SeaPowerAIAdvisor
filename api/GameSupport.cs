@@ -15,6 +15,12 @@ public interface IAdvisorGameSupport
     void AppendSonobuoyDrop(string target, string ammunition, AdvisorMapCoordinate position);
 }
 
+// Optional reservation control; existing game-support implementations need not provide it.
+public interface IAdvisorReservationSupport
+{
+    void ClearReservations(string target);
+}
+
 // Detached values: commands decide applicability; the host does not filter this list by command or aircraft type.
 public sealed class GameUnitInfo
 {
@@ -38,8 +44,13 @@ public sealed class AmmunitionInfo
     public int Remaining { get; }
     public int Available { get; }
     public bool SingleRoundSupported { get; }
+    public int AvailableAfterClearingReservations { get; }
     public AmmunitionInfo(string id, string name, string type, string subtype, int remaining, int available, bool singleRoundSupported)
-    { Id = id; Name = name; Type = type; Subtype = subtype; Remaining = remaining; Available = available; SingleRoundSupported = singleRoundSupported; }
+        : this(id, name, type, subtype, remaining, available, singleRoundSupported, available) { }
+    public AmmunitionInfo(string id, string name, string type, string subtype, int remaining, int available,
+        bool singleRoundSupported, int availableAfterClearingReservations)
+    { Id = id; Name = name; Type = type; Subtype = subtype; Remaining = remaining; Available = available;
+        SingleRoundSupported = singleRoundSupported; AvailableAfterClearingReservations = availableAfterClearingReservations; }
 }
 
 public sealed class ReservationRoute

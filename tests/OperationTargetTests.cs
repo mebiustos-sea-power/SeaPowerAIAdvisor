@@ -59,7 +59,7 @@ internal static class OperationTargetTests
                 Require((string?)receipt["status"] == "proposed" && (string?)receipt["request_id"] == "replay.order-1" &&
                     (bool?)receipt["registered"] == false, "Equivalent targets did not share the original request identity");
             }
-            var changed = Execute("unit:42"); changed["arguments"]!["latitude"] = 27;
+            var changed = Execute("unit:42"); changed["arguments"]!["drops"]![0]!["latitude"] = 27;
             Require(Code(Send(trial, session, changed)) == "request_id_conflict", "A changed order silently replaced its receipt");
             var proposal = trial.Service.FinishProposal("replay", true)!;
             Require(proposal.State == AdvisorProposalState.Pending && proposal.Orders.Count == 1 &&
@@ -90,7 +90,7 @@ internal static class OperationTargetTests
         {
             using var trial = new Trial();
             using var session = trial.Gateway.CreateSession("ammunition", AdvisorPrompts.Current, References())!;
-            var request = Execute("unit:own_unit_8"); request["arguments"]!["ammunition"] = "weapon_reference_18";
+            var request = Execute("unit:own_unit_8"); request["arguments"]!["drops"]![0]!["ammunition"] = "weapon_reference_18";
             var original = request.DeepClone(); var rejected = Send(trial, session, request);
             Require((string?)rejected["status"] == "rejected" && Code(rejected) == "sonobuoy_not_carried" &&
                 (string?)rejected["target_ref_resolution"]?["resolved"] == "unit:42" && JToken.DeepEquals(original, request),
@@ -125,7 +125,7 @@ internal static class OperationTargetTests
     private static JObject Execute(string target, string id = "order-1") => new()
     {
         ["action"] = "execute", ["operation_id"] = SonobuoyDropExtension.OperationId, ["request_id"] = id, ["target_ref"] = target,
-        ["arguments"] = new JObject { ["latitude"] = 26.5, ["longitude"] = 127.5, ["ammunition"] = "custom_buoy" }
+        ["arguments"] = SonobuoyFixture.Arguments("custom_buoy")
     };
     private static JObject Send(Trial trial, IAdvisorOperationSession session, JObject request) =>
         OperationGatewayTests.Finish(trial.Gateway, session.ExecuteAsync(request, CancellationToken.None));
@@ -156,6 +156,7 @@ internal static class OperationTargetTests
         internal readonly List<(string Ammunition, double Latitude, double Longitude)> Orders = new();
         internal Helicopter(int id) => Id = id;
         public IReadOnlyList<BattleSonobuoyAmmo> Ammunition() => new[] { new BattleSonobuoyAmmo("custom_buoy", "Custom buoy", 12, 12, true) };
+        public void ClearReservations() => Orders.Clear();
         public void Append(string ammunition, double latitude, double longitude) => Orders.Add((ammunition, latitude, longitude));
     }
 }

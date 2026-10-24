@@ -73,7 +73,7 @@ internal static class OperationTests
             var request = Request(operations); var answer = operations.Execute(request);
             answer["data"]!["count"] = 200;
             Require((int?)operations.Execute((JObject)request.DeepClone())["data"]!["count"] == 1 && unit.Calls == 1, "A retry duplicated an order or mutated the stored receipt");
-            var changed = (JObject)request.DeepClone(); changed["arguments"]!["longitude"] = 128;
+            var changed = (JObject)request.DeepClone(); changed["arguments"]!["drops"]![0]!["longitude"] = 128;
             Expect(() => operations.Execute(changed), "request_id_conflict");
             var nextBattle = Service(() => true, unit);
             Expect(() => nextBattle.Execute(request), "operation_scope_changed");
@@ -184,12 +184,15 @@ internal static class OperationTests
             foreach (var pair in new (string Key, JToken Value)[]
             {
                 ("latitude", 91), ("longitude", -181), ("latitude", "26.5"), ("longitude", double.NaN),
-                ("latitude", JValue.CreateNull()), ("count", 2), ("count", "1"), ("placement", "replace"),
+                ("latitude", JValue.CreateNull()), ("count", 2), ("count", "1"), ("placement", "invalid"),
                 ("ammunition", "other-weapon"), ("unknown", true)
             })
             {
                 var request = Request(operations, "invalid-" + index++);
-                request["arguments"]!["depth"] = "below_layer"; request["arguments"]![pair.Key] = pair.Value;
+                request["arguments"]!["depth"] = "below_layer";
+                var arguments = (JObject)request["arguments"]!;
+                if (pair.Key == "placement") arguments[pair.Key] = pair.Value;
+                else arguments["drops"]![0]![pair.Key] = pair.Value;
                 Require((string?)operations.Execute(request)["status"] == "rejected", "Invalid arguments were accepted");
             }
             Require(unit.Calls == 0 && unit.Queue.Count == 1 && unit.Depth == "alternating",
@@ -223,7 +226,7 @@ internal static class OperationTests
     private static JObject Request(AdvisorOperations operations, string id = "request-1") => new()
     {
         ["scope_id"] = operations.ScopeId, ["request_id"] = id, ["operation"] = SonobuoyDropExtension.OperationId, ["target_ref"] = "unit:42",
-        ["arguments"] = new JObject { ["latitude"] = 26.5, ["longitude"] = 127.5, ["ammunition"] = "custom_mod_sonobuoy", ["count"] = 1, ["placement"] = "append" }
+        ["arguments"] = SonobuoyFixture.Arguments("custom_mod_sonobuoy")
     };
     private static AdvisorLocalResponse Send(AdvisorLocalApi api, string method, string path, JObject? body = null)
     { var task = api.Enqueue(method, path, body ?? new()); api.Pump(); return task.GetAwaiter().GetResult(); }
@@ -249,6 +252,7 @@ internal static class OperationTests
         internal double LastLatitude, LastLongitude;
         internal readonly List<string> Queue = new() { "existing waypoint" };
         public IReadOnlyList<BattleSonobuoyAmmo> Ammunition() => new[] { new BattleSonobuoyAmmo("custom_mod_sonobuoy", "Custom buoy", 3, Available, SingleDrop) };
+        public void ClearReservations() => Queue.Clear();
         public void Append(string ammunition, double latitude, double longitude)
         { Calls++; LastAmmo = ammunition; LastLatitude = latitude; LastLongitude = longitude; Queue.Add("one buoy reservation"); }
     }

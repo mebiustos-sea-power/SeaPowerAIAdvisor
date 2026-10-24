@@ -372,14 +372,14 @@ internal static class OperationPlanTests
                 new AdvisorWeaponReferences(new[] { ("weapon_reference_1", "mod_buoy", "Custom buoy") }));
             using var session = gateway.CreateSession("aliases", AdvisorPrompts.Current, references)!;
             JObject Drop(string target, string ammunition) => new() { ["operation_id"] = command.Id, ["target_ref"] = target,
-                ["arguments"] = new JObject { ["latitude"] = 26.5, ["longitude"] = 127, ["ammunition"] = ammunition } };
+                ["arguments"] = SonobuoyFixture.Arguments(ammunition, 26.5, 127) };
             var request = Batch(Plan("a", Drop("own_unit_1", "Custom buoy")), Plan("b", Drop("unit:own_unit_1", "weapon_reference_1"))); request["action"] = "submit";
             var result = OperationGatewayTests.Finish(gateway, session.ExecuteAsync(request, CancellationToken.None));
             var proposal = service.Proposal("aliases")!;
             Require((string?)result["status"] == "proposed" && result["plan_resolutions"]?.Count() == 2 &&
                 (string?)result["plan_resolutions"]?[1]?["plan_id"] == "b" && (int?)result["plan_resolutions"]?[1]?["operation_index"] == 0 &&
                 (string?)result["plan_resolutions"]?[1]?["argument_resolutions"]?[0]?["resolved"] == "mod_buoy" &&
-                proposal.Plans.All(p => p.Orders.Single().Target == "unit:42" && (string?)p.Orders.Single().Arguments["ammunition"] == "mod_buoy") &&
+                proposal.Plans.All(p => p.Orders.Single().Target == "unit:42" && (string?)p.Orders.Single().Arguments["drops"]![0]!["ammunition"] == "mod_buoy") &&
                 (string?)session.History[0]?["request"]?["plans"]?[0]?["operations"]?[0]?["target_ref"] == "own_unit_1",
                 "Normalization lost canonical identities, plan boundaries or original evidence");
             _ = OperationGatewayTests.Finish(gateway, session.ExecuteAsync(request, CancellationToken.None));
@@ -439,6 +439,7 @@ internal static class OperationPlanTests
         public ReservationRoute? ReservationRoute => new(new AdvisorMapCoordinate(26.5, 127.5), null);
         internal int Count;
         public IReadOnlyList<BattleSonobuoyAmmo> Ammunition() => new[] { new BattleSonobuoyAmmo("mod_buoy", "Custom buoy", 1, 1 - Count, true) };
+        public void ClearReservations() => Count = 0;
         public void Append(string ammunition, double latitude, double longitude) => Count++;
     }
     private sealed class Map : IAdvisorMap

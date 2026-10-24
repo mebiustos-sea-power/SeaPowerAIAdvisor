@@ -48,11 +48,11 @@ internal static class OperationDocumentationTests
             Require(en.Language == "en" && ja.Language == "ja" && en["name"] != ja["name"] &&
                 operation.Documentation.For("de")["name"] == en["name"], "Standard command resources or unsupported-language fallback are missing");
             foreach (var text in new[] { en, ja })
-                Require(new[] { "name", "summary", "requirements", "proposal_append" }.All(key => !string.IsNullOrWhiteSpace(text[key])) &&
+                Require(new[] { "name", "summary", "requirements", "proposal_append", "proposal_replace", "proposal_depth" }.All(key => !string.IsNullOrWhiteSpace(text[key])) &&
                     text.Format("proposal_summary", "Hobby 1", 2).Contains("Hobby 1", StringComparison.Ordinal), "A standard language cannot render its explanation or approval summary");
             Require((string?)operation.Definition()["description"] == operation.Description &&
                 (string?)operation.Definition()["id"] == SonobuoyDropExtension.OperationId &&
-                ((JArray)operation.Definition()["parameters"]!["required"]!).Values<string>().SequenceEqual(new[] { "latitude", "longitude", "ammunition" }),
+                ((JArray)operation.Definition()["parameters"]!["required"]!).Values<string>().SequenceEqual(new[] { "placement", "drops" }),
                 "UI localization translated identifiers, changed arguments or replaced the actual AI instruction");
         });
         check("Documentation inspection works with commands disabled and never reads candidates, creates proposals or enables execution", () =>

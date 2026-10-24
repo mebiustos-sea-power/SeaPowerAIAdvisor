@@ -114,7 +114,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(api.run("operations", "candidates", "seapower.schedule_sonobuoy_drop")[0], 0)
             path = Path(temporary) / "order.json"
             body = {"scope_id": "loaded-game", "request_id": "one-reservation", "operation": "seapower.schedule_sonobuoy_drop",
-                    "target_ref": "unit:42", "arguments": {"latitude": 26.5, "longitude": 127.5, "ammunition": "custom_buoy", "depth": "above_layer"}}
+                    "target_ref": "unit:42", "arguments": {"placement": "append", "drops": [{"latitude": 26.5, "longitude": 127.5, "ammunition": "custom_buoy"}], "depth": "above_layer"}}
             path.write_text(tool.encode(body), encoding="utf-8")
             self.assertEqual(api.run("operations", "execute", "--request-file", path)[0], 0)
             self.assertEqual(api.calls[-1][:3], ("POST", "/v1/operations", body))

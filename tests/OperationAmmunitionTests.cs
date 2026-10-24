@@ -31,12 +31,12 @@ internal static class OperationAmmunitionTests
                     "Normalization modified the original request or its diagnostic record");
             }
             var proposal = trial.Service.FinishProposal("equivalent", true)!;
-            Require(proposal.Orders.Count == 1 && (string?)proposal.Orders[0].Arguments["ammunition"] == "mod_buoy" &&
+            Require(proposal.Orders.Count == 1 && (string?)proposal.Orders[0].Arguments["drops"]![0]!["ammunition"] == "mod_buoy" &&
                 trial.Main.Orders.Count == 0, "Alias retries duplicated the proposal or bypassed approval");
             trial.Service.Approve(proposal); trial.Service.Approve(proposal);
             Require(trial.Main.Orders.SequenceEqual(new[] { "mod_buoy" }) &&
                 (string?)Send(trial, session, Request("weapon_reference_18"))["status"] == "registered", "Approval or replay duplicated a registration");
-            var changed = Request("mod_buoy"); changed["arguments"]!["latitude"] = 27;
+            var changed = Request("mod_buoy"); changed["arguments"]!["drops"]![0]!["latitude"] = 27;
             Require(Code(Send(trial, session, changed)) == "request_id_conflict", "Changed content silently replaced a request");
         });
         check("Ambiguous display names are rejected without choosing by stock or availability, while exact references remain usable", () =>
@@ -62,7 +62,7 @@ internal static class OperationAmmunitionTests
             foreach (var value in new[] { "foreign_buoy", "weapon_reference_19", "weapon_reference_999", "shared buoy", "Shared", "Shared buoy " })
                 Require(Code(Send(trial, session, Request(value, "bad-" + ++attempt))) == "sonobuoy_not_carried", "A foreign or approximate identity was accepted: " + value);
             var proposal = trial.Service.FinishProposal("strict", true)!;
-            Require(proposal.Orders.Count == 1 && (string?)proposal.Orders[0].Arguments["ammunition"] == "mod_buoy", "Rejected input changed the proposal");
+            Require(proposal.Orders.Count == 1 && (string?)proposal.Orders[0].Arguments["drops"]![0]!["ammunition"] == "mod_buoy", "Rejected input changed the proposal");
             trial.Service.Approve(proposal);
             Require(trial.Main.Orders.SequenceEqual(new[] { "mod_buoy" }) && trial.Other.Orders.Count == 0, "A name collision redirected the order");
         });
@@ -97,7 +97,7 @@ internal static class OperationAmmunitionTests
             Require(Code(Send(trial, retry, Request("weapon_reference_18"))) == "request_id_conflict", "A fresh reference map redirected an old order");
             using var next = trial.Gateway.CreateSession("next", AdvisorPrompts.Current, remapped)!;
             Require((string?)Send(trial, next, Request("weapon_reference_18"))["status"] == "proposed", "A new consultation reused the previous map");
-            Require((string?)trial.Service.FinishProposal("next", true)!.Orders[0].Arguments["ammunition"] == "second_buoy" &&
+            Require((string?)trial.Service.FinishProposal("next", true)!.Orders[0].Arguments["drops"]![0]!["ammunition"] == "second_buoy" &&
                 trial.Main.Orders.SequenceEqual(new[] { "mod_buoy" }), "A different consultation's proposal executed or lost its identity");
         });
         check("Operation reference maps exclude disabled weapons, excluded units and enemy-only performance records", () =>
@@ -124,11 +124,12 @@ internal static class OperationAmmunitionTests
             var custom = new CustomOperation(); trial.Service.Register(custom);
             using var session = trial.Gateway.CreateSession("custom", AdvisorPrompts.Current, References())!;
             var request = Request("Shared buoy"); request["operation_id"] = custom.Id;
+            request["arguments"] = new JObject { ["ammunition"] = "Shared buoy" };
             Require((string?)Send(trial, session, request)["status"] == "proposed", "A custom operation stopped accepting its arguments");
             trial.Service.FinishProposal("custom", true);
             Require(custom.Value == "Shared buoy", "The host interpreted an arbitrary command's ammunition field");
             var direct = new JObject { ["scope_id"] = trial.Service.ScopeId, ["request_id"] = "manual",
-                ["operation"] = SonobuoyDropExtension.OperationId, ["target_ref"] = "unit:42", ["arguments"] = request["arguments"]!.DeepClone() };
+                ["operation"] = SonobuoyDropExtension.OperationId, ["target_ref"] = "unit:42", ["arguments"] = SonobuoyFixture.Arguments("Shared buoy") };
             Require(Code(trial.Service.Execute(direct)) == "sonobuoy_not_carried" && trial.Main.Orders.Count == 0,
                 "The explicit developer registration silently acquired AI argument normalization");
         });
@@ -159,7 +160,7 @@ internal static class OperationAmmunitionTests
     private static JObject Request(string ammunition, string id = "order-1") => new()
     {
         ["action"] = "execute", ["operation_id"] = SonobuoyDropExtension.OperationId, ["request_id"] = id, ["target_ref"] = "unit:own_unit_8",
-        ["arguments"] = new JObject { ["ammunition"] = ammunition, ["latitude"] = 26.5, ["longitude"] = 127.5 }
+        ["arguments"] = SonobuoyFixture.Arguments(ammunition)
     };
     private static JObject Send(Trial trial, IAdvisorOperationSession session, JObject request) =>
         OperationGatewayTests.Finish(trial.Gateway, session.ExecuteAsync(request, CancellationToken.None));
@@ -190,6 +191,7 @@ internal static class OperationAmmunitionTests
         internal readonly List<string> Orders = new();
         internal Helicopter(int id, string ammunition) { Id = id; Ammo = new() { OperationAmmunitionTests.Ammo(ammunition, "Shared buoy") }; }
         public IReadOnlyList<BattleSonobuoyAmmo> Ammunition() => Ammo;
+        public void ClearReservations() => Orders.Clear();
         public void Append(string ammunition, double latitude, double longitude) => Orders.Add(ammunition);
     }
     private sealed class CustomOperation : IAdvisorOperation

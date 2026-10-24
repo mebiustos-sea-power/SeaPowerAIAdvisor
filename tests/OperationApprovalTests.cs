@@ -11,15 +11,15 @@ internal static class OperationApprovalTests
 {
     internal static void Run(Action<string, Action> check)
     {
-        check("Twelve buoy requests remain one proposal until approval, append in order and cannot execute twice", () =>
+        check("A twelve-drop unit plan remains pending until approval, appends in order and cannot execute twice", () =>
         {
             var unit = new Helicopter(); var service = Buoys(unit); service.BeginProposal("turn");
-            var requests = Enumerable.Range(0, 12).Select(i => Request(service, "turn", i)).ToArray();
+            var requests = new[] { DropPlan(service, "turn", 0, Enumerable.Range(0, 12).ToArray()) };
             foreach (var request in requests)
                 Require((string?)service.Propose("turn", request)["status"] == "proposed", "Valid buoy proposal rejected");
             Require(unit.Latitudes.Count == 0 && unit.Queue.Count == 1, "Proposal changed the game before approval");
             var proposal = service.FinishProposal("turn", true)!;
-            Require(proposal.State == AdvisorProposalState.Pending && proposal.Orders.Count == 12, "Requests were not held together");
+            Require(proposal.State == AdvisorProposalState.Pending && proposal.Orders.Count == 1, "Requests were not held together");
             foreach (var language in new[] { "en", "ja" })
             {
                 var description = service.DescribeProposal(proposal, language);
@@ -28,8 +28,8 @@ internal static class OperationApprovalTests
                     "The command summary lost the target, total, ammunition or last destination");
             }
             // Detached payloads cannot change the eventual approved work.
-            requests[0]["arguments"]!["latitude"] = -80;
-            proposal.Orders[0].Arguments["latitude"] = 80;
+            requests[0]["arguments"]!["drops"]![0]!["latitude"] = -80;
+            proposal.Orders[0].Arguments["drops"]![0]!["latitude"] = 80;
             unit.Depth = "below_layer";
             var preview = service.PreviewProposal(proposal, "en");
             var points = preview.Drawings.Where(d => d.Kind == AdvisorMapDrawingKind.Point).ToArray();
@@ -43,10 +43,10 @@ internal static class OperationApprovalTests
             Require(points.Select(point => point.Coordinates[0].Latitude).SequenceEqual(unit.Latitudes) &&
                 points.All(point => point.Coordinates[0].Longitude == 127.5),
                 "The approval preview differed from the registered coordinates or used caller-mutated arguments");
-            Require(proposal.State == AdvisorProposalState.Registered && proposal.RegisteredCount == 12 && unit.Queue.Count == 13 &&
+            Require(proposal.State == AdvisorProposalState.Registered && proposal.RegisteredCount == 1 && unit.Queue.Count == 13 &&
                 unit.Queue[0] == "player waypoint" && unit.Latitudes.SequenceEqual(Enumerable.Range(0, 12).Select(i => 26.5 + i * .001)) &&
                 unit.Depths.All(depth => depth == "below_layer"), "Approval lost order, repeated a task, cleared the player route or overwrote depth");
-            Require((string?)service.Propose("turn", Request(service, "turn", 0))["status"] == "registered" && unit.Latitudes.Count == 12,
+            Require((string?)service.Propose("turn", DropPlan(service, "turn", 0, Enumerable.Range(0, 12).ToArray()))["status"] == "registered" && unit.Latitudes.Count == 12,
                 "Repeating the same AI request registered it twice");
         });
         check("Sonobuoy route previews keep each helicopter's live append point and proposal order without changing reservations", () =>
@@ -58,8 +58,8 @@ internal static class OperationApprovalTests
             var units = new List<IBattleSonobuoyUnit> { first, second };
             var operation = SonobuoyFixture.Create(() => units); var service = new AdvisorOperations(() => true);
             service.Register(operation); service.BeginProposal("routes");
-            var values = new[] { Request(service, "routes", 2), Request(service, "routes", 9), Request(service, "routes", 0), Request(service, "routes", 7) };
-            values[1]["target_ref"] = "unit:43"; values[3]["target_ref"] = "unit:43";
+            var values = new[] { DropPlan(service, "routes", 0, 2, 0), DropPlan(service, "routes", 1, 9, 7) };
+            values[1]["target_ref"] = "unit:43";
             foreach (var request in values) service.Propose("routes", request);
             var proposal = service.FinishProposal("routes", true)!;
             var preview = service.PreviewProposal(proposal, "en");
@@ -87,8 +87,7 @@ internal static class OperationApprovalTests
             var service = new AdvisorOperations(() => true);
             service.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { unit }, () => information));
             service.BeginProposal("hidden-route");
-            service.Propose("hidden-route", Request(service, "hidden-route", 0));
-            service.Propose("hidden-route", Request(service, "hidden-route", 1));
+            service.Propose("hidden-route", DropPlan(service, "hidden-route", 0, 0, 1));
             var proposal = service.FinishProposal("hidden-route", true)!;
             var line = service.PreviewProposal(proposal, "en").Drawings.Single(d => d.Kind == AdvisorMapDrawingKind.Line);
             Require(line.Coordinates.Select(p => p.Latitude).SequenceEqual(new[] { 26.5, 26.501 }) && unit.Queue.Count == 1,
@@ -97,7 +96,7 @@ internal static class OperationApprovalTests
             Require(service.PreviewProposal(proposal, "en").Drawings.Single(d => d.Kind == AdvisorMapDrawingKind.Line).Coordinates[0].Latitude == 26.4,
                 "Restoring movement disclosure kept using an old permission or route");
             service.Approve(proposal);
-            Require(proposal.RegisteredCount == 2 && unit.Queue.Count == 3, "Movement disclosure changed reservation acceptance");
+            Require(proposal.RegisteredCount == 1 && unit.Queue.Count == 3, "Movement disclosure changed reservation acceptance");
             service.Retire();
         });
         check("One drop still draws an arrival leg, while an unavailable start never becomes a zero coordinate", () =>
@@ -118,7 +117,7 @@ internal static class OperationApprovalTests
         {
             var service = Buoys(new Helicopter()); var chat = new AdvisorConversation();
             var turn = chat.Begin(new AdvisorQuestion("Place buoys")); service.BeginProposal(turn.OperationId);
-            for (var i = 0; i < 12; i++) service.Propose(turn.OperationId, Request(service, turn.OperationId, i));
+            service.Propose(turn.OperationId, DropPlan(service, turn.OperationId, 0, Enumerable.Range(0, 12).ToArray()));
             turn.Finish(new AdviceResult("Original AI answer", 2, 0, null), service);
             var text = AdvisorText.Load("en");
             XElement Button() => XDocument.Parse(AdvisorTranscript.Render(chat, text, "Adviser", "empty"))
@@ -195,7 +194,7 @@ internal static class OperationApprovalTests
                 var enabled = true; var information = AdvisorInformation.Default; var unit = new Helicopter();
                 var units = new List<IBattleSonobuoyUnit> { unit }; var service = new AdvisorOperations(() => enabled);
                 service.Register(SonobuoyFixture.Create(() => units, () => information)); service.BeginProposal("check");
-                for (var i = 0; i < 3; i++) service.Propose("check", Request(service, "check", i));
+                service.Propose("check", DropPlan(service, "check", 0, 0, 1, 2));
                 var proposal = service.FinishProposal("check", true)!;
                 if (change == "inventory") unit.Inventory = 2;
                 if (change == "target") units.Clear();
@@ -249,13 +248,107 @@ internal static class OperationApprovalTests
             try { service.Propose("unknown", Request(service, "unknown", 1, operation.Id)); throw new Exception("Unknown request replayed"); }
             catch (AdvisorOperationException error) when (error.Code == "operation_outcome_unknown") { }
         });
-        check("Staging never accepts ammunition already promised in the same proposal", () =>
+        check("Staging rejects a second plan for the same unit without changing its accepted plan", () =>
         {
             var unit = new Helicopter { Inventory = 2 }; var service = Buoys(unit); service.BeginProposal("inventory");
-            service.Propose("inventory", Request(service, "inventory", 0)); service.Propose("inventory", Request(service, "inventory", 1));
-            var rejected = service.Propose("inventory", Request(service, "inventory", 2));
-            Require((string?)rejected["code"] == "no_available_sonobuoy" && service.Proposal("inventory")!.Orders.Count == 2 && unit.Queue.Count == 1,
+            service.Propose("inventory", DropPlan(service, "inventory", 0, 0, 1));
+            var rejected = service.Propose("inventory", DropPlan(service, "inventory", 1, 2));
+            Require((string?)rejected["code"] == "duplicate_unit_plan" && service.Proposal("inventory")!.Orders.Count == 1 && unit.Queue.Count == 1,
                 "Staged requests oversubscribed inventory or reserved it in the game before approval");
+        });
+        check("Each alternative carries independent per-unit append or replace plans, descriptions and route origins", () =>
+        {
+            var first = new Helicopter(); var second = new Helicopter { Id = 43, Name = "Hobby 2" };
+            var service = new AdvisorOperations(() => true);
+            service.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { first, second }));
+            service.BeginProposal("placement");
+            JObject Order(Helicopter unit, string placement, params int[] drops)
+            {
+                var request = DropPlan(service, "placement", unit.Id, drops);
+                request["arguments"]!["placement"] = placement;
+                return new JObject { ["operation_id"] = SonobuoyDropExtension.OperationId,
+                    ["target_ref"] = "unit:" + unit.Id, ["arguments"] = request["arguments"]!.DeepClone() };
+            }
+            JObject Plan(string id, params JObject[] orders) => new() { ["plan_id"] = id, ["title"] = id,
+                ["summary"] = "Alternative", ["operations"] = new JArray(orders) };
+            service.SubmitPlans("placement", new JObject { ["request_id"] = "placement",
+                ["plans"] = new JArray(Plan("a", Order(first, "replace", 0, 1), Order(second, "append", 2, 3)),
+                    Plan("b", Order(first, "append", 4, 5), Order(second, "replace", 6, 7))) });
+            var proposal = service.FinishProposal("placement", true)!;
+            foreach (var language in new[] { "en", "ja" })
+            {
+                var text = service.DescribeProposal(proposal, language, "a");
+                Require(text.Contains("Hobby 1", StringComparison.Ordinal) && text.Contains("Hobby 2", StringComparison.Ordinal) &&
+                    text.Contains(language == "en" ? "Existing reservations: replace" : "既存予約: 置換", StringComparison.Ordinal) &&
+                    text.Contains(language == "en" ? "Existing reservations: append" : "既存予約: 追記", StringComparison.Ordinal),
+                    "Approval hid a unit's reservation policy");
+            }
+            var lines = service.PreviewProposal(proposal, "en", "a").Drawings.Where(d => d.Kind == AdvisorMapDrawingKind.Line).ToArray();
+            Require(lines.Select(l => l.Coordinates[0].Latitude).SequenceEqual(new[] { 26.2, 26.4 }) && first.ClearCalls == 0 && second.ClearCalls == 0,
+                "Replacement preview used the old endpoint, append preview ignored it, or preview cleared reservations");
+            var other = service.PreviewProposal(proposal, "en", "b").Drawings.Where(d => d.Kind == AdvisorMapDrawingKind.Line).ToArray();
+            Require(other.Select(l => l.Coordinates[0].Latitude).SequenceEqual(new[] { 26.4, 26.2 }), "Alternative placement leaked into another plan");
+            service.Approve(proposal, new[] { "a" }); service.Approve(proposal, new[] { "b" });
+            Require(proposal.State == AdvisorProposalState.Registered && first.ClearCalls == 1 && first.Queue.Count == 2 &&
+                second.ClearCalls == 0 && second.Queue[0] == "player waypoint" && second.Queue.Count == 3 &&
+                first.Latitudes.SequenceEqual(new[] { 26.5, 26.501 }) && second.Latitudes.SequenceEqual(new[] { 26.502, 26.503 }) &&
+                first.Depth == "alternating" && second.Depth == "alternating", "Selection cleared repeatedly, mixed unit policies or executed another alternative");
+        });
+        check("Replacement reclaims only cancelled reservations and never ammunition in active use", () =>
+        {
+            var unit = new Helicopter { Inventory = 6, Reserved = 5, Active = 1 }; var service = Buoys(unit);
+            var candidate = service.Candidates(SonobuoyDropExtension.OperationId)["candidates"]![0]!;
+            Require((bool?)candidate["available"] == true && (int?)candidate["ammunition"]![0]!["available_count"] == 0 &&
+                (int?)candidate["ammunition"]![0]!["available_after_replacement_count"] == 5, "Replacement candidates lost reusable stock or reclaimed active work");
+            JObject Request(string id, string placement, int count)
+            { var request = DropPlan(service, id, 0, Enumerable.Range(0, count).ToArray()); request["arguments"]!["placement"] = placement; return request; }
+            Require((string?)service.Execute(Request("append-short", "append", 1))["code"] == "no_available_sonobuoy" &&
+                (string?)service.Execute(Request("replace-short", "replace", 6))["code"] == "no_available_sonobuoy" && unit.ClearCalls == 0,
+                "A shortage erased a reservation or spent an active round");
+            var result = service.Execute(Request("replace-valid", "replace", 5));
+            Require((string?)result["status"] == "registered" && unit.ClearCalls == 1 && unit.Queue.Count == 5 && unit.Active == 1,
+                "Valid replacement did not reclaim the cancelled reservations exactly once");
+        });
+        check("Every point is validated before replacement and adoption rechecks inventory without erasing the old queue", () =>
+        {
+            var unit = new Helicopter(); var service = Buoys(unit);
+            var invalid = DropPlan(service, "invalid", 0, 0, 1); invalid["arguments"]!["placement"] = "replace";
+            invalid["arguments"]!["drops"]![1]!["latitude"] = 91;
+            Require((string?)service.Execute(invalid)["status"] == "rejected" && unit.ClearCalls == 0 && unit.Queue.Single() == "player waypoint",
+                "An invalid later point erased the queue or registered an earlier point");
+            var valid = DropPlan(service, "stale", 0, 0, 1); valid["arguments"]!["placement"] = "replace";
+            service.BeginProposal("stale"); service.Propose("stale", valid); var proposal = service.FinishProposal("stale", true)!;
+            unit.Inventory = 1; service.Approve(proposal);
+            Require(proposal.State == AdvisorProposalState.Rejected && unit.ClearCalls == 0 && unit.Queue.Single() == "player waypoint",
+                "A stale accepted replacement removed existing work before revalidation");
+        });
+        check("A failure after clearing or appending stays unknown and cannot repeat or run the next unit", () =>
+        {
+            foreach (var placement in new[] { "append", "replace" })
+            {
+                var unit = new Helicopter { RejectAt = 1 }; var next = new Helicopter { Id = 43 };
+                var service = new AdvisorOperations(() => true); service.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { unit, next }));
+                service.BeginProposal("failure"); var first = DropPlan(service, "failure", 0, 0, 1, 2); first["arguments"]!["placement"] = placement;
+                service.Propose("failure", first); var second = Request(service, "failure", 1); second["target_ref"] = "unit:43"; service.Propose("failure", second);
+                var proposal = service.FinishProposal("failure", true)!;
+                try { service.Approve(proposal); throw new Exception("Incomplete execution was reported as success"); }
+                catch (InvalidOperationException error) when (error.InnerException is OperationException) { }
+                service.Approve(proposal);
+                Require(proposal.State == AdvisorProposalState.Unknown && proposal.ErrorCode == "operation_outcome_unknown" &&
+                    unit.Latitudes.Count == 1 && next.Latitudes.Count == 0 && unit.ClearCalls == (placement == "replace" ? 1 : 0),
+                    "Partial unit work was reported as unchanged, replayed, or followed by another unit");
+            }
+        });
+        check("The drop limit counts points across units and invalid nested policies never change existing reservations", () =>
+        {
+            var first = new Helicopter { Inventory = 40 }; var second = new Helicopter { Id = 43, Inventory = 40 };
+            var service = new AdvisorOperations(() => true); service.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { first, second }));
+            service.BeginProposal("limits"); service.Propose("limits", DropPlan(service, "limits", 0, Enumerable.Range(0, 30).ToArray()));
+            var other = DropPlan(service, "limits", 1, Enumerable.Range(0, 11).ToArray()); other["target_ref"] = "unit:43";
+            Require((string?)service.Propose("limits", other)["code"] == "too_many_sonobuoy_drops", "Grouping units bypassed the drop-count budget");
+            var malformed = DropPlan(service, "nested", 0, 0); malformed["arguments"]!["drops"]![0]!["placement"] = "replace";
+            Require((string?)service.Execute(malformed)["status"] == "rejected" && first.ClearCalls == 0 && second.ClearCalls == 0,
+                "Per-point placement was accepted or validation changed a queue");
         });
     }
     private static AdvisorOperations Buoys(Helicopter unit)
@@ -264,8 +357,16 @@ internal static class OperationApprovalTests
     {
         var args = new JObject { ["latitude"] = 26.5 + index * .001, ["longitude"] = 127.5, ["ammunition"] = "mod_buoy" };
         if (operation != SonobuoyDropExtension.OperationId) args["index"] = index;
+        else args = SonobuoyFixture.Arguments("mod_buoy", 26.5 + index * .001);
         return new JObject { ["scope_id"] = service.ScopeId, ["request_id"] = owner + "." + index,
             ["operation"] = operation, ["target_ref"] = "unit:42", ["arguments"] = args };
+    }
+    private static JObject DropPlan(AdvisorOperations service, string owner, int id, params int[] indices)
+    {
+        var request = Request(service, owner, id);
+        request["arguments"]!["drops"] = new JArray(indices.Select(i => new JObject
+        { ["latitude"] = 26.5 + i * .001, ["longitude"] = 127.5, ["ammunition"] = "mod_buoy" }));
+        return request;
     }
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
     private sealed class Helicopter : IBattleSonobuoyUnit
@@ -277,12 +378,13 @@ internal static class OperationApprovalTests
         public JObject Position => new();
         public ReservationRoute? ReservationRoute { get; set; } =
             new(new AdvisorMapCoordinate(26.2, 127.2), new AdvisorMapCoordinate(26.4, 127.4));
-        internal int Inventory = 12;
+        internal int Inventory = 12, Reserved, Active, ClearCalls, RejectAt = -1;
         internal List<double> Latitudes = new();
         internal List<string> Depths = new();
         internal List<string> Queue = new() { "player waypoint" };
-        public IReadOnlyList<BattleSonobuoyAmmo> Ammunition() => new[] { new BattleSonobuoyAmmo("mod_buoy", "Custom buoy", Inventory, Inventory - Latitudes.Count, true) };
-        public void Append(string ammunition, double latitude, double longitude) { Latitudes.Add(latitude); Depths.Add(Depth); Queue.Add("one buoy"); }
+        public IReadOnlyList<BattleSonobuoyAmmo> Ammunition() => new[] { new BattleSonobuoyAmmo("mod_buoy", "Custom buoy", Inventory, Math.Max(0, Inventory - Reserved - Active - Latitudes.Count), true, Math.Max(0, Inventory - Active)) };
+        public void ClearReservations() { ClearCalls++; Queue.Clear(); Latitudes.Clear(); Depths.Clear(); Reserved = 0; }
+        public void Append(string ammunition, double latitude, double longitude) { if (Latitudes.Count == RejectAt) throw new OperationException(409, "reservation_rejected"); Latitudes.Add(latitude); Depths.Add(Depth); Queue.Add("one buoy"); }
     }
     private sealed class Extension : IAdvisorOperation
     {

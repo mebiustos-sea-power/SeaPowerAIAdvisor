@@ -7,7 +7,7 @@ using SeaPowerAIAdvisor.Api;
 namespace SeaPowerAIAdvisor;
 
 // Player-owned units only. Selection and command-specific eligibility remain with each command.
-internal sealed class BattleOperationSupport : IAdvisorGameSupport
+internal sealed class BattleOperationSupport : IAdvisorGameSupport, IAdvisorReservationSupport
 {
     private readonly Func<IReadOnlyList<ObjectBase>> units;
     private readonly Func<AdvisorInformation> information;
@@ -75,8 +75,8 @@ internal sealed class BattleOperationSupport : IAdvisorGameSupport
             var reserved = unit._userRoot == null ? 0 : unit._userRoot.TaskViewModels
                 .Where(v => v?.Task is AttackAtWaypoint attack && attack._ammunitionName == pair.Key)
                 .Sum(v => ((AttackAtWaypoint)v.Task)._salvo);
-            reserved += unit._currentEngageTasks.Where(t => t._ammoId == pair.Key).Sum(t => t._shotsToFire);
-            reserved += unit._obp._weaponSystems.Count(w => w._executingEngageTask &&
+            var active = unit._currentEngageTasks.Where(t => t._ammoId == pair.Key).Sum(t => t._shotsToFire);
+            active += unit._obp._weaponSystems.Count(w => w._executingEngageTask &&
                 w._ammoForEngage._ap._ammunitionFileName == pair.Key);
             var launchers = unit.GetWeaponSystemsForAmmunition(pair.Key, false);
             var single = launchers.Count > 0 && launchers.All(w => w is WeaponSystemHardpoint &&
@@ -84,8 +84,16 @@ internal sealed class BattleOperationSupport : IAdvisorGameSupport
                     ? !amounts.TryGetValue(pair.Key, out var count) || count == 1
                     : throw new InvalidOperationException("The hardpoint salvo amounts are unavailable.")));
             return new AmmunitionInfo(pair.Key, ammo._displayedName, ammo._type.ToString(), ammo._subType.ToString(),
-                remaining, Math.Max(0, remaining - reserved), single);
+                remaining, Math.Max(0, remaining - reserved - active), single, Math.Max(0, remaining - active));
         }).ToArray();
+    }
+    public void ClearReservations(string target)
+    {
+        var unit = Unit(target);
+        if (OrderUnavailableReason(unit) is string reason) throw new OperationException(409, reason);
+        unit.RemoveWaypoints();
+        if (unit._userRoot.TaskViewModels.Count != 0)
+            throw new InvalidOperationException("The native reservation queue was not cleared.");
     }
     public void AppendSonobuoyDrop(string target, string ammunition, AdvisorMapCoordinate position)
     {

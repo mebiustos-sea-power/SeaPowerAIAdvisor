@@ -10,19 +10,31 @@ namespace SeaPowerAIAdvisor;
 internal sealed class SonobuoyDropExtension : IAdvisorOperationExtension, IAdvisorOperationInstructions
 {
     internal const string OperationId = "seapower.schedule_sonobuoy_drop";
+    internal const int MaximumDrops = 40;
     public int ApiVersion => AdvisorApi.ContractVersion;
     public string GetInstructions() => AdvisorPrompts.Current.Text("battle.json", "operation_sonobuoy_drop");
     public OperationDefinition GetDefinition() => new(OperationId, "Schedule sonobuoy drops.", new JObject
     {
         ["type"] = "object", ["additionalProperties"] = false,
-        ["required"] = new JArray("latitude", "longitude", "ammunition"),
+        ["required"] = new JArray("placement", "drops"),
         ["properties"] = new JObject
         {
-            ["latitude"] = new JObject { ["type"] = "number", ["minimum"] = -90, ["maximum"] = 90 },
-            ["longitude"] = new JObject { ["type"] = "number", ["minimum"] = -180, ["maximum"] = 180 },
-            ["ammunition"] = new JObject { ["type"] = "string" },
-            ["count"] = new JObject { ["type"] = "integer", ["enum"] = new JArray(1), ["default"] = 1 },
-            ["placement"] = new JObject { ["type"] = "string", ["enum"] = new JArray("append"), ["default"] = "append" }
+            ["placement"] = new JObject { ["type"] = "string", ["enum"] = new JArray("append", "replace"),
+                ["description"] = "Append to or replace this unit's entire existing reservation queue." },
+            ["drops"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = MaximumDrops,
+                ["description"] = "Ordered drop positions; at most 40 drops across this command in one proposal.",
+                ["items"] = new JObject
+                {
+                    ["type"] = "object", ["additionalProperties"] = false,
+                    ["required"] = new JArray("latitude", "longitude", "ammunition"),
+                    ["properties"] = new JObject
+                    {
+                        ["latitude"] = new JObject { ["type"] = "number", ["minimum"] = -90, ["maximum"] = 90 },
+                        ["longitude"] = new JObject { ["type"] = "number", ["minimum"] = -180, ["maximum"] = 180 },
+                        ["ammunition"] = new JObject { ["type"] = "string" }
+                    }
+                }
+            }
         }
     }.ToString(Newtonsoft.Json.Formatting.None),
         AdvisorText.ReadResources(typeof(SonobuoyDropExtension).Assembly, "SeaPowerAIAdvisor.Commands.SonobuoyDrop.Localization.", "en", "ja"),
@@ -42,145 +54,171 @@ internal sealed class SonobuoyDropOperation : IAdvisorOperationHandler, SeaPower
             throw new OperationException(403, "information_disabled");
     }
     private IReadOnlyList<Unit> Units() => context.Game.GetUnits().Select(u => new Unit(u, context.Game))
-        .Where(u => u.Ammunition().Count != 0).ToArray();
-    private static JObject Arguments(OperationOrder order) => JObject.Parse(order.ArgumentsJson);
+        .Where(u => u.Ammunition.Count != 0).ToArray();
     public void Dispose() { }
 
     private sealed class Unit
     {
         internal GameUnitInfo Info { get; }
         private readonly IAdvisorGameSupport game;
-        private readonly IReadOnlyList<AmmunitionInfo> ammunition;
+        internal IReadOnlyList<AmmunitionInfo> Ammunition { get; }
         internal Unit(GameUnitInfo info, IAdvisorGameSupport game)
-        { Info = info; this.game = game; ammunition = game.GetAmmunition(info.Target).Where(a => a.Type == "Bomb" && a.Subtype == "Sonobuoy").ToArray(); }
-        internal int Id => Info.Id;
-        internal string Name => Info.Name;
+        { Info = info; this.game = game; Ammunition = game.GetAmmunition(info.Target).Where(a => a.Type == "Bomb" && a.Subtype == "Sonobuoy").ToArray(); }
         internal string? UnavailableReason => Info.OrderUnavailableReason == "target_unavailable" ? "target_unavailable"
             : Info.IsAircraft && !Info.IsAirborne ? "unit_not_airborne" : Info.OrderUnavailableReason;
         internal string Depth => game.GetSonobuoyDepth(Info.Target);
-        internal JObject Position => Info.Position is AdvisorMapCoordinate position
-            ? new JObject { ["latitude_deg"] = position.Latitude, ["longitude_deg"] = position.Longitude } : new JObject();
         internal ReservationRoute? ReservationRoute => game.IsInformationEnabled("battle_movement_plans") ? game.GetReservationRoute(Info.Target) : null;
-        internal IReadOnlyList<AmmunitionInfo> Ammunition() => ammunition;
-        internal void Append(string ammunition, double latitude, double longitude) =>
-            game.AppendSonobuoyDrop(Info.Target, ammunition, new AdvisorMapCoordinate(latitude, longitude));
     }
+    private sealed class Drop
+    {
+        internal string Ammunition { get; }
+        internal AdvisorMapCoordinate Position { get; }
+        internal Drop(string ammunition, AdvisorMapCoordinate position) { Ammunition = ammunition; Position = position; }
+    }
+    private sealed class Plan
+    {
+        internal bool Replace { get; }
+        internal IReadOnlyList<Drop> Drops { get; }
+        internal string Placement => Replace ? "replace" : "append";
+        internal Plan(bool replace, IReadOnlyList<Drop> drops) { Replace = replace; Drops = drops; }
+    }
+    private static JObject Position(AdvisorMapCoordinate? position) => position is AdvisorMapCoordinate value
+        ? new JObject { ["latitude_deg"] = value.Latitude, ["longitude_deg"] = value.Longitude } : new JObject();
     public string GetCandidates()
     {
         CheckInformation();
         return new JArray(Units().Select(unit =>
         {
-            var ammunition = unit.Ammunition();
-            var reason = unit.UnavailableReason ?? (ammunition.Any(a => a.Available > 0 && a.SingleRoundSupported) ? null : "no_available_sonobuoy");
+            var ammunition = unit.Ammunition;
+            var reason = unit.UnavailableReason ?? (ammunition.Any(a => a.AvailableAfterClearingReservations > 0 && a.SingleRoundSupported) ? null : "no_available_sonobuoy");
             return new JObject
             {
-                ["target_ref"] = "unit:" + unit.Id.ToString(CultureInfo.InvariantCulture), ["display_name"] = unit.Name,
-                ["available"] = reason == null, ["unavailable_reason"] = reason, ["depth"] = unit.Depth, ["position"] = unit.Position.DeepClone(),
+                ["target_ref"] = unit.Info.Target, ["display_name"] = unit.Info.Name,
+                ["available"] = reason == null, ["unavailable_reason"] = reason, ["depth"] = unit.Depth,
+                ["position"] = Position(unit.Info.Position),
+                ["reservation_end_position"] = Position(unit.ReservationRoute?.EndPosition),
                 ["ammunition"] = new JArray(ammunition.Select(a => new JObject { ["id"] = a.Id, ["display_name"] = a.Name,
-                    ["remaining_count"] = a.Remaining, ["available_count"] = a.Available, ["single_drop_supported"] = a.SingleRoundSupported }))
+                    ["remaining_count"] = a.Remaining, ["available_count"] = a.Available,
+                    ["available_after_replacement_count"] = a.AvailableAfterClearingReservations,
+                    ["single_drop_supported"] = a.SingleRoundSupported }))
             };
         })).ToString(Newtonsoft.Json.Formatting.None);
     }
-
     public OperationArgumentNormalization NormalizeArguments(OperationOrder order, IAdvisorOperationReferences references)
     {
         CheckInformation();
-        var arguments = Arguments(order);
-        if (arguments["ammunition"]?.Type != JTokenType.String) return new OperationArgumentNormalization(order.ArgumentsJson);
-        var requested = (string)arguments["ammunition"]!;
+        var arguments = JObject.Parse(order.ArgumentsJson);
+        if (arguments["drops"] is not JArray drops) return new OperationArgumentNormalization(order.ArgumentsJson);
         var unit = Units().FirstOrDefault(u => u.Info.Target == order.Target);
         if (unit == null) return new OperationArgumentNormalization(order.ArgumentsJson);
-        var match = references.MatchAmmunition(requested, unit.Ammunition().Select(a => new AmmunitionIdentity(a.Id, a.Name)).ToArray());
-        if (match.Ids.Count > 1) throw new OperationException(409, "ambiguous_ammunition_reference");
         var resolutions = new List<OperationArgumentResolution>();
-        if (match.Ids.Count == 1 && match.Ids[0] != requested)
+        for (var i = 0; i < drops.Count; i++)
         {
-            arguments["ammunition"] = match.Ids[0];
-            resolutions.Add(new OperationArgumentResolution("ammunition", requested, match.Ids[0], match.Reason));
+            if (drops[i] is not JObject drop || drop["ammunition"]?.Type != JTokenType.String) continue;
+            var requested = (string)drop["ammunition"]!;
+            var match = references.MatchAmmunition(requested, unit.Ammunition.Select(a => new AmmunitionIdentity(a.Id, a.Name)).ToArray());
+            if (match.Ids.Count > 1) throw new OperationException(409, "ambiguous_ammunition_reference");
+            if (match.Ids.Count != 1 || match.Ids[0] == requested) continue;
+            drop["ammunition"] = match.Ids[0];
+            resolutions.Add(new OperationArgumentResolution("drops[" + i.ToString(CultureInfo.InvariantCulture) + "].ammunition", requested, match.Ids[0], match.Reason));
         }
         return new OperationArgumentNormalization(arguments.ToString(Newtonsoft.Json.Formatting.None), resolutions);
     }
     public void Validate(IReadOnlyList<OperationOrder> orders)
     {
-        foreach (var order in orders) _ = Read(order.Target, Arguments(order));
-        foreach (var group in orders.GroupBy(o => (o.Target, Ammo: (string)Arguments(o)["ammunition"]!)))
-        {
-            var data = Read(group.Key.Target, Arguments(group.First()));
-            if (data.Unit.Ammunition().Single(a => a.Id == group.Key.Ammo).Available < group.Count())
-                throw new OperationException(409, "no_available_sonobuoy");
-        }
+        var count = 0;
+        foreach (var order in orders) count += Read(order).Plan.Drops.Count;
+        if (orders.GroupBy(o => o.Target).Any(g => g.Count() != 1)) throw new OperationException(400, "duplicate_unit_plan");
+        if (count > SonobuoyDropExtension.MaximumDrops) throw new OperationException(400, "too_many_sonobuoy_drops");
     }
     public string DescribeProposal(IReadOnlyList<OperationOrder> orders, string language)
     {
-        var text = context.Text;
-        var current = Units();
-        return string.Join("\n\n", orders.GroupBy(o => o.Target).Select(group =>
+        var text = context.Text; var current = Units();
+        return string.Join("\n\n", orders.Select(order =>
         {
-            var unit = current.FirstOrDefault(u => "unit:" + u.Id.ToString(CultureInfo.InvariantCulture) == group.Key);
-            var summary = text.Format(language, "proposal_summary", unit?.Name ?? group.Key, group.Count()) + "\n" + text.Get(language, "proposal_append");
-            return summary + "\n\n" + string.Join("\n", group.Select((order, i) =>
+            var plan = Parse(JObject.Parse(order.ArgumentsJson));
+            var unit = current.FirstOrDefault(u => u.Info.Target == order.Target);
+            var summary = text.Format(language, "proposal_summary", unit?.Info.Name ?? order.Target, plan.Drops.Count) + "\n" +
+                text.Get(language, plan.Replace ? "proposal_replace" : "proposal_append") + "\n" + text.Get(language, "proposal_depth");
+            return summary + "\n\n" + string.Join("\n", plan.Drops.Select((drop, i) =>
             {
-                var args = Arguments(order);
-                var ammo = unit?.Ammunition().FirstOrDefault(a => a.Id == (string?)args["ammunition"]);
-                return (i + 1).ToString(CultureInfo.InvariantCulture) + ". " + (ammo?.Name ?? (string)args["ammunition"]!) +
-                    " — " + ((double)args["latitude"]!).ToString("F5", CultureInfo.InvariantCulture) + ", " +
-                    ((double)args["longitude"]!).ToString("F5", CultureInfo.InvariantCulture);
+                var ammo = unit?.Ammunition.FirstOrDefault(a => a.Id == drop.Ammunition);
+                return (i + 1).ToString(CultureInfo.InvariantCulture) + ". " + (ammo?.Name ?? drop.Ammunition) +
+                    " — " + drop.Position.Latitude.ToString("F5", CultureInfo.InvariantCulture) + ", " +
+                    drop.Position.Longitude.ToString("F5", CultureInfo.InvariantCulture);
             }));
         }));
     }
     public AdvisorMapPreview Preview(IReadOnlyList<OperationOrder> orders, string language)
     {
-        var current = Units();
-        var drawings = new List<AdvisorMapDrawing>();
-        foreach (var group in orders.GroupBy(order => order.Target))
+        var current = Units(); var drawings = new List<AdvisorMapDrawing>();
+        foreach (var order in orders)
         {
-            var unit = current.FirstOrDefault(unit => "unit:" + unit.Id.ToString(CultureInfo.InvariantCulture) == group.Key);
-            var drops = group.Select(order =>
-            {
-                var arguments = Arguments(order);
-                return new AdvisorMapCoordinate((double)arguments["latitude"]!, (double)arguments["longitude"]!);
-            }).ToArray();
-            if (drops.Length == 0) continue;
-            var route = new List<AdvisorMapCoordinate>();
+            var plan = Parse(JObject.Parse(order.ArgumentsJson));
+            var unit = current.FirstOrDefault(u => u.Info.Target == order.Target);
             var existing = unit?.ReservationRoute;
-            if (existing != null) route.Add(existing.EndPosition ?? existing.CurrentPosition);
-            route.AddRange(drops);
+            var start = plan.Replace ? unit?.Info.Position ?? existing?.CurrentPosition : existing?.EndPosition ?? existing?.CurrentPosition;
+            var route = new List<AdvisorMapCoordinate>();
+            if (start is AdvisorMapCoordinate origin) route.Add(origin);
+            route.AddRange(plan.Drops.Select(d => d.Position));
             // Draw beneath the numbered markers; preserve the proposed order separately for each unit.
             if (route.Count > 1) drawings.Add(AdvisorMapDrawing.Line(route));
-            for (var i = 0; i < drops.Length; i++)
-                drawings.Add(AdvisorMapDrawing.Point(drops[i], (unit?.Name ?? group.Key) + " · " + (i + 1).ToString(CultureInfo.InvariantCulture)));
+            for (var i = 0; i < plan.Drops.Count; i++)
+                drawings.Add(AdvisorMapDrawing.Point(plan.Drops[i].Position, (unit?.Info.Name ?? order.Target) + " · " + (i + 1).ToString(CultureInfo.InvariantCulture)));
         }
         return new AdvisorMapPreview(drawings);
     }
-    private (Unit Unit, string Ammunition, double Latitude, double Longitude) Read(string target, JObject arguments)
+    private (Unit Unit, Plan Plan) Read(OperationOrder order)
     {
-        CheckInformation();
-        if (arguments.Properties().Any(p => p.Name is not ("latitude" or "longitude" or "ammunition" or "count" or "placement" or "depth")) ||
-            arguments["ammunition"]?.Type != JTokenType.String || string.IsNullOrWhiteSpace((string?)arguments["ammunition"]) ||
-            (arguments["count"] != null && (arguments["count"]!.Type != JTokenType.Integer || arguments["count"]!.ToString() != "1")) ||
-            (arguments["placement"] != null && (arguments["placement"]!.Type != JTokenType.String || (string?)arguments["placement"] != "append")))
-            throw new OperationException(400, "invalid_sonobuoy_arguments");
-        var latitude = Coordinate(arguments["latitude"], 90);
-        var longitude = Coordinate(arguments["longitude"], 180);
-        var unit = Units().FirstOrDefault(u => "unit:" + u.Id.ToString(CultureInfo.InvariantCulture) == target)
-            ?? throw new OperationException(409, "target_unavailable");
+        CheckInformation(); var plan = Parse(JObject.Parse(order.ArgumentsJson));
+        var unit = Units().FirstOrDefault(u => u.Info.Target == order.Target) ?? throw new OperationException(409, "target_unavailable");
         if (unit.UnavailableReason is string reason) throw new OperationException(409, reason);
-        var ammunition = (string)arguments["ammunition"]!;
-        var ammo = unit.Ammunition().FirstOrDefault(a => a.Id == ammunition)
-            ?? throw new OperationException(409, "sonobuoy_not_carried");
-        if (ammo.Available < 1) throw new OperationException(409, "no_available_sonobuoy");
-        if (!ammo.SingleRoundSupported) throw new OperationException(409, "single_drop_unavailable");
-        return (unit, ammunition, latitude, longitude);
+        foreach (var group in plan.Drops.GroupBy(d => d.Ammunition))
+        {
+            var ammo = unit.Ammunition.FirstOrDefault(a => a.Id == group.Key) ?? throw new OperationException(409, "sonobuoy_not_carried");
+            if ((plan.Replace ? ammo.AvailableAfterClearingReservations : ammo.Available) < group.Count())
+                throw new OperationException(409, "no_available_sonobuoy");
+            if (!ammo.SingleRoundSupported) throw new OperationException(409, "single_drop_unavailable");
+        }
+        return (unit, plan);
     }
     public string Execute(OperationOrder order)
     {
-        var target = order.Target;
-        var data = Read(target, Arguments(order));
-        // Ignore incoming depth choices; the player-controlled setting is read again at registration.
-        var effectiveDepth = data.Unit.Depth;
-        data.Unit.Append(data.Ammunition, data.Latitude, data.Longitude);
-        return new JObject { ["target_ref"] = target, ["ammunition"] = data.Ammunition, ["count"] = 1,
-            ["latitude"] = data.Latitude, ["longitude"] = data.Longitude, ["placement"] = "append", ["depth"] = effectiveDepth }.ToString(Newtonsoft.Json.Formatting.None);
+        var data = Read(order); var depth = data.Unit.Depth; var changed = false;
+        try
+        {
+            if (data.Plan.Replace)
+            {
+                var reservations = context.Game as IAdvisorReservationSupport
+                    ?? throw new InvalidOperationException("The game adapter does not provide reservation control.");
+                reservations.ClearReservations(order.Target); changed = true;
+            }
+            foreach (var drop in data.Plan.Drops)
+            { context.Game.AppendSonobuoyDrop(order.Target, drop.Ammunition, drop.Position); changed = true; }
+        }
+        catch (OperationException error) when (changed)
+        {
+            // A rejected later step cannot mean the unit's entire plan left the game unchanged.
+            throw new InvalidOperationException("Sonobuoy plan execution stopped after reservation changes; the outcome is incomplete.", error);
+        }
+        return new JObject { ["target_ref"] = order.Target, ["count"] = data.Plan.Drops.Count,
+            ["placement"] = data.Plan.Placement, ["depth"] = depth,
+            ["drops"] = new JArray(data.Plan.Drops.Select(d => new JObject { ["ammunition"] = d.Ammunition,
+                ["latitude"] = d.Position.Latitude, ["longitude"] = d.Position.Longitude })) }.ToString(Newtonsoft.Json.Formatting.None);
+    }
+    private static Plan Parse(JObject arguments)
+    {
+        if (arguments.Properties().Any(p => p.Name is not ("placement" or "drops" or "depth")) ||
+            arguments["placement"]?.Type != JTokenType.String || (string?)arguments["placement"] is not ("append" or "replace") ||
+            arguments["drops"] is not JArray drops || drops.Count < 1 || drops.Count > SonobuoyDropExtension.MaximumDrops)
+            throw new OperationException(400, "invalid_sonobuoy_arguments");
+        return new Plan((string)arguments["placement"]! == "replace", ((JArray)arguments["drops"]!).Select(value =>
+        {
+            if (value is not JObject drop || drop.Count != 3 || drop.Properties().Any(p => p.Name is not ("latitude" or "longitude" or "ammunition")) ||
+                drop["ammunition"]?.Type != JTokenType.String || string.IsNullOrWhiteSpace((string?)drop["ammunition"]))
+                throw new OperationException(400, "invalid_sonobuoy_arguments");
+            return new Drop((string)drop["ammunition"]!, new AdvisorMapCoordinate(Coordinate(drop["latitude"], 90), Coordinate(drop["longitude"], 180)));
+        }).ToArray());
     }
     private static double Coordinate(JToken? value, double limit)
     {
