@@ -10,6 +10,9 @@ internal sealed class AdvisorHudButton : IDisposable
 {
     private readonly Grid grid;
     private readonly ColumnDefinition column;
+    private readonly Ellipse notification;
+    private readonly Brush consultingBrush;
+    private readonly Brush unreadBrush = new SolidColorBrush(Color.FromArgb(255, 128, 224, 96));
     internal ToggleButton Control { get; }
 
     internal AdvisorHudButton(Grid grid, ToggleButton reference, string tooltip)
@@ -26,6 +29,9 @@ internal sealed class AdvisorHudButton : IDisposable
         using var reader = new StreamReader(source);
         Control = GUI.ParseXaml(reader.ReadToEnd()) as ToggleButton
             ?? throw new InvalidOperationException("The advisor HUD button view is not a ToggleButton.");
+        notification = Control.Content as Ellipse
+            ?? throw new InvalidOperationException("The advisor result notification is missing.");
+        consultingBrush = notification.Fill;
         Control.ToolTip = tooltip;
         Control.Width = double.IsNaN(reference.Width) ? reference.ActualWidth : reference.Width;
         Control.Height = double.IsNaN(reference.Height) ? reference.ActualHeight : reference.Height;
@@ -49,6 +55,12 @@ internal sealed class AdvisorHudButton : IDisposable
             Dispose();
             throw;
         }
+    }
+
+    internal void SetStatus(bool consulting, bool unread)
+    {
+        notification.Fill = consulting ? consultingBrush : unreadBrush;
+        notification.Visibility = Control.IsChecked != true && (consulting || unread) ? Visibility.Visible : Visibility.Collapsed;
     }
 
     public void Dispose()

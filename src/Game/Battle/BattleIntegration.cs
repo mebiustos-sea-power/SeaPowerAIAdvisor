@@ -115,6 +115,7 @@ internal sealed class BattleIntegration
         if (showError != null) runtime.NotifyFailure(showError);
         errorWindow?.Tick();
         launcher.Control.IsChecked = errorWindow?.IsOpen == true || advisor?.IsOpen == true;
+        launcher.SetStatus(advisor?.IsConsulting == true, advisor?.HasUnreadResult == true);
     }
 
     private AdvisorWindow GetAdvisor()

@@ -174,6 +174,8 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     }
 
     internal bool IsOpen => host.Windows.Contains(window);
+    internal bool IsConsulting => active != null;
+    internal bool HasUnreadResult { get; private set; }
     internal string DisplayName => appliedProfile?.DisplayName ?? speakerName;
     internal bool CanConsult => active == null && !operationReview.IsOpen && conversationPane.Visibility == Visibility.Visible;
 
@@ -196,25 +198,28 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     internal void Toggle()
     {
         if (IsOpen) { Close(); return; }
+        var resultScroll = HasUnreadResult ? pendingScroll : null;
         RefreshLanguage();
         LoadProfile();
         RefreshConfigurationNotice();
         ShowConversation(false);
         WindowHostCommands.OpenWindowCommand.Execute(window, view);
         if (!IsOpen) throw new InvalidOperationException("The game window host did not open the advisor.");
+        HasUnreadResult = false;
+        if (resultScroll != null) pendingScroll = resultScroll;
         // Reopen the conversation intact; offer the current notice only after the host has displayed it.
         if (!updateNotice.Show()) questionInput.RequestFocus();
     }
 
     internal void Tick()
     {
-        if (!IsOpen) { updateNotice.Hide(); operationReview.Close(); CancelActive(); questionInput.Reset(); typing.Release(); ReleasePortrait(); return; }
+        CompleteActive();
+        UpdateActiveProgress();
+        if (!IsOpen) { updateNotice.Hide(); operationReview.Close(); questionInput.Reset(); typing.Release(); ReleasePortrait(); return; }
         settings.Tick();
         operationReview.Tick();
         UpdateUnitInsertion();
         questionInput.Tick();
-        CompleteActive();
-        UpdateActiveProgress();
         transcript.Tick();
         if (diagnosticScrollPending)
         {
@@ -233,6 +238,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     // Fault teardown must cancel work and release input without rendering the broken conversation again.
     internal void Stop()
     {
+        HasUnreadResult = false;
         updateNotice.Hide();
         var job = active; active = null;
         if (pendingTurn?.State == AdvisorTurnState.Waiting)
@@ -267,7 +273,6 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         updateNotice.Dismiss();
         consultationMenu.Close();
         operationReview.Close();
-        CancelActive();
         ReleaseInput();
         settings.Close();
         ReleasePortrait();
@@ -527,8 +532,9 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         var progress = active?.TakeProgress();
         if (progress == null) return;
         var turn = pendingTurn ?? throw new InvalidOperationException("The pending turn is missing.");
-        var follow = FollowingLatest;
         turn.UpdateProgress(progress);
+        if (!IsOpen) return;
+        var follow = FollowingLatest;
         transcript.UpdateProgress(turn, text);
         if (follow) ScrollToEnd();
     }
@@ -539,11 +545,13 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         if (job == null || !job.Completion.IsCompleted) return;
         UpdateActiveProgress();
         var turn = pendingTurn ?? throw new InvalidOperationException("The pending turn is missing.");
-        var follow = FollowingLatest;
-        var readingOffset = transcriptScroll.TargetVerticalOffset;
+        var visible = IsOpen;
+        var follow = !visible || FollowingLatest;
+        var readingOffset = visible ? transcriptScroll.TargetVerticalOffset : 0;
         active = null;
         pendingTurn = null;
         var completion = job.TakeCompleted();
+        HasUnreadResult |= !visible && !completion.IsCancelled;
         SetBusy(false);
         if (completion.UnexpectedError != null)
         {
@@ -554,7 +562,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         {
             FinishProposal(turn, false);
             turn.Cancel();
-            ShowConversation(false);
+            if (visible) ShowConversation(false);
             status.Text = text["status.cancelled"];
         }
         else if (completion.Error != null)
@@ -567,7 +575,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
             var result = completion.Result ?? throw new InvalidOperationException("The completed consultation has no result.");
             localRun?.Complete(result, turn.Progress?.ConnectionName ?? pendingConnectionName);
             turn.Finish(result, OperationService);
-            ShowConversation(false);
+            if (visible) ShowConversation(false);
             var connection = AdvisorProgress.FormatConnection(turn.Progress?.ConnectionName ?? pendingConnectionName,
                 result.Model.Length > 0 ? result.Model : turn.Progress?.Model ?? "", text);
             status.Text = text.Format(result.Completed ? "status.completed" : "status.incomplete", connection, result.QueryRounds, result.ApiRequests,
@@ -588,7 +596,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         turn.Fail(error);
         FinishRecording();
         pendingTurn = null;
-        ShowConversation(false);
+        if (IsOpen) ShowConversation(false);
         status.Text = text["status.failed"];
         ScrollToEnd();
     }
@@ -727,6 +735,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         CancelActive();
         operationReview.Close();
         conversation.Clear();
+        HasUnreadResult = false;
         pendingScroll = null;
         diagnosticScrollPending = false;
         RefreshConfigurationNotice();

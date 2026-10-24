@@ -2,6 +2,10 @@
               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
               Width="32" Height="32" FontSize="14" FontWeight="Bold" Focusable="False"
               Background="#898379" Foreground="#292429" BorderBrush="#4B5054">
+  <ToggleButton.Content>
+    <Ellipse Width="8" Height="8" Fill="#FFE060" Stroke="#292429" StrokeThickness="1"
+             Visibility="Collapsed" IsHitTestVisible="False" />
+  </ToggleButton.Content>
   <ToggleButton.Template>
     <ControlTemplate TargetType="{x:Type ToggleButton}">
       <Grid Background="Transparent">
@@ -15,6 +19,8 @@
                      StrokeThickness="0.25" HorizontalAlignment="Center"
                      VerticalAlignment="Center" IsHitTestVisible="False" />
         </Border>
+        <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Right"
+                          VerticalAlignment="Top" Margin="1" IsHitTestVisible="False" />
       </Grid>
       <ControlTemplate.Triggers>
         <Trigger Property="IsMouseOver" Value="True">
