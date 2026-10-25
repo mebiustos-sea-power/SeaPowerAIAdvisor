@@ -121,7 +121,7 @@ Bug reports are welcome through [GitHub issues](https://github.com/mebiustos-sea
 
 ## For developers
 
-The host ships `SeaPowerAIAdvisor.Api.dll` for external Anchor Chain mods. Extensions can use the standard retrieval engine or implement an independent consultation workflow. See the [public API guide](docs/public-api.md) and [offline example](examples/ExternalAdvisor/Examples.cs). The public API remains experimental. Developer-authored update announcements are configured as described in the [update notice guide](docs/update-notices.md).
+The host ships `SeaPowerAIAdvisor.Api.dll` for external Anchor Chain mods. Extensions can use the standard retrieval engine or implement an independent consultation workflow. See the [public API guide](docs/public-api.md) and [offline example](examples/ExternalAdvisor/Examples.cs). The SDK and public API are experimental and may undergo breaking changes without prior notice; external extensions may require updates or rebuilding. See the [SDK stability notice](docs/public-api.md). Developer-authored update announcements are configured as described in the [update notice guide](docs/update-notices.md).
 
 To build on Windows, install Python 3 and the .NET SDK specified by `global.json`. Copy `Directory.Build.local.props.example` to `Directory.Build.local.props` and set your Sea Power and Anchor Chain directories. The full test script also expects Bungalow's Dynamic Campaign Mod's Workshop files for campaign tests; it remains optional at runtime.
 

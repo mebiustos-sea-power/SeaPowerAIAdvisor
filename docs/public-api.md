@@ -1,6 +1,8 @@
 # AI Advisor extension API
 
-This is the initial experimental public contract, version 1, introduced in AI Advisor v0.14.0. Earlier releases do not include it.
+This is the experimental public contract, version 1, introduced in AI Advisor v0.14.0. Earlier releases do not include it.
+
+**The SDK and public API are under active development and may undergo breaking changes without prior notice. External extensions may require source changes or rebuilding after an update.** Use the API DLL shipped with the host version you are targeting.
 
 ## Projects and dependencies
 
@@ -173,4 +175,4 @@ Build the host and example first. The check copies their DLLs into separate temp
 
 Automated tests use real separate client DLLs and mock HTTP. They cover both workflows, settings without Gemini field assumptions, disclosure/round limits, byte budgets, cancellation/disposal, both directions of Gemini handoff, terminal sub failure, programming errors, redaction and concurrent diagnostics. Automated checks do not replace in-game validation of third-party extensions or of each provider/model combination.
 
-Keep the host and shipped API DLL together. Future compatible releases must preserve existing contract members; breaking changes require a new contract version. Removing an extension does not delete its saved connection settings.
+Keep the host and shipped API DLL together. Registration rejects a declared `ApiVersion` that differs from `AdvisorApi.ContractVersion`; this check does not guarantee backward compatibility throughout the current experimental development period. Follow the SDK notice above when updating. Removing an extension does not delete its saved connection settings.
