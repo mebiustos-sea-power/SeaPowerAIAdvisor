@@ -247,3 +247,17 @@ DeepSeek通常版46相談、GLM5.3は4相談で、現行と4候補を比較し�
 ユーザーの依頼により、第2回のs3_groupedをpackage/Prompts/battle.jsonのevidence_policyへ正式反映した。試験した268語の文案と完全一致する。共通指示・取得案内・リンク指定・操作定義・キャンペーン用プロンプトは維持する。
 
 既存のビルド・オフライン検証を通し、停止を確認してゲーム環境へ配置した。プロンプトは同梱・dist・配置先で一致し、検証済みの主/API DLLも含む配布8ファイル全体がdistと一致することを照合。C#ソース・バージョンは変更していない。今回の正式反映のための追加AI相談は実施していない。第2回終了時の未反映という記載は、その試験終了時点の記録である。作業証跡はローカルartifacts/formal-evidence-20261025/。
+
+## 現実の地形を考慮させる指示の採用（2026年10月26日）
+
+現実の地理知識を経路・配置の計画に使わせる目的で、同一の出発点・目的地と戦況を使い、DeepSeek V4.1 Flash 1017通常版で48相談を比較した。評価は島・陸岸・周囲の海域を計画へ結び付ける反応であり、座標精度の改善は採用条件にしていない。
+
+共通systemへ置く候補16を採用した。試験版では地形を計画に結び付けた説明が4相談中3相談、周囲の陸海を考慮させるだけの短文は4相談中1相談だった。共通systemに置いた方の反応が多かったため、当初の戦闘用evidence_policy優先案から変更し、戦術戦闘への適用を文中で限定した。
+
+正式採用時には、現在地形データをAIへ提供していないため「提供されたゲーム内地形を優先する」という将来向けの一節を除いた。削除後の文案は追加の実AI比較を行っておらず、前記の回数は試験版に対する観測である。採用した追記は次のとおり。
+
+```text
+In tactical battles, account for real-world geography when planning routes or placements. For waterborne units, avoid intervening land along every connecting leg and allow coastal clearance. General geography is an estimate, not verified game terrain.
+```
+
+ゲーム内の地形・水深データを新たに取得・送信する変更ではない。取得経路と解像度などの調査は[地形情報の調査](terrain-data-research.md)を参照する。英日文案・各相談の入力と回答・評価・使用量は、ローカル専用のartifacts/terrain-prompt-tuning-20261026/に保持する。
