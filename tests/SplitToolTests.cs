@@ -9,8 +9,6 @@ using Client = SeaPowerAIAdvisor.ExtensionFixture;
 
 internal static partial class ProviderTests
 {
-    private static JObject LegacyPlans()
-    { var request = PlanRequest(BuoyRequest()); request["action"] = "submit"; return request; }
     private static void RunSplitTools(Action<string, Action> check)
     {
         check("Split tool calls batch independent snapshot and operation reads in one round and preserve each call's results", () =>
@@ -123,50 +121,42 @@ internal static partial class ProviderTests
             catch (OperationCanceledException) { Require(knowledge.RoundsUsed == 0 && operation.Writes == 0, "Cancellation continued snapshot work"); return; }
             throw new InvalidOperationException("Cancellation was hidden");
         });
-        check("Old and split standard providers can hand off both ways with one evidence ledger and one approval receipt", () =>
+        check("Standard provider handoff retains one evidence ledger and one approval receipt", () =>
         {
-            foreach (var legacyFirst in new[] { true, false })
+            var unit = new OperationHelicopter(); var registry = SonobuoyRegistry(unit);
+            using var gateway = new AdvisorOperationGateway(registry);
+            using var operations = gateway.CreateSession("provider-switch", AdvisorPrompts.Current)!;
+            var knowledge = ReadKnowledge();
+            var main = new FakeProvider("main", (session, send, _, _) =>
             {
-                var unit = new OperationHelicopter(); var registry = SonobuoyRegistry(unit);
-                using var gateway = new AdvisorOperationGateway(registry);
-                using var operations = gateway.CreateSession("format-switch", AdvisorPrompts.Current)!;
-                var knowledge = ReadKnowledge();
-                Task<AdvisorReply> Main(FakeSession session, int send, bool _, CancellationToken token)
-                {
-                    Require(session.Input.Tools.Count == (legacyFirst ? 2 : 5), "Main received another tool format");
-                    if (send > 1) throw new AdvisorConnectionException("rate_limited", 429);
-                    var read = legacyFirst ? new AdvisorToolCall("fact", AdvisorLegacyTools.ReadName, LegacyReadArguments(QueryTests.Q("get_briefing"))) : Call("fact", "get_briefing");
-                    var order = legacyFirst ? new AdvisorToolCall("order", "game_operations", LegacyPlans()) : ProposalReply("order", BuoyRequest()).Calls.Single();
-                    return Task.FromResult(Reply(read, order));
-                }
-                Task<AdvisorReply> Sub(FakeSession session, int send, bool _, CancellationToken token)
-                {
-                    Require(session.Input.Tools.Count == (legacyFirst ? 5 : 2) && session.Continuation?.Retrievals.Count == 1 &&
-                        session.Continuation.Operations.Count == 1 && session.Continuation.RoundsUsed == 1, "Fallback changed tools or duplicated evidence");
-                    return Task.FromResult(send == 1 ? (legacyFirst ? ProposalReply("replay", BuoyRequest()) : Reply(new AdvisorToolCall("replay", "game_operations", LegacyPlans())))
-                        : new AdvisorReply("Retained proposal", Array.Empty<AdvisorToolCall>(), 1));
-                }
-                IAdvisorProvider main = legacyFirst ? new LegacyProvider("old", Main) : new FakeProvider("new", Main);
-                IAdvisorProvider sub = legacyFirst ? new FakeProvider("new", Sub) : new LegacyProvider("old", Sub);
-                var result = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(main, sub).ConsultAsync(
-                    AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations), CancellationToken.None)));
-                Require(result.Completed && result.ApiRequests == 4 && result.QueryRounds == 1 && result.TotalTokens == null && unit.Calls == 0,
-                    "Format migration changed request accounting or bypassed approval");
-                var proposal = registry.FinishProposal("format-switch", true)!;
-                Require(proposal.Plans.Count == 2 && proposal.Orders.Count == 2, "Replay duplicated a plan set"); registry.Approve(proposal, new[] { "a" });
-                Require(unit.Calls == 1, "The migrated proposal did not execute exactly once");
-            }
+                if (send > 1) throw new AdvisorConnectionException("rate_limited", 429);
+                return Task.FromResult(Reply(Call("fact", "get_briefing"), ProposalReply("order", BuoyRequest()).Calls.Single()));
+            });
+            var sub = new FakeProvider("sub", (session, send, _, _) =>
+            {
+                Require(session.Continuation?.Retrievals.Count == 1 && session.Continuation.Operations.Count == 1 &&
+                    session.Continuation.RoundsUsed == 1, "Fallback duplicated or lost evidence");
+                return Task.FromResult(send == 1 ? ProposalReply("replay", BuoyRequest())
+                    : new AdvisorReply("Retained proposal", Array.Empty<AdvisorToolCall>(), 1));
+            });
+            var result = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(main, sub).ConsultAsync(
+                AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations), CancellationToken.None)));
+            Require(result.Completed && result.ApiRequests == 4 && result.QueryRounds == 1 && result.TotalTokens == null && unit.Calls == 0,
+                "Handoff changed request accounting or bypassed approval");
+            var proposal = registry.FinishProposal("provider-switch", true)!;
+            Require(proposal.Plans.Count == 2 && proposal.Orders.Count == 2, "Replay duplicated a plan set"); registry.Approve(proposal, new[] { "a" });
+            Require(unit.Calls == 1, "The retained proposal did not execute exactly once");
         });
-        check("A separately compiled tool-list extension receives split definitions and uses the same host approval service", () =>
+        check("A separately compiled standard extension receives split definitions and uses the same host approval service", () =>
         {
-            var extension = new Client.ToolListExtension(); using var host = new PublicHost(extension);
+            var extension = new Client.StandardExtension(); using var host = new PublicHost(extension);
             var unit = new OperationHelicopter(); var registry = SonobuoyRegistry(unit);
             using var gateway = new AdvisorOperationGateway(registry);
             using var operations = gateway.CreateSession("public-split", AdvisorPrompts.Current)!;
             var sends = 0; System.Collections.Generic.IReadOnlyList<Api.ToolResult>? results = null;
             extension.Open = (_, _, input, _) =>
             {
-                Require(input.ToolsJson.Count == 5 && input.ToolJson == null && input.OperationToolJson == null, "The opt-in public adapter received the old contract");
+                Require(input.ToolsJson.Count == 5, "The public adapter did not receive all supplied tools");
                 return new Client.Session(_ => new Api.ProviderRequest(100, token =>
                 {
                     token.ThrowIfCancellationRequested();

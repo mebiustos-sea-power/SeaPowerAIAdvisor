@@ -75,7 +75,7 @@ internal sealed class AdvisorPrompts
 
     internal static AdvisorPrompts Load(string directory)
     {
-        var common = Read(directory, "common.json", "system", "instructions", "preferences_policy", "read_tool_description", "upfront_retrieval_policy", "operation_read_tool_description", "situation_tool_description", "on_request_retrieval_policy", "snapshot_tool_description");
+        var common = Read(directory, "common.json", "system", "instructions", "preferences_policy", "upfront_retrieval_policy", "situation_tool_description", "on_request_retrieval_policy", "snapshot_tool_description");
         if (!(common["instructions"] is JObject instructions)) throw Invalid("common.json");
         ValidateStrings(instructions, "common.json", "task", "advice_policy", "retrieval_policy", "language", "knowledge", "source_text", "coverage", "information_policy", "format");
         var campaign = Read(directory, "campaign.json", CampaignFields);

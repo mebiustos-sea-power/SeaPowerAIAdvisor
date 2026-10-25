@@ -100,7 +100,7 @@ internal static class GeminiTests
                         "User style replaced core rules or was elevated into the system instruction");
                     return Reply(new JObject { ["text"] = "Réponse." });
                 });
-                var result = await new GeminiAdvisor(fake).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None, profile, commonPrompt, userName: userName);
+                var result = await new GeminiFixture(fake).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None, profile, commonPrompt, userName: userName);
                 Require(result.Text == "Réponse." && fake.Calls == 1 &&
                     session.InitialInput()["advisor_preferences"] == null, "Preferences changed the knowledge session or caused extra API calls");
             }
@@ -169,7 +169,7 @@ internal static class GeminiTests
                 previous = (string)response["id"]!;
                 return response;
             });
-            var advisor = new GeminiAdvisor(transport);
+            var advisor = new GeminiFixture(transport);
             var result = await advisor.ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None);
             Require(result.ApiRequests == 4 && result.QueryRounds == 3 && result.TotalTokens == 40 &&
                 !result.Text.Contains("hidden reasoning", StringComparison.Ordinal) &&
@@ -202,7 +202,7 @@ internal static class GeminiTests
                     "A valid query without an echoed consultation ID did not execute");
                 return Reply(new JObject { ["text"] = "現在の艦隊情報を確認しました。" });
             });
-            var advice = await new GeminiAdvisor(transport).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None);
+            var advice = await new GeminiFixture(transport).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None);
             Require(advice.ApiRequests == 3 && advice.QueryRounds == 1, "Rejected envelope reached the snapshot or binding introduced an extra request");
         }));
         check("Parallel Gemini calls are grouped into one bounded round with exact response IDs", () => Async(async () =>
@@ -222,7 +222,7 @@ internal static class GeminiTests
                     (string?)InteractionFixture.Result(body, 1)["results"]![0]!["query"] == "list_contacts", "Parallel result mapping changed");
                 return Reply(new JObject { ["text"] = "観測情報を確認しました。" });
             });
-            var result = await new GeminiAdvisor(transport).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None);
+            var result = await new GeminiFixture(transport).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None);
             Require(result.QueryRounds == 1 && result.ApiRequests == 2, "Parallel calls consumed extra rounds");
         }));
         check("Gemini stops at the default request limit without a final tools-disabled request and preserves unknown usage", () => Async(async () =>
@@ -236,7 +236,7 @@ internal static class GeminiTests
                 if (n == 2) response.Remove("usage");
                 return response;
             });
-            var result = await new GeminiAdvisor(transport).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None);
+            var result = await new GeminiFixture(transport).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None);
             Require(!result.Completed && result.CompletionReason == AdvisorCompletionReason.RoundLimit && result.Text == "" &&
                 result.ApiRequests == AdvisorQueryLimits.DefaultMaxRounds && transport.Calls == AdvisorQueryLimits.DefaultMaxRounds && result.QueryRounds == AdvisorQueryLimits.DefaultMaxRounds && result.TotalTokens == null,
                 "An unfinished consultation was completed, retried or reported fabricated usage");
@@ -268,11 +268,11 @@ internal static class GeminiTests
                 });
                 var session = Session(assembly);
                 if (count.HasValue)
-                    await GeminiAdvisor.RunAsync("unused-history-test", session, Settings(), new AdvisorQuestion("Current question"), history,
-                        CancellationToken.None, _ => new GeminiTransport(handler), historyExchanges: options.HistoryExchanges);
+                    await GeminiFixture.RunAsync("unused-history-test", session, Settings(), new AdvisorQuestion("Current question"), history,
+                        CancellationToken.None, _ => new AdvisorHttpTransport(handler), historyExchanges: options.HistoryExchanges);
                 else
-                    await GeminiAdvisor.RunAsync("unused-history-test", session, Settings(), new AdvisorQuestion("Current question"), history,
-                        CancellationToken.None, _ => new GeminiTransport(handler));
+                    await GeminiFixture.RunAsync("unused-history-test", session, Settings(), new AdvisorQuestion("Current question"), history,
+                        CancellationToken.None, _ => new AdvisorHttpTransport(handler));
                 Require(handler.Calls == 1 && chat.Turns.Count == 20 && chat.Exchanges.SequenceEqual(history),
                     "Selecting history caused extra API calls or removed visible dialogue");
             }
@@ -300,7 +300,7 @@ internal static class GeminiTests
                             "Display-only captions entered Gemini history");
                         return Reply(new JObject { ["text"] = "Reply / 回答" });
                     });
-                    var answer = await new GeminiAdvisor(transport).ConsultAsync(session, Settings(), prior, CancellationToken.None);
+                    var answer = await new GeminiFixture(transport).ConsultAsync(session, Settings(), prior, CancellationToken.None);
                     Require(transport.Calls == 1 && chat.TryAdd(request, answer.Text, out _), "The shortcut did not complete through the normal provider");
                 }
             }
@@ -309,7 +309,7 @@ internal static class GeminiTests
         {
             var transport = new Fake((n, b, c) => throw new InvalidOperationException("Network should not be called"));
             var history = new[] { new ChatExchange("以前の質問", new string('報', 360_000)) };
-            await ThrowsCodeAsync("request_budget", () => new GeminiAdvisor(transport).ConsultAsync(Session(assembly), Settings(), history, CancellationToken.None));
+            await ThrowsCodeAsync("request_budget", () => new GeminiFixture(transport).ConsultAsync(Session(assembly), Settings(), history, CancellationToken.None));
             Require(transport.Calls == 0, "Oversized request was sent");
         }));
         check("Incomplete or blocked generations cannot be displayed as successful advice", () => Async(async () =>
@@ -317,10 +317,10 @@ internal static class GeminiTests
             foreach (var (finish, code) in new[] { ("MAX_TOKENS", "output_limit"), ("SAFETY", "generation_failed") })
             {
                 var transport = new Fake((n, b, c) => { var r = Reply(new JObject { ["text"] = "partial" }); r["status"] = finish == "MAX_TOKENS" ? "incomplete" : "failed"; return r; });
-                await ThrowsCodeAsync(code, () => new GeminiAdvisor(transport).ConsultAsync(Session(assembly), Settings(), Array.Empty<ChatExchange>(), CancellationToken.None));
+                await ThrowsCodeAsync(code, () => new GeminiFixture(transport).ConsultAsync(Session(assembly), Settings(), Array.Empty<ChatExchange>(), CancellationToken.None));
             }
             var blocked = new Fake((n, b, c) => new JObject { ["status"] = "failed" });
-            await ThrowsCodeAsync("generation_failed", () => new GeminiAdvisor(blocked).ConsultAsync(Session(assembly), Settings(), Array.Empty<ChatExchange>(), CancellationToken.None));
+            await ThrowsCodeAsync("generation_failed", () => new GeminiFixture(blocked).ConsultAsync(Session(assembly), Settings(), Array.Empty<ChatExchange>(), CancellationToken.None));
         }));
         check("Missing or duplicate function-call identities are rejected before any situation query executes", () => Async(async () =>
         {
@@ -334,7 +334,7 @@ internal static class GeminiTests
                 var steps = new JArray(call);
                 if (malformed == "duplicate_id") steps.Add(call.DeepClone());
                 var fake = new Fake((_, _, _) => new JObject { ["id"] = "interaction-1", ["status"] = "requires_action", ["steps"] = steps.DeepClone() });
-                await ThrowsCodeAsync("invalid_function_call", () => new GeminiAdvisor(fake).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None));
+                await ThrowsCodeAsync("invalid_function_call", () => new GeminiFixture(fake).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None));
                 Require(fake.Calls == 1 && session.RoundsUsed == 0, "An ambiguous function call executed a query or triggered another billable request");
             }
         }));
@@ -343,7 +343,7 @@ internal static class GeminiTests
             using var cancellation = new CancellationTokenSource();
             var session = Session(assembly);
             var transport = new Fake((n, b, c) => { cancellation.Cancel(); return Reply(new JObject { ["functionCall"] = Call(session, "catalog", "cancel") }); });
-            try { await new GeminiAdvisor(transport).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), cancellation.Token); }
+            try { await new GeminiFixture(transport).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), cancellation.Token); }
             catch (OperationCanceledException)
             { Require(transport.Calls == 1 && session.RoundsUsed == 0, "Cancelled work continued"); return; }
             throw new InvalidOperationException("Cancellation was ignored");

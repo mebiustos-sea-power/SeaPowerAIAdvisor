@@ -15,10 +15,7 @@ public sealed class ConnectionField
     public bool Numeric { get; }
     private readonly IReadOnlyDictionary<string, string> translations;
     public ConnectionField(string key, string label, string defaultValue = "", bool secret = false,
-        IReadOnlyDictionary<string, string>? translations = null)
-        : this(key, label, false, defaultValue, secret, translations) { }
-    public ConnectionField(string key, string label, bool numeric, string defaultValue = "", bool secret = false,
-        IReadOnlyDictionary<string, string>? translations = null)
+        IReadOnlyDictionary<string, string>? translations = null, bool numeric = false)
     {
         Key = key; Label = label; DefaultValue = defaultValue; Secret = secret; Numeric = numeric;
         this.translations = new ReadOnlyDictionary<string, string>(translations == null
@@ -60,15 +57,12 @@ public interface IAdvisorExtensionDescription
     string GetDescription(string uiLanguage);
 }
 
+// Expose every definition in ConsultationInput.ToolsJson unchanged; the list may be empty.
 public interface IStandardAdvisorExtension : IAdvisorExtension
 {
     IAdvisorSession OpenSession(ConnectionSettings connection, IAdvisorConnectionServices services,
         ConsultationInput input, RetrievalHistory? continuation);
 }
-
-// Opt into ConsultationInput.ToolsJson and expose every supplied definition unchanged.
-// IStandardAdvisorExtension alone retains the original two-tool contract.
-public interface IAdvisorToolListExtension : IStandardAdvisorExtension { }
 
 public interface IIndependentAdvisorExtension : IAdvisorExtension
 {

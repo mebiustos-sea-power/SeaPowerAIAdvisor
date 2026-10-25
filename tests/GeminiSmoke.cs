@@ -17,7 +17,7 @@ internal static class GeminiSmoke
         var snapshot = SituationTests.CheckSave(Assembly.LoadFrom(campaign), save, definition);
         var question = "接続試験です。自軍艦隊の一覧を取得し、先頭の艦隊から艦を1隻選んで燃料・弾薬・損傷を確認し、その艦名と状態を日本語で短く答えてください。実セーブの読み取り試験で、兵装サービスにはスタブを使用しています。";
         using var transport = new GeminiTransport();
-        var result = new GeminiAdvisor(transport).ConsultAsync(new AdvisorQuerySession(snapshot, "ja", question),
+        var result = new GeminiFixture(transport).ConsultAsync(new AdvisorQuerySession(snapshot, "ja", question),
             settings, Array.Empty<ChatExchange>(), CancellationToken.None).GetAwaiter().GetResult();
         var report = new JObject
         {

@@ -14,12 +14,6 @@ internal interface IAdvisorProvider
     IAdvisorProviderSession Start(AdvisorProviderInput input, AdvisorContinuation? continuation);
 }
 
-// Older standard extensions retain their two-tool wire contract at the extension boundary.
-internal interface IAdvisorLegacyToolProvider
-{
-    bool UsesLegacyTools { get; }
-}
-
 internal interface IAdvisorProviderSession : IDisposable
 {
     AdvisorProviderRequest Prepare(bool allowTools);

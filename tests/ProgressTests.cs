@@ -36,7 +36,7 @@ internal static class ProgressTests
                 Require((string?)body["generation_config"]!["tool_choice"] == "auto", "The final answer was forced by disabling retrievals");
                 return Reply(new JObject { ["text"] = "Answer" });
             });
-            var answer = await new GeminiAdvisor(transport).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None,
+            var answer = await new GeminiFixture(transport).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None,
                 profile: profile, progress: p => events.Add(p));
             Require(answer.ApiRequests == 3 && answer.QueryRounds == 2 && events.Select(e => e.Stage).SequenceEqual(new[] {
                 AdvisorStage.Waiting, AdvisorStage.Retrieving, AdvisorStage.Waiting, AdvisorStage.Retrieving, AdvisorStage.Waiting, AdvisorStage.FinalAnswer }) &&
@@ -56,12 +56,12 @@ internal static class ProgressTests
             var events = new List<AdvisorProgress>();
             var session = Session(1);
             var transport = new Fake((call, body, token) => call == 1 ? Reply(Call("PRIVATE_UNKNOWN_QUERY")) : Reply(new JObject { ["text"] = "Insufficient data" }));
-            var incomplete = await new GeminiAdvisor(transport).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None, progress: events.Add);
+            var incomplete = await new GeminiFixture(transport).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None, progress: events.Add);
             Require(!incomplete.Completed && events.All(p => p.Stage != AdvisorStage.FinalAnswer) &&
                 events.All(p => !p.Queries.Contains("PRIVATE_UNKNOWN_QUERY")), "Rejected queries were reported as acquired data or leaked model arguments");
             using var cancelled = new CancellationTokenSource(); events.Clear(); session = Session(1);
             transport = new Fake((call, body, token) => { cancelled.Cancel(); return Reply(Call("catalog")); });
-            try { await new GeminiAdvisor(transport).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), cancelled.Token, progress: events.Add); }
+            try { await new GeminiFixture(transport).ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), cancelled.Token, progress: events.Add); }
             catch (OperationCanceledException)
             { Require(session.RoundsUsed == 0 && events.Count == 1 && events[0].Stage == AdvisorStage.Waiting, "Cancelled communication continued retrieval progress"); return; }
             throw new InvalidOperationException("Cancellation was ignored");

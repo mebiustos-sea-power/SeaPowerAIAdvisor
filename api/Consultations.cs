@@ -10,20 +10,10 @@ public sealed class ConsultationInput
 {
     public string DataJson { get; }
     public string SystemInstruction { get; }
-    // Legacy standard/independent schemas. Null for tool-list inputs; use ToolsJson in that mode.
-    public string? ToolJson { get; }
-    public string? OperationToolJson { get; }
     public IReadOnlyList<string> ToolsJson { get; }
-    public static ConsultationInput WithTools(string dataJson, string systemInstruction, IEnumerable<string> toolsJson) =>
-        new(dataJson, systemInstruction, null, null, toolsJson);
-    private ConsultationInput(string dataJson, string systemInstruction, string? toolJson, string? operationToolJson, IEnumerable<string> toolsJson)
-    { DataJson = dataJson; SystemInstruction = systemInstruction; ToolJson = toolJson; OperationToolJson = operationToolJson;
+    public ConsultationInput(string dataJson, string systemInstruction, IEnumerable<string> toolsJson)
+    { DataJson = dataJson; SystemInstruction = systemInstruction;
         ToolsJson = Array.AsReadOnly(toolsJson.ToArray()); }
-    public ConsultationInput(string dataJson, string systemInstruction, string? toolJson)
-        : this(dataJson, systemInstruction, toolJson, null) { }
-    public ConsultationInput(string dataJson, string systemInstruction, string? toolJson, string? operationToolJson)
-        : this(dataJson, systemInstruction, toolJson, operationToolJson,
-            new[] { toolJson, operationToolJson }.Where(t => t != null).Select(t => t!)) { }
 }
 
 // Contains only executed queries/results. Provider conversation IDs and thinking are excluded.
@@ -33,9 +23,7 @@ public sealed class RetrievalHistory
     public int RoundsUsed { get; }
     public int MaxRounds { get; }
     public string OperationsJson { get; }
-    public RetrievalHistory(string retrievalsJson, int roundsUsed, int maxRounds)
-        : this(retrievalsJson, roundsUsed, maxRounds, "[]") { }
-    public RetrievalHistory(string retrievalsJson, int roundsUsed, int maxRounds, string operationsJson)
+    public RetrievalHistory(string retrievalsJson, int roundsUsed, int maxRounds, string operationsJson = "[]")
     { RetrievalsJson = retrievalsJson; RoundsUsed = roundsUsed; MaxRounds = maxRounds; OperationsJson = operationsJson; }
 }
 
@@ -67,9 +55,7 @@ public sealed class ConsultationContext
     public IAdvisorOperations? Operations { get; }
     private readonly Action<AdvisorProgressUpdate> progress;
     public ConsultationContext(ConsultationInput input, IAdvisorKnowledge knowledge, RetrievalHistory continuation,
-        Action<AdvisorProgressUpdate> progress) : this(input, knowledge, continuation, progress, null) { }
-    public ConsultationContext(ConsultationInput input, IAdvisorKnowledge knowledge, RetrievalHistory continuation,
-        Action<AdvisorProgressUpdate> progress, IAdvisorOperations? operations)
+        Action<AdvisorProgressUpdate> progress, IAdvisorOperations? operations = null)
     { Input = input; Knowledge = knowledge; Continuation = continuation; this.progress = progress; Operations = operations; }
     public void ReportProgress(AdvisorProgressUpdate update) => progress(update);
 }

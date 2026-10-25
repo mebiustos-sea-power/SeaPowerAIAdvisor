@@ -124,7 +124,7 @@ internal static partial class ProviderTests
                 var models = new List<string>(); var handlers = new List<BackendHttpHandler>();
                 void Settings(string model) => File.WriteAllText(path, new JObject { ["api_key"] = "mock_backend_key", ["model"] = model }.ToString());
                 Settings("gemini-first-model");
-                var registry = GeminiBackend.CreateRegistry(path, trace =>
+                var registry = AdvisorServices.CreateRegistry(path, transportFactory: trace =>
                 {
                     var handler = new BackendHttpHandler(async (request, token) =>
                     {
@@ -132,7 +132,7 @@ internal static partial class ProviderTests
                         models.Add((string)JObject.Parse(await request.Content!.ReadAsStringAsync(token))["model"]!);
                         return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(InteractionFixture.Reply(new JObject { ["text"] = "Gemini answer" }).ToString()) };
                     });
-                    handlers.Add(handler); return new GeminiTransport(handler, trace);
+                    handlers.Add(handler); return new AdvisorHttpTransport(handler, trace);
                 });
                 var first = registry.Prepare();
                 Settings("gemini-second-model");

@@ -19,7 +19,7 @@
     <PackageReference Include="Markdig" Version="1.4.0" />
     <ProjectReference Include="..\api\SeaPowerAIAdvisor.Api.csproj" />
     <ProjectReference Include="ExtensionFixture\SeaPowerAIAdvisor.ExtensionFixture.csproj" />
-    <ProjectReference Include="..\examples\ExternalAdvisor\SeaPowerAIAdvisor.Example.csproj" />
+    <ProjectReference Include="..\examples\ExternalAdapter\SeaPowerAIAdvisor.Example.csproj" />
     <Compile Remove="ExtensionFixture\**\*.cs" />
     <Compile Remove="ExtensionLoading\**\*.cs" />
     <Compile Include="..\src\Providers\Extensions\AdvisorExtensionBridge.cs" Link="AdvisorExtensionBridge.cs" />
@@ -71,7 +71,6 @@
     <Compile Include="..\src\UI\AdvisorDraftMapPreview.cs" Link="AdvisorDraftMapPreview.cs" />
     <Compile Include="..\src\UI\AdvisorNotice.cs" Link="AdvisorNotice.cs" />
     <Compile Include="..\src\Diagnostics\AdvisorRuntime.cs" Link="AdvisorRuntime.cs" />
-    <Compile Include="..\src\Providers\Gemini\GeminiConnectionTest.cs" Link="GeminiConnectionTest.cs" />
     <Compile Include="..\src\UI\QuestionInput.cs" Link="QuestionInput.cs" />
     <Compile Include="..\src\UI\QuestionFocus.cs" Link="QuestionFocus.cs" />
     <Compile Include="..\src\UI\AdvisorText.cs" Link="AdvisorText.cs" />
@@ -106,7 +105,6 @@
     <Compile Include="..\src\Diagnostics\AdvisorErrorHistory.cs" Link="AdvisorErrorHistory.cs" />
     <Compile Include="..\src\Diagnostics\AdvisorErrorCapture.cs" Link="AdvisorErrorCapture.cs" />
     <Compile Include="..\src\Advisor\AdvisorConsultation.cs" Link="AdvisorConsultation.cs" />
-    <Compile Include="..\src\Providers\Gemini\GeminiAdvisor.cs" Link="GeminiAdvisor.cs" />
     <Compile Include="..\src\Providers\Gemini\GeminiInteraction.cs" Link="GeminiInteraction.cs" />
     <Compile Include="..\src\Configuration\AdvisorRequestTimeout.cs" Link="AdvisorRequestTimeout.cs" />
     <Compile Include="..\src\Configuration\AdvisorOutputTokens.cs" Link="AdvisorOutputTokens.cs" />
@@ -123,13 +121,11 @@
     <Compile Include="..\src\Providers\OpenRouter\OpenRouterService.cs" Link="OpenRouterService.cs" />
     <Compile Include="..\src\Advisor\AdvisorBackend.cs" Link="AdvisorBackend.cs" />
     <Compile Include="..\src\Advisor\AdvisorBackendRegistry.cs" Link="AdvisorBackendRegistry.cs" />
-    <Compile Include="..\src\Providers\Gemini\GeminiBackend.cs" Link="GeminiBackend.cs" />
     <Compile Include="..\src\Advisor\AdvisorContext.cs" Link="AdvisorContext.cs" />
     <Compile Include="..\src\Advisor\AdvisorRequestShape.cs" Link="AdvisorRequestShape.cs" />
     <Compile Include="..\src\Advisor\AdvisorReadSession.cs" Link="AdvisorReadSession.cs" />
     <Compile Include="..\src\Advisor\AdvisorToolBinding.cs" Link="AdvisorToolBinding.cs" />
     <Compile Include="..\src\Advisor\AdvisorToolSession.cs" Link="AdvisorToolSession.cs" />
-    <Compile Include="..\src\Advisor\AdvisorLegacyTools.cs" Link="AdvisorLegacyTools.cs" />
     <Compile Include="..\src\Operations\AdvisorOperationTools.cs" Link="AdvisorOperationTools.cs" />
     <Compile Include="..\src\Advisor\AdvisorQueryBatch.cs" Link="AdvisorQueryBatch.cs" />
     <Compile Include="..\src\Advisor\AdvisorProvider.cs" Link="AdvisorProvider.cs" />

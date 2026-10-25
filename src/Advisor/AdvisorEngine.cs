@@ -37,8 +37,7 @@ internal sealed class AdvisorEngine : IAdvisorBackend
         var lastQueries = Array.Empty<string>();
         var lastApiRequest = 0;
         var retrievals = continuation == null ? new JArray() : (JArray)continuation.Retrievals.DeepClone();
-        using var connection = new AdvisorConnection(main, sub, fallback => context.PrepareStandardInput(fallback ? fallbackDelivery : delivery,
-            (fallback ? sub : main) is IAdvisorLegacyToolProvider { UsesLegacyTools: true }), error =>
+        using var connection = new AdvisorConnection(main, sub, fallback => context.PrepareStandardInput(fallback ? fallbackDelivery : delivery), error =>
         {
             usageKnown = false; // A lost response may have consumed tokens that we cannot measure.
             switched?.Invoke(error);

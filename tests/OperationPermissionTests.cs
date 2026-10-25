@@ -10,14 +10,13 @@ internal static partial class ProviderTests
 {
     private static void RunOperationPermission(Action<string, Action> check)
     {
-        check("Advisory shortcuts never open operation services and retain situation advice across delivery modes and legacy adapters", () => Async(async () =>
+        check("Advisory shortcuts never open operation services and retain situation advice across delivery modes", () => Async(async () =>
         {
             var opened = 0; var operation = new LookupOperation(); var registry = new AdvisorOperations(_ => true); registry.Register(operation);
             using var gateway = new AdvisorOperationGateway(registry);
             var source = new BattleAdvisorSource(() => throw new InvalidOperationException("Unexpected capture"), () => { opened++; return gateway; });
             foreach (var shortcut in new[] { AdvisorShortcut.NextSteps, AdvisorShortcut.KeyRisks, AdvisorShortcut.RadarOperations, AdvisorShortcut.OwnUnits, AdvisorShortcut.Contacts, AdvisorShortcut.MoreDetail })
             foreach (var delivery in new[] { AdvisorSituationDelivery.OnDemand, AdvisorSituationDelivery.Upfront, AdvisorSituationDelivery.OnRequest })
-            foreach (var legacy in new[] { false, true })
             {
                 var request = shortcut.Prepare("Advice"); var knowledge = DeliveryKnowledge();
                 using var operations = AdvisorConsultation.CreateOperations(request, source, "advisory", knowledge.Prompts, AdvisorOperationReferences.Empty);
@@ -27,13 +26,13 @@ internal static partial class ProviderTests
                     Require(!session.Input.Tools.Any(t => (string?)t["name"] is "list_operations" or "describe_operation" or "get_operation_candidates" or "propose_operation_plans" or "game_operations"),
                         "An operation tool was advertised in an advisory consultation");
                     if (n == 1 && delivery != AdvisorSituationDelivery.Upfront)
-                        return Task.FromResult(Reply(delivery == AdvisorSituationDelivery.OnRequest ? FullSituationCall("situation", legacy) :
-                            new AdvisorToolCall("briefing", legacy ? "query_game" : "query_situation", legacy ? LegacyReadArguments(QueryTests.Q("get_briefing")) : ReadArguments(QueryTests.Q("get_briefing")))));
+                        return Task.FromResult(Reply(delivery == AdvisorSituationDelivery.OnRequest ? FullSituationCall("situation") :
+                            Call("briefing", "get_briefing")));
                     Require(delivery == AdvisorSituationDelivery.Upfront ? session.Input.Data["situation_data"] != null :
                         session.Results.Single().Data["results"]?[0]?["data"] != null, "Disabling commands also disabled situation evidence");
                     return Task.FromResult(new AdvisorReply("Situation advice", Array.Empty<AdvisorToolCall>(), 1));
                 }
-                IAdvisorProvider provider = legacy ? new LegacyProvider("legacy", Send) : new FakeProvider("standard", Send);
+                var provider = new FakeProvider("standard", Send);
                 var answer = await new AdvisorEngine(provider, delivery: delivery).ConsultAsync(AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations), CancellationToken.None);
                 Require(answer.Completed && operation.Writes == 0 && opened == 0, "Advice was blocked or a command escaped the disabled policy");
             }
@@ -100,7 +99,7 @@ internal static partial class ProviderTests
             var source = new BattleAdvisorSource(() => throw new Exception("Unexpected capture"), () => { opened++; throw new InvalidOperationException("Disabled operations were opened"); });
             using var operations = AdvisorConsultation.CreateOperations(turn.Request, source, turn.OperationId, AdvisorPrompts.Current, AdvisorOperationReferences.Empty);
             var main = new FakeProvider("main", (_, _, _, _) => throw new AdvisorConnectionException("rate_limited", 429));
-            var sub = new LegacyProvider("legacy", (s, _, _, _) =>
+            var sub = new FakeProvider("sub", (s, _, _, _) =>
             {
                 Require(s.Input.Tools.All(t => (string?)t["name"] != "game_operations") &&
                     !s.Input.Tools.Any(t => t.ToString().Contains("\"operation_id\"", StringComparison.Ordinal)), "A provider switch restored operation access");
@@ -112,7 +111,7 @@ internal static partial class ProviderTests
             external.Consult = (_, _, context, token) =>
             {
                 token.ThrowIfCancellationRequested();
-                Require(context.Operations == null && context.Input.OperationToolJson == null &&
+                Require(context.Operations == null &&
                     context.Input.ToolsJson.All(t => !t.Contains("propose_operation_plans", StringComparison.Ordinal)), "An independent fallback received disabled commands");
                 return Task.FromResult(new Api.AdvisorAnswer("Independent advice"));
             };

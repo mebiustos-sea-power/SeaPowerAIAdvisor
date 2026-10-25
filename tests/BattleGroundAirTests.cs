@@ -120,7 +120,7 @@ internal static partial class BattleTests
         check("Gemini can batch ground/base and aircraft inventory retrieval through the common provider", () =>
         {
             var transport = new GroundAirTransport();
-            var result = new GeminiAdvisor(transport).ConsultAsync(new BattleQuerySession(GroundFixture(out _).Capture(), "ja", "航空基地から何を出すべき？"),
+            var result = new GeminiFixture(transport).ConsultAsync(new BattleQuerySession(GroundFixture(out _).Capture(), "ja", "航空基地から何を出すべき？"),
                 AdvisorSettings.Parse("{\"api_key\":\"mock-ground-air-key\"}"), Array.Empty<ChatExchange>(), CancellationToken.None).GetAwaiter().GetResult();
             Require(result.ApiRequests == 2 && result.QueryRounds == 1 && result.Queries.Contains("get_air_units") && transport.Calls == 2,
                 "The actual provider path could not complete a ground/aviation batch");

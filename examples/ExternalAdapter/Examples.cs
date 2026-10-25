@@ -51,7 +51,7 @@ internal abstract class ExampleDefinition : IAdvisorExtension, IAdvisorExtension
     }
 }
 
-internal sealed class StandardExample : ExampleDefinition, IAdvisorToolListExtension, IAdvisorExtensionVersion
+internal sealed class StandardExample : ExampleDefinition, IStandardAdvisorExtension, IAdvisorExtensionVersion
 {
     public string Version => "0.1.0";
     public override string Id => "example.standard";

@@ -122,10 +122,9 @@ internal static partial class ProviderTests
         new JObject { ["requests"] = new JArray(new JObject { ["query"] = query }) });
     private static AdvisorReply Reply(params AdvisorToolCall[] calls) => new("", calls, 7);
 
-    private class FakeProvider : IAdvisorProvider, IAdvisorLegacyToolProvider
+    private sealed class FakeProvider : IAdvisorProvider
     {
         public string Model { get; }
-        public virtual bool UsesLegacyTools => false;
         private readonly Func<FakeSession, int, bool, CancellationToken, Task<AdvisorReply>> send;
         private readonly int bytes;
         internal List<FakeSession> Sessions { get; } = new();
@@ -136,13 +135,6 @@ internal static partial class ProviderTests
             var session = new FakeSession(input, continuation, send, bytes);
             Sessions.Add(session); return session;
         }
-    }
-
-    private sealed class LegacyProvider : FakeProvider
-    {
-        public override bool UsesLegacyTools => true;
-        internal LegacyProvider(string model, Func<FakeSession, int, bool, CancellationToken, Task<AdvisorReply>> send, int bytes = 100)
-            : base(model, send, bytes) { }
     }
 
     private sealed class FakeSession : IAdvisorProviderSession

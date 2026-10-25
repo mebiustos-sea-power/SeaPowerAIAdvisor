@@ -8,37 +8,32 @@ using Api = SeaPowerAIAdvisor.Api;
 
 internal static partial class ProviderTests
 {
-    private static AdvisorToolCall FullSituationCall(string id, bool legacy = false) => legacy
-        ? new(id, "query_game", LegacyReadArguments(new JObject { ["query"] = "get_situation" }))
-        : new(id, "get_situation", new JObject());
+    private static AdvisorToolCall FullSituationCall(string id) => new(id, "get_situation", new JObject());
 
     private static void RunRequestedSituation(Action<string, Action> check)
     {
         check("Requested delivery withholds automatic situation context and does not export data for a greeting", () => Async(async () =>
         {
-            foreach (var legacy in new[] { false, true })
+            var knowledge = new SnapshotSpy { AutomaticText = new string('x', AdvisorQueryLimits.MaxTotalBytes) };
+            var run = new AdvisorLocalRun();
+            Task<AdvisorReply> Send(FakeSession session, int _, bool __, CancellationToken ___)
             {
-                var knowledge = new SnapshotSpy { AutomaticText = new string('x', AdvisorQueryLimits.MaxTotalBytes) };
-                var run = new AdvisorLocalRun();
-                Task<AdvisorReply> Send(FakeSession session, int _, bool __, CancellationToken ___)
-                {
-                    var data = session.Input.Data;
-                    Require(data["situation"] == null && data["situation_data"] == null && data["knowledge_catalog"] == null &&
-                        data["referenced_units"] == null && data["contact_assessment"] == null && data["aviation_semantics"] == null &&
-                        (string?)data["question"] == "Question" && (string?)data["common_prompt"] == "Style" &&
-                        data["prior_dialogue"]?.Count() == 1 && (string?)data["interaction_mode"] == "on_request",
-                        "Automatic game evidence leaked or user-supplied context was removed");
-                    Require(session.Input.Tools.Count == 1 && RequestSchemaFixture.Accepts(session.Input.Tools[0]["parameters"]!, FullSituationCall("check", legacy).Arguments),
-                        "A compatible full-situation request was not available");
-                    return Task.FromResult(new AdvisorReply("Hello", Array.Empty<AdvisorToolCall>(), 1));
-                }
-                IAdvisorProvider provider = legacy ? new LegacyProvider("old", Send) : new FakeProvider("new", Send);
-                var context = AdvisorContext.Create(run.Observe(knowledge), new[] { new ChatExchange("Earlier", "Answer") },
-                    commonPrompt: "Style", preparedInput: run.CaptureInput);
-                var result = await new AdvisorEngine(provider, delivery: AdvisorSituationDelivery.OnRequest).ConsultAsync(context, CancellationToken.None);
-                Require(result.Completed && result.ApiRequests == 1 && knowledge.Exports == 0 && knowledge.RoundsUsed == 0 &&
-                    run.Snapshot()["retrievals"]?.Count() == 0, "Greeting caused an eager full export or charged an unused read");
+                var data = session.Input.Data;
+                Require(data["situation"] == null && data["situation_data"] == null && data["knowledge_catalog"] == null &&
+                    data["referenced_units"] == null && data["contact_assessment"] == null && data["aviation_semantics"] == null &&
+                    (string?)data["question"] == "Question" && (string?)data["common_prompt"] == "Style" &&
+                    data["prior_dialogue"]?.Count() == 1 && (string?)data["interaction_mode"] == "on_request",
+                    "Automatic game evidence leaked or user-supplied context was removed");
+                Require(session.Input.Tools.Count == 1 && RequestSchemaFixture.Accepts(session.Input.Tools[0]["parameters"]!, FullSituationCall("check").Arguments),
+                    "A compatible full-situation request was not available");
+                return Task.FromResult(new AdvisorReply("Hello", Array.Empty<AdvisorToolCall>(), 1));
             }
+            var provider = new FakeProvider("greeting", Send);
+            var context = AdvisorContext.Create(run.Observe(knowledge), new[] { new ChatExchange("Earlier", "Answer") },
+                commonPrompt: "Style", preparedInput: run.CaptureInput);
+            var result = await new AdvisorEngine(provider, delivery: AdvisorSituationDelivery.OnRequest).ConsultAsync(context, CancellationToken.None);
+            Require(result.Completed && result.ApiRequests == 1 && knowledge.Exports == 0 && knowledge.RoundsUsed == 0 &&
+                run.Snapshot()["retrievals"]?.Count() == 0, "Greeting caused an eager full export or charged an unused read");
         }));
         check("Requested full data uses permission-filtered projections once, including responses above the partial-read ceiling", () => Async(async () =>
         {
@@ -81,18 +76,6 @@ internal static partial class ProviderTests
             var operation = new LookupOperation(); var registry = new AdvisorOperations(_ => true); registry.Register(operation);
             using var gateway = new AdvisorOperationGateway(registry);
             using var operations = gateway.CreateSession("requested-mixed", AdvisorPrompts.Current)!;
-            var legacyKnowledge = new SnapshotSpy();
-            var legacyContext = AdvisorContext.Create(legacyKnowledge, Array.Empty<ChatExchange>(), operations: operations);
-            var legacyInput = legacyContext.PrepareStandardInput(AdvisorSituationDelivery.OnRequest, legacy: true);
-            var legacyArgs = new JObject { ["requests"] = new JArray(
-                new JObject { ["source"] = "situation", ["query"] = "get_situation" }, Lookup("describe")) };
-            Require(RequestSchemaFixture.Accepts(legacyInput.Tools.Single(t => (string?)t["name"] == "query_game")["parameters"]!, legacyArgs),
-                "Legacy adapters cannot batch the full situation with operation lookups");
-            var legacyMixed = OperationGatewayTests.Finish(gateway, legacyContext.Tools.ExecuteAsync(new[] {
-                new AdvisorToolCall("legacy-mixed", "query_game", legacyArgs) }, CancellationToken.None, (_, _) => { }, (_, _) => { }));
-            Require(legacyMixed.Results.Single().Data["results"]?[0]?["data"]?["situation_data"] != null &&
-                (string?)legacyMixed.Results.Single().Data["results"]?[1]?["data"]?["operation"]?["id"] == operation.Id,
-                "Legacy full-snapshot batching lost the snapshot or operation result");
             var knowledge = new SnapshotSpy(); var context = AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations);
             context.PrepareStandardInput(AdvisorSituationDelivery.OnRequest);
             AdvisorToolDispatch Dispatch(params AdvisorToolCall[] calls) => OperationGatewayTests.Finish(gateway,
@@ -140,33 +123,30 @@ internal static partial class ProviderTests
                     "Oversized data was truncated, sent or falsely marked as supplied");
             }
         });
-        check("Requested snapshots survive new/legacy provider handoffs without replaying full data or leaking private state", () => Async(async () =>
+        check("Requested snapshots survive standard provider handoffs without replaying full data or leaking private state", () => Async(async () =>
         {
-            foreach (var legacyFirst in new[] { false, true })
+            var knowledge = new SnapshotSpy(); var recording = new AdvisorLocalRun();
+            Task<AdvisorReply> Main(FakeSession session, int n, bool _, CancellationToken __)
             {
-                var knowledge = new SnapshotSpy(); var recording = new AdvisorLocalRun();
-                Task<AdvisorReply> Main(FakeSession session, int n, bool _, CancellationToken __)
-                {
-                    if (n == 1) return Task.FromResult(Reply(FullSituationCall("main", legacyFirst)));
-                    session.Input.Data["private_provider_state"] = "opaque";
-                    throw new AdvisorConnectionException("rate_limited", 429);
-                }
-                Task<AdvisorReply> Sub(FakeSession session, int n, bool _, CancellationToken __)
-                {
-                    Require(session.Continuation?.Retrievals.Count == 1 &&
-                        session.Continuation.Retrievals[0]?["response"]?["results"]?[0]?["data"]?["situation_data"] != null &&
-                        session.Input.Data["situation"] == null && session.Input.Data["private_provider_state"] == null, "Fallback lost executed evidence or copied provider-private state");
-                    if (n == 1) return Task.FromResult(Reply(FullSituationCall("sub", !legacyFirst)));
-                    Require((string?)session.Results.Single().Data["results"]?[0]?["data"]?["status"] == "already_supplied", "Fallback resent the same full data");
-                    return Task.FromResult(new AdvisorReply("Continued", Array.Empty<AdvisorToolCall>(), 1));
-                }
-                IAdvisorProvider main = legacyFirst ? new LegacyProvider("main", Main) : new FakeProvider("main", Main);
-                IAdvisorProvider sub = legacyFirst ? new FakeProvider("sub", Sub) : new LegacyProvider("sub", Sub);
-                var answer = await new AdvisorEngine(main, sub, delivery: AdvisorSituationDelivery.OnRequest).ConsultAsync(
-                    AdvisorContext.Create(recording.Observe(knowledge), Array.Empty<ChatExchange>()), CancellationToken.None);
-                Require(answer.Completed && answer.ApiRequests == 4 && answer.TotalTokens == null && knowledge.Exports == 1 &&
-                    recording.Snapshot()["retrievals"]?.Count() == 1, "Handoff reset delivery state or lost diagnostic evidence");
+                if (n == 1) return Task.FromResult(Reply(FullSituationCall("main")));
+                session.Input.Data["private_provider_state"] = "opaque";
+                throw new AdvisorConnectionException("rate_limited", 429);
             }
+            Task<AdvisorReply> Sub(FakeSession session, int n, bool _, CancellationToken __)
+            {
+                Require(session.Continuation?.Retrievals.Count == 1 &&
+                    session.Continuation.Retrievals[0]?["response"]?["results"]?[0]?["data"]?["situation_data"] != null &&
+                    session.Input.Data["situation"] == null && session.Input.Data["private_provider_state"] == null, "Fallback lost executed evidence or copied provider-private state");
+                if (n == 1) return Task.FromResult(Reply(FullSituationCall("sub")));
+                Require((string?)session.Results.Single().Data["results"]?[0]?["data"]?["status"] == "already_supplied", "Fallback resent the same full data");
+                return Task.FromResult(new AdvisorReply("Continued", Array.Empty<AdvisorToolCall>(), 1));
+            }
+            var main = new FakeProvider("main", Main);
+            var sub = new FakeProvider("sub", Sub);
+            var answer = await new AdvisorEngine(main, sub, delivery: AdvisorSituationDelivery.OnRequest).ConsultAsync(
+                AdvisorContext.Create(recording.Observe(knowledge), Array.Empty<ChatExchange>()), CancellationToken.None);
+            Require(answer.Completed && answer.ApiRequests == 4 && answer.TotalTokens == null && knowledge.Exports == 1 &&
+                recording.Snapshot()["retrievals"]?.Count() == 1, "Handoff reset delivery state or lost diagnostic evidence");
         }));
         check("An independent fallback receives successfully delivered full evidence in its host retrieval history", () => Async(async () =>
         {

@@ -52,7 +52,7 @@ internal static class PromptTests
                 Require((string?)sent["common_prompt"] == "Shared preference" && (string?)sent["reply_language"] == "ja",
                     "The common preference or game reply language did not reach the request");
             });
-            var result = new GeminiAdvisor(fake).ConsultAsync(session, AdvisorSettings.Parse("{\"api_key\":\"mock-prompts-key\"}"),
+            var result = new GeminiFixture(fake).ConsultAsync(session, AdvisorSettings.Parse("{\"api_key\":\"mock-prompts-key\"}"),
                 Array.Empty<ChatExchange>(), CancellationToken.None, commonPrompt: "Shared preference").GetAwaiter().GetResult();
             Require(result.ApiRequests == 1 && fake.Calls == 1, "Loading external instructions caused extra requests");
             var rejected = session.Execute(new JObject { ["consultation_id"] = "another-session", ["requests"] = new JArray() });
@@ -91,7 +91,7 @@ internal static class PromptTests
                         input["prior_dialogue"]!.Count() == 1 && (string?)input["question"] == "Test question",
                         "Plain mode reset temporary system instructions, history, language or other consultation inputs");
                 });
-                _ = new GeminiAdvisor(transport).ConsultAsync(session, AdvisorSettings.Parse("{\"api_key\":\"mock-plain-key\"}"),
+                _ = new GeminiFixture(transport).ConsultAsync(session, AdvisorSettings.Parse("{\"api_key\":\"mock-plain-key\"}"),
                     history, CancellationToken.None, profile: effective, commonPrompt: run.CommonPromptFor(configuredCommon), userName: "Commander").GetAwaiter().GetResult();
                 Require(transport.Calls == 1 && saved.DefaultPersonality == "Saved default personality" &&
                     saved.CustomPersonality == "Saved custom personality" && saved.UseDefault == useDefault &&
@@ -140,7 +140,7 @@ internal static class PromptTests
                 Require((string?)InteractionFixture.Result(body)["status"] == "ok", "The prompt update interrupted information retrieval");
                 return InteractionFixture.Reply(new JObject { ["text"] = "Answer" });
             });
-            var result = new GeminiAdvisor(transport).ConsultAsync(active, AdvisorSettings.Parse("{\"api_key\":\"mock-prompts-key\"}"),
+            var result = new GeminiFixture(transport).ConsultAsync(active, AdvisorSettings.Parse("{\"api_key\":\"mock-prompts-key\"}"),
                 Array.Empty<ChatExchange>(), CancellationToken.None).GetAwaiter().GetResult();
             Require(result.ApiRequests == 2 && result.QueryRounds == 1 && runtime.HasOverrides &&
                 runtime.Current.Fields.All(f => f.Value == edits[f.Id]), "Temporary edits were lost or changed the consultation rounds");
@@ -150,7 +150,7 @@ internal static class PromptTests
                 nextSystem.Contains(edits["common.json:system"], StringComparison.Ordinal) &&
                 nextSystem.Contains(edits["common.json:preferences_policy"], StringComparison.Ordinal) &&
                 nextSystem.Contains(edits["battle.json:evidence_policy"], StringComparison.Ordinal), "The next actual request ignored the applied draft"));
-            _ = new GeminiAdvisor(nextTransport).ConsultAsync(next, AdvisorSettings.Parse("{\"api_key\":\"mock-prompts-key\"}"),
+            _ = new GeminiFixture(nextTransport).ConsultAsync(next, AdvisorSettings.Parse("{\"api_key\":\"mock-prompts-key\"}"),
                 Array.Empty<ChatExchange>(), CancellationToken.None).GetAwaiter().GetResult();
             Require(before.All(file => File.ReadAllBytes(Path.Combine(directory, file.Key!)).SequenceEqual(file.Value)), "Applying edits wrote a prompt file");
             var restarted = new AdvisorPromptOverrides(AdvisorPrompts.Load(directory));
@@ -205,7 +205,7 @@ internal static class PromptTests
                 var transport = new CaptureTransport(body => Require((string?)InteractionFixture.Initial(body)["question"] == "EDITED_REQUEST_" + pair.Item2,
                     "An edited shortcut did not reach the real request input"));
                 var session = new BattleQuerySession(Battle(), "ja", question.Text, prompts: runtime.Current);
-                _ = new GeminiAdvisor(transport).ConsultAsync(session, AdvisorSettings.Parse("{\"api_key\":\"mock-prompts-key\"}"),
+                _ = new GeminiFixture(transport).ConsultAsync(session, AdvisorSettings.Parse("{\"api_key\":\"mock-prompts-key\"}"),
                     Array.Empty<ChatExchange>(), CancellationToken.None).GetAwaiter().GetResult();
                 Require(question.DisplayText == "Visible caption" && transport.Calls == 1, "The hidden question changed its visible caption or added API calls");
                 Require(chat.TryAdd(question, "Answer", out _), "An edited shortcut could not be stored in conversation history");

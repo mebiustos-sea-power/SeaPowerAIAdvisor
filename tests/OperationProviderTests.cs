@@ -12,32 +12,28 @@ internal static partial class ProviderTests
 {
     private static void RunOperations(Action<string, Action> check)
     {
-        check("Split and legacy AI workflows get the contract with live candidates and submit plans in four requests before approval", () =>
+        check("Standard AI workflows get the contract with live candidates and submit plans in four requests before approval", () =>
         {
             foreach (var delivery in new[] { AdvisorSituationDelivery.OnDemand, AdvisorSituationDelivery.Upfront, AdvisorSituationDelivery.OnRequest })
-            foreach (var legacy in new[] { false, true })
             foreach (var planCount in new[] { 1, 2 })
             {
                 var unit = new OperationHelicopter(); var registry = SonobuoyRegistry(unit);
                 using var gateway = new AdvisorOperationGateway(registry);
                 using var operations = gateway.CreateSession("ai", AdvisorPrompts.Current)!;
                 var knowledge = DeliveryKnowledge(); var progress = new List<AdvisorProgress>();
-                AdvisorReply Read(string id, JObject args) => legacy
-                    ? Reply(new AdvisorToolCall(id, "query_game", new JObject { ["requests"] = new JArray(new JObject(args) { ["source"] = "operation" }) }))
-                    : OperationReply(id, args);
                 Task<AdvisorReply> Send(FakeSession session, int send, bool allowed, CancellationToken token)
                 {
-                    Require(session.Input.Tools.Any(t => (string?)t["name"] == (legacy ? "game_operations" : "propose_operation_plans")) &&
+                    Require(session.Input.Tools.Any(t => (string?)t["name"] == "propose_operation_plans") &&
                         !session.Input.Data.ToString().Contains(SonobuoyDropExtension.OperationId, StringComparison.Ordinal),
                         "Operation definition was eagerly embedded in initial context");
-                    if (send == 1) return Task.FromResult(Read("list", new JObject { ["action"] = "list" }));
+                    if (send == 1) return Task.FromResult(OperationReply("list", new JObject { ["action"] = "list" }));
                     var result = session.Results.Single().Data;
                     if (result["results"] is JArray reads) result = (JObject)reads[0]!["data"]!;
                     if (send == 2)
                     {
                         var id = (string)result["operations"]![0]!["id"]!;
                         Require(id == SonobuoyDropExtension.OperationId, "AI could not discover its operation");
-                        return Task.FromResult(Read("candidates", new JObject { ["action"] = "candidates", ["operation_id"] = id }));
+                        return Task.FromResult(OperationReply("candidates", new JObject { ["action"] = "candidates", ["operation_id"] = id }));
                     }
                     if (send == 3)
                     {
@@ -56,15 +52,14 @@ internal static partial class ProviderTests
                         order["arguments"]!["drops"]![0]!["longitude"] = candidate["position"]!["longitude_deg"]!.DeepClone();
                         var request = PlanRequest(order);
                         if (planCount == 1) ((JArray)request["plans"]!).RemoveAt(1);
-                        if (legacy) request["action"] = "submit";
-                        return Task.FromResult(Reply(new AdvisorToolCall("plans", legacy ? "game_operations" : "propose_operation_plans", request)));
+                        return Task.FromResult(Reply(new AdvisorToolCall("plans", "propose_operation_plans", request)));
                     }
                     Require((string?)result["status"] == "proposed" && (bool?)result["registered"] == false &&
                         (bool?)result["requires_approval"] == true && result["plans"]!.Count() == planCount && unit.Calls == 0,
                         "AI submission below target was rejected, padded, bypassed approval or misreported registration");
                     return Task.FromResult(new AdvisorReply("One buoy order proposed.", Array.Empty<AdvisorToolCall>(), 1));
                 }
-                IAdvisorProvider provider = legacy ? new LegacyProvider("operation-model", Send) : new FakeProvider("operation-model", Send);
+                var provider = new FakeProvider("operation-model", Send);
                 var context = AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations, progress: progress.Add);
                 var result = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(provider, delivery: delivery).ConsultAsync(context, CancellationToken.None)));
                 Require(unit.Calls == 0, "AI bypassed approval");
@@ -96,56 +91,49 @@ internal static partial class ProviderTests
         });
         check("Rejected operation lookups and proposals retain the last real progress without claiming acceptance", () =>
         {
-            foreach (var legacy in new[] { false, true })
+            var unit = new OperationHelicopter(); var registry = SonobuoyRegistry(unit);
+            using var gateway = new AdvisorOperationGateway(registry);
+            using var operations = gateway.CreateSession("progress-errors", AdvisorPrompts.Current)!;
+            var progress = new List<AdvisorProgress>();
+            AdvisorReply Submit(string id, JObject request)
             {
-                var unit = new OperationHelicopter(); var registry = SonobuoyRegistry(unit);
-                using var gateway = new AdvisorOperationGateway(registry);
-                using var operations = gateway.CreateSession("progress-errors", AdvisorPrompts.Current)!;
-                var progress = new List<AdvisorProgress>();
-                AdvisorReply Read(string id, JObject args) => legacy
-                    ? Reply(new AdvisorToolCall(id, "query_game", new JObject { ["requests"] = new JArray(new JObject(args) { ["source"] = "operation" }) }))
-                    : OperationReply(id, args);
-                AdvisorReply Submit(string id, JObject request)
+                return Reply(new AdvisorToolCall(id, "propose_operation_plans", request));
+            }
+            Task<AdvisorReply> Send(FakeSession session, int send, bool _, CancellationToken token)
+            {
+                if (send is 1 or 3) return Task.FromResult(OperationReply("missing-" + send, new JObject {
+                    ["action"] = "candidates", ["operation_id"] = "PRIVATE_MISSING_OPERATION" }));
+                if (send == 2) return Task.FromResult(OperationReply("list", new JObject { ["action"] = "list" }));
+                if (send == 4)
                 {
-                    if (legacy) request["action"] = "submit";
-                    return Reply(new AdvisorToolCall(id, legacy ? "game_operations" : "propose_operation_plans", request));
+                    var request = BuoyRequest(); request["request_id"] = "rejected-order";
+                    request["arguments"]!["drops"]![0]!["ammunition"] = "PRIVATE_INVALID_AMMUNITION";
+                    return Task.FromResult(Submit("rejected", PlanRequest(request)));
                 }
-                Task<AdvisorReply> Send(FakeSession session, int send, bool _, CancellationToken token)
+                if (send == 5)
                 {
-                    if (send is 1 or 3) return Task.FromResult(Read("missing-" + send, new JObject {
-                        ["action"] = "candidates", ["operation_id"] = "PRIVATE_MISSING_OPERATION" }));
-                    if (send == 2) return Task.FromResult(Read("list", new JObject { ["action"] = "list" }));
-                    if (send == 4)
-                    {
-                        var request = BuoyRequest(); request["request_id"] = "rejected-order";
-                        request["arguments"]!["drops"]![0]!["ammunition"] = "PRIVATE_INVALID_AMMUNITION";
-                        return Task.FromResult(Submit("rejected", PlanRequest(request)));
-                    }
-                    if (send == 5)
-                    {
-                        Require((string?)session.Results.Single().Data["status"] == "error", "The failed proposal fixture was not rejected");
-                        return Task.FromResult(Submit("valid", PlanRequest(BuoyRequest())));
-                    }
-                    if (send == 6) return Task.FromResult(Submit("invalid", new JObject { ["request_id"] = "invalid", ["plans"] = new JArray() }));
-                    Require((string?)session.Results.Single().Data["status"] == "error", "An invalid later submission was accepted");
-                    return Task.FromResult(new AdvisorReply("Ready for review", Array.Empty<AdvisorToolCall>(), 1));
+                    Require((string?)session.Results.Single().Data["status"] == "error", "The failed proposal fixture was not rejected");
+                    return Task.FromResult(Submit("valid", PlanRequest(BuoyRequest())));
                 }
-                IAdvisorProvider provider = legacy ? new LegacyProvider("progress", Send) : new FakeProvider("progress", Send);
-                var result = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(provider).ConsultAsync(
-                    AdvisorContext.Create(new Knowledge(10), Array.Empty<ChatExchange>(), operations: operations, progress: progress.Add), CancellationToken.None)));
-                var waiting = progress.Where(p => p.Stage == AdvisorStage.Waiting).ToArray();
-                Require(result.Completed && result.ApiRequests == 7 && waiting.Length == 7 && waiting[1].Queries.Count == 0 &&
-                    waiting[2].Queries.SequenceEqual(waiting[3].Queries) && waiting[3].Queries.SequenceEqual(waiting[4].Queries) &&
-                    waiting[5].Queries.SequenceEqual(waiting[6].Queries) && unit.Calls == 0 && registry.Proposal("progress-errors")!.Plans.Count == 2,
-                    "Rejections erased completed work, fabricated progress or changed the accepted proposal");
-                foreach (var language in new[] { "ja", "en" })
-                {
-                    var text = AdvisorText.Load(language);
-                    Require(waiting.Take(5).All(p => !AdvisorProgress.Format(p, text).Contains(text["progress.proposed"], StringComparison.Ordinal)) &&
-                        waiting.Skip(5).All(p => AdvisorProgress.Format(p, text).Contains(text["progress.proposed"], StringComparison.Ordinal)) &&
-                        progress.All(p => !AdvisorProgress.Format(p, text).Contains("PRIVATE_", StringComparison.Ordinal)),
-                        "A failed tool call claimed proposal acceptance or exposed model arguments");
-                }
+                if (send == 6) return Task.FromResult(Submit("invalid", new JObject { ["request_id"] = "invalid", ["plans"] = new JArray() }));
+                Require((string?)session.Results.Single().Data["status"] == "error", "An invalid later submission was accepted");
+                return Task.FromResult(new AdvisorReply("Ready for review", Array.Empty<AdvisorToolCall>(), 1));
+            }
+            var provider = new FakeProvider("progress", Send);
+            var result = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(provider).ConsultAsync(
+                AdvisorContext.Create(new Knowledge(10), Array.Empty<ChatExchange>(), operations: operations, progress: progress.Add), CancellationToken.None)));
+            var waiting = progress.Where(p => p.Stage == AdvisorStage.Waiting).ToArray();
+            Require(result.Completed && result.ApiRequests == 7 && waiting.Length == 7 && waiting[1].Queries.Count == 0 &&
+                waiting[2].Queries.SequenceEqual(waiting[3].Queries) && waiting[3].Queries.SequenceEqual(waiting[4].Queries) &&
+                waiting[5].Queries.SequenceEqual(waiting[6].Queries) && unit.Calls == 0 && registry.Proposal("progress-errors")!.Plans.Count == 2,
+                "Rejections erased completed work, fabricated progress or changed the accepted proposal");
+            foreach (var language in new[] { "ja", "en" })
+            {
+                var text = AdvisorText.Load(language);
+                Require(waiting.Take(5).All(p => !AdvisorProgress.Format(p, text).Contains(text["progress.proposed"], StringComparison.Ordinal)) &&
+                    waiting.Skip(5).All(p => AdvisorProgress.Format(p, text).Contains(text["progress.proposed"], StringComparison.Ordinal)) &&
+                    progress.All(p => !AdvisorProgress.Format(p, text).Contains("PRIVATE_", StringComparison.Ordinal)),
+                    "A failed tool call claimed proposal acceptance or exposed model arguments");
             }
         });
         check("One tool call submits two full plans with eleven or forty ordered drops, and only the chosen plan registers", () =>
@@ -281,8 +269,6 @@ internal static partial class ProviderTests
                 CheckWire((JArray)body["tools"]!, true);
                 Require(!body.ToString().Contains(SonobuoyDropExtension.OperationId, StringComparison.Ordinal), "Commands were eagerly embedded");
             }
-            var old = new Api.ConsultationInput("{}", "system", "{}");
-            Require(old.OperationToolJson == null && old.ToolsJson.Count == 1 && new Api.RetrievalHistory("[]", 0, 1).OperationsJson == "[]", "Legacy constructors changed");
             await Task.CompletedTask;
         }));
         check("An independent external consultation discovers and proposes through the same host approval boundary", () =>
@@ -293,7 +279,7 @@ internal static partial class ProviderTests
             using var operations = gateway.CreateSession("independent", AdvisorPrompts.Current)!;
             external.Consult = async (_, _, context, token) =>
             {
-                Require(context.Operations != null && context.Input.OperationToolJson != null, "Independent extension did not receive its optional operation service");
+                Require(context.Operations != null && context.Input.ToolsJson.Select(JObject.Parse).Any(t => (string?)t["name"] == "game_operations"), "Independent extension did not receive its optional operation service");
                 var list = JObject.Parse(await context.Operations!.ExecuteAsync("{\"action\":\"list\"}", token));
                 Require(list["operations"]!.Count() == 1, "Independent catalog lookup failed");
                 var result = JObject.Parse(await context.Operations.ExecuteAsync(new JObject(PlanRequest(BuoyRequest())) { ["action"] = "submit" }.ToString(), token));

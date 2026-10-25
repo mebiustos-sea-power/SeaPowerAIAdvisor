@@ -19,7 +19,7 @@ internal static class GeminiAirSmoke
             "テスト空母のF-14とF/A-18を発進させ、対艦ミサイルで敵水上艦を攻撃してください。") };
         var settings = AdvisorSettings.Load(settingsPath);
         using var transport = new RecordedTransport();
-        var result = new GeminiAdvisor(transport).ConsultAsync(session, settings, history, CancellationToken.None).GetAwaiter().GetResult();
+        var result = new GeminiFixture(transport).ConsultAsync(session, settings, history, CancellationToken.None).GetAwaiter().GetResult();
         var report = new JObject
         {
             ["test_data"] = "synthetic own aviation, real campaign state classes and wing calculations; not the user's aircraft inventory",

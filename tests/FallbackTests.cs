@@ -74,7 +74,7 @@ internal static class FallbackTests
                     "A new consultation inherited an earlier server conversation or fallback context");
                 return Response(200, Reply(new JObject { ["text"] = "Answer" }));
             }));
-            var advisor = new GeminiAdvisor(transport, _ => switches++);
+            var advisor = new GeminiFixture(transport, _ => switches++);
             var result = await advisor.ConsultAsync(session, Settings(), Array.Empty<ChatExchange>(), CancellationToken.None, progress: events.Add);
             Require(result.Text == "Answer" && result.ApiRequests == 4 && result.QueryRounds == 2 && result.TotalTokens == null && switches == 1 &&
                 keys.SequenceEqual(new[] { Main, Main, Backup, Backup }), "Fallback state, actual request count or unknown usage was incorrect");
@@ -106,7 +106,7 @@ internal static class FallbackTests
                     }
                     return Task.FromResult(Response(200, Reply(new JObject { ["text"] = "Recovered" })));
                 }));
-                var answer = await new GeminiAdvisor(transport).ConsultAsync(Session(), Settings(), Array.Empty<ChatExchange>(), CancellationToken.None);
+                var answer = await new GeminiFixture(transport).ConsultAsync(Session(), Settings(), Array.Empty<ChatExchange>(), CancellationToken.None);
                 Require(answer.ApiRequests == 2 && keys.SequenceEqual(new[] { Main, Backup }), "A supported temporary failure did not switch: " + failure);
             }
             foreach (var (status, code) in new[] { (400,"api_bad_request"), (401,"api_access_denied"), (403,"api_access_denied"),
@@ -114,12 +114,12 @@ internal static class FallbackTests
             {
                 var handler = new Handler((request, token) => Task.FromResult(Response(status, "malformed")));
                 using var transport = new GeminiTransport(handler);
-                var error = await Fails(code, () => new GeminiAdvisor(transport).ConsultAsync(Session(), Settings(), Array.Empty<ChatExchange>(), CancellationToken.None));
+                var error = await Fails(code, () => new GeminiFixture(transport).ConsultAsync(Session(), Settings(), Array.Empty<ChatExchange>(), CancellationToken.None));
                 Require(handler.Calls == 1 && !error.UsingFallback, "An unrelated error was hidden by fallback");
             }
             var limited = new Handler((request, token) => Task.FromResult(Response(429, "{}")));
             using var primaryOnly = new GeminiTransport(limited);
-            await Fails("rate_limited", () => new GeminiAdvisor(primaryOnly).ConsultAsync(Session(), Settings(""), Array.Empty<ChatExchange>(), CancellationToken.None));
+            await Fails("rate_limited", () => new GeminiFixture(primaryOnly).ConsultAsync(Session(), Settings(""), Array.Empty<ChatExchange>(), CancellationToken.None));
             Require(limited.Calls == 1, "A missing optional key triggered a retry");
         }));
         check("Fallback failure is terminal and cancellation interrupts the handoff without another request", () => Async(async () =>
@@ -128,7 +128,7 @@ internal static class FallbackTests
             using (var transport = new GeminiTransport(new Handler((request, token) =>
             { keys.Add(Key(request)); return Task.FromResult(Response(503,"{}")); })))
             {
-                var error = await Fails("api_error", () => new GeminiAdvisor(transport).ConsultAsync(Session(), Settings(), Array.Empty<ChatExchange>(), CancellationToken.None));
+                var error = await Fails("api_error", () => new GeminiFixture(transport).ConsultAsync(Session(), Settings(), Array.Empty<ChatExchange>(), CancellationToken.None));
                 Require(keys.SequenceEqual(new[] { Main, Backup }) && error.UsingFallback &&
                     AdvisorNotice.Connection(error).Message(AdvisorText.Load("ja")).Contains(AdvisorText.Load("ja")["connection.fallback_failed"], StringComparison.Ordinal),
                     "A fallback failure retried or did not identify the failing key slot");
@@ -136,7 +136,7 @@ internal static class FallbackTests
             using var cancellation = new CancellationTokenSource();
             var handler = new Handler((request, token) => Task.FromResult(Response(503,"{}")));
             using var cancelled = new GeminiTransport(handler);
-            try { await new GeminiAdvisor(cancelled, _ => cancellation.Cancel()).ConsultAsync(Session(), Settings(), Array.Empty<ChatExchange>(), cancellation.Token); }
+            try { await new GeminiFixture(cancelled, _ => cancellation.Cancel()).ConsultAsync(Session(), Settings(), Array.Empty<ChatExchange>(), cancellation.Token); }
             catch (OperationCanceledException)
             { Require(handler.Calls == 1, "Cancellation during the handoff sent another request"); return; }
             throw new InvalidOperationException("Cancellation was ignored");
@@ -146,7 +146,7 @@ internal static class FallbackTests
             var handler = new Handler((request, token) => Task.FromResult(Response(503,"{}")));
             using var transport = new GeminiTransport(handler);
             var session = Session();
-            await Fails("request_budget", () => new GeminiAdvisor(transport).ConsultAsync(session, Settings(),
+            await Fails("request_budget", () => new GeminiFixture(transport).ConsultAsync(session, Settings(),
                 new[] { new ChatExchange("Earlier question", new string('x', 550000)) }, CancellationToken.None));
             Require(handler.Calls == 1 && session.RoundsUsed == 0, "Failover bypassed the byte budget or consumed an information round");
         }));
@@ -163,8 +163,8 @@ internal static class FallbackTests
                     "The connection test used the other key's model");
                 return Key(request) == Main ? Response(503,"{}") : Response(200, Reply(new JObject { ["text"] = "OK" }));
             });
-            await Fails("api_error", () => GeminiConnectionTest.RunAsync("unused-fallback-tests", draft.TestSettings(), CancellationToken.None, trace => new GeminiTransport(handler, trace)));
-            var result = await GeminiConnectionTest.RunAsync("unused-fallback-tests", draft.TestSettings(true), CancellationToken.None, trace => new GeminiTransport(handler, trace));
+            await Fails("api_error", () => GeminiFixture.TestAsync("unused-fallback-tests", draft.TestSettings(), CancellationToken.None, trace => new AdvisorHttpTransport(handler, trace)));
+            var result = await GeminiFixture.TestAsync("unused-fallback-tests", draft.TestSettings(true), CancellationToken.None, trace => new AdvisorHttpTransport(handler, trace));
             Require(keys.SequenceEqual(new[] { Main, Backup }) && result.ApiRequests == 1, "A key test switched credentials or tested both keys");
             draft.SubId = null;
             Throws("fallback_key_missing", () => draft.TestSettings(true));
@@ -179,8 +179,8 @@ internal static class FallbackTests
                 var nested = new JObject { ["key"] = Backup }.ToString(Formatting.None);
                 return Response(200, Reply(new JObject { ["text"] = "Answer " + Main + " " + nested }));
             });
-            var result = await GeminiAdvisor.RunAsync(directory, Session(), Settings(log: true), new AdvisorQuestion("Question"),
-                Array.Empty<ChatExchange>(), CancellationToken.None, trace => new GeminiTransport(handler, trace));
+            var result = await GeminiFixture.RunAsync(directory, Session(), Settings(log: true), new AdvisorQuestion("Question"),
+                Array.Empty<ChatExchange>(), CancellationToken.None, trace => new AdvisorHttpTransport(handler, trace));
             var file = Directory.GetFiles(directory, "*.jsonl").Single(); var raw = File.ReadAllText(file);
             var records = File.ReadAllLines(file).Select(JObject.Parse).ToArray();
             Require(!raw.Contains(Main, StringComparison.Ordinal) && !raw.Contains(Backup, StringComparison.Ordinal) &&

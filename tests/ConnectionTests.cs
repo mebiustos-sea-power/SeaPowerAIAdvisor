@@ -35,7 +35,7 @@ internal static class ConnectionTests
             });
             var settings = draft.TestSettings();
             Require(!settings.LogAiJson, "The test applied an unsaved logging preference");
-            var result = await GeminiConnectionTest.RunAsync(path, settings, CancellationToken.None, trace => new GeminiTransport(handler, trace), requestText: requestText);
+            var result = await GeminiFixture.TestAsync(path, settings, CancellationToken.None, trace => new AdvisorHttpTransport(handler, trace), requestText: requestText);
             Require(result.ApiRequests == 1 && result.QueryRounds == 0 && handler.Calls == 1 && result.Text == "OK" && !Directory.Exists(path),
                 "The check made extra requests, created files while logging is disabled, or failed to verify generation");
         }));
@@ -83,9 +83,9 @@ internal static class ConnectionTests
             throw new InvalidOperationException("Cancellation was shown as success or a provider error");
         }));
     }
-    private static Task<AdviceResult> Run(Handler handler, CancellationToken cancellation = default) => GeminiConnectionTest.RunAsync(
+    private static Task<AdviceResult> Run(Handler handler, CancellationToken cancellation = default) => GeminiFixture.TestAsync(
         "unused-connection-test-directory", new AdvisorSettingsDraft(new JObject { ["api_key"] = Key }).TestSettings(), cancellation,
-        trace => new GeminiTransport(handler, trace));
+        trace => new AdvisorHttpTransport(handler, trace));
     private static JObject Reply() => InteractionFixture.Reply(new JObject { ["text"] = "OK" });
     private static HttpResponseMessage Response(JObject body) => new(HttpStatusCode.OK) { Content = new StringContent(body.ToString()) };
     private static async Task Fails(string code, Func<Task<AdviceResult>> action)

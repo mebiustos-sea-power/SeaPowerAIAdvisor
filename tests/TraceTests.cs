@@ -47,8 +47,8 @@ internal static class TraceTests
                 received.Add(response);
                 return Response(200, response);
             });
-            var result = await GeminiAdvisor.RunAsync(directory, session, Settings(), question,
-                Array.Empty<ChatExchange>(), CancellationToken.None, trace => new GeminiTransport(handler, trace));
+            var result = await GeminiFixture.RunAsync(directory, session, Settings(), question,
+                Array.Empty<ChatExchange>(), CancellationToken.None, trace => new AdvisorHttpTransport(handler, trace));
             var file = Directory.GetFiles(directory, "*.jsonl").Single();
             var records = Read(file);
             Require(records.Select(r => (string)r["event"]!).SequenceEqual(new[]
@@ -75,7 +75,7 @@ internal static class TraceTests
             var special = Key + (char)34 + (char)92 + "tail";
             var settings = Settings(true, special);
             var question = new AdvisorQuestion("Check " + special);
-            using var trace = AdvisorTrace.Start(directory, "redaction", GeminiBackend.Diagnostics(settings), question)!;
+            using var trace = AdvisorTrace.Start(directory, "redaction", GeminiFixture.Diagnostics(settings), question)!;
             var body = new JObject { ["plain"] = special, ["nested_json"] = new JObject { ["secret"] = special }.ToString(Formatting.None) };
             var original = body.ToString(Formatting.None);
             var unicode = string.Concat(special.Select(c => "\\u" + ((int)c).ToString("x4", CultureInfo.InvariantCulture)));
@@ -109,8 +109,8 @@ internal static class TraceTests
             {
                 var question = new AdvisorQuestion("Question");
                 var session = Session(question);
-                await Throws(code, () => GeminiAdvisor.RunAsync(directory, session, Settings(), question, Array.Empty<ChatExchange>(),
-                    CancellationToken.None, trace => new GeminiTransport(new Handler((r, c) => Task.FromResult(Response(status, body))), trace)));
+                await Throws(code, () => GeminiFixture.RunAsync(directory, session, Settings(), question, Array.Empty<ChatExchange>(),
+                    CancellationToken.None, trace => new AdvisorHttpTransport(new Handler((r, c) => Task.FromResult(Response(status, body))), trace)));
                 var records = ReadConsultation(directory, session.Id);
                 var received = records.Single(r => (string?)r["event"] == "response");
                 Require((int)received["http_status"]! == status && (bool)received["body_complete"]! &&
@@ -127,8 +127,8 @@ internal static class TraceTests
                 var session = Session(question);
                 var handler = new Handler((r, c) => Task.FromException<HttpResponseMessage>(
                     code == "network_error" ? new HttpRequestException("simulated") : new OperationCanceledException()));
-                await Throws(code, () => GeminiAdvisor.RunAsync(directory, session, Settings(), question, Array.Empty<ChatExchange>(),
-                    CancellationToken.None, trace => new GeminiTransport(handler, trace)));
+                await Throws(code, () => GeminiFixture.RunAsync(directory, session, Settings(), question, Array.Empty<ChatExchange>(),
+                    CancellationToken.None, trace => new AdvisorHttpTransport(handler, trace)));
                 var records = ReadConsultation(directory, session.Id);
                 Require(records.Count(r => (string?)r["event"] == "request") == 1 && !records.Any(r => (string?)r["event"] == "response"),
                     "A missing network response was fabricated or the attempt disappeared");
@@ -143,8 +143,8 @@ internal static class TraceTests
                 { Content = new StreamContent(new InterruptedStream(cancellation)) }));
             try
             {
-                await GeminiAdvisor.RunAsync(directory, Session(question), Settings(), question, Array.Empty<ChatExchange>(),
-                    cancellation.Token, trace => new GeminiTransport(handler, trace));
+                await GeminiFixture.RunAsync(directory, Session(question), Settings(), question, Array.Empty<ChatExchange>(),
+                    cancellation.Token, trace => new AdvisorHttpTransport(handler, trace));
                 throw new InvalidOperationException("Expected cancellation");
             }
             catch (OperationCanceledException) { }
@@ -158,8 +158,8 @@ internal static class TraceTests
         check("Oversized response protection remains bounded and the captured body is marked incomplete", () => InTemp(async directory =>
         {
             var question = new AdvisorQuestion("Question");
-            await Throws("response_too_large", () => GeminiAdvisor.RunAsync(directory, Session(question), Settings(), question,
-                Array.Empty<ChatExchange>(), CancellationToken.None, trace => new GeminiTransport(
+            await Throws("response_too_large", () => GeminiFixture.RunAsync(directory, Session(question), Settings(), question,
+                Array.Empty<ChatExchange>(), CancellationToken.None, trace => new AdvisorHttpTransport(
                     new Handler((r, c) => Task.FromResult(Response(200, new string('x', GeminiTransport.MaxResponseBytes + 20_000)))), trace)));
             var response = Read(Directory.GetFiles(directory, "*.jsonl").Single()).Single(r => (string?)r["event"] == "response");
             Require(!(bool)response["body_complete"]! && (long)response["received_bytes"]! > GeminiTransport.MaxResponseBytes &&
@@ -181,16 +181,16 @@ internal static class TraceTests
             var question = new AdvisorQuestion("Question");
             var calls = 0;
             foreach (var settings in new[] { defaults, Settings(false) })
-                await GeminiAdvisor.RunAsync(disabledPath, Session(question), settings, question, Array.Empty<ChatExchange>(),
+                await GeminiFixture.RunAsync(disabledPath, Session(question), settings, question, Array.Empty<ChatExchange>(),
                     CancellationToken.None, trace =>
                     {
                         Require(trace == null, "Disabled logging created a writer");
-                        return new GeminiTransport(new Handler((r, c) => { calls++; return Task.FromResult(Response(200, Reply(new JObject { ["text"] = "Answer" }))); }), trace);
+                        return new AdvisorHttpTransport(new Handler((r, c) => { calls++; return Task.FromResult(Response(200, Reply(new JObject { ["text"] = "Answer" }))); }), trace);
                     });
             Require(calls == 2 && !Directory.Exists(disabledPath), "Disabling logs affected the consultation or wrote files");
             var blocked = Path.Combine(directory, "blocked");
             File.WriteAllText(blocked, "file, not directory");
-            await Throws("diagnostic_log_error", () => GeminiAdvisor.RunAsync(blocked, Session(question), Settings(), question,
+            await Throws("diagnostic_log_error", () => GeminiFixture.RunAsync(blocked, Session(question), Settings(), question,
                 Array.Empty<ChatExchange>(), CancellationToken.None, trace => { calls++; throw new InvalidOperationException("HTTP should not start"); }));
             Require(calls == 2, "An unlogged consultation was sent despite a failed log");
         }));
@@ -199,8 +199,8 @@ internal static class TraceTests
             await Task.WhenAll(Enumerable.Range(0, 2).Select(i => Task.Run(async () =>
             {
                 var question = new AdvisorQuestion("Question " + i);
-                await GeminiAdvisor.RunAsync(directory, Session(question), Settings(), question, Array.Empty<ChatExchange>(),
-                    CancellationToken.None, trace => new GeminiTransport(new Handler((r, c) =>
+                await GeminiFixture.RunAsync(directory, Session(question), Settings(), question, Array.Empty<ChatExchange>(),
+                    CancellationToken.None, trace => new AdvisorHttpTransport(new Handler((r, c) =>
                         Task.FromResult(Response(200, Reply(new JObject { ["text"] = "Answer " + i })))), trace));
             })));
             var records = Read(Directory.GetFiles(directory, "*.jsonl").Single());
@@ -215,25 +215,25 @@ internal static class TraceTests
             var path = Path.Combine(directory, "ai-communication.jsonl");
             File.WriteAllText(path, "previous game run");
             var question = new AdvisorQuestion("First consultation");
-            Require(AdvisorTrace.Start(directory, "disabled", GeminiBackend.Diagnostics(Settings(false)), question) == null &&
+            Require(AdvisorTrace.Start(directory, "disabled", GeminiFixture.Diagnostics(Settings(false)), question) == null &&
                 File.ReadAllText(path) == "previous game run", "Disabled logging erased the previous game run");
             var session = Session(question);
-            GeminiTransport Transport(AdvisorTrace? trace) => new(new Handler((r, c) =>
+            AdvisorHttpTransport Transport(AdvisorTrace? trace) => new(new Handler((r, c) =>
                 Task.FromResult(Response(200, Reply(new JObject { ["text"] = "OK" })))), trace);
-            await GeminiAdvisor.RunAsync(directory, session, Settings(), question, Array.Empty<ChatExchange>(),
+            await GeminiFixture.RunAsync(directory, session, Settings(), question, Array.Empty<ChatExchange>(),
                 CancellationToken.None, Transport);
             var first = File.ReadAllText(path);
             Require(Directory.GetFiles(directory, "*.jsonl").Single() == path && Read(path).Length == 4 &&
                 !first.Contains("previous game run", StringComparison.Ordinal), "The first logged consultation did not replace the fixed file");
-            await GeminiAdvisor.RunAsync(directory, Session(question), Settings(false), question, Array.Empty<ChatExchange>(),
+            await GeminiFixture.RunAsync(directory, Session(question), Settings(false), question, Array.Empty<ChatExchange>(),
                 CancellationToken.None, Transport);
             Require(File.ReadAllText(path) == first, "Turning logging off modified the current log");
-            await GeminiConnectionTest.RunAsync(directory, Settings(), CancellationToken.None, Transport);
+            await GeminiFixture.TestAsync(directory, Settings(), CancellationToken.None, Transport);
             var afterTest = File.ReadAllText(path);
             Require(afterTest.StartsWith(first, StringComparison.Ordinal) && Read(path).Length == 8 &&
                 Read(path).Any(r => ((string)r["consultation_id"]!).StartsWith("connection-test-", StringComparison.Ordinal)),
                 "Re-enabling logging or running a connection test erased earlier records");
-            await GeminiAdvisor.RunAsync(directory, Session(question), Settings(), question, Array.Empty<ChatExchange>(),
+            await GeminiFixture.RunAsync(directory, Session(question), Settings(), question, Array.Empty<ChatExchange>(),
                 CancellationToken.None, Transport);
             Require(File.ReadAllText(path).StartsWith(afterTest, StringComparison.Ordinal) && Read(path).Length == 12 &&
                 ReadConsultation(directory, session.Id).Length == 4, "A later consultation truncated earlier records");

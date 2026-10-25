@@ -155,7 +155,7 @@ internal static partial class ProviderTests
             settings.Put(sub); settings.SubId = sub.Id;
             external.Consult = async (configuration, services, context, token) =>
             {
-                Require(context.Input.ToolJson != null && JObject.Parse(context.Input.DataJson)["situation_data"] == null,
+                Require(context.Input.ToolsJson.Count == 1 && JObject.Parse(context.Input.DataJson)["situation_data"] == null,
                     "A standard strategy was forced on an independent workflow");
                 _ = context.Knowledge.Execute(PublicQuery("get_briefing"));
                 await services.PostJsonAsync(new Uri("https://fixture.invalid/unavailable"), "{}", token);

@@ -275,7 +275,7 @@ internal static partial class BattleTests
         check("A Gemini battle consultation batches own capabilities with public enemy threat evidence", () =>
         {
             var session = new BattleQuerySession(new Fixture().Capture(), "ja", "自軍と敵の射程を比べて");
-            var result = new GeminiAdvisor(new CapabilityTransport()).ConsultAsync(session,
+            var result = new GeminiFixture(new CapabilityTransport()).ConsultAsync(session,
                 AdvisorSettings.Parse("{\"api_key\":\"mock-key\",\"model\":\"gemini-test\",\"log_ai_json\":false}"),
                 Array.Empty<ChatExchange>(), CancellationToken.None).GetAwaiter().GetResult();
             Require(result.ApiRequests == 3 && result.QueryRounds == 2 && result.Queries.Contains("get_unit_capabilities") &&
@@ -434,7 +434,7 @@ internal static partial class BattleTests
             var policy = AdvisorInformation.All.With(InformationKind.BattleWeapons, false);
             var session = new BattleQuerySession(new Fixture().Capture(), "ja", "Own fuel", information: policy);
             var transport = new RestrictedTransport();
-            var result = new GeminiAdvisor(transport).ConsultAsync(session, AdvisorSettings.Parse("{\"api_key\":\"mock-information-key\"}"),
+            var result = new GeminiFixture(transport).ConsultAsync(session, AdvisorSettings.Parse("{\"api_key\":\"mock-information-key\"}"),
                 Array.Empty<ChatExchange>(), CancellationToken.None).GetAwaiter().GetResult();
             Require(result.ApiRequests == 2 && result.QueryRounds == 1 && transport.Calls == 2, "Restricted consultation did not complete");
         });
@@ -443,7 +443,7 @@ internal static partial class BattleTests
             var session = new BattleQuerySession(new Fixture().Capture(), "ja", "まず何をすべき？");
             var transport = new MockBattleTransport();
             var settings = AdvisorSettings.Parse("{\"api_key\":\"mock-local-key\",\"model\":\"gemini-3.5-flash-lite\",\"log_ai_json\":false}");
-            var result = new GeminiAdvisor(transport).ConsultAsync(session, settings, Array.Empty<ChatExchange>(), CancellationToken.None).GetAwaiter().GetResult();
+            var result = new GeminiFixture(transport).ConsultAsync(session, settings, Array.Empty<ChatExchange>(), CancellationToken.None).GetAwaiter().GetResult();
             Require(result.ApiRequests == 3 && result.QueryRounds == 2 && result.Queries.Contains("get_units") &&
                 result.Text == "公開目標を優先し、接触を確認してください。", "Battle consultation did not complete");
         });

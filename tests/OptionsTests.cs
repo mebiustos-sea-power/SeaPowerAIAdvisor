@@ -192,7 +192,7 @@ internal static class OptionsTests
                 var session = source.CreateSession("ja", "次の行動は？", limit);
                 var transport = new RoundTransport(limit);
                 var settings = AdvisorSettings.Parse("{\"api_key\":\"mock_round_settings\"}");
-                var result = new GeminiAdvisor(transport).ConsultAsync(session, settings, Array.Empty<ChatExchange>(), CancellationToken.None).GetAwaiter().GetResult();
+                var result = new GeminiFixture(transport).ConsultAsync(session, settings, Array.Empty<ChatExchange>(), CancellationToken.None).GetAwaiter().GetResult();
                 Require(!result.Completed && result.QueryRounds == limit && result.ApiRequests == limit && transport.Calls == limit && session.MaxRounds == limit,
                     "A fixed five-round or six-request limit overrode the configured consultation");
                 var rejected = session.Execute(new JObject { ["consultation_id"] = session.Id,

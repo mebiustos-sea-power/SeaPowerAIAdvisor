@@ -40,7 +40,7 @@ internal static partial class ProviderTests
             var count = AdvisorServiceCatalog.BuiltIn.Services.Count;
             ThrowsPublic<ArgumentException>(() => new Api.AdvisorException("raw service response with credentials"));
             ThrowsPublic<InvalidOperationException>(() => Api.AdvisorApi.Register(external));
-            ThrowsPublic<NotSupportedException>(() => Api.AdvisorApi.Register(new Client.StandardExtension { ApiVersion = 2 }));
+            ThrowsPublic<NotSupportedException>(() => Api.AdvisorApi.Register(new Client.StandardExtension { ApiVersion = Api.AdvisorApi.ContractVersion + 1 }));
             ThrowsPublic<ArgumentException>(() => Api.AdvisorApi.Register(new Client.StandardExtension
             { Fields = new[] { new Api.ConnectionField("duplicate", "First"), new Api.ConnectionField("duplicate", "Second") } }));
             Require(AdvisorServiceCatalog.BuiltIn.Services.Count == count, "Invalid registration partially replaced providers");
@@ -74,12 +74,12 @@ internal static partial class ProviderTests
             {
                 Require(history == null && JObject.Parse(input.DataJson)["prior_dialogue"]!.Count() == 1 &&
                     !input.DataJson.Contains("external-secret", StringComparison.Ordinal), "Public input exposed credentials or lost conversation");
-                var tool = (string)JObject.Parse(input.ToolJson!)["name"]!;
+                var tool = (string)input.ToolsJson.Select(JObject.Parse).Single(t => (string?)t["name"] == "query_situation")["name"]!;
                 return new Client.Session(allow => new Api.ProviderRequest(100, token =>
                 {
                     token.ThrowIfCancellationRequested();
                     if (++calls == 1) return Task.FromResult(new Api.ProviderReply("", new[] {
-                        new Api.ToolCall("a", tool, LegacyReadArguments(QueryTests.Q("get_briefing")).ToString()), new Api.ToolCall("b", tool, LegacyReadArguments(QueryTests.Q("catalog")).ToString()) }, 3));
+                        new Api.ToolCall("a", tool, ReadArguments(QueryTests.Q("get_briefing")).ToString()), new Api.ToolCall("b", tool, ReadArguments(QueryTests.Q("catalog")).ToString()) }, 3));
                     Require(results?.Count == 2 && results[0].Id == "a" && results[1].Id == "b" &&
                         JObject.Parse(results[0].DataJson).ToString().Contains("Public briefing", StringComparison.Ordinal),
                         "Public tool replies lost call identity or player-known data");

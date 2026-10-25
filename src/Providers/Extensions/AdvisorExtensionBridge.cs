@@ -29,10 +29,8 @@ internal static class AdvisorExtensionBridge
         }
         catch (JsonException) { throw new Api.AdvisorException(errorCode); }
     }
-    internal static Api.ConsultationInput Input(AdvisorProviderInput input, bool toolList = false) => toolList
-        ? Api.ConsultationInput.WithTools(Json(input.Data), input.SystemInstruction, input.Tools.Select(Json))
-        : new Api.ConsultationInput(Json(input.Data), input.SystemInstruction,
-            input.Tools.Count > 0 ? Json(input.Tools[0]) : null, input.Tools.Count > 1 ? Json(input.Tools[1]) : null);
+    internal static Api.ConsultationInput Input(AdvisorProviderInput input) =>
+        new(Json(input.Data), input.SystemInstruction, input.Tools.Select(Json));
     internal static Api.RetrievalHistory? History(AdvisorContinuation? value) => value == null ? null : new(Json(value.Retrievals), value.RoundsUsed, value.MaxRounds, Json(value.Operations));
     internal static Api.ConnectionSettings Configuration(AdvisorService service, AdvisorApiConfiguration configuration,
         bool fallback) => new(configuration.Id, configuration.Name, configuration.Provider,
@@ -156,18 +154,17 @@ internal sealed class ExternalAdvisorService : AdvisorService
         cancellation.ThrowIfCancellationRequested(); return AdvisorExtensionBridge.Answer(answer);
     }
 
-    private sealed class Provider : IAdvisorProvider, IAdvisorLegacyToolProvider
+    private sealed class Provider : IAdvisorProvider
     {
         private readonly Api.IStandardAdvisorExtension extension;
         private readonly Api.ConnectionSettings settings;
         private readonly Api.IAdvisorConnectionServices services;
         public string Model => settings.Model;
-        public bool UsesLegacyTools => extension is not Api.IAdvisorToolListExtension;
         internal Provider(Api.IStandardAdvisorExtension extension, Api.ConnectionSettings settings, Api.IAdvisorConnectionServices services)
         { this.extension = extension; this.settings = settings; this.services = services; }
         public IAdvisorProviderSession Start(AdvisorProviderInput input, AdvisorContinuation? continuation) =>
             new Session(AdvisorExtensionBridge.Invoke(() => extension.OpenSession(settings, services,
-                AdvisorExtensionBridge.Input(input, !UsesLegacyTools), AdvisorExtensionBridge.History(continuation)))
+                AdvisorExtensionBridge.Input(input), AdvisorExtensionBridge.History(continuation)))
                 ?? throw new InvalidOperationException("The extension returned no provider session."));
     }
     private sealed class Session : IAdvisorProviderSession
