@@ -169,14 +169,16 @@ internal sealed class AdvisorApiSettingsView
         updating = true;
         try
         {
-            data = value; ids = value?.Configurations.Select(c => c.Id).ToArray() ?? Array.Empty<string>();
+            data = value;
+            var entries = value?.ConfigurationsByName.ToArray() ?? Array.Empty<AdvisorApiConfigurationDraft>();
+            ids = entries.Select(c => c.Id).ToArray();
             main.Items.Clear(); sub.Items.Clear();
             main.Items.Add(new ComboBoxItem { Content = text()["connection.choose_configuration"] });
             sub.Items.Add(new ComboBoxItem { Content = text()["connection.no_sub"] });
             foreach (var id in ids)
                 foreach (var control in new[] { main, sub }) control.Items.Add(new ComboBoxItem { Content = value!.Find(id)!.Name });
             main.SelectedIndex = Array.IndexOf(ids, selectedMain) + 1; sub.SelectedIndex = Array.IndexOf(ids, selectedSub) + 1;
-            cards.Show(value?.Configurations.Select(c => c.Build()).ToArray() ?? Array.Empty<AdvisorApiConfiguration>(), value?.MainId, value?.SubId);
+            cards.Show(entries.Select(c => c.Build()).ToArray(), value?.MainId, value?.SubId);
             typing.Release(); editorBaseline = null; listPane.Visibility = Visibility.Visible;
             editorPane.Visibility = Visibility.Collapsed; name.Text = timeout.Text = outputTokens.Text = ""; provider.Items.Clear(); fields.Children.Clear(); fieldValues.Clear(); providerDrafts.Clear();
             providerDescription.Text = ""; providerDescriptionBox.Visibility = Visibility.Collapsed;

@@ -1,11 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Noesis;
 
 namespace SeaPowerAIAdvisor;
 
-// Cards present saved connections and report identity; editing and persistence belong to the API page.
+// Cards preserve the supplied connection order and report identity; editing and persistence belong to the API page.
 internal sealed class AdvisorApiConnectionListView
 {
     private readonly StackPanel host;
@@ -18,12 +17,12 @@ internal sealed class AdvisorApiConnectionListView
         Action<string> open, Action<Action> guard)
     { this.host = host; this.services = services; this.text = text; this.open = open; this.guard = guard; }
 
-    internal void Show(IReadOnlyList<AdvisorApiConfiguration> entries, string? mainId, string? subId)
+    internal void Show(IReadOnlyList<AdvisorApiConfiguration> orderedEntries, string? mainId, string? subId)
     {
         host.Children.Clear();
-        if (entries.Count == 0)
+        if (orderedEntries.Count == 0)
             host.Children.Add(new TextBlock { Text = text()["connection.empty"], TextWrapping = TextWrapping.Wrap });
-        foreach (var entry in entries.OrderBy(entry => entry.Name, StringComparer.CurrentCultureIgnoreCase))
+        foreach (var entry in orderedEntries)
         {
             var service = services.Find(entry.Provider);
             var description = service == null ? entry.Provider + " / " + text()["connection.provider_unavailable"] : service.Caption(text());

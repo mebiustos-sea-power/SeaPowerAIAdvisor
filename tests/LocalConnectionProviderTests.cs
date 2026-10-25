@@ -11,6 +11,32 @@ internal static partial class ProviderTests
 {
     private static void RunLocalConnections(Action<string, Action> check)
     {
+        check("Connection lists share name and ID ordering without changing saved order or connection assignments", () =>
+        {
+            var saved = new AdvisorSettingsDraft(new JObject());
+            foreach (var entry in new[] { ("z-main", "Zulu"), ("b-duplicate", "alpha"), ("a-duplicate", "Alpha"), ("m-sub", "Middle"), ("hidden", "Beta") })
+                saved.Put(new AdvisorApiConfigurationDraft(new AdvisorApiConfiguration(entry.Item1, entry.Item2, "mock-key-" + entry.Item1, "gemini-model")));
+            saved.MainId = "z-main"; saved.SubId = "m-sub";
+            var document = saved.Data(); var registration = saved.Configurations.Select(c => c.Id).ToArray();
+            Require(saved.ConfigurationsByName.Select(c => c.Id).SequenceEqual(new[] { "a-duplicate", "b-duplicate", "hidden", "m-sub", "z-main" }),
+                "Name ordering depends on registration order or treats equivalent names inconsistently");
+            var policy = new AdvisorLocalConnections(new[] { "z-main", "m-sub", "b-duplicate", "a-duplicate" }, "m-sub");
+            var listed = policy.Describe(saved);
+            Require(((JArray)listed["connections"]!).Select(c => (string)c["id"]!).SequenceEqual(new[] { "a-duplicate", "b-duplicate", "m-sub", "z-main" }) &&
+                (string?)listed["default_connection_id"] == "m-sub" && policy.AllowedIds.SequenceEqual(new[] { "z-main", "m-sub", "b-duplicate", "a-duplicate" }),
+                "Developer discovery changed order, leaked a disallowed entry or reassigned its default");
+            Require(saved.Data().SequenceEqual(document) && saved.Configurations.Select(c => c.Id).SequenceEqual(registration) &&
+                saved.MainId == "z-main" && saved.SubId == "m-sub", "Listing reordered stored credentials or changed main/sub assignments");
+            var chosen = new AdvisorSettingsDraft(JObject.Parse(System.Text.Encoding.UTF8.GetString(document)));
+            policy.Select(chosen, "b-duplicate", true);
+            Require(chosen.MainId == "b-duplicate" && chosen.SubId == "m-sub" && chosen.Main.Name == "alpha",
+                "Sorting made selection use a position or a duplicate name instead of its stable ID");
+            saved.Find("z-main")!.Name = "AAA";
+            Require(saved.ConfigurationsByName.First().Id == "z-main" &&
+                (string?)policy.Describe(saved)["connections"]![0]!["id"] == "z-main" &&
+                saved.MainId == "z-main" && saved.SubId == "m-sub" && policy.DefaultId == "m-sub",
+                "A renamed connection retained stale ordering or changed an assigned identity");
+        });
         check("A developer-selected connection sends only its key and can fall back only to an allowed saved sub", () => Async(async () =>
         {
             var source = new AdvisorSettingsDraft(new JObject());

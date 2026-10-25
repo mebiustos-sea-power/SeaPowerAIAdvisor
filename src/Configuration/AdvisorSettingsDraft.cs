@@ -14,6 +14,9 @@ internal sealed class AdvisorSettingsDraft
     internal AdvisorConnectionOptions Options => new(source);
     private readonly List<AdvisorApiConfigurationDraft> configurations;
     internal IReadOnlyList<AdvisorApiConfigurationDraft> Configurations => configurations;
+    // Presentation and discovery share an order without changing the saved library or its identities.
+    internal IEnumerable<AdvisorApiConfigurationDraft> ConfigurationsByName => configurations
+        .OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase).ThenBy(c => c.Id, StringComparer.Ordinal);
     internal string? MainId { get; set; }
     internal string? SubId { get; set; }
     internal bool LogAiJson { get; set; }

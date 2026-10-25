@@ -33,7 +33,7 @@ internal sealed class AdvisorLocalConnections
     }
     internal JObject Describe(AdvisorSettingsDraft settings)
     {
-        var available = settings.Configurations.Where(c => AllowedIds.Contains(c.Id)).ToArray();
+        var available = settings.ConfigurationsByName.Where(c => AllowedIds.Contains(c.Id)).ToArray();
         return new JObject
         {
             ["allow_model_override"] = AllowModelOverride,

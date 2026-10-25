@@ -22,6 +22,8 @@ Every request must include `X-Advisor-Developer: 1`. Send JSON bodies with `Cont
 
 While the local API is enabled and listening, `%TEMP%\SeaPowerAIAdvisor\developer-api.json` contains the endpoint, game `process_id`, `default_connection_id`, `allow_model_override` and the same allowed `connections` metadata as `/v1/connections`. Connection settings and credentials are not included. Read this file to discover choices without making an API request.
 
+Connection lists use the same name order as the settings UI: names are compared case-insensitively, with ordinal ID order breaking ties. Connections are selected by ID, not by list position.
+
 The file is written at startup and after saved option/connection changes, and removed when the local API is disabled or the game exits normally. An abnormal exit can leave it behind; check the recorded process ID before using it. Unchecking or deleting the developer default leaves it unselected rather than choosing another connection automatically.
 
 ## Endpoints

@@ -24,7 +24,7 @@ internal sealed class AdvisorLocalConnectionsView
     {
         modelOverride.IsChecked = saved.AllowModelOverride;
         host.Children.Clear(); choices.Clear();
-        foreach (var entry in settings.Configurations)
+        foreach (var entry in settings.ConfigurationsByName)
         {
             var box = new CheckBox
             {
