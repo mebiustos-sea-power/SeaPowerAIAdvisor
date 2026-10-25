@@ -136,14 +136,14 @@ internal static partial class ProviderTests
                     Require(session.Input.Tools.Count == (legacyFirst ? 2 : 5), "Main received another tool format");
                     if (send > 1) throw new AdvisorConnectionException("rate_limited", 429);
                     var read = legacyFirst ? new AdvisorToolCall("fact", AdvisorLegacyTools.ReadName, LegacyReadArguments(QueryTests.Q("get_briefing"))) : Call("fact", "get_briefing");
-                    var order = legacyFirst ? new AdvisorToolCall("order", "game_operations", LegacyPlans()) : OperationReply("order", BuoyRequest()).Calls.Single();
+                    var order = legacyFirst ? new AdvisorToolCall("order", "game_operations", LegacyPlans()) : ProposalReply("order", BuoyRequest()).Calls.Single();
                     return Task.FromResult(Reply(read, order));
                 }
                 Task<AdvisorReply> Sub(FakeSession session, int send, bool _, CancellationToken token)
                 {
                     Require(session.Input.Tools.Count == (legacyFirst ? 5 : 2) && session.Continuation?.Retrievals.Count == 1 &&
                         session.Continuation.Operations.Count == 1 && session.Continuation.RoundsUsed == 1, "Fallback changed tools or duplicated evidence");
-                    return Task.FromResult(send == 1 ? (legacyFirst ? OperationReply("replay", BuoyRequest()) : Reply(new AdvisorToolCall("replay", "game_operations", LegacyPlans())))
+                    return Task.FromResult(send == 1 ? (legacyFirst ? ProposalReply("replay", BuoyRequest()) : Reply(new AdvisorToolCall("replay", "game_operations", LegacyPlans())))
                         : new AdvisorReply("Retained proposal", Array.Empty<AdvisorToolCall>(), 1));
                 }
                 IAdvisorProvider main = legacyFirst ? new LegacyProvider("old", Main) : new FakeProvider("new", Main);
@@ -176,7 +176,7 @@ internal static partial class ProviderTests
                     if (sends == 2)
                     {
                         Require(results?.Count == 2 && JObject.Parse(results[0].DataJson)["results"]?[0]?["data"]?["text"] != null, "Public results were lost");
-                        var order = OperationReply("proposal", BuoyRequest()).Calls.Single();
+                        var order = ProposalReply("proposal", BuoyRequest()).Calls.Single();
                         return Task.FromResult(new Api.ProviderReply("", new[] { new Api.ToolCall(order.Id, order.Name, order.Arguments.ToString()) }));
                     }
                     Require((string?)JObject.Parse(results!.Single().DataJson)["status"] == "proposed" && unit.Calls == 0, "Public adapter bypassed approval");

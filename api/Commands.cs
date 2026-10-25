@@ -57,6 +57,11 @@ public sealed class OperationOrder
 public interface IAdvisorOperationHandler : IDisposable
 {
     string GetCandidates();
+}
+
+// Commands outside reservation composition own their validation, explanation and post-approval action.
+public interface IAdvisorOperationActions
+{
     void Validate(IReadOnlyList<OperationOrder> orders);
     string DescribeProposal(IReadOnlyList<OperationOrder> orders, string language);
     string Execute(OperationOrder order);

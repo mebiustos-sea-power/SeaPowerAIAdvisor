@@ -57,15 +57,15 @@ internal static class CommandSdkTests
             var catalog = new AdvisorOperationCatalog(); catalog.Register(extension); var service = Service(catalog);
             Require(((JArray)service.Candidates("fixture.command")["candidates"]!).Count == 1 && sessions == 1, "Candidate dispatch failed");
             service.BeginProposal("test"); var first = Request(service, 0); var second = Request(service, 1);
-            service.Propose("test", first); service.Propose("test", second);
+            OperationSubmissionFixture.Submit(service, "test", first, second);
             var proposal = service.FinishProposal("test", true)!;
             Require(executed.Count == 0 && service.DescribeProposal(proposal, "en") == "Fixture proposal" && service.PreviewProposal(proposal, "en").Drawings.Count == 0,
                 "A command ran before approval or required an optional preview");
-            service.Approve(proposal); service.Approve(proposal); service.Propose("test", first);
-            Require(executed.SequenceEqual(new[] { 0, 1 }) && validations.SequenceEqual(new[] { 1, 2, 2 }), "Approval changed order, skipped combined validation or executed twice");
-            service.BeginProposal("later"); service.Propose("later", Request(service, 2)); var later = service.FinishProposal("later", true)!;
+            service.Approve(proposal); service.Approve(proposal); OperationSubmissionFixture.Submit(service, "test", first, second);
+            Require(executed.SequenceEqual(new[] { 0, 1 }) && validations.SequenceEqual(new[] { 2, 2, 2, 2 }), "Approval changed order, skipped combined validation or executed twice");
+            service.BeginProposal("later"); OperationSubmissionFixture.Submit(service, "later", Request(service, 2)); var later = service.FinishProposal("later", true)!;
             ready = false; service.Approve(later);
-            Require(later.State == AdvisorProposalState.Rejected && executed.Count == 2, "Approval ignored changed live conditions"); service.Retire();
+            Require(later.State == AdvisorProposalState.Pending && later.ErrorCode == "target_unavailable" && executed.Count == 2, "Approval ignored changed live conditions"); service.Retire();
         });
         check("Retiring SDK commands disposes sessions and only their map leases, and revokes retained game services", () =>
         {
@@ -110,9 +110,9 @@ internal static class CommandSdkTests
                 catalog.Register(new Client.CommandExtension { Open = _ => new Client.CommandHandler { Run = _ =>
                 { calls++; if (malformed) return "not json"; throw new InvalidOperationException("unexpected native failure"); } } });
                 var service = Service(catalog); var request = Request(service, 0);
-                Throws<Exception>(() => service.Execute(request));
-                try { service.Execute(request); throw new Exception("Repeated an unknown result"); }
-                catch (AdvisorOperationException error) { Require(error.Code == "operation_outcome_unknown" && calls == 1, "A fault became a normal rejection or repeated its side effect"); }
+                Throws<Exception>(() => OperationSubmissionFixture.Adopt(service, request));
+                Require((string?)OperationSubmissionFixture.Adopt(service, request)["status"] == "unknown" && calls == 1,
+                    "A fault became a normal rejection or repeated its side effect");
                 service.Retire();
             }
         });

@@ -6,13 +6,13 @@
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Deterministic>true</Deterministic>
+    <DefaultItemExcludes>$(DefaultItemExcludes);tests\**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="SeaPowerAIAdvisor.Api" HintPath="$(AdvisorApiPath)" Private="false" />
     <Reference Include="AnchorChain" HintPath="$(AnchorChainDir)\AnchorChain.dll" Private="false" ExternallyResolved="true" />
     <Reference Include="Newtonsoft.Json" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\Newtonsoft.Json.dll" Private="false" />
     <EmbeddedResource Include="Localization\*.json" LogicalName="SeaPowerAIAdvisor.ExampleCommand.Localization.%(Filename).json" />
-    <Compile Remove="tests\**\*.cs" />
     <None Update="_info.ini" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <Target Name="CheckSdkReferences" BeforeTargets="ResolveReferences">

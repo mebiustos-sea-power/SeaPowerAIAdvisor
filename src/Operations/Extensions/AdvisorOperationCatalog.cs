@@ -13,7 +13,7 @@ internal sealed class AdvisorOperationCatalog
     private readonly object sync = new();
     private readonly List<AdvisorOperationRegistration> registrations = new();
     private static AdvisorOperationCatalog CreateBuiltIn()
-    { var catalog = new AdvisorOperationCatalog(); catalog.Register(new SonobuoyDropExtension()); return catalog; }
+    { var catalog = new AdvisorOperationCatalog(); catalog.Register(new SonobuoyDropExtension()); catalog.Register(new MovementExtension()); catalog.Register(new FormationReturnExtension()); return catalog; }
     internal string Register(IAdvisorOperationExtension extension)
     {
         if (extension == null) throw new ArgumentNullException(nameof(extension));

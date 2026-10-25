@@ -28,9 +28,9 @@ internal sealed partial class AdvisorOperations
         var plans = ((JArray)request["plans"]!).Cast<JObject>().Select(p => new AdvisorOperationPlan((string)p["plan_id"]!,
             (string)p["title"]!, (string)p["summary"]!, ((JArray)p["operations"]!).Cast<JObject>().Select(o => new AdvisorOperationOrder(new JObject
             {
-                ["scope_id"] = ScopeId, ["request_id"] = owner + "." + (string)request["request_id"]! + "." + (index++).ToString(CultureInfo.InvariantCulture),
+                ["scope_id"] = ScopeId, ["request_id"] = owner + "." + (index++).ToString(CultureInfo.InvariantCulture),
                 ["operation"] = o["operation_id"]!.DeepClone(), ["target_ref"] = o["target_ref"]!.DeepClone(), ["arguments"] = o["arguments"]!.DeepClone()
-            })))).ToArray();
+            })), (JArray)p["reservation_updates"]!)).ToArray();
         var orders = plans.SelectMany(p => p.Orders).ToArray();
         var policies = orders.Select(o => Operation(o.OperationId)).Distinct().Select(Policy).ToArray();
         var minimum = policies.Max(p => p.Minimum); var maximum = policies.Min(p => p.Maximum);
@@ -44,15 +44,52 @@ internal sealed partial class AdvisorOperations
             if (receipts.ContainsKey(order.Id)) throw new AdvisorOperationException(409, "request_id_conflict");
         }
         // Validate alternatives independently. No receipts, reservations or partial plans survive a rejected set.
-        foreach (var plan in plans)
-            foreach (var group in plan.Orders.GroupBy(o => o.OperationId)) Operation(group.Key).Validate(group.ToArray());
+        foreach (var plan in plans) ValidatePlan(plan);
         foreach (var order in orders)
-            receipts.Add(order.Id, new Receipt(order.Request) { Result = new JObject { ["request_id"] = order.Id, ["status"] = "proposed", ["registered"] = false } });
+            receipts.Add(order.Id, new Receipt() { Result = new JObject { ["request_id"] = order.Id, ["status"] = "proposed", ["registered"] = false } });
         proposal.Submit(request, plans, selection);
         proposal.RequiresApproval = plans.Length > 1 || orders.Any(o => Operation(o.OperationId).RequiresApproval);
         planSubmissions.Add(owner, proposal);
         return SubmissionResult(proposal);
     }
+    // Explicit, AI-free development execution through the same proposal validation and ordered approval path.
+    internal JObject SubmitAndApprove(JObject request)
+    {
+        CheckEnabled();
+        if (request.Properties().Any(p => p.Name is not ("scope_id" or "request_id" or "plans" or "selected_plan_ids")))
+            throw new AdvisorOperationException(400, "invalid_operation_request");
+        if (Text(request, "scope_id") != ScopeId) throw new AdvisorOperationException(409, "operation_scope_changed");
+        var submission = (JObject)request.DeepClone(); submission.Remove("scope_id"); submission.Remove("selected_plan_ids");
+        AdvisorOperationPlanBatch.Validate(submission);
+        string[]? selected = null;
+        if (request["selected_plan_ids"] != null)
+        {
+            if (request["selected_plan_ids"] is not JArray ids || ids.Any(id => id.Type != JTokenType.String))
+                throw new AdvisorOperationException(400, "invalid_plan_selection");
+            selected = ids.Values<string>().Select(id => id!).ToArray();
+        }
+        var owner = "developer-plan." + (string)submission["request_id"]!;
+        if (!planSubmissions.ContainsKey(owner) && Proposal(owner) == null) BeginProposal(owner);
+        _ = SubmitPlans(owner, submission);
+        var proposal = planSubmissions[owner];
+        // Validate selection before FinishProposal can auto-adopt a command that does not require approval.
+        var orders = SelectedOrders(proposal, selected);
+        if (proposal.State is not (AdvisorProposalState.Collecting or AdvisorProposalState.Pending) &&
+            !proposal.ExecutionOrders.SequenceEqual(orders)) throw new AdvisorOperationException(409, "request_id_conflict");
+        if (proposal.State == AdvisorProposalState.Collecting)
+        {
+            proposal.RequiresApproval = true;
+            FinishProposal(owner, true);
+        }
+        if (proposal.State == AdvisorProposalState.Pending) Approve(proposal, selected);
+        var result = SubmissionResult(proposal);
+        result["scope_id"] = ScopeId;
+        if (proposal.ErrorCode != null) result["code"] = proposal.ErrorCode;
+        result["results"] = new JArray(proposal.ExecutionOrders.Select(order => receipts[order.Id].Result?.DeepClone()
+            ?? new JObject { ["request_id"] = order.Id, ["status"] = "unknown" }));
+        return result;
+    }
+
     private static JObject SubmissionResult(AdvisorOperationProposal proposal) => new()
     {
         ["request_id"] = proposal.Submission!["request_id"]!.DeepClone(),

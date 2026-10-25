@@ -38,9 +38,9 @@ internal static class AdvisorLegacyTools
         {
             var execution = (JObject)operations.Tool.DeepClone();
             execution["description"] = prompts.Text("battle.json", "operation_execution_description");
-            execution["parameters"] = AdvisorOperationGateway.ExecutionSchema(operations.Tool);
+            execution["parameters"] = AdvisorOperationGateway.ActionSchema(operations.Tool, "submit");
             yield return new AdvisorToolBinding(execution, "propose_operation_plans",
-                (args, cancellation) => AdvisorOperationGateway.ProposeAsync(operations, args, cancellation));
+                (args, cancellation) => AdvisorOperationGateway.SubmitAsync(operations, args, cancellation));
         }
     }
     private static JObject WithSource(JObject schema, string source)

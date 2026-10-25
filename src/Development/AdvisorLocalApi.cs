@@ -158,10 +158,14 @@ internal sealed class AdvisorLocalApi
             var id = path.Substring("/v1/operations/".Length, path.Length - "/v1/operations/".Length - "/candidates".Length);
             return new(200, Operations().Candidates(id));
         }
-        if (method == "POST" && path == "/v1/operations")
+        if (method == "POST" && path == "/v1/operation-plans")
         {
-            var result = Operations().Execute(body);
-            return new((string?)result["status"] == "registered" ? 200 : 409, result);
+            var status = Target().LocalStatus();
+            if ((bool?)status["proposal_review_open"] == true) throw new AdvisorLocalApiException(409, "proposal_review_open");
+            if ((bool?)status["busy"] == true) throw new AdvisorLocalApiException(409, "consultation_busy");
+            if ((bool?)status["settings_open"] == true) throw new AdvisorLocalApiException(409, "settings_open");
+            var result = Operations().SubmitAndApprove(body);
+            return new((bool?)result["registered"] == true ? 200 : 409, result);
         }
         if (method == "GET" && path == "/v1/connections") return new(200, ConnectionInfo());
         if (method == "GET" && path == "/v1/status")

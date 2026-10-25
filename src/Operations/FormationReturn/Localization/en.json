@@ -1,0 +1,11 @@
+{
+  "proposal_append": "Existing reservations: append",
+  "proposal_replace": "Existing reservations: replace (clear all existing reservations)",
+  "proposal_independent": "The unit will act independently while following these reservations.",
+  "name": "Return to formation",
+  "summary": "Schedule a return to the current formation after preceding reservations.",
+  "requirements": "Requires Data for AI access to own units and movement plans. The target must belong to a formation and be a controllable follower. This must be its final reservation operation. Replace existing reservations to request a return without first completing them.",
+  "proposal_summary": "{0}: return to formation under {1}.",
+  "proposal_timing": "Return starts after preceding reservations. Formation control then follows the moving leader.",
+  "preview_return": "{0} / return to formation"
+}

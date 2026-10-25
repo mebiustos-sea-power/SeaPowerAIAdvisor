@@ -21,7 +21,7 @@ internal enum AdvisorProposalState { Collecting, Pending, Executing, Registered,
 // The conversation owns visibility; the battle-scoped operation service owns state and execution.
 internal sealed class AdvisorOperationProposal
 {
-    private readonly List<AdvisorOperationPlan> plans = new() { new AdvisorOperationPlan("default", "", "", Array.Empty<AdvisorOperationOrder>()) };
+    private readonly List<AdvisorOperationPlan> plans = new();
     internal string Owner { get; }
     internal IReadOnlyList<AdvisorOperationPlan> Plans => plans.AsReadOnly();
     internal IReadOnlyList<AdvisorOperationOrder> Orders => plans.SelectMany(p => p.Orders).ToArray();
@@ -33,7 +33,6 @@ internal sealed class AdvisorOperationProposal
     internal string? ErrorCode { get; set; }
     internal int RegisteredCount { get; set; }
     internal AdvisorOperationProposal(string owner) => Owner = owner;
-    internal void Add(AdvisorOperationOrder order) => plans[0].Add(order);
     internal void Submit(JObject submission, IEnumerable<AdvisorOperationPlan> values, AdvisorPlanSelection selection)
     {
         Submission = (JObject)submission.DeepClone();

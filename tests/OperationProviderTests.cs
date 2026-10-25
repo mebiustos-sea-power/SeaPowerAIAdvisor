@@ -42,7 +42,7 @@ internal static partial class ProviderTests
                     if (send == 3)
                     {
                         var definition = result["operation"]!; var candidate = result["candidates"]![0]!;
-                        Require(definition["parameters"]!["required"]!.Values<string>().SequenceEqual(new[] { "placement", "drops" }) &&
+                        Require(definition["parameters"]!["required"]!.Values<string>().SequenceEqual(new[] { "drops" }) &&
                             definition["parameters"]!["properties"]!["depth"] == null &&
                             (bool?)definition["requires_approval"] == true && (int?)definition["plan_policy"]?["target"] == 2 &&
                             (int?)definition["plan_policy"]?["minimum"] == 1 &&
@@ -119,11 +119,11 @@ internal static partial class ProviderTests
                     {
                         var request = BuoyRequest(); request["request_id"] = "rejected-order";
                         request["arguments"]!["drops"]![0]!["ammunition"] = "PRIVATE_INVALID_AMMUNITION";
-                        return Task.FromResult(legacy ? Reply(new AdvisorToolCall("rejected", "game_operations", request)) : OperationReply("rejected", request));
+                        return Task.FromResult(Submit("rejected", PlanRequest(request)));
                     }
                     if (send == 5)
                     {
-                        Require((string?)session.Results.Single().Data["status"] == (legacy ? "rejected" : "error"), "The failed proposal fixture was not rejected");
+                        Require((string?)session.Results.Single().Data["status"] == "error", "The failed proposal fixture was not rejected");
                         return Task.FromResult(Submit("valid", PlanRequest(BuoyRequest())));
                     }
                     if (send == 6) return Task.FromResult(Submit("invalid", new JObject { ["request_id"] = "invalid", ["plans"] = new JArray() }));
@@ -242,11 +242,11 @@ internal static partial class ProviderTests
             var unit = new OperationHelicopter(); var registry = SonobuoyRegistry(unit);
             using var gateway = new AdvisorOperationGateway(registry);
             using var operations = gateway.CreateSession("handoff", AdvisorPrompts.Current)!;
-            var main = new FakeProvider("first", (_, n, _, _) => n == 1 ? Task.FromResult(OperationReply("first-order", BuoyRequest())) : throw new AdvisorConnectionException("rate_limited", 429));
+            var main = new FakeProvider("first", (_, n, _, _) => n == 1 ? Task.FromResult(ProposalReply("first-order", BuoyRequest())) : throw new AdvisorConnectionException("rate_limited", 429));
             var sub = new FakeProvider("second", (s, n, _, _) =>
             {
                 Require(s.Continuation != null && (string?)s.Continuation.Operations[0]?["response"]?["status"] == "proposed", "Handoff lost the existing order receipt");
-                return Task.FromResult(n == 1 ? OperationReply("replay", BuoyRequest()) : new AdvisorReply("Existing reservation retained.", Array.Empty<AdvisorToolCall>(), 1));
+                return Task.FromResult(n == 1 ? ProposalReply("replay", BuoyRequest()) : new AdvisorReply("Existing reservation retained.", Array.Empty<AdvisorToolCall>(), 1));
             });
             var context = AdvisorContext.Create(new Knowledge(4), Array.Empty<ChatExchange>(), operations: operations);
             var answer = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(main, sub).ConsultAsync(context, CancellationToken.None)));
@@ -296,7 +296,7 @@ internal static partial class ProviderTests
                 Require(context.Operations != null && context.Input.OperationToolJson != null, "Independent extension did not receive its optional operation service");
                 var list = JObject.Parse(await context.Operations!.ExecuteAsync("{\"action\":\"list\"}", token));
                 Require(list["operations"]!.Count() == 1, "Independent catalog lookup failed");
-                var result = JObject.Parse(await context.Operations.ExecuteAsync(BuoyRequest().ToString(), token));
+                var result = JObject.Parse(await context.Operations.ExecuteAsync(new JObject(PlanRequest(BuoyRequest())) { ["action"] = "submit" }.ToString(), token));
                 return new Api.AdvisorAnswer((string?)result["status"] == "proposed" ? "Independent registration" : "Failed");
             };
             var setup = AdvisorServices.Prepare(ExtensionDraft(external));
@@ -304,7 +304,7 @@ internal static partial class ProviderTests
             var result = OperationGatewayTests.Finish(gateway, Task.Run(() => AdvisorConsultation.RunAsync(setup, context,
                 "unused-operation-log", new AdvisorQuestion("Schedule one buoy"), CancellationToken.None)));
             Require(unit.Calls == 0, "An independent backend bypassed approval");
-            var proposal = registry.FinishProposal("independent", true)!; registry.Approve(proposal);
+            var proposal = registry.FinishProposal("independent", true)!; registry.Approve(proposal, new[] { "a" });
             Require(result.Text == "Independent registration" && unit.Calls == 1, "A custom workflow was forced through the standard engine or lost its order");
         });
         check("Local consultation diagnostics retain operation requests and receipts without changing them", () =>
@@ -313,7 +313,8 @@ internal static partial class ProviderTests
             var run = new AdvisorLocalRun(); var turn = new AdvisorConversation().Begin(new AdvisorQuestion("One buoy")); run.Attach(turn);
             using var operations = run.Observe(gateway.CreateSession(turn.OperationId, AdvisorPrompts.Current)!);
             run.CaptureInput(AdvisorContext.Create(new Knowledge(1), Array.Empty<ChatExchange>(), operations: operations).Input);
-            var request = BuoyRequest(); _ = OperationGatewayTests.Finish(gateway, operations.ExecuteAsync(request, CancellationToken.None));
+            var request = PlanRequest(BuoyRequest()); request["action"] = "submit";
+            _ = OperationGatewayTests.Finish(gateway, operations.ExecuteAsync(request, CancellationToken.None));
             request["request_id"] = "mutated"; turn.Complete("Registered"); run.Finish();
             var snapshot = run.Snapshot();
             Require(snapshot["input"]?["tools"]?.Count() == 2 && (string?)snapshot["operations"]?[0]?["request"]?["request_id"] == "buoy-1" &&
@@ -326,23 +327,24 @@ internal static partial class ProviderTests
         request["arguments"]!["drops"]![0]!["latitude"] = 26.5 + index * 0.001;
         return new AdvisorToolCall("schedule-" + index, "propose_operation_plans", PlanRequest(request));
     }
+    private static AdvisorReply ProposalReply(string id, JObject order) => Reply(new AdvisorToolCall(id, "propose_operation_plans", PlanRequest(order)));
     private static AdvisorReply OperationReply(string id, JObject args)
     {
         var name = (string?)args["action"] switch {
             "list" => "list_operations", "describe" => "describe_operation", "candidates" => "get_operation_candidates",
-            "execute" => "propose_operation_plans", _ => throw new InvalidOperationException("Unknown fixture operation") };
-        var arguments = (string?)args["action"] == "execute" ? PlanRequest(args) : (JObject)args.DeepClone(); arguments.Remove("action");
+            _ => throw new InvalidOperationException("Unknown fixture operation") };
+        var arguments = (JObject)args.DeepClone(); arguments.Remove("action");
         return Reply(new AdvisorToolCall(id, name, arguments));
     }
     private static JObject PlanRequest(JObject request)
     {
         var order = (JObject)request.DeepClone(); order.Remove("action"); order.Remove("request_id");
         return new JObject { ["request_id"] = request["request_id"]!.DeepClone(), ["plans"] = new JArray(new[] { "a", "b" }.Select(id =>
-            new JObject { ["plan_id"] = id, ["title"] = "Plan " + id, ["summary"] = "Comparison " + id, ["operations"] = new JArray(order.DeepClone()) })) };
+            SonobuoyFixture.Queued(new JObject { ["plan_id"] = id, ["title"] = "Plan " + id, ["summary"] = "Comparison " + id, ["operations"] = new JArray(order.DeepClone()) }))) };
     }
     private static JObject BuoyRequest() => new()
     {
-        ["action"] = "execute", ["operation_id"] = SonobuoyDropExtension.OperationId, ["request_id"] = "buoy-1", ["target_ref"] = "unit:42",
+        ["operation_id"] = SonobuoyDropExtension.OperationId, ["request_id"] = "buoy-1", ["target_ref"] = "unit:42",
         ["arguments"] = SonobuoyFixture.Arguments("extra_mod_buoy")
     };
     private static AdvisorOperations SonobuoyRegistry(OperationHelicopter unit)

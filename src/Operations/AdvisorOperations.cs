@@ -39,9 +39,7 @@ internal sealed partial class AdvisorOperations
 {
     private sealed class Receipt
     {
-        internal readonly JObject Request;
         internal JObject? Result;
-        internal Receipt(JObject request) => Request = (JObject)request.DeepClone();
     }
     private const int MaximumReceipts = 1024;
     private readonly Dictionary<string, IAdvisorOperation> operations = new(StringComparer.Ordinal);
@@ -85,15 +83,9 @@ internal sealed partial class AdvisorOperations
             var request = (JObject)submitted.Submission!.DeepClone(); request["action"] = "submit";
             return new JArray(new JObject { ["request"] = request, ["response"] = SubmissionResult(submitted) });
         }
-        var prefix = owner + ".";
-        return new JArray(receipts.Where(p => p.Key.StartsWith(prefix, StringComparison.Ordinal)).Select(p => new JObject
-        {
-            ["request"] = new JObject { ["action"] = "execute", ["operation_id"] = p.Value.Request["operation"]!.DeepClone(),
-                ["target_ref"] = p.Value.Request["target_ref"]!.DeepClone(), ["request_id"] = p.Key.Substring(prefix.Length),
-                ["arguments"] = p.Value.Request["arguments"]!.DeepClone() },
-            ["response"] = p.Value.Result?.DeepClone() ?? new JObject { ["status"] = "unknown", ["code"] = "operation_outcome_unknown" }
-        }));
+        return new JArray();
     }
+
     internal JObject Discover(string search, int offset, int limit)
     {
         CheckEnabled();
@@ -131,6 +123,8 @@ internal sealed partial class AdvisorOperations
         var definition = (JObject)operation.Definition().DeepClone();
         definition["requires_approval"] = operation.RequiresApproval;
         definition["plan_policy"] = Policy(operation).Json();
+        if (operation is IAdvisorReservationCommand reservation && reservation.ComposesReservations)
+            definition["reservation_sequence"] = new JObject { ["ends_sequence"] = reservation.EndsReservationSequence };
         return definition;
     }
     internal AdvisorOperationProposal? Proposal(string owner)
@@ -150,33 +144,6 @@ internal sealed partial class AdvisorOperations
         return operation is IAdvisorOperationArgumentNormalizer normalizer
             ? normalizer.NormalizeArguments(target, detached, references, resolutions) : detached;
     }
-    internal JObject Propose(string owner, JObject request)
-    {
-        CheckEnabled();
-        ValidateRequest(request);
-        var id = (string)request["request_id"]!;
-        if (receipts.TryGetValue(id, out var previous)) return Replay(previous, request);
-        var operation = Operation((string)request["operation"]!);
-        if (receipts.Count >= MaximumReceipts) throw new AdvisorOperationException(409, "operation_receipt_limit");
-        var proposal = Proposal(owner);
-        if (proposal == null || proposal.State != AdvisorProposalState.Collecting) throw new AdvisorOperationException(409, "proposal_closed");
-        if (proposal.Submission != null) throw new AdvisorOperationException(409, "proposal_already_submitted");
-        var receipt = new Receipt(request);
-        receipts.Add(id, receipt);
-        var order = new AdvisorOperationOrder(request);
-        try
-        {
-            // Validate the combined demand, without reserving inventory or mutating game state.
-            operation.Validate(proposal.Orders.Where(o => o.OperationId == operation.Id).Concat(new[] { order }).ToArray());
-            proposal.Add(order);
-            proposal.RequiresApproval |= operation.RequiresApproval;
-            receipt.Result = new JObject { ["request_id"] = id, ["status"] = "proposed", ["registered"] = false,
-                ["requires_approval"] = operation.RequiresApproval };
-        }
-        catch (AdvisorOperationException error)
-        { receipt.Result = new JObject { ["request_id"] = id, ["status"] = "rejected", ["code"] = error.Code }; }
-        return (JObject)receipt.Result.DeepClone();
-    }
     internal AdvisorOperationProposal? FinishProposal(string owner, bool success)
     {
         CheckThread();
@@ -191,17 +158,13 @@ internal sealed partial class AdvisorOperations
     internal string DescribeProposal(AdvisorOperationProposal proposal, string language, string? planId = null)
     {
         CheckThread(); RequireCurrent(proposal);
-        return string.Join("\n\n", Plan(proposal, planId).Orders.GroupBy(o => o.OperationId)
-            .Select(group => Operation(group.Key).DescribeProposal(group.ToArray(), language)));
+        return DescribePlan(Plan(proposal, planId), language);
     }
     internal AdvisorMapPreview PreviewProposal(AdvisorOperationProposal proposal, string language, string? planId = null)
     {
         CheckThread(); RequireCurrent(proposal);
         if (proposal.State != AdvisorProposalState.Pending || !Enabled) return AdvisorMapPreview.Empty;
-        var previews = Plan(proposal, planId).Orders.GroupBy(o => o.OperationId)
-            .Select(group => Operation(group.Key) is IAdvisorOperationPreview operation
-                ? operation.Preview(group.ToArray(), language) : AdvisorMapPreview.Empty).ToArray();
-        return new AdvisorMapPreview(previews.SelectMany(preview => preview.Drawings));
+        return PreviewPlan(Plan(proposal, planId), language);
     }
     internal void Approve(AdvisorOperationProposal proposal, IEnumerable<string>? selected = null)
     {
@@ -210,26 +173,38 @@ internal sealed partial class AdvisorOperations
         var orders = SelectedOrders(proposal, selected);
         proposal.ExecutionOrders = orders;
         proposal.ErrorCode = null;
+        ReservationPlan? prepared = null;
         try
         {
             CheckEnabled();
-            foreach (var group in orders.GroupBy(o => o.OperationId))
-                Operation(group.Key).Validate(group.ToArray());
+            prepared = ValidatePlan(CombinePlans(proposal.Plans.Where(p => p.Orders.Any(orders.Contains))));
         }
         catch (AdvisorOperationException error)
         {
-            if (proposal.Submission != null) { proposal.ErrorCode = error.Code; return; }
-            RejectRemaining(proposal, error.Code); proposal.State = AdvisorProposalState.Rejected; return;
+            proposal.ErrorCode = error.Code; return;
         }
         proposal.State = AdvisorProposalState.Executing;
         foreach (var order in proposal.Orders.Except(orders))
             receipts[order.Id].Result = new JObject { ["request_id"] = order.Id, ["status"] = "not_selected" };
         // Preserve request order. Preflight is not a transaction: native side effects cannot be rolled back.
+        var begun = new HashSet<string>(StringComparer.Ordinal);
         foreach (var order in orders)
         {
             try
             {
-                var data = Operation(order.OperationId).Execute(order.Target, order.Arguments);
+                JObject data;
+                if (ReservationCommand(order) is IAdvisorReservationCommand command)
+                {
+                    var changed = false;
+                    try
+                    {
+                        if (begun.Add(order.Target)) changed = command.BeginQueue(order.Target, prepared.Placements[order.Target]);
+                        data = command.ExecuteReservation(prepared.Steps[order.Id]);
+                    }
+                    catch (AdvisorOperationException error) when (changed)
+                    { throw new InvalidOperationException("Reservation execution failed after queue/control changes.", error); }
+                }
+                else data = Operation(order.OperationId).Execute(order.Target, order.Arguments);
                 receipts[order.Id].Result = new JObject { ["request_id"] = order.Id, ["status"] = "registered", ["data"] = data.DeepClone() };
                 proposal.RegisteredCount++;
             }
@@ -293,38 +268,6 @@ internal sealed partial class AdvisorOperations
         if (!Identifier(Text(request, "request_id"))) throw new AdvisorOperationException(400, "invalid_request_id");
         _ = Text(request, "operation"); _ = Text(request, "target_ref");
         if (scope != ScopeId) throw new AdvisorOperationException(409, "operation_scope_changed");
-    }
-    private static JObject Replay(Receipt receipt, JObject request)
-    {
-        if (!JToken.DeepEquals(receipt.Request, request)) throw new AdvisorOperationException(409, "request_id_conflict");
-        return receipt.Result == null ? throw new AdvisorOperationException(409, "operation_outcome_unknown") : (JObject)receipt.Result.DeepClone();
-    }
-
-    // Explicit developer API registration. This is not exposed through the AI operation gateway.
-    internal JObject Execute(JObject request)
-    {
-        CheckEnabled();
-        ValidateRequest(request);
-        var id = (string)request["request_id"]!;
-        var operationId = (string)request["operation"]!;
-        var target = (string)request["target_ref"]!;
-        var arguments = (JObject)request["arguments"]!;
-        if (receipts.TryGetValue(id, out var previous)) return Replay(previous, request);
-        var operation = Operation(operationId);
-        if (receipts.Count >= MaximumReceipts) throw new AdvisorOperationException(409, "operation_receipt_limit");
-        var receipt = new Receipt(request);
-        receipts.Add(id, receipt);
-        try
-        {
-            var data = operation.Execute(target, (JObject)arguments.DeepClone());
-            receipt.Result = new JObject { ["request_id"] = id, ["status"] = "registered", ["data"] = data.DeepClone() };
-        }
-        catch (AdvisorOperationException error)
-        {
-            receipt.Result = new JObject { ["request_id"] = id, ["status"] = "rejected", ["code"] = error.Code };
-        }
-        // Unexpected errors propagate; the unresolved receipt prevents a blind retry from registering twice.
-        return (JObject)receipt.Result.DeepClone();
     }
     private IAdvisorOperation Operation(string id) => operations.TryGetValue(id, out var operation) ? operation
         : throw new AdvisorOperationException(404, "unknown_operation");

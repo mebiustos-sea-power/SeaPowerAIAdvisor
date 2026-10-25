@@ -42,7 +42,7 @@ Each command has its own `--help`:
 | `cancel` | Explicitly cancel active consultation work. |
 | `operations list` | Read the operation catalog and current battle scope. |
 | `operations candidates OPERATION` | Read current own-unit candidates and available ammunition. |
-| `operations execute --request-file FILE` | Submit one explicit reservation request without AI; preserves the supplied scope and request ID. |
+| `operations submit --request-file FILE` | Validate and adopt an explicit composed plan without AI or an approval dialog; preserves scope, selection and order. |
 | `reservations list --unit-id ID` | Inspect this own unit’s current native reservations in queue order. |
 | `reservations clear --unit-id ID --scope-id SCOPE` | Remove all queued reservations of this unit, including manual orders. |
 
@@ -55,16 +55,23 @@ Operation commands require **Settings → Commands → Enable commands**, as wel
 ```sh
 python3 tools/advisor_dev.py operations list
 python3 tools/advisor_dev.py operations candidates seapower.schedule_sonobuoy_drop --output artifacts/candidates.json
-python3 tools/advisor_dev.py operations execute --request-file artifacts/order.json --output artifacts/order-result.json
+python3 tools/advisor_dev.py operations submit --request-file artifacts/order.json --output artifacts/order-result.json
 ```
 
-The request file must explicitly contain its current `scope_id`, `request_id`, operation, target and arguments. For the built-in sonobuoy command, arguments are `{ "placement": "append" | "replace", "drops": [{ "latitude": 26.5, "longitude": 127.5, "ammunition": "carried_id" }] }`, with ordered drop points for one unit. Replacement clears that target's entire existing reservation queue once. Sonobuoy candidates and registration results report the player-controlled `depth` (`above_layer`, `below_layer`, or `alternating`). The first release does not advertise depth control and ignores any supplied `arguments.depth`, preserving a player's setting change while the AI is responding. The tool does not generate new identities, rebind stale targets, or retry a POST. A `registered` result only acknowledges a native reservation; it does not wait for the unit or sonobuoy.
+The request file contains `scope_id`, `request_id` and `plans`, including one plan and one operation for a single drop. Each plan has `reservation_updates`: one `{ "target_ref", "placement": "append" | "replace" }` per composing target, or an empty array for noncomposing commands. Sonobuoy arguments contain only `drops`: `[{ "latitude": 26.5, "longitude": 127.5, "ammunition": "carried_id" }]`. Replacement clears that target's entire existing reservation queue once. Sonobuoy candidates and registration results report the player-controlled `depth` (`above_layer`, `below_layer`, or `alternating`). The first release does not advertise depth control and ignores any supplied `arguments.depth`, preserving a player's setting change while the AI is responding. The tool does not generate new identities, rebind stale targets, or retry a POST. A `registered` result only acknowledges a native reservation; it does not wait for the unit or sonobuoy.
 
 For repeated paused-game trials, `reservations list` returns the numeric unit ID, current battle scope, order sequence and sonobuoy coordinates/ammunition/count. Use that scope explicitly with `reservations clear` to reset the unit before the next consultation. Clearing uses the game's native removal method and verifies the queue is empty; it does not undo consumed ammunition or deployment already underway. Both commands require commands to be enabled. Clear is rejected while a consultation or settings editing is active, never retries automatically and does not infer a different battle scope. These are developer commands, not AI-advertised operations.
 
 ```sh
 python3 tools/advisor_dev.py reservations list --unit-id 1029 --output /tmp/queue.json
 python3 tools/advisor_dev.py reservations clear --unit-id 1029 --scope-id <scope_id_from_queue>
+```
+
+
+For single or composed trials, use `operations submit --request-file FILE`. The JSON contains `scope_id`, `request_id`, `plans` and optional `selected_plan_ids` (required when there are multiple alternatives). Plan format matches the [composition example](../docs/ai-unit-control-design.md#18-コマンドをまたぐ予約合成と移動編隊復帰2026-10-25). This explicit development endpoint **adopts immediately without a dialog**, while using the same validation, target preparation and ordered execution as normal approval. It is blocked during consultations, settings editing or an open approval review. It does not make AI requests. Keep scope and request IDs explicit; an identical successful retry returns the retained result, while changing the selected plan or submitted content under the same ID is rejected. Registration does not mean gameplay completion.
+
+```sh
+python3 tools/advisor_dev.py operations submit --request-file artifacts/composed-plan.json --output artifacts/composed-result.json
 ```
 
 ## Questions, connection and recording

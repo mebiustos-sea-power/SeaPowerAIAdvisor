@@ -52,7 +52,7 @@ internal static class OperationDocumentationTests
                     text.Format("proposal_summary", "Hobby 1", 2).Contains("Hobby 1", StringComparison.Ordinal), "A standard language cannot render its explanation or approval summary");
             Require((string?)operation.Definition()["description"] == operation.Description &&
                 (string?)operation.Definition()["id"] == SonobuoyDropExtension.OperationId &&
-                ((JArray)operation.Definition()["parameters"]!["required"]!).Values<string>().SequenceEqual(new[] { "placement", "drops" }),
+                ((JArray)operation.Definition()["parameters"]!["required"]!).Values<string>().SequenceEqual(new[] { "drops" }),
                 "UI localization translated identifiers, changed arguments or replaced the actual AI instruction");
         });
         check("Documentation inspection works with commands disabled and never reads candidates, creates proposals or enables execution", () =>

@@ -41,7 +41,7 @@ All responses are JSON. These endpoints are experimental and separate from the p
 | POST | `/v1/prompts/reset` | Restore the prompt bundle loaded at startup. |
 | GET | `/v1/operations` | Current battle scope and operation catalog; empty when commands are disabled. |
 | GET | `/v1/operations/{operation}/candidates` | Current player-owned candidates and ammunition availability for an operation. |
-| POST | `/v1/operations` | Register an operation without calling an AI provider. |
+| POST | `/v1/operation-plans` | Submit and adopt explicit plans without AI or an approval dialog. |
 
 Question bodies specify exactly one of `question` and `shortcut`:
 
@@ -140,7 +140,7 @@ With **Settings → Commands → Enable commands** enabled, normal and developer
 
 The retained consultation result includes `input.tools` (the actual prepared definition list) and an `operations` array with request/response pairs. These are separate from read-only snapshot `retrievals`. Operation records use the operation-service action envelope after tool-argument translation; the full communication log retains the original wire calls. Operation candidates and validation use live game-thread state. Sonobuoy scheduling requires own-unit basic information and ammunition information to remain enabled in Data for AI; otherwise it returns `information_disabled`. Disabling commands, cancelling or leaving the battle blocks unregistered queued work. A successful registration remains a game-owned order; it is not a deployment-completion report.
 
-AI `execute` calls now return `status: "proposed"` and `registered: false` without changing the game. The host groups requests from one successful consultation into a proposal. If any operation requires approval (including sonobuoy scheduling), the player must use **Review proposal… → Adopt** in the conversation window. The command implementation supplies the review text; approval revalidates live conditions and combined inventory. Failed/cancelled consultations and discarded history invalidate unapproved proposals. A custom consultation backend uses this same host-controlled path. The developer API has no approval endpoint. The status response includes `advisor.proposal_review_open`; a new consultation or developer reservation reset is rejected while that review is open.
+AI `submit` calls return `status: "proposed"` and `registered: false` without changing the game. The host retains the submitted plan set from a successful consultation as a proposal. If any operation requires approval (including sonobuoy scheduling), the player must use **Review proposal… → Adopt** in the conversation window. The command implementation supplies the review text; approval revalidates live conditions and combined inventory. Failed/cancelled consultations and discarded history invalidate unapproved proposals. A custom consultation backend uses this same host-controlled path. The developer API has no approval endpoint. The status response includes `advisor.proposal_review_open`; a new consultation or developer reservation reset is rejected while that review is open.
 
 During AI consultations, operation target aliases `own_unit_N` and `unit:own_unit_N` are resolved only through that consultation's permission-filtered own-unit mapping. Responses include `target_ref_resolution` (`requested`, `resolved`, `reason`) when corrected, so the retained operation request/response pairs and wire logs show both spellings. Unknown own-unit aliases return `unknown_unit_reference` without widening candidate filters. Numeric unit IDs and request IDs are not corrected. The sonobuoy command resolves each `arguments.drops[].ammunition` from a known consultation weapon-reference ID or an exact display name only when it identifies one carried sonobuoy for the target. Canonical keys take precedence; ambiguous names return `ambiguous_ammunition_reference`, while unknown/un-carried values retain normal validation errors. Responses record changes in `argument_resolutions` (`argument`, `requested`, `resolved`, `reason`), alongside the untouched original request. Matching does not choose a different variant based on remaining stock or launch availability. Stored proposals use canonical IDs for receipt comparison and live approval-time validation. Direct developer operation requests below still require canonical target and ammunition identifiers.
 
@@ -150,7 +150,7 @@ Use a capability question such as “What game operations can you perform?” to
 
 Enable **Settings → Commands → Enable commands** and save. The developer local API must also be enabled. No AI connection, API key, or developer default connection is needed for these operation endpoints. AI consultation requests use the proposal-and-approval flow above; these explicit developer operation requests register directly for testing.
 
-The current operation is `seapower.schedule_sonobuoy_drop`: register an ordered drop plan for one eligible player-controlled unit, appending to or replacing its existing reservations. It does not expand the request to other formation members. The trial rejects a unit following formation or carrying a conflicting active order rather than changing that control state. Candidates expose `available`, `unavailable_reason`, the unit's current `position`, `depth` and permitted `reservation_end_position`, and each sonobuoy's internal `id`, `remaining_count`, `available_count`, `available_after_replacement_count` and `single_drop_supported`.
+`seapower.schedule_sonobuoy_drop` registers ordered drops for eligible player-controlled units. It can be combined with `seapower.schedule_movement` and `seapower.schedule_formation_return` in the same plan. Queue policy is set once per target; the host prepares that queue before its first segment, including switching a selected follower to individual movement when supported. Targets are never silently redirected to a flagship. Candidates expose `available`, `unavailable_reason`, the unit's current `position`, `depth` and permitted `reservation_end_position`, and each sonobuoy's internal `id`, `remaining_count`, `available_count`, `available_after_replacement_count` and `single_drop_supported`.
 
 From the repository root:
 
@@ -165,22 +165,33 @@ Use the returned `scope_id`, a candidate's `target_ref`, and its actual ammuniti
 {
   "scope_id": "COPY_FROM_CURRENT_CANDIDATES",
   "request_id": "sonobuoy-trial-001",
-  "operation": "seapower.schedule_sonobuoy_drop",
-  "target_ref": "unit:REPLACE_WITH_CANDIDATE_ID",
-  "arguments": {
-    "placement": "append",
-    "drops": [
-      { "latitude": 26.5, "longitude": 127.5, "ammunition": "REPLACE_WITH_CARRIED_AMMUNITION_ID" }
-    ]
-  }
+  "plans": [
+    {
+      "plan_id": "drop",
+      "title": "Sonobuoy trial",
+      "summary": "One drop at the selected point",
+      "reservation_updates": [
+        { "target_ref": "unit:REPLACE_WITH_CANDIDATE_ID", "placement": "append" }
+      ],
+      "operations": [
+        {
+          "operation_id": "seapower.schedule_sonobuoy_drop",
+          "target_ref": "unit:REPLACE_WITH_CANDIDATE_ID",
+          "arguments": {
+            "drops": [{ "latitude": 26.5, "longitude": 127.5, "ammunition": "REPLACE_WITH_CARRIED_AMMUNITION_ID" }]
+          }
+        }
+      ]
+    }
+  ]
 }
 ```
 
 ```sh
-python3 tools/advisor_dev.py operations execute --request-file artifacts/sonobuoy-request.json --output artifacts/sonobuoy-result.json
+python3 tools/advisor_dev.py operations submit --request-file artifacts/sonobuoy-request.json --output artifacts/sonobuoy-result.json
 ```
 
-The built-in command now accepts one ordered drop plan per unit. Set `placement` to `append` to preserve its existing reservations, or `replace` to clear that unit's entire existing reservation queue once before adding the drops. Replacement does not affect other units. `available_after_replacement_count` excludes active ammunition use while allowing cancelled reservations to be reused. The direct developer endpoint still requires the same complete argument format and does not normalize AI aliases.
+Each plan sets `reservation_updates[].placement` to `append` to preserve a target's existing reservations, or `replace` to clear its entire queue once before the first new segment. Repeated operations for that target share the same policy. Replacement does not affect other units. `available_after_replacement_count` excludes active ammunition use while allowing cancelled reservations to be reused. The direct developer endpoint still requires the same complete argument format and does not normalize AI aliases.
 
 Candidate and registration-result `depth` is read-only information: `above_layer`, `below_layer`, or `alternating` (the game's Intermittent setting). The first release always uses the player-controlled game setting. A supplied `arguments.depth` is ignored without changing the setting or rejecting an otherwise valid reservation, and is not advertised as an operation parameter. The host reads the current setting again when registering the order; a player's change while the AI is responding is preserved. Other unsupported arguments and invalid reservation data are still rejected.
 
@@ -243,3 +254,7 @@ The transport is exercised with a real Windows loopback HTTP listener in the aut
 Null, non-string and unknown values return HTTP 400 `invalid_situation_delivery` before consultation execution. Independent workflows retain their own strategy; an unsupported `upfront` or `on_request` choice returns HTTP 400 `situation_delivery_unavailable`. The accepted response and retained result report the selected connection's captured `situation_delivery`. The retained result also includes `situation_delivery_override` (null means connection inheritance); actual input records the mode in use, including after fallback. Preparation is deferred until the shortcut policy is resolved, and unsupported choices are rejected before starting a turn. `/v1/connections` and the Temp discovery file report each connection's saved value; this field is null for independent workflows. These choices do not change normal UI consultations or saved defaults. The result's recorded input also identifies the actual `interaction_mode`.
 
 For `on_request`, initial `input.data` excludes automatically attached situation context, including overview and objectives. The first successful full result appears once in `retrievals` with `query: "get_situation"`; repeated requests report `already_supplied` without copying the full result again. Data remains captured at consultation start and respects Data for AI selections. `query_rounds` counts partial retrievals, so it remains zero for this full export; `api_requests` still counts all actual API exchanges. Operation reads/proposals remain separately recorded.
+
+### Composed native-order trial (no AI)
+
+`POST /v1/operation-plans` accepts an explicit `scope_id`, `request_id`, `plans` and optional `selected_plan_ids`. Use the same [ordered plan and target policy format](ai-unit-control-design.md#18-コマンドをまたぐ予約合成と移動編隊復帰2026-10-25) as AI submissions. Unlike a normal consultation, this development request adopts the selected plan immediately without a dialog. Command enablement, ownership, live preflight, terminal-order checks and replay protection still apply. Consultations, settings and proposal review must be idle. Successful registration is HTTP 200; a pending/rejected result is 409. Reusing an ID with different contents or a different completed selection is a conflict. The CLI exposes this as `operations submit --request-file FILE`; it never retries a POST automatically. There is no separate single-operation submission route; one plan with one operation uses the same endpoint.

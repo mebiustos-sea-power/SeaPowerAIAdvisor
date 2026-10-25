@@ -15,7 +15,7 @@ public sealed class CommandExtension : IAdvisorOperationExtension
     public IAdvisorOperationHandler CreateSession(IAdvisorOperationContext context) => Open(context);
 }
 
-public sealed class CommandHandler : IAdvisorOperationHandler
+public sealed class CommandHandler : IAdvisorOperationHandler, IAdvisorOperationActions
 {
     public Func<string> Candidates { get; set; } = () => "[{\"target_ref\":\"fixture:target\",\"display_name\":\"Target\"}]";
     public Action<IReadOnlyList<OperationOrder>> Check { get; set; } = _ => { };

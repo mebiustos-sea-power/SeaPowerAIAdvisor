@@ -24,9 +24,9 @@ internal static class OperationAmmunitionTests
                 var answer = Send(trial, session, request);
                 Require((string?)answer["status"] == "proposed" && (bool?)answer["registered"] == false, "An exact identity did not stage a proposal");
                 if (value != "mod_buoy")
-                    Require((string?)answer["argument_resolutions"]?[0]?["requested"] == value &&
-                        (string?)answer["argument_resolutions"]?[0]?["resolved"] == "mod_buoy", "The correction is missing from the response");
-                else Require(answer["argument_resolutions"] == null, "A canonical ID was recorded as a correction");
+                    Require((string?)OperationSubmissionFixture.ArgumentResolutions(answer)[0]?["requested"] == value &&
+                        (string?)OperationSubmissionFixture.ArgumentResolutions(answer)[0]?["resolved"] == "mod_buoy", "The correction is missing from the response");
+                else Require(OperationSubmissionFixture.ArgumentResolutions(answer).Count == 0, "A canonical ID was recorded as a correction");
                 Require(JToken.DeepEquals(request, original) && JToken.DeepEquals(run.Snapshot()["operations"]!.Last!["request"], original),
                     "Normalization modified the original request or its diagnostic record");
             }
@@ -36,7 +36,7 @@ internal static class OperationAmmunitionTests
             trial.Service.Approve(proposal); trial.Service.Approve(proposal);
             Require(trial.Main.Orders.SequenceEqual(new[] { "mod_buoy" }) &&
                 (string?)Send(trial, session, Request("weapon_reference_18"))["status"] == "registered", "Approval or replay duplicated a registration");
-            var changed = Request("mod_buoy"); changed["arguments"]!["drops"]![0]!["latitude"] = 27;
+            var changed = Request("mod_buoy"); OperationSubmissionFixture.Arguments(changed)!["drops"]![0]!["latitude"] = 27;
             Require(Code(Send(trial, session, changed)) == "request_id_conflict", "Changed content silently replaced a request");
         });
         check("Ambiguous display names are rejected without choosing by stock or availability, while exact references remain usable", () =>
@@ -60,7 +60,11 @@ internal static class OperationAmmunitionTests
             Require((string?)Send(trial, session, Request("mod_buoy"))["status"] == "proposed", "A canonical key was reinterpreted as another name");
             var attempt = 0;
             foreach (var value in new[] { "foreign_buoy", "weapon_reference_19", "weapon_reference_999", "shared buoy", "Shared", "Shared buoy " })
-                Require(Code(Send(trial, session, Request(value, "bad-" + ++attempt))) == "sonobuoy_not_carried", "A foreign or approximate identity was accepted: " + value);
+            {
+                using var invalid = trial.Gateway.CreateSession("invalid-" + ++attempt, AdvisorPrompts.Current, References())!;
+                Require(Code(Send(trial, invalid, Request(value))) == "sonobuoy_not_carried", "A foreign or approximate identity was accepted: " + value);
+                Require(trial.Service.FinishProposal("invalid-" + attempt, true)!.Orders.Count == 0, "Rejected input left executable work");
+            }
             var proposal = trial.Service.FinishProposal("strict", true)!;
             Require(proposal.Orders.Count == 1 && (string?)proposal.Orders[0].Arguments["drops"]![0]!["ammunition"] == "mod_buoy", "Rejected input changed the proposal");
             trial.Service.Approve(proposal);
@@ -81,7 +85,7 @@ internal static class OperationAmmunitionTests
             var pending = trial.Service.FinishProposal("shortage", true)!;
             trial.Main.Ammo[0] = Ammo("mod_buoy", "Renamed buoy", 0);
             trial.Service.Approve(pending);
-            Require(pending.State == AdvisorProposalState.Rejected && pending.ErrorCode == "no_available_sonobuoy" &&
+            Require(pending.State == AdvisorProposalState.Pending && pending.ErrorCode == "no_available_sonobuoy" &&
                 trial.Main.Orders.Count == 1, "Approval substituted another available variant instead of rejecting depletion");
         });
         check("Consultation reference mappings are isolated and reusing an order ID cannot rebind an alias to different ammunition", () =>
@@ -123,15 +127,17 @@ internal static class OperationAmmunitionTests
             using var trial = new Trial();
             var custom = new CustomOperation(); trial.Service.Register(custom);
             using var session = trial.Gateway.CreateSession("custom", AdvisorPrompts.Current, References())!;
-            var request = Request("Shared buoy"); request["operation_id"] = custom.Id;
-            request["arguments"] = new JObject { ["ammunition"] = "Shared buoy" };
+            var request = Request("Shared buoy"); request["plans"]![0]!["operations"]![0]!["operation_id"] = custom.Id;
+            request["plans"]![0]!["reservation_updates"] = new JArray();
+            request["plans"]![0]!["operations"]![0]!["arguments"] = new JObject { ["ammunition"] = "Shared buoy" };
             Require((string?)Send(trial, session, request)["status"] == "proposed", "A custom operation stopped accepting its arguments");
             trial.Service.FinishProposal("custom", true);
             Require(custom.Value == "Shared buoy", "The host interpreted an arbitrary command's ammunition field");
             var direct = new JObject { ["scope_id"] = trial.Service.ScopeId, ["request_id"] = "manual",
                 ["operation"] = SonobuoyDropExtension.OperationId, ["target_ref"] = "unit:42", ["arguments"] = SonobuoyFixture.Arguments("Shared buoy") };
-            Require(Code(trial.Service.Execute(direct)) == "sonobuoy_not_carried" && trial.Main.Orders.Count == 0,
-                "The explicit developer registration silently acquired AI argument normalization");
+            try { OperationSubmissionFixture.Adopt(trial.Service, direct); throw new Exception("Developer input was normalized"); }
+            catch (AdvisorOperationException error) when (error.Code == "sonobuoy_not_carried") { }
+            Require(trial.Main.Orders.Count == 0, "Rejected developer input registered an order");
         });
     }
 
@@ -157,11 +163,11 @@ internal static class OperationAmmunitionTests
         ["ammunition"] = new JArray(new JObject { ["reference_id"] = reference, ["display_name"] = "Shared buoy", ["remaining_count"] = 12 }) } };
     private static JObject Reference(string id, string key) => new() { ["id"] = id, ["reference_key"] = key, ["display_name"] = "Reference buoy" };
     private static BattleSonobuoyAmmo Ammo(string id, string name, int available = 12) => new(id, name, available, available, true);
-    private static JObject Request(string ammunition, string id = "order-1") => new()
+    private static JObject Request(string ammunition, string id = "order-1") => OperationSubmissionFixture.AiRequest(new JObject
     {
-        ["action"] = "execute", ["operation_id"] = SonobuoyDropExtension.OperationId, ["request_id"] = id, ["target_ref"] = "unit:own_unit_8",
+        ["operation_id"] = SonobuoyDropExtension.OperationId, ["request_id"] = id, ["target_ref"] = "unit:own_unit_8",
         ["arguments"] = SonobuoyFixture.Arguments(ammunition)
-    };
+    });
     private static JObject Send(Trial trial, IAdvisorOperationSession session, JObject request) =>
         OperationGatewayTests.Finish(trial.Gateway, session.ExecuteAsync(request, CancellationToken.None));
     private static string? Code(JObject answer) => (string?)answer["code"] ?? (string?)answer["error"]?["code"];

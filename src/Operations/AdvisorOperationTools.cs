@@ -27,7 +27,7 @@ internal static class AdvisorOperationTools
             if (args["action"] != null || args["source"] != null)
                 return Task.FromResult(new JObject { ["status"] = "error", ["error"] = new JObject { ["code"] = "invalid_operation_request" } });
             var request = (JObject)args.DeepClone(); request["action"] = "submit";
-            return AdvisorOperationGateway.ProposeAsync(session, request, cancellation);
+            return AdvisorOperationGateway.SubmitAsync(session, request, cancellation);
         });
     }
     private static readonly (string Name, string Action, string Description)[] reads = {

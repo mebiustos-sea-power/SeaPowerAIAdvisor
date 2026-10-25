@@ -5,7 +5,7 @@ using SeaPowerAIAdvisor.Api;
 namespace SeaPowerAIAdvisor;
 
 // Revokes retained SDK services on battle retirement; never exports native objects or permits worker-thread game access.
-internal sealed class AdvisorOperationContext : IAdvisorOperationContext, IAdvisorGameSupport, IAdvisorReservationSupport, IAdvisorMap, IAdvisorOperationText, IDisposable
+internal sealed class AdvisorOperationContext : IAdvisorOperationContext, IAdvisorGameSupport, IAdvisorReservationSupport, IAdvisorReservationSequenceSupport, IAdvisorMovementSupport, IAdvisorMap, IAdvisorOperationText, IDisposable
 {
     private readonly IAdvisorGameSupport game;
     private readonly IAdvisorMap map;
@@ -27,6 +27,15 @@ internal sealed class AdvisorOperationContext : IAdvisorOperationContext, IAdvis
     public IReadOnlyList<AmmunitionInfo> GetAmmunition(string target) { Check(); return game.GetAmmunition(target); }
     public ReservationRoute? GetReservationRoute(string target) { Check(); return game.GetReservationRoute(target); }
     public string GetSonobuoyDepth(string target) { Check(); return game.GetSonobuoyDepth(target); }
+    private IAdvisorReservationSequenceSupport Sequence => game as IAdvisorReservationSequenceSupport
+        ?? throw new InvalidOperationException("The game adapter does not provide reservation sequences.");
+    private IAdvisorMovementSupport Movement => game as IAdvisorMovementSupport
+        ?? throw new InvalidOperationException("The game adapter does not provide movement support.");
+    public ReservationQueueState InspectReservations(string target, ReservationPlacement placement) { Check(); return Sequence.InspectReservations(target, placement); }
+    public bool BeginReservations(string target, ReservationPlacement placement) { Check(); return Sequence.BeginReservations(target, placement); }
+    public IReadOnlyList<MovementUnitInfo> GetMovementUnits() { Check(); return Movement.GetMovementUnits(); }
+    public void AppendMovement(string target, MovementWaypoint waypoint) { Check(); Movement.AppendMovement(target, waypoint); }
+    public void AppendFormationReturn(string target) { Check(); Movement.AppendFormationReturn(target); }
     public void ClearReservations(string target)
     {
         Check();

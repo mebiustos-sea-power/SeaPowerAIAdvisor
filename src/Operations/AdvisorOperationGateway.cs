@@ -23,19 +23,17 @@ internal sealed class AdvisorOperationGateway : IDisposable
         new(new[] { "list" }, Array.Empty<string>(), "search", "offset", "limit"),
         new(new[] { "describe" }, new[] { "operation_id" }),
         new(new[] { "candidates" }, new[] { "operation_id" }, "target_ref", "offset", "limit"),
-        new(new[] { "execute" }, new[] { "operation_id", "target_ref", "request_id", "arguments" }),
         new(new[] { "submit" }, new[] { "request_id", "plans" })
     };
     internal static JObject ActionSchema(JObject tool, string action) => requestShapes.Single(s => s.Matches(action)).Schema("action",
         (JObject)tool["parameters"]!["properties"]!, new[] { action });
     internal static JObject ReadSchema(JObject tool) => AdvisorRequestShape.Union("action", requestShapes,
         (JObject)tool["parameters"]!["properties"]!, new[] { "list", "describe", "candidates" });
-    internal static JObject ExecutionSchema(JObject tool) => ActionSchema(tool, "submit");
     // Standard adapters expose proposals separately; independent clients retain the complete service.
-    internal static Task<JObject> ProposeAsync(IAdvisorOperationSession session, JObject request, CancellationToken cancellation)
+    internal static Task<JObject> SubmitAsync(IAdvisorOperationSession session, JObject request, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
-        if (request["action"]?.Type != JTokenType.String || (string?)request["action"] is not ("execute" or "submit"))
+        if (request["action"]?.Type != JTokenType.String || (string?)request["action"] != "submit")
             return Task.FromResult(Error("invalid_operation_request"));
         return session.ExecuteAsync(request, cancellation);
     }
@@ -103,7 +101,7 @@ internal sealed class AdvisorOperationGateway : IDisposable
         var action = Text(request, "action");
         if (requestShapes.Any(s => s.Matches(action)) && !requestShapes.Any(s => s.Matches(action) && s.AllowsFields(request, "action") && s.HasRequired(request)))
             throw new AdvisorOperationException(400, "invalid_operation_request");
-        if ((action is "candidates" or "execute") && request["target_ref"] != null)
+        if (action == "candidates" && request["target_ref"] != null)
             request = NormalizeTarget(request, references, resolutions);
         switch (action)
         {
@@ -121,6 +119,14 @@ internal sealed class AdvisorOperationGateway : IDisposable
                 AdvisorOperationPlanBatch.Validate(submission);
                 var fixes = new JArray(); resolutions["plan_resolutions"] = fixes;
                 foreach (var plan in ((JArray)submission["plans"]!).Cast<JObject>())
+                {
+                    if (plan["reservation_updates"] is JArray updates)
+                        for (var u = 0; u < updates.Count; u++)
+                        {
+                            if (updates[u] is not JObject update) throw new AdvisorOperationException(400, "invalid_reservation_policy");
+                            var correction = new JObject(); updates[u] = NormalizeTarget(update, references, correction);
+                            if (correction.Count > 0) { correction["plan_id"] = plan["plan_id"]!.DeepClone(); correction["reservation_index"] = u; fixes.Add(correction); }
+                        }
                     for (var i = 0; i < ((JArray)plan["operations"]!).Count; i++)
                     {
                         var order = (JObject)plan["operations"]![i]!; var correction = new JObject();
@@ -133,18 +139,8 @@ internal sealed class AdvisorOperationGateway : IDisposable
                         { correction["plan_id"] = plan["plan_id"]!.DeepClone(); correction["operation_index"] = i; fixes.Add(correction); }
                         plan["operations"]![i] = normalized;
                     }
+                }
                 return operations.SubmitPlans(owner, submission);
-            case "execute":
-                var id = Text(request, "request_id");
-                if (id.Length > 40 || request["arguments"] is not JObject args) throw new AdvisorOperationException(400, "invalid_operation_request");
-                var operationId = Text(request, "operation_id");
-                var targetRef = Text(request, "target_ref");
-                var argumentResolutions = new JArray();
-                resolutions["argument_resolutions"] = argumentResolutions;
-                var arguments = operations.NormalizeArguments(operationId, targetRef, args, references, argumentResolutions);
-                // The host binds battle and owner identity. A repeated order ID reaches the same receipt.
-                return operations.Propose(owner, new JObject { ["scope_id"] = operations.ScopeId, ["request_id"] = owner + "." + id,
-                    ["operation"] = operationId, ["target_ref"] = targetRef, ["arguments"] = arguments });
             default: throw new AdvisorOperationException(400, "unknown_operation_action");
         }
     }
@@ -200,14 +196,13 @@ internal sealed class AdvisorOperationGateway : IDisposable
                 ["type"] = "object", ["additionalProperties"] = false, ["required"] = new JArray("action"),
                 ["properties"] = new JObject
                 {
-                    ["action"] = new JObject { ["type"] = "string", ["enum"] = new JArray("list", "describe", "candidates", "submit", "execute") },
+                    ["action"] = new JObject { ["type"] = "string", ["enum"] = new JArray("list", "describe", "candidates", "submit") },
                     ["search"] = new JObject { ["type"] = "string", ["description"] = prompts.Text("battle.json", "operation_search") },
                     ["offset"] = new JObject { ["type"] = "integer", ["minimum"] = 0 },
                     ["limit"] = new JObject { ["type"] = "integer", ["minimum"] = 1, ["maximum"] = 20 },
                     ["operation_id"] = new JObject { ["type"] = "string" },
                     ["target_ref"] = new JObject { ["type"] = "string", ["description"] = prompts.Text("battle.json", "operation_target_ref") },
                     ["request_id"] = batch["properties"]!["request_id"]!.DeepClone(),
-                    ["arguments"] = new JObject { ["type"] = "object" },
                     ["plans"] = batch["properties"]!["plans"]!.DeepClone()
                 }
             }

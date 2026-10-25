@@ -7,7 +7,7 @@ using SeaPowerAIAdvisor.Api;
 namespace SeaPowerAIAdvisor;
 
 // Player-owned units only. Selection and command-specific eligibility remain with each command.
-internal sealed class BattleOperationSupport : IAdvisorGameSupport, IAdvisorReservationSupport
+internal sealed partial class BattleOperationSupport : IAdvisorGameSupport, IAdvisorReservationSupport
 {
     private readonly Func<IReadOnlyList<ObjectBase>> units;
     private readonly Func<AdvisorInformation> information;

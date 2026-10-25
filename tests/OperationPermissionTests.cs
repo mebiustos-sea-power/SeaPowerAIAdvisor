@@ -79,7 +79,7 @@ internal static partial class ProviderTests
             Require(operations != null, "A custom shortcut could not opt into operations");
             var executor = new FakeProvider("custom", (session, n, _, _) => Task.FromResult(n switch {
                 1 => OperationReply("definition", new JObject { ["action"] = "describe", ["operation_id"] = SonobuoyDropExtension.OperationId }),
-                2 => OperationReply("drop", BuoyRequest()),
+                2 => ProposalReply("drop", BuoyRequest()),
                 _ => new AdvisorReply("Awaiting approval", Array.Empty<AdvisorToolCall>(), 1) }));
             var result = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(executor).ConsultAsync(
                 AdvisorContext.Create(DeliveryKnowledge(), Array.Empty<ChatExchange>(), operations: operations), CancellationToken.None)));

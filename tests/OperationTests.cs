@@ -60,33 +60,33 @@ internal static class OperationTests
             Require(!((JArray)operations.Catalog()["operations"]!).Any(), "Disabled operations were advertised");
             Expect(() => operations.Candidates(SonobuoyDropExtension.OperationId), "unit_operations_disabled");
             var request = Request(operations);
-            Expect(() => operations.Execute(request), "unit_operations_disabled");
+            Expect(() => OperationSubmissionFixture.Adopt(operations, request), "unit_operations_disabled");
             Require(unit.Calls == 0, "Disabled request reached the native bridge");
             enabled = true; Require(operations.Catalog()["operations"]!.Count() == 1, "Enabled operation was not registered");
-            Require((string?)operations.Execute(request)["status"] == "registered" && unit.Calls == 1, "Enabled request failed");
-            enabled = false; Expect(() => operations.Execute(Request(operations, "after-disable")), "unit_operations_disabled");
+            Require((string?)OperationSubmissionFixture.Adopt(operations, request)["status"] == "registered" && unit.Calls == 1, "Enabled request failed");
+            enabled = false; Expect(() => OperationSubmissionFixture.Adopt(operations, Request(operations, "after-disable")), "unit_operations_disabled");
             Require(unit.Queue.Count == 2 && unit.Calls == 1, "Turning commands off cancelled a native order or added another one");
         });
         check("Repeated operation requests are idempotent, conflicting IDs and old battle scopes are rejected", () =>
         {
             var unit = new Unit(); var operations = Service(() => true, unit);
-            var request = Request(operations); var answer = operations.Execute(request);
-            answer["data"]!["count"] = 200;
-            Require((int?)operations.Execute((JObject)request.DeepClone())["data"]!["count"] == 1 && unit.Calls == 1, "A retry duplicated an order or mutated the stored receipt");
+            var request = Request(operations); var answer = OperationSubmissionFixture.Adopt(operations, request);
+            OperationSubmissionFixture.Data(answer)["count"] = 200;
+            Require((int?)OperationSubmissionFixture.Data(OperationSubmissionFixture.Adopt(operations, (JObject)request.DeepClone()))["count"] == 1 && unit.Calls == 1, "A retry duplicated an order or mutated the stored receipt");
             var changed = (JObject)request.DeepClone(); changed["arguments"]!["drops"]![0]!["longitude"] = 128;
-            Expect(() => operations.Execute(changed), "request_id_conflict");
+            Expect(() => OperationSubmissionFixture.Adopt(operations, changed), "request_id_conflict");
             var nextBattle = Service(() => true, unit);
-            Expect(() => nextBattle.Execute(request), "operation_scope_changed");
+            Expect(() => OperationSubmissionFixture.Adopt(nextBattle, request), "operation_scope_changed");
             Require(unit.Calls == 1, "An old scope was rebound to the current unit");
         });
         check("Unexpected operation errors stay visible and their unknown side effects are never retried blindly", () =>
         {
             var operations = new AdvisorOperations(() => true); var effect = new FaultyOperation(); operations.Register(effect);
             var request = Request(operations); request["operation"] = effect.Id;
-            try { operations.Execute(request); throw new InvalidOperationException("Expected native error"); }
+            try { OperationSubmissionFixture.Adopt(operations, request); throw new InvalidOperationException("Expected native error"); }
             catch (IOException) { }
             Require(effect.Calls == 1, "Faulty operation was not invoked");
-            Expect(() => operations.Execute(request), "operation_outcome_unknown");
+            Require((string?)OperationSubmissionFixture.Adopt(operations, request)["status"] == "unknown", "Unknown outcome was discarded");
             Require(effect.Calls == 1, "Retry duplicated an order after an unexpected error");
             var offThread = Task.Run(() =>
             {
@@ -105,12 +105,12 @@ internal static class OperationTests
             {
                 information = AdvisorInformation.Default.With(kind, false);
                 Expect(() => operations.Candidates(SonobuoyDropExtension.OperationId), "information_disabled");
-                Require((string?)operations.Execute(Request(operations, "blocked-" + kind))["code"] == "information_disabled" && unit.Calls == 0,
-                    "Operation bypassed excluded data or registered while information was disabled");
+                Expect(() => OperationSubmissionFixture.Adopt(operations, Request(operations, "blocked-" + kind)), "information_disabled");
+                Require(unit.Calls == 0, "Operation registered while information was disabled");
             }
             information = AdvisorInformation.Default;
             Require(operations.Candidates(SonobuoyDropExtension.OperationId)["candidates"]!.Any() &&
-                (string?)operations.Execute(Request(operations, "enabled"))["status"] == "registered", "Restoring information did not restore the operation");
+                (string?)OperationSubmissionFixture.Adopt(operations, Request(operations, "enabled"))["status"] == "registered", "Restoring information did not restore the operation");
         });
         check("Sonobuoy registration appends one native order with an unfamiliar ammunition key and preserves prior orders", () =>
         {
@@ -121,7 +121,7 @@ internal static class OperationTests
             try
             {
                 CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
-                var result = operations.Execute(Request(operations));
+                var result = OperationSubmissionFixture.Adopt(operations, Request(operations));
                 Require((string?)result["status"] == "registered" && unit.Queue.Count == 2 && unit.Queue[0] == "existing waypoint" &&
                     unit.LastAmmo == "custom_mod_sonobuoy" && unit.LastLatitude == 26.5 && unit.LastLongitude == 127.5 && unit.Calls == 1,
                     "The native request replaced a route, changed coordinates or used a fixed weapon name");
@@ -143,9 +143,9 @@ internal static class OperationTests
                 Require((string?)observed["depth"] == "above_layer", "The current setting was not exposed");
                 unit.Depth = "alternating";
                 var request = Request(operations); request["arguments"]!["depth"] = requestedDepth;
-                var result = operations.Execute(request);
+                var result = OperationSubmissionFixture.Adopt(operations, request);
                 var current = operations.Candidates(SonobuoyDropExtension.OperationId)["candidates"]![0]!;
-                Require((string?)result["status"] == "registered" && (string?)result["data"]!["depth"] == "alternating" &&
+                Require((string?)result["status"] == "registered" && (string?)OperationSubmissionFixture.Data(result)["depth"] == "alternating" &&
                     unit.Depth == "alternating" && (string?)current["depth"] == "alternating" && unit.Queue.Count == 2,
                     "A supplied or stale depth overwrote the player's live setting, or the reservation was lost");
                 Require(other.Depth == "below_layer" && other.Queue.Count == 1, "Another helicopter was changed");
@@ -155,10 +155,10 @@ internal static class OperationTests
         {
             var unit = new Unit { Depth = "below_layer" }; var operations = Service(() => true, unit);
             var request = Request(operations);
-            var result = operations.Execute(request);
-            Require((string?)result["data"]!["depth"] == "below_layer" && unit.Depth == "below_layer", "An omitted depth reset the setting");
+            var result = OperationSubmissionFixture.Adopt(operations, request);
+            Require((string?)OperationSubmissionFixture.Data(result)["depth"] == "below_layer" && unit.Depth == "below_layer", "An omitted depth reset the setting");
             unit.Depth = "above_layer";
-            var replay = operations.Execute((JObject)request.DeepClone());
+            var replay = OperationSubmissionFixture.Adopt(operations, (JObject)request.DeepClone());
             Require(JToken.DeepEquals(result, replay) && unit.Depth == "above_layer" && unit.Calls == 1 && unit.Queue.Count == 2,
                 "A receipt replay registered another order or overwrote a later user choice");
         });
@@ -168,15 +168,16 @@ internal static class OperationTests
             var operations = new AdvisorOperations(() => true); operations.Register(SonobuoyFixture.Create(() => current));
             _ = operations.Candidates(SonobuoyDropExtension.OperationId);
             unit.UnavailableReason = "unit_not_airborne";
-            Require((string?)operations.Execute(Request(operations, "landed"))["code"] == "unit_not_airborne", "Landed candidate was still registered");
+            Expect(() => OperationSubmissionFixture.Adopt(operations, Request(operations, "landed")), "unit_not_airborne");
             unit.UnavailableReason = "following_formation";
-            Require((string?)operations.Execute(Request(operations, "formation"))["code"] == "following_formation", "Follower's control mode was silently changed");
+            Expect(() => OperationSubmissionFixture.Adopt(operations, Request(operations, "formation")), "following_formation");
             unit.UnavailableReason = null; unit.Available = 0;
-            Require((string?)operations.Execute(Request(operations, "no-ammo"))["code"] == "no_available_sonobuoy", "A previously reserved round was reused");
+            Expect(() => OperationSubmissionFixture.Adopt(operations, Request(operations, "no-ammo")), "no_available_sonobuoy");
             unit.Available = 2; unit.SingleDrop = false;
-            Require((string?)operations.Execute(Request(operations, "multi-drop"))["code"] == "single_drop_unavailable", "A batch-release launcher was treated as one round");
+            Expect(() => OperationSubmissionFixture.Adopt(operations, Request(operations, "multi-drop")), "single_drop_unavailable");
             current.Clear();
-            Require((string?)operations.Execute(Request(operations, "gone"))["code"] == "target_unavailable" && unit.Calls == 0, "A stale or foreign object was still operated");
+            Expect(() => OperationSubmissionFixture.Adopt(operations, Request(operations, "gone")), "target_unavailable");
+            Require(unit.Calls == 0, "A stale or foreign object was still operated");
         });
         check("Invalid sonobuoy coordinates, counts, placement and ammunition never reach the native bridge", () =>
         {
@@ -193,7 +194,8 @@ internal static class OperationTests
                 var arguments = (JObject)request["arguments"]!;
                 if (pair.Key == "placement") arguments[pair.Key] = pair.Value;
                 else arguments["drops"]![0]![pair.Key] = pair.Value;
-                Require((string?)operations.Execute(request)["status"] == "rejected", "Invalid arguments were accepted");
+                try { OperationSubmissionFixture.Adopt(operations, request); throw new Exception("Invalid arguments were accepted"); }
+                catch (AdvisorOperationException) { }
             }
             Require(unit.Calls == 0 && unit.Queue.Count == 1 && unit.Depth == "alternating",
                 "An invalid request changed native orders or the helicopter depth setting");
@@ -204,18 +206,19 @@ internal static class OperationTests
             var api = new AdvisorLocalApi(() => throw new InvalidOperationException("Prompt access"), e => throw e,
                 () => throw new InvalidOperationException("Connection access"), (_, _, _, _) => throw new InvalidOperationException("AI preparation"));
             var owner = new object();
-            api.Attach(owner, "tactical_battle", () => throw new InvalidOperationException("Conversation access"), operations); api.Enable();
+            api.Attach(owner, "tactical_battle", () => new IdleTarget(), operations); api.Enable();
             var candidates = Send(api, "GET", "/v1/operations/" + SonobuoyDropExtension.OperationId + "/candidates");
             Require(candidates.Status == 200 && (string?)candidates.Data["scope_id"] == operations.ScopeId, "Candidates lost battle scope");
-            var request = Request(operations);
-            var pending = api.Enqueue("POST", "/v1/operations", request); enabled = false; api.Pump();
+            var request = OperationSubmissionFixture.DeveloperRequest(Request(operations));
+            var pending = api.Enqueue("POST", "/v1/operation-plans", request); enabled = false; api.Pump();
             Require(pending.GetAwaiter().GetResult().Status == 403 && unit.Calls == 0, "A queued request bypassed the saved command switch");
             enabled = true;
-            Require(Send(api, "POST", "/v1/operations", request).Status == 200 && unit.Calls == 1, "Offline registration failed");
-            Require(Send(api, "POST", "/v1/operations", request).Status == 200 && unit.Calls == 1, "HTTP retry duplicated the reservation");
+            Require(Send(api, "POST", "/v1/operation-plans", request).Status == 200 && unit.Calls == 1, "Offline registration failed");
+            Require(Send(api, "POST", "/v1/operation-plans", request).Status == 200 && unit.Calls == 1, "HTTP retry duplicated the reservation");
+            Require(Send(api, "POST", "/v1/operations", Request(operations, "obsolete")).Status == 404 && unit.Calls == 1, "An obsolete route changed reservations");
             Require(Send(api, "GET", "/v1/operations/candidates").Status == 404, "Malformed path was dispatched");
             api.Detach(owner);
-            Require(Send(api, "POST", "/v1/operations", Request(operations, "detached")).Status == 409 && unit.Calls == 1, "Detached battle still accepted orders");
+            Require(Send(api, "POST", "/v1/operation-plans", OperationSubmissionFixture.DeveloperRequest(Request(operations, "detached"))).Status == 409 && unit.Calls == 1, "Detached battle still accepted orders");
             api.Disable();
         });
     }
@@ -237,6 +240,14 @@ internal static class OperationTests
         throw new InvalidOperationException("Expected operation rejection: " + code);
     }
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
+    private sealed class IdleTarget : IAdvisorLocalTarget
+    {
+        public JObject LocalStatus() => new();
+        public AdvisorLocalRun LocalConsult(string? question, string? shortcut, bool allowFallback, Func<AdvisorSituationDelivery?, AdvisorBackendSetup> prepare,
+            bool plainAdvisor, bool? allowOperations, AdvisorSituationDelivery? situationDelivery) => throw new InvalidOperationException("AI access");
+        public void LocalClear() => throw new InvalidOperationException("Conversation access");
+        public void LocalCancel() => throw new InvalidOperationException("Conversation access");
+    }
     private sealed class Unit : IBattleSonobuoyUnit
     {
         public int Id { get; }

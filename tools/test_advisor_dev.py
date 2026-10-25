@@ -42,7 +42,7 @@ class MockApi:
                     value = {"enabled": True, "advisor": {"busy": api.busy, "settings_open": False}, "last_consultation_id": "test-job"}
                 elif self.path == "/v1/connections":
                     value = {"default_connection_id": "local-test", "connections": [{"id": "local-test", "name": "試験接続"}]}
-                elif self.path == "/v1/operations":
+                elif self.path in ("/v1/operations", "/v1/operation-plans"):
                     if self.command == "POST":
                         if api.disconnect_post:
                             self.close_connection = True
@@ -113,15 +113,16 @@ class CliTests(unittest.TestCase):
             self.assertEqual(api.run("operations", "list")[0], 0)
             self.assertEqual(api.run("operations", "candidates", "seapower.schedule_sonobuoy_drop")[0], 0)
             path = Path(temporary) / "order.json"
-            body = {"scope_id": "loaded-game", "request_id": "one-reservation", "operation": "seapower.schedule_sonobuoy_drop",
-                    "target_ref": "unit:42", "arguments": {"placement": "append", "drops": [{"latitude": 26.5, "longitude": 127.5, "ammunition": "custom_buoy"}], "depth": "above_layer"}}
+            body = {"scope_id": "loaded-game", "request_id": "one-reservation", "plans": [{"plan_id": "one", "title": "Drop", "summary": "One buoy",
+                    "reservation_updates": [{"target_ref": "unit:42", "placement": "append"}], "operations": [{"operation_id": "seapower.schedule_sonobuoy_drop",
+                    "target_ref": "unit:42", "arguments": {"drops": [{"latitude": 26.5, "longitude": 127.5, "ammunition": "custom_buoy"}], "depth": "above_layer"}}]}]}
             path.write_text(tool.encode(body), encoding="utf-8")
-            self.assertEqual(api.run("operations", "execute", "--request-file", path)[0], 0)
-            self.assertEqual(api.calls[-1][:3], ("POST", "/v1/operations", body))
+            self.assertEqual(api.run("operations", "submit", "--request-file", path)[0], 0)
+            self.assertEqual(api.calls[-1][:3], ("POST", "/v1/operation-plans", body))
             api.calls.clear(); api.disconnect_post = True
-            self.assertEqual(api.run("operations", "execute", "--request-file", path)[0], 1)
+            self.assertEqual(api.run("operations", "submit", "--request-file", path)[0], 1)
             self.assertEqual(len(api.calls), 1, "A lost acknowledgement retried an order")
-            self.assertEqual(api.calls[0][:3], ("POST", "/v1/operations", body))
+            self.assertEqual(api.calls[0][:3], ("POST", "/v1/operation-plans", body))
 
     def test_reservations_select_explicit_unit_and_scope_and_never_retry_clear(self):
         with MockApi() as api, tempfile.TemporaryDirectory() as temporary:
@@ -393,6 +394,24 @@ try {
         finally:
             if process.poll() is None:
                 process.kill(); process.communicate()
+
+
+class ComposedPlanCliTests(unittest.TestCase):
+    def test_plan_keeps_explicit_scope_selection_and_order(self):
+        body = {"scope_id": "saved-scope", "request_id": "planned-1", "selected_plan_ids": ["a"],
+                "plans": [{"plan_id": "a", "reservation_updates": [{"target_ref": "unit:42", "placement": "replace"}],
+                           "operations": [{"operation_id": "move", "target_ref": "unit:42"}, {"operation_id": "drop", "target_ref": "unit:42"}]}]}
+        with tempfile.TemporaryDirectory() as directory, MockApi() as api:
+            request = Path(directory) / "plan.json"
+            request.write_text(json.dumps(body), encoding="utf-8")
+            connection = Path(directory) / "api.json"
+            connection.write_text(json.dumps({"endpoint": api.base}), encoding="utf-8")
+            # Use the same public CLI parser and dispatch as other developer commands.
+            with contextlib.redirect_stdout(io.StringIO()):
+                code = tool.main(["--transport", "direct", "--discovery-file", str(connection), "operations", "submit", "--request-file", str(request)])
+            self.assertEqual(code, 0)
+            posts = [call for call in api.calls if call[0] == "POST"]
+            self.assertEqual([(call[1], call[2]) for call in posts], [("/v1/operation-plans", body)])
 
 
 if __name__ == "__main__":

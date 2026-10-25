@@ -85,8 +85,9 @@ internal static class OperationGatewayTests
                 new JObject { ["action"] = "list", ["limit"] = 21 }, new JObject { ["action"] = "list", ["offset"] = -1 },
                 new JObject { ["action"] = "candidates", ["operation_id"] = operation.Id, ["limit"] = "1" },
                 new JObject { ["action"] = "describe", ["operation_id"] = "missing" }, new JObject { ["action"] = "unsupported" },
-                new JObject { ["action"] = "execute", ["operation_id"] = operation.Id, ["scope_id"] = "forged" },
-                new JObject { ["action"] = "execute", ["operation_id"] = operation.Id, ["arguments"] = new JArray() }
+                new JObject { ["action"] = "execute", ["operation_id"] = operation.Id, ["request_id"] = "old", ["target_ref"] = "custom:7", ["arguments"] = new JObject() },
+                new JObject { ["action"] = "submit", ["operation_id"] = operation.Id, ["scope_id"] = "forged" },
+                new JObject { ["action"] = "submit", ["operation_id"] = operation.Id, ["arguments"] = new JArray() }
             }) Require(Code(Send(gateway, session, bad)) != null, "Malformed operation request succeeded");
             Require(operation.Calls == 0, "Invalid arguments changed game state");
         });
@@ -104,7 +105,7 @@ internal static class OperationGatewayTests
                 "Retry lost its mechanical identity or prior result");
             Require((string?)Send(gateway, retry, Execute(operation.Id))["status"] == "registered" && operation.Calls == 1,
                 "Retry duplicated a previously registered order");
-            var altered = Execute(operation.Id); altered["arguments"]!["extra"] = true;
+            var altered = Execute(operation.Id); OperationSubmissionFixture.Arguments(altered)["extra"] = true;
             Require(Code(Send(gateway, retry, altered)) == "request_id_conflict" && operation.Calls == 1, "A reused ID changed its registered order");
         });
         check("Unexpected native errors propagate and cannot be hidden by replaying the same AI order ID", () =>
@@ -116,7 +117,7 @@ internal static class OperationGatewayTests
             Require((string?)Finish(gateway, work)["status"] == "proposed" && operation.Calls == 0, "A staged fault ran early");
             try { service.FinishProposal("failure", true); throw new InvalidOperationException("Native failure was hidden"); }
             catch (System.IO.IOException) { }
-            Require(Code(Send(gateway, session, Execute(operation.Id))) == "operation_outcome_unknown" && operation.Calls == 1,
+            Require((string?)Send(gateway, session, Execute(operation.Id))["status"] == "unknown" && operation.Calls == 1,
                 "Unknown side effects were replayed");
         });
         check("Independent operation discovery is bounded even when no standard engine manages its loop", () =>
@@ -138,8 +139,8 @@ internal static class OperationGatewayTests
     private static JObject Send(AdvisorOperationGateway gateway, IAdvisorOperationSession session, JObject request) =>
         Finish(gateway, session.ExecuteAsync(request, CancellationToken.None));
     private static string? Code(JObject result) => (string?)result["error"]?["code"] ?? (string?)result["code"];
-    internal static JObject Execute(string operation) => new() { ["action"] = "execute", ["operation_id"] = operation,
-        ["request_id"] = "order-1", ["target_ref"] = "custom:7", ["arguments"] = new JObject() };
+    internal static JObject Execute(string operation) => OperationSubmissionFixture.AiRequest(new JObject { ["operation_id"] = operation,
+        ["request_id"] = "order-1", ["target_ref"] = "custom:7", ["arguments"] = new JObject() });
     private static AdvisorOperations Registry(Func<bool> enabled, Operation operation)
     { var registry = new AdvisorOperations(enabled); registry.Register(operation); return registry; }
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }

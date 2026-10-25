@@ -11,7 +11,7 @@ namespace SeaPowerAIAdvisor;
 
 // All built-in and external commands cross this boundary before entering the existing approval engine.
 internal sealed class AdvisorRegisteredOperation : IAdvisorOperation, IAdvisorOperationPlans,
-    IAdvisorOperationPreview, IAdvisorOperationArgumentNormalizer, IDisposable
+    IAdvisorOperationPreview, IAdvisorOperationArgumentNormalizer, IAdvisorReservationCommand, IDisposable
 {
     private readonly AdvisorOperationRegistration registration;
     private readonly AdvisorOperationContext context;
@@ -19,28 +19,41 @@ internal sealed class AdvisorRegisteredOperation : IAdvisorOperation, IAdvisorOp
     private bool disposed;
     internal AdvisorRegisteredOperation(AdvisorOperationRegistration registration, IAdvisorGameSupport game, IAdvisorMap map)
     { this.registration = registration; context = new AdvisorOperationContext(game, map, registration.Text); }
+    public bool ComposesReservations => registration.Extension is IAdvisorReservationExtension;
+    public bool EndsReservationSequence => (registration.Extension as IAdvisorReservationExtension)?.EndsReservationSequence ?? false;
+    private static IAdvisorReservationOperation Reservation(Api.IAdvisorOperationHandler handler) => handler as IAdvisorReservationOperation
+        ?? throw new InvalidOperationException("Reservation extension must implement the reservation handler contract.");
+    public ReservationQueueState InspectQueue(string target, ReservationPlacement placement) => Translate(() => context.InspectReservations(target, placement));
+    public bool BeginQueue(string target, ReservationPlacement placement) => Translate(() => context.BeginReservations(target, placement));
+    public void ValidateReservations(IReadOnlyList<ReservationOrder> orders) => Call(h => { Reservation(h).ValidateReservations(orders); return true; });
+    public string DescribeReservation(ReservationOrder order, string language) => Call(h => Reservation(h).DescribeReservation(order, language));
+    public ReservationPreview PreviewReservation(ReservationOrder order, string language) => Call(h => Reservation(h).PreviewReservation(order, language));
+    public JObject ExecuteReservation(ReservationOrder order) => Call(h => JObject.Parse(Reservation(h).ExecuteReservation(order)));
     public string Id => registration.Definition.Id;
     public string Description => registration.Instructions;
     public AdvisorOperationText Documentation => registration.Text;
     public bool RequiresApproval => registration.Definition.RequiresApproval;
     public AdvisorOperationPlanPolicy PlanPolicy => registration.Policy;
     public JObject Definition() => new() { ["id"] = Id, ["description"] = Description, ["parameters"] = registration.Parameters.DeepClone() };
-    private T Call<T>(Func<Api.IAdvisorOperationHandler, T> action)
+    private T Translate<T>(Func<T> action)
     {
         context.Check();
-        try
-        {
-            handler ??= registration.Extension.CreateSession(context) ?? throw new InvalidOperationException("The command session is missing: " + Id);
-            return action(handler);
-        }
+        try { return action(); }
         catch (OperationException error) { throw new AdvisorOperationException(error.Status, error.Code); }
     }
+    private T Call<T>(Func<Api.IAdvisorOperationHandler, T> action) => Translate(() =>
+    {
+        handler ??= registration.Extension.CreateSession(context) ?? throw new InvalidOperationException("The command session is missing: " + Id);
+        return action(handler);
+    });
+    private static IAdvisorOperationActions Actions(Api.IAdvisorOperationHandler handler) => handler as IAdvisorOperationActions
+        ?? throw new InvalidOperationException("A non-reservation command must implement its action contract.");
     private static IReadOnlyList<OperationOrder> Orders(IReadOnlyList<AdvisorOperationOrder> orders) =>
         Array.AsReadOnly(orders.Select(o => new OperationOrder(o.Target, o.Arguments.ToString(Formatting.None))).ToArray());
     public JArray Candidates() => Call(h => JArray.Parse(h.GetCandidates()));
-    public void Validate(IReadOnlyList<AdvisorOperationOrder> orders) => Call(h => { h.Validate(Orders(orders)); return true; });
-    public string DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => Call(h => h.DescribeProposal(Orders(orders), language));
-    public JObject Execute(string target, JObject arguments) => Call(h => JObject.Parse(h.Execute(new OperationOrder(target, arguments.ToString(Formatting.None)))));
+    public void Validate(IReadOnlyList<AdvisorOperationOrder> orders) => Call(h => { Actions(h).Validate(Orders(orders)); return true; });
+    public string DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => Call(h => Actions(h).DescribeProposal(Orders(orders), language));
+    public JObject Execute(string target, JObject arguments) => Call(h => JObject.Parse(Actions(h).Execute(new OperationOrder(target, arguments.ToString(Formatting.None)))));
     public AdvisorMapPreview Preview(IReadOnlyList<AdvisorOperationOrder> orders, string language) => Call(h =>
         h is Api.IAdvisorOperationPreview preview ? preview.Preview(Orders(orders), language) : AdvisorMapPreview.Empty);
     public JObject NormalizeArguments(string target, JObject arguments, AdvisorOperationReferences references, JArray resolutions) => Call(h =>

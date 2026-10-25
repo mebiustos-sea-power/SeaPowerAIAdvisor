@@ -680,6 +680,7 @@ internal static partial class BattleTests
     }
     private sealed class Geo
     {
+        public double _height { get; set; }
         public double Latitude { get; }
         public double Longitude { get; }
         internal Geo(double latitude, double longitude) { Latitude = latitude; Longitude = longitude; }

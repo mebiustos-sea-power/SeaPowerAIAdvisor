@@ -351,7 +351,7 @@ def parser():
     operations = commands.add_parser("operations").add_subparsers(dest="operation_command", required=True)
     add_output(operations.add_parser("list"))
     candidates = operations.add_parser("candidates"); candidates.add_argument("operation"); add_output(candidates)
-    execute = operations.add_parser("execute"); execute.add_argument("--request-file", required=True); add_output(execute)
+    plan = operations.add_parser("submit", help="Register one explicitly selected composed plan without AI or approval UI."); plan.add_argument("--request-file", required=True); add_output(plan)
     reservations = commands.add_parser("reservations").add_subparsers(dest="reservation_command", required=True)
     for name in ("list", "clear"):
         command = reservations.add_parser(name)
@@ -430,7 +430,7 @@ def main(argv=None):
                 if not isinstance(body, dict):
                     raise ToolError("The operation request must be a JSON object.")
                 # Preserve scope and request IDs. Never retry or silently rebind an order to another loaded game.
-                value = client.request("POST", "/v1/operations", body)
+                value = client.request("POST", "/v1/operation-plans", body)
         elif args.command == "reservations":
             if args.unit_id <= 0: raise ToolError("unit-id must be a positive integer.")
             path = "/v1/units/" + str(args.unit_id) + "/reservations"

@@ -50,7 +50,7 @@ internal sealed class SonobuoyCommandExtension : IAdvisorOperationExtension
     public IAdvisorOperationHandler CreateSession(IAdvisorOperationContext context) => new SonobuoyCommand(context);
 }
 
-internal sealed class SonobuoyCommand : IAdvisorOperationHandler, IAdvisorOperationPreview
+internal sealed class SonobuoyCommand : IAdvisorOperationHandler, IAdvisorOperationActions, IAdvisorOperationPreview
 {
     private readonly IAdvisorOperationContext context;
     internal SonobuoyCommand(IAdvisorOperationContext context) => this.context = context;

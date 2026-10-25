@@ -376,9 +376,9 @@ internal static class OperationPlanTests
             var request = Batch(Plan("a", Drop("own_unit_1", "Custom buoy")), Plan("b", Drop("unit:own_unit_1", "weapon_reference_1"))); request["action"] = "submit";
             var result = OperationGatewayTests.Finish(gateway, session.ExecuteAsync(request, CancellationToken.None));
             var proposal = service.Proposal("aliases")!;
-            Require((string?)result["status"] == "proposed" && result["plan_resolutions"]?.Count() == 2 &&
-                (string?)result["plan_resolutions"]?[1]?["plan_id"] == "b" && (int?)result["plan_resolutions"]?[1]?["operation_index"] == 0 &&
-                (string?)result["plan_resolutions"]?[1]?["argument_resolutions"]?[0]?["resolved"] == "mod_buoy" &&
+            Require((string?)result["status"] == "proposed" && result["plan_resolutions"]?.Count() == 4 &&
+                (string?)result["plan_resolutions"]?[3]?["plan_id"] == "b" && (int?)result["plan_resolutions"]?[3]?["operation_index"] == 0 &&
+                (string?)result["plan_resolutions"]?[3]?["argument_resolutions"]?[0]?["resolved"] == "mod_buoy" &&
                 proposal.Plans.All(p => p.Orders.Single().Target == "unit:42" && (string?)p.Orders.Single().Arguments["drops"]![0]!["ammunition"] == "mod_buoy") &&
                 (string?)session.History[0]?["request"]?["plans"]?[0]?["operations"]?[0]?["target_ref"] == "own_unit_1",
                 "Normalization lost canonical identities, plan boundaries or original evidence");
@@ -390,8 +390,8 @@ internal static class OperationPlanTests
     private static AdvisorOperations Service(Command command, string owner)
     { var service = new AdvisorOperations(() => true); service.Register(command); service.BeginProposal(owner); return service; }
     private static JObject Batch(params JObject[] plans) => new() { ["request_id"] = "submission", ["plans"] = new JArray(plans) };
-    private static JObject Plan(string id, params JObject[] orders) => new()
-    { ["plan_id"] = id, ["title"] = "Plan " + id, ["summary"] = "Trade-off " + id, ["operations"] = new JArray(orders) };
+    private static JObject Plan(string id, params JObject[] orders) => SonobuoyFixture.Queued(new JObject
+    { ["plan_id"] = id, ["title"] = "Plan " + id, ["summary"] = "Trade-off " + id, ["operations"] = new JArray(orders) });
     private static JObject Order(Command operation, string target, int index) => new()
     { ["operation_id"] = operation.Id, ["target_ref"] = target, ["arguments"] = new JObject { ["index"] = index } };
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }

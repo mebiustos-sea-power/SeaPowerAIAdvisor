@@ -9,6 +9,8 @@
     <FileVersion>0.17.1.0</FileVersion>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Operations\Movement\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.Movement.Localization.%(Filename).json" />
+    <EmbeddedResource Include="Operations\FormationReturn\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.FormationReturn.Localization.%(Filename).json" />
     <EmbeddedResource Include="Operations\SonobuoyDrop\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.SonobuoyDrop.Localization.%(Filename).json" />
 
     <Reference Include="AnchorChain" HintPath="$(AnchorChainDir)\AnchorChain.dll" Private="false" ExternallyResolved="true" />

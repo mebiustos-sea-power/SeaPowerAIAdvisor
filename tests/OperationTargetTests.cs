@@ -22,8 +22,8 @@ internal static class OperationTargetTests
                 var result = Send(trial, session, request);
                 Require((int?)result["total_count"] == 1 && (string?)result["candidates"]?[0]?["target_ref"] == "unit:42",
                     "The alias did not select its mapped unit");
-                Require((string?)result["target_ref_resolution"]?["requested"] == alias &&
-                    (string?)result["target_ref_resolution"]?["resolved"] == "unit:42" && JToken.DeepEquals(request, original),
+                Require((string?)OperationSubmissionFixture.TargetResolution(result)?["requested"] == alias &&
+                    (string?)OperationSubmissionFixture.TargetResolution(result)?["resolved"] == "unit:42" && JToken.DeepEquals(request, original),
                     "Resolution changed the caller's request or omitted the correction");
                 var entry = session.History.Last!;
                 var recorded = recording.Snapshot()["operations"]!.Last!;
@@ -56,10 +56,10 @@ internal static class OperationTargetTests
             foreach (var target in new[] { "own_unit_8", "unit:own_unit_8", "unit:42" })
             {
                 var receipt = Send(trial, session, Execute(target));
-                Require((string?)receipt["status"] == "proposed" && (string?)receipt["request_id"] == "replay.order-1" &&
+                Require((string?)receipt["status"] == "proposed" && (string?)receipt["request_id"] == "order-1" &&
                     (bool?)receipt["registered"] == false, "Equivalent targets did not share the original request identity");
             }
-            var changed = Execute("unit:42"); changed["arguments"]!["drops"]![0]!["latitude"] = 27;
+            var changed = Execute("unit:42"); OperationSubmissionFixture.Arguments(changed)!["drops"]![0]!["latitude"] = 27;
             Require(Code(Send(trial, session, changed)) == "request_id_conflict", "A changed order silently replaced its receipt");
             var proposal = trial.Service.FinishProposal("replay", true)!;
             Require(proposal.State == AdvisorProposalState.Pending && proposal.Orders.Count == 1 &&
@@ -86,17 +86,17 @@ internal static class OperationTargetTests
             Require(Code(Send(trial, empty, Candidates("own_unit_8"))) == "unknown_unit_reference" &&
                 (int?)Send(trial, empty, Candidates("unit:42"))["total_count"] == 1, "An absent map guessed an ID or broke canonical callers");
         });
-        check("Unit normalization does not guess unmapped ammunition references or replace conflicting request IDs", () =>
+        check("Unit normalization rejects unmapped ammunition before accepting a corrected submission", () =>
         {
             using var trial = new Trial();
             using var session = trial.Gateway.CreateSession("ammunition", AdvisorPrompts.Current, References())!;
-            var request = Execute("unit:own_unit_8"); request["arguments"]!["drops"]![0]!["ammunition"] = "weapon_reference_18";
+            var request = Execute("unit:own_unit_8"); OperationSubmissionFixture.Arguments(request)!["drops"]![0]!["ammunition"] = "weapon_reference_18";
             var original = request.DeepClone(); var rejected = Send(trial, session, request);
-            Require((string?)rejected["status"] == "rejected" && Code(rejected) == "sonobuoy_not_carried" &&
-                (string?)rejected["target_ref_resolution"]?["resolved"] == "unit:42" && JToken.DeepEquals(original, request),
+            Require((string?)rejected["status"] == "error" && Code(rejected) == "sonobuoy_not_carried" &&
+                (string?)OperationSubmissionFixture.TargetResolution(rejected)?["resolved"] == "unit:42" && JToken.DeepEquals(original, request),
                 "Unit resolution rewrote ammunition or hid the command's validation error");
-            Require(Code(Send(trial, session, Execute("unit:42"))) == "request_id_conflict" && trial.Main.Orders.Count == 0,
-                "A rejected order ID was automatically replaced after changing ammunition");
+            Require((string?)Send(trial, session, Execute("unit:42"))["status"] == "proposed" && trial.Main.Orders.Count == 0,
+                "A failed submission retained work or prevented correction before approval");
         });
         check("Normalized proposals still revalidate live conditions at approval and respect disabled or retired gateways", () =>
         {
@@ -106,7 +106,7 @@ internal static class OperationTargetTests
             var proposal = trial.Service.FinishProposal("live", true)!;
             trial.Main.UnavailableReason = "current_order_conflict";
             trial.Service.Approve(proposal);
-            Require(proposal.State == AdvisorProposalState.Rejected && trial.Main.Orders.Count == 0,
+            Require(proposal.State == AdvisorProposalState.Pending && proposal.ErrorCode == "current_order_conflict" && trial.Main.Orders.Count == 0,
                 "The normalized target bypassed approval-time validation");
             trial.Enabled = false;
             Require(Code(Send(trial, session, Execute("own_unit_8", "disabled"))) == "unit_operations_disabled", "Normalization bypassed WIP");
@@ -122,11 +122,11 @@ internal static class OperationTargetTests
     }
     private static AdvisorOperationReferences References() => new(new AdvisorUnitReferences(new[] { ("own_unit_8", 42), ("own_unit_9", 8) }).Only(new[] { "own_unit_8" }));
     private static JObject Candidates(string target) => new() { ["action"] = "candidates", ["operation_id"] = SonobuoyDropExtension.OperationId, ["target_ref"] = target };
-    private static JObject Execute(string target, string id = "order-1") => new()
+    private static JObject Execute(string target, string id = "order-1") => OperationSubmissionFixture.AiRequest(new JObject
     {
-        ["action"] = "execute", ["operation_id"] = SonobuoyDropExtension.OperationId, ["request_id"] = id, ["target_ref"] = target,
+        ["operation_id"] = SonobuoyDropExtension.OperationId, ["request_id"] = id, ["target_ref"] = target,
         ["arguments"] = SonobuoyFixture.Arguments("custom_buoy")
-    };
+    });
     private static JObject Send(Trial trial, IAdvisorOperationSession session, JObject request) =>
         OperationGatewayTests.Finish(trial.Gateway, session.ExecuteAsync(request, CancellationToken.None));
     private static string? Code(JObject result) => (string?)result["error"]?["code"] ?? (string?)result["code"];

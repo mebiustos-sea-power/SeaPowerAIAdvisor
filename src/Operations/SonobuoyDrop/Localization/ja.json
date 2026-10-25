@@ -5,5 +5,6 @@
   "proposal_summary": "{0}のソノブイ投下予約: {1}地点",
   "proposal_append": "既存予約: 追記",
   "proposal_replace": "既存予約: 置換 (既存予約をすべて消去)",
-  "proposal_depth": "深度は現在のゲーム設定を使用します。"
+  "proposal_depth": "深度は現在のゲーム設定を使用します。",
+  "proposal_independent": "対象ユニットは個別行動に切り替わります。"
 }

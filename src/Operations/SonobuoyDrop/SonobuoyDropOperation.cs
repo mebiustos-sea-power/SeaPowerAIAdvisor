@@ -7,20 +7,19 @@ using SeaPowerAIAdvisor.Api;
 
 namespace SeaPowerAIAdvisor;
 
-internal sealed class SonobuoyDropExtension : IAdvisorOperationExtension, IAdvisorOperationInstructions
+internal sealed class SonobuoyDropExtension : IAdvisorOperationExtension, IAdvisorOperationInstructions, IAdvisorReservationExtension
 {
     internal const string OperationId = "seapower.schedule_sonobuoy_drop";
     internal const int MaximumDrops = 40;
+    public bool EndsReservationSequence => false;
     public int ApiVersion => AdvisorApi.ContractVersion;
     public string GetInstructions() => AdvisorPrompts.Current.Text("battle.json", "operation_sonobuoy_drop");
     public OperationDefinition GetDefinition() => new(OperationId, "Schedule sonobuoy drops.", new JObject
     {
         ["type"] = "object", ["additionalProperties"] = false,
-        ["required"] = new JArray("placement", "drops"),
+        ["required"] = new JArray("drops"),
         ["properties"] = new JObject
         {
-            ["placement"] = new JObject { ["type"] = "string", ["enum"] = new JArray("append", "replace"),
-                ["description"] = "Append to or replace this unit's entire existing reservation queue." },
             ["drops"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = MaximumDrops,
                 ["description"] = "Ordered drop positions; at most 40 drops across this command in one proposal.",
                 ["items"] = new JObject
@@ -43,8 +42,8 @@ internal sealed class SonobuoyDropExtension : IAdvisorOperationExtension, IAdvis
 }
 
 // Policy uses only the public SDK. Native reservation registration is supplied by the game support service.
-internal sealed class SonobuoyDropOperation : IAdvisorOperationHandler, SeaPowerAIAdvisor.Api.IAdvisorOperationPreview,
-    SeaPowerAIAdvisor.Api.IAdvisorOperationArgumentNormalizer
+internal sealed class SonobuoyDropOperation : IAdvisorOperationHandler,
+    SeaPowerAIAdvisor.Api.IAdvisorOperationArgumentNormalizer, IAdvisorReservationOperation
 {
     private readonly IAdvisorOperationContext context;
     internal SonobuoyDropOperation(IAdvisorOperationContext context) => this.context = context;
@@ -77,10 +76,8 @@ internal sealed class SonobuoyDropOperation : IAdvisorOperationHandler, SeaPower
     }
     private sealed class Plan
     {
-        internal bool Replace { get; }
         internal IReadOnlyList<Drop> Drops { get; }
-        internal string Placement => Replace ? "replace" : "append";
-        internal Plan(bool replace, IReadOnlyList<Drop> drops) { Replace = replace; Drops = drops; }
+        internal Plan(IReadOnlyList<Drop> drops) => Drops = drops;
     }
     private static JObject Position(AdvisorMapCoordinate? position) => position is AdvisorMapCoordinate value
         ? new JObject { ["latitude_deg"] = value.Latitude, ["longitude_deg"] = value.Longitude } : new JObject();
@@ -90,13 +87,24 @@ internal sealed class SonobuoyDropOperation : IAdvisorOperationHandler, SeaPower
         return new JArray(Units().Select(unit =>
         {
             var ammunition = unit.Ammunition;
-            var reason = unit.UnavailableReason ?? (ammunition.Any(a => a.AvailableAfterClearingReservations > 0 && a.SingleRoundSupported) ? null : "no_available_sonobuoy");
+            var reason = unit.UnavailableReason;
+            ReservationQueueState? queue = null;
+            if (reason is null or "following_formation" && context.Game is IAdvisorReservationSequenceSupport sequence)
+            {
+                queue = sequence.InspectReservations(unit.Info.Target, ReservationPlacement.Append);
+                // Explicit replacement can still make a queue eligible; advertise both choices.
+                var replacement = sequence.InspectReservations(unit.Info.Target, ReservationPlacement.Replace);
+                reason = queue.UnavailableReason == null || replacement.UnavailableReason == null ? null : queue.UnavailableReason;
+            }
+            reason ??= ammunition.Any(a => a.AvailableAfterClearingReservations > 0 && a.SingleRoundSupported) ? null : "no_available_sonobuoy";
             return new JObject
             {
                 ["target_ref"] = unit.Info.Target, ["display_name"] = unit.Info.Name,
                 ["available"] = reason == null, ["unavailable_reason"] = reason, ["depth"] = unit.Depth,
                 ["position"] = Position(unit.Info.Position),
-                ["reservation_end_position"] = Position(unit.ReservationRoute?.EndPosition),
+                ["reservation_end_position"] = Position(queue?.BecomesIndependent == true ? null : unit.ReservationRoute?.EndPosition),
+                ["requires_independent_action"] = queue?.BecomesIndependent == true,
+                ["append_unavailable_reason"] = queue?.UnavailableReason,
                 ["ammunition"] = new JArray(ammunition.Select(a => new JObject { ["id"] = a.Id, ["display_name"] = a.Name,
                     ["remaining_count"] = a.Remaining, ["available_count"] = a.Available,
                     ["available_after_replacement_count"] = a.AvailableAfterClearingReservations,
@@ -124,95 +132,73 @@ internal sealed class SonobuoyDropOperation : IAdvisorOperationHandler, SeaPower
         }
         return new OperationArgumentNormalization(arguments.ToString(Newtonsoft.Json.Formatting.None), resolutions);
     }
-    public void Validate(IReadOnlyList<OperationOrder> orders)
+    private Unit ReservationUnit(ReservationOrder order)
     {
-        var count = 0;
-        foreach (var order in orders) count += Read(order).Plan.Drops.Count;
-        if (orders.GroupBy(o => o.Target).Any(g => g.Count() != 1)) throw new OperationException(400, "duplicate_unit_plan");
-        if (count > SonobuoyDropExtension.MaximumDrops) throw new OperationException(400, "too_many_sonobuoy_drops");
+        CheckInformation();
+        var unit = Units().FirstOrDefault(u => u.Info.Target == order.Order.Target) ?? throw new OperationException(409, "target_unavailable");
+        var reason = unit.UnavailableReason;
+        if (reason == "following_formation" && order.Queue.BecomesIndependent) reason = null;
+        if (reason != null) throw new OperationException(409, reason);
+        return unit;
     }
-    public string DescribeProposal(IReadOnlyList<OperationOrder> orders, string language)
+    public void ValidateReservations(IReadOnlyList<ReservationOrder> orders)
     {
-        var text = context.Text; var current = Units();
-        return string.Join("\n\n", orders.Select(order =>
+        var items = orders.Select(order => (Order: order, Unit: ReservationUnit(order), Plan: Parse(JObject.Parse(order.Order.ArgumentsJson)))).ToArray();
+        if (items.Sum(i => i.Plan.Drops.Count) > SonobuoyDropExtension.MaximumDrops) throw new OperationException(400, "too_many_sonobuoy_drops");
+        foreach (var group in items.GroupBy(i => i.Order.Order.Target))
         {
-            var plan = Parse(JObject.Parse(order.ArgumentsJson));
-            var unit = current.FirstOrDefault(u => u.Info.Target == order.Target);
-            var summary = text.Format(language, "proposal_summary", unit?.Info.Name ?? order.Target, plan.Drops.Count) + "\n" +
-                text.Get(language, plan.Replace ? "proposal_replace" : "proposal_append") + "\n" + text.Get(language, "proposal_depth");
-            return summary + "\n\n" + string.Join("\n", plan.Drops.Select((drop, i) =>
+            var first = group.First();
+            foreach (var demand in group.SelectMany(i => i.Plan.Drops).GroupBy(d => d.Ammunition))
             {
-                var ammo = unit?.Ammunition.FirstOrDefault(a => a.Id == drop.Ammunition);
-                return (i + 1).ToString(CultureInfo.InvariantCulture) + ". " + (ammo?.Name ?? drop.Ammunition) +
-                    " — " + drop.Position.Latitude.ToString("F5", CultureInfo.InvariantCulture) + ", " +
-                    drop.Position.Longitude.ToString("F5", CultureInfo.InvariantCulture);
-            }));
-        }));
-    }
-    public AdvisorMapPreview Preview(IReadOnlyList<OperationOrder> orders, string language)
-    {
-        var current = Units(); var drawings = new List<AdvisorMapDrawing>();
-        foreach (var order in orders)
-        {
-            var plan = Parse(JObject.Parse(order.ArgumentsJson));
-            var unit = current.FirstOrDefault(u => u.Info.Target == order.Target);
-            var existing = unit?.ReservationRoute;
-            var start = plan.Replace ? unit?.Info.Position ?? existing?.CurrentPosition : existing?.EndPosition ?? existing?.CurrentPosition;
-            var route = new List<AdvisorMapCoordinate>();
-            if (start is AdvisorMapCoordinate origin) route.Add(origin);
-            route.AddRange(plan.Drops.Select(d => d.Position));
-            // Draw beneath the numbered markers; preserve the proposed order separately for each unit.
-            if (route.Count > 1) drawings.Add(AdvisorMapDrawing.Line(route));
-            for (var i = 0; i < plan.Drops.Count; i++)
-                drawings.Add(AdvisorMapDrawing.Point(plan.Drops[i].Position, (unit?.Info.Name ?? order.Target) + " · " + (i + 1).ToString(CultureInfo.InvariantCulture)));
+                var ammo = first.Unit.Ammunition.FirstOrDefault(a => a.Id == demand.Key) ?? throw new OperationException(409, "sonobuoy_not_carried");
+                if (!ammo.SingleRoundSupported) throw new OperationException(409, "single_drop_unavailable");
+                if ((first.Order.Placement == ReservationPlacement.Replace ? ammo.AvailableAfterClearingReservations : ammo.Available) < demand.Count())
+                    throw new OperationException(409, "no_available_sonobuoy");
+            }
         }
-        return new AdvisorMapPreview(drawings);
     }
-    private (Unit Unit, Plan Plan) Read(OperationOrder order)
+    public string DescribeReservation(ReservationOrder order, string language)
     {
-        CheckInformation(); var plan = Parse(JObject.Parse(order.ArgumentsJson));
-        var unit = Units().FirstOrDefault(u => u.Info.Target == order.Target) ?? throw new OperationException(409, "target_unavailable");
-        if (unit.UnavailableReason is string reason) throw new OperationException(409, reason);
-        foreach (var group in plan.Drops.GroupBy(d => d.Ammunition))
-        {
-            var ammo = unit.Ammunition.FirstOrDefault(a => a.Id == group.Key) ?? throw new OperationException(409, "sonobuoy_not_carried");
-            if ((plan.Replace ? ammo.AvailableAfterClearingReservations : ammo.Available) < group.Count())
-                throw new OperationException(409, "no_available_sonobuoy");
-            if (!ammo.SingleRoundSupported) throw new OperationException(409, "single_drop_unavailable");
-        }
-        return (unit, plan);
+        var plan = Parse(JObject.Parse(order.Order.ArgumentsJson)); var unit = ReservationUnit(order); var text = context.Text;
+        var summary = text.Format(language, "proposal_summary", unit.Info.Name, plan.Drops.Count);
+        if (order.Index == 0) summary += "\n" + text.Get(language, order.Placement == ReservationPlacement.Replace ? "proposal_replace" : "proposal_append");
+        if (order.Index == 0 && order.Queue.BecomesIndependent) summary += "\n" + text.Get(language, "proposal_independent");
+        return summary + "\n" + text.Get(language, "proposal_depth") + "\n\n" + string.Join("\n", plan.Drops.Select((drop, i) =>
+            (i + 1).ToString(CultureInfo.InvariantCulture) + ". " + (unit.Ammunition.FirstOrDefault(a => a.Id == drop.Ammunition)?.Name ?? drop.Ammunition) +
+            " — " + drop.Position.Latitude.ToString("F5", CultureInfo.InvariantCulture) + ", " + drop.Position.Longitude.ToString("F5", CultureInfo.InvariantCulture)));
     }
-    public string Execute(OperationOrder order)
+    public ReservationPreview PreviewReservation(ReservationOrder order, string language)
     {
-        var data = Read(order); var depth = data.Unit.Depth; var changed = false;
+        var plan = Parse(JObject.Parse(order.Order.ArgumentsJson)); var unit = ReservationUnit(order); var drawings = new List<AdvisorMapDrawing>();
+        var route = new List<AdvisorMapCoordinate>(); if (order.StartPosition is AdvisorMapCoordinate start) route.Add(start);
+        route.AddRange(plan.Drops.Select(d => d.Position));
+        if (route.Count > 1) drawings.Add(AdvisorMapDrawing.Line(route));
+        for (var i = 0; i < plan.Drops.Count; i++) drawings.Add(AdvisorMapDrawing.Point(plan.Drops[i].Position,
+            unit.Info.Name + " / " + (order.Index + 1).ToString(CultureInfo.InvariantCulture) + "." + (i + 1).ToString(CultureInfo.InvariantCulture)));
+        return new ReservationPreview(new AdvisorMapPreview(drawings), plan.Drops.Last().Position);
+    }
+    public string ExecuteReservation(ReservationOrder order)
+    {
+        var plan = Parse(JObject.Parse(order.Order.ArgumentsJson)); var unit = ReservationUnit(order); var changed = false;
+        // The shared coordinator already handled replacement. Native append checks the currently available inventory again.
         try
         {
-            if (data.Plan.Replace)
-            {
-                var reservations = context.Game as IAdvisorReservationSupport
-                    ?? throw new InvalidOperationException("The game adapter does not provide reservation control.");
-                reservations.ClearReservations(order.Target); changed = true;
-            }
-            foreach (var drop in data.Plan.Drops)
-            { context.Game.AppendSonobuoyDrop(order.Target, drop.Ammunition, drop.Position); changed = true; }
+            foreach (var drop in plan.Drops)
+            { context.Game.AppendSonobuoyDrop(order.Order.Target, drop.Ammunition, drop.Position); changed = true; }
         }
         catch (OperationException error) when (changed)
-        {
-            // A rejected later step cannot mean the unit's entire plan left the game unchanged.
-            throw new InvalidOperationException("Sonobuoy plan execution stopped after reservation changes; the outcome is incomplete.", error);
-        }
-        return new JObject { ["target_ref"] = order.Target, ["count"] = data.Plan.Drops.Count,
-            ["placement"] = data.Plan.Placement, ["depth"] = depth,
-            ["drops"] = new JArray(data.Plan.Drops.Select(d => new JObject { ["ammunition"] = d.Ammunition,
+        { throw new InvalidOperationException("Sonobuoy segment stopped after reservation changes.", error); }
+        return new JObject { ["target_ref"] = order.Order.Target, ["count"] = plan.Drops.Count, ["depth"] = unit.Depth,
+            ["drops"] = new JArray(plan.Drops.Select(d => new JObject { ["ammunition"] = d.Ammunition,
                 ["latitude"] = d.Position.Latitude, ["longitude"] = d.Position.Longitude })) }.ToString(Newtonsoft.Json.Formatting.None);
     }
+
     private static Plan Parse(JObject arguments)
     {
-        if (arguments.Properties().Any(p => p.Name is not ("placement" or "drops" or "depth")) ||
-            arguments["placement"]?.Type != JTokenType.String || (string?)arguments["placement"] is not ("append" or "replace") ||
+        if (arguments.Properties().Any(p => p.Name is not ("drops" or "depth")) ||
             arguments["drops"] is not JArray drops || drops.Count < 1 || drops.Count > SonobuoyDropExtension.MaximumDrops)
             throw new OperationException(400, "invalid_sonobuoy_arguments");
-        return new Plan((string)arguments["placement"]! == "replace", ((JArray)arguments["drops"]!).Select(value =>
+        return new Plan(((JArray)arguments["drops"]!).Select(value =>
         {
             if (value is not JObject drop || drop.Count != 3 || drop.Properties().Any(p => p.Name is not ("latitude" or "longitude" or "ammunition")) ||
                 drop["ammunition"]?.Type != JTokenType.String || string.IsNullOrWhiteSpace((string?)drop["ammunition"]))

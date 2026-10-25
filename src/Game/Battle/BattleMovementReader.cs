@@ -79,9 +79,53 @@ internal static class BattleMovementReader
             else position = Required(task, "WaypointPosition");
             if (position != null) row["position"] = AdvisorInputBuilder.Position(new MapPosition(
                 Number(Required(position, "Latitude")), Number(Required(position, "Longitude"))));
+            Settings(row, task, unit, position, relative);
             result.Add(row);
         }
         return result;
+    }
+
+    private static void Settings(JObject row, object task, object unit, object? position, bool relative)
+    {
+        var speed = "unchanged";
+        if ((bool)RequiredParameter(task, "_setSpeed"))
+        {
+            var code = Code(RequiredParameter(task, "_speedState"));
+            var plane = Code(Required(unit, "_type")) == "aircraft";
+            speed = plane ? code switch
+            {
+                "ahead_2_3" => "loiter", "ahead_standard" => "cruise", "ahead_full" => "max", "ahead_flank" => "afterburner",
+                _ => code
+            } : code switch
+            {
+                "ahead_1_3" => "ahead_one_third", "ahead_2_3" => "ahead_two_thirds", "ahead_standard" => "ahead_standard",
+                "ahead_full" => "ahead_full", "ahead_flank" => "ahead_flank", "allstop" => "stop", "backfull" => "reverse_full",
+                _ => code
+            };
+        }
+        row["speed_setting"] = speed;
+        var vertical = new JObject();
+        if (relative) vertical["mode"] = (bool)RequiredParameter(task, "setHeight") ? "relative_to_parent" : "unchanged";
+        else
+        {
+            var code = Code(RequiredParameter(task, "_heightState"));
+            vertical["mode"] = code switch
+            {
+                "nochange" => "unchanged", "current" => "actual_at_activation", "parent" => "parent_at_activation",
+                "number" => "specified", "verylow" => "very_low", "veryhigh" => "very_high", _ => code
+            };
+            var kind = Code(Required(unit, "_type"));
+            if (kind == "submarine" && code is "verylow" or "low" or "medium" or "high" or "veryhigh")
+                vertical["depth_preset"] = code switch { "verylow" => "shallow", "low" => "above_layer", "medium" => "below_layer", "high" => "deep", _ => "very_deep" };
+            if (code == "number" && position != null)
+            {
+                var feet = Number(Required(position, "_height")) * 220.4727;
+                if (kind == "submarine") vertical["depth_ft"] = -feet;
+                else if (kind is "aircraft" or "helicopter") vertical["altitude_ft"] = feet;
+            }
+        }
+        row["vertical_setting"] = vertical;
+        row["return_to_formation"] = (bool)Required(task, "_returnToFormation");
     }
 
     private static bool Is(object value, string name)

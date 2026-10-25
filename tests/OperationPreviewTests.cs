@@ -45,7 +45,7 @@ internal static class OperationPreviewTests
         });
         check("Retired, removed, replaced, disabled and registered proposals lose their previews", () =>
         {
-            foreach (var cause in new[] { "retire", "remove", "replace", "disable", "register", "reject", "service" })
+            foreach (var cause in new[] { "retire", "remove", "replace", "disable", "register", "service" })
             {
                 var enabled = true; var service = new AdvisorOperations(() => enabled);
                 var command = new VisibleOperation("custom.visible"); service.Register(command);
@@ -57,7 +57,6 @@ internal static class OperationPreviewTests
                 if (cause == "replace") service.BeginProposal("turn");
                 if (cause == "disable") enabled = false;
                 if (cause == "register") service.Approve(proposal);
-                if (cause == "reject") { command.Reject = true; service.Approve(proposal); }
                 if (cause == "service") active = null;
                 review.Tick(active); review.Tick(active);
                 Require(map.Active == 0 && command.Executions == (cause == "register" ? 1 : 0),
@@ -82,9 +81,9 @@ internal static class OperationPreviewTests
     private static AdvisorOperationProposal Plan(AdvisorOperations service, string owner, params string[] operations)
     {
         service.BeginProposal(owner);
-        for (var i = 0; i < operations.Length; i++)
-            Require((string?)service.Propose(owner, new JObject { ["scope_id"] = service.ScopeId, ["request_id"] = owner + "." + i,
-                ["operation"] = operations[i], ["target_ref"] = "example:1", ["arguments"] = new JObject() })["status"] == "proposed", "Test proposal rejected");
+        Require((string?)OperationSubmissionFixture.Submit(service, owner, operations.Select((id, i) => new JObject {
+            ["scope_id"] = service.ScopeId, ["request_id"] = owner + "." + i, ["operation"] = id,
+            ["target_ref"] = "example:1", ["arguments"] = new JObject() }).ToArray())["status"] == "proposed", "Test proposal rejected");
         return service.FinishProposal(owner, true)!;
     }
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
@@ -95,11 +94,10 @@ internal static class OperationPreviewTests
         public string Description => "Example operation";
         public bool RequiresApproval => true;
         internal int Executions;
-        internal bool Reject;
         internal TextOperation(string id) => Id = id;
         public JObject Definition() => new() { ["id"] = Id };
         public JArray Candidates() => new();
-        public void Validate(IReadOnlyList<AdvisorOperationOrder> orders) { if (Reject) throw new AdvisorOperationException(409, "unavailable"); }
+        public void Validate(IReadOnlyList<AdvisorOperationOrder> orders) { }
         public string DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => Description;
         public JObject Execute(string target, JObject arguments) { Executions++; return new JObject(); }
     }

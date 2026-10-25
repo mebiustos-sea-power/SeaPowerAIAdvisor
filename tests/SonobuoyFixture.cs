@@ -41,7 +41,20 @@ internal static class SonobuoyFixture
         var catalog = new AdvisorOperationCatalog(); catalog.Register(new SonobuoyDropExtension());
         return catalog.CreateOperations(new Game(units, information ?? (() => AdvisorInformation.Default)), new Map()).Single();
     }
-    private sealed class Game : IAdvisorGameSupport, IAdvisorReservationSupport
+    // Converts the pre-composition test builders to the public plan-level queue policy.
+    internal static JObject Queued(JObject plan)
+    {
+        var updates = new JArray();
+        foreach (var order in ((JArray)plan["operations"]!).Cast<JObject>().Where(o => (string?)o["operation_id"] == SonobuoyDropExtension.OperationId))
+        {
+            var args = (JObject)order["arguments"]!;
+            updates.Add(new JObject { ["target_ref"] = order["target_ref"]!.DeepClone(), ["placement"] = args["placement"]!.DeepClone() });
+            args.Remove("placement");
+        }
+        plan["reservation_updates"] = updates;
+        return plan;
+    }
+    private sealed class Game : IAdvisorGameSupport, IAdvisorReservationSupport, IAdvisorReservationSequenceSupport
     {
         private readonly Func<IReadOnlyList<IBattleSonobuoyUnit>> units;
         private readonly Func<AdvisorInformation> information;
@@ -51,13 +64,23 @@ internal static class SonobuoyFixture
             u.Position["latitude_deg"] is JValue lat && u.Position["longitude_deg"] is JValue lon
                 ? new AdvisorMapCoordinate((double)lat, (double)lon) : null,
             true, u.UnavailableReason != "unit_not_airborne", u.UnavailableReason == "unit_not_airborne" ? null : u.UnavailableReason)).ToArray();
-        private IBattleSonobuoyUnit Unit(string target) => units().Single(u => "unit:" + u.Id == target);
+        private IBattleSonobuoyUnit Unit(string target) => units().SingleOrDefault(u => "unit:" + u.Id == target) ?? throw new OperationException(409, "target_unavailable");
         public IReadOnlyList<AmmunitionInfo> GetAmmunition(string target) => Unit(target).Ammunition()
             .Select(a => new AmmunitionInfo(a.Id, a.Name, "Bomb", "Sonobuoy", a.Remaining, a.Available, a.SingleDrop, a.AvailableAfterReplacement)).ToArray();
         public ReservationRoute? GetReservationRoute(string target)
             => Unit(target).ReservationRoute;
         public string GetSonobuoyDepth(string target) => Unit(target).Depth;
         public void ClearReservations(string target) => Unit(target).ClearReservations();
+        public ReservationQueueState InspectReservations(string target, ReservationPlacement placement)
+        {
+            var unit = Unit(target); var route = IsInformationEnabled("battle_movement_plans") ? unit.ReservationRoute : null;
+            var position = route?.CurrentPosition;
+            if (position == null && unit.Position["latitude_deg"] != null && unit.Position["longitude_deg"] != null)
+                position = new AdvisorMapCoordinate((double)unit.Position["latitude_deg"]!, (double)unit.Position["longitude_deg"]!);
+            return new ReservationQueueState(position, route?.EndPosition, false, unit.UnavailableReason);
+        }
+        public bool BeginReservations(string target, ReservationPlacement placement)
+        { if (placement != ReservationPlacement.Replace) return false; Unit(target).ClearReservations(); return true; }
         public void AppendSonobuoyDrop(string target, string ammunition, AdvisorMapCoordinate position) => Unit(target).Append(ammunition, position.Latitude, position.Longitude);
     }
     private sealed class Map : IAdvisorMap
