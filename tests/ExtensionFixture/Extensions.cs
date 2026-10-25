@@ -7,9 +7,10 @@ using SeaPowerAIAdvisor.Api;
 namespace SeaPowerAIAdvisor.ExtensionFixture;
 
 // A separate client assembly depends only on the published contract, never host internals.
-public abstract class Definition : IAdvisorExtension
+public abstract class Definition : IAdvisorExtension, IAdvisorExtensionVersion
 {
     public int ApiVersion { get; set; } = AdvisorApi.ContractVersion;
+    public string? Version { get; set; }
     public string Id { get; set; } = "fixture." + Guid.NewGuid().ToString("N");
     public string Name => "External fixture";
     public string Protocol => "fixture";

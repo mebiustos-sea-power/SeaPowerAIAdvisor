@@ -63,11 +63,11 @@ internal sealed partial class AdvisorOperations
         operations.Add(operation.Id, operation);
     }
     // Reading documentation does not enable commands or create an execution session.
-    internal IReadOnlyList<(string Id, AdvisorText Text, JObject Definition)> Inspect(string language)
+    internal IReadOnlyList<(string Id, AdvisorText Text, JObject Definition, string? Version)> Inspect(string language)
     {
         CheckThread();
         if (retired) throw new AdvisorOperationException(409, "operation_scope_changed");
-        return operations.Values.Select(operation => (operation.Id, operation.Documentation.For(language), Definition(operation))).ToArray();
+        return operations.Values.Select(operation => (operation.Id, operation.Documentation.For(language), Definition(operation), (operation as IAdvisorExtensionVersion)?.Version)).ToArray();
     }
     internal JObject Catalog()
     {

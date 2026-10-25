@@ -32,7 +32,7 @@ Enable the example, AI Advisor and Anchor Chain in the game's MOD manager, and c
 
 ## Command behavior
 
-`SonobuoyCommand.cs` implements registration metadata, candidates, side-effect-free validation/review, optional preview and execution. English and Japanese text belong to this MOD; the host provides language fallback. Each operation takes a target reference and three arguments:
+`SonobuoyCommand.cs` implements registration metadata, candidates, side-effect-free validation/review, optional preview and execution. It also demonstrates the optional `IAdvisorExtensionVersion`: its `Version` identifies this command itself and appears in Settings > Extensions > Commands. Omit the interface to leave the version undisplayed. SDK compatibility still uses `ApiVersion`; see the [SDK stability notice and display-version contract](../../docs/public-api.md). English and Japanese text belong to this MOD; the host provides language fallback. Each operation takes a target reference and three arguments:
 
 ```json
 {

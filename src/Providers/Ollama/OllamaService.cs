@@ -13,6 +13,8 @@ internal sealed class OllamaService : AdvisorService
     internal const string DefaultModel = "qwen3:8b";
     internal override string Id => "ollama";
     internal override string Name => "Ollama";
+    internal override string Version => "1.0.0";
+    internal override string Summary(AdvisorText text) => text.Format("extensions.adapter_summary", Name);
     internal override string Description(AdvisorText text) => text["connection.ollama_description"];
     internal override string Protocol => "ollama_chat";
     internal override IReadOnlyList<AdvisorConnectionField> Fields { get; } = Array.AsReadOnly(new[]

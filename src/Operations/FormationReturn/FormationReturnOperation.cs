@@ -6,10 +6,11 @@ using SeaPowerAIAdvisor.Api;
 
 namespace SeaPowerAIAdvisor;
 
-internal sealed class FormationReturnExtension : IAdvisorOperationExtension, IAdvisorOperationInstructions, IAdvisorReservationExtension
+internal sealed class FormationReturnExtension : IAdvisorOperationExtension, IAdvisorOperationInstructions, IAdvisorReservationExtension, IAdvisorExtensionVersion
 {
     internal const string OperationId = "seapower.return_to_formation";
     public int ApiVersion => AdvisorApi.ContractVersion;
+    public string Version => "1.0.0";
     public bool EndsReservationSequence => true;
     public string GetInstructions() => AdvisorPrompts.Current.Text("battle.json", "operation_formation_return");
     public OperationDefinition GetDefinition() => new(OperationId, "Return to formation after preceding reservations.",

@@ -22,12 +22,15 @@ internal static class ProviderRegistration
 }
 
 // These examples make no AI requests. Their replies identify them as offline examples.
-internal abstract class ExampleDefinition : IAdvisorExtension, IAdvisorExtensionDescription
+internal abstract class ExampleDefinition : IAdvisorExtension, IAdvisorExtensionDescription, IAdvisorExtensionSummary
 {
     public int ApiVersion => AdvisorApi.ContractVersion;
     public abstract string Id { get; }
     public abstract string Name { get; }
     public string Protocol => "offline_example";
+    public string GetSummary(string uiLanguage) => uiLanguage == "ja"
+        ? "オフラインの接続アダプター実装例です。"
+        : "Offline connection-adapter example.";
     public string GetDescription(string uiLanguage) => uiLanguage == "ja"
         ? "オフラインの実装例です。AIへの通信は行いません。"
         : "Offline implementation example. No AI requests are sent.";
@@ -48,8 +51,9 @@ internal abstract class ExampleDefinition : IAdvisorExtension, IAdvisorExtension
     }
 }
 
-internal sealed class StandardExample : ExampleDefinition, IAdvisorToolListExtension
+internal sealed class StandardExample : ExampleDefinition, IAdvisorToolListExtension, IAdvisorExtensionVersion
 {
+    public string Version => "0.1.0";
     public override string Id => "example.standard";
     public override string Name => "Example: standard engine (offline)";
     public IAdvisorSession OpenSession(ConnectionSettings connection, IAdvisorConnectionServices services,

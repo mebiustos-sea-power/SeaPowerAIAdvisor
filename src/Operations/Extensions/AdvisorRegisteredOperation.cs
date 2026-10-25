@@ -11,7 +11,7 @@ namespace SeaPowerAIAdvisor;
 
 // All built-in and external commands cross this boundary before entering the existing approval engine.
 internal sealed class AdvisorRegisteredOperation : IAdvisorOperation, IAdvisorOperationPlans,
-    IAdvisorOperationPreview, IAdvisorOperationArgumentNormalizer, IAdvisorReservationCommand, IDisposable
+    IAdvisorOperationPreview, IAdvisorOperationArgumentNormalizer, IAdvisorReservationCommand, IAdvisorExtensionVersion, IDisposable
 {
     private readonly AdvisorOperationRegistration registration;
     private readonly AdvisorOperationContext context;
@@ -19,6 +19,7 @@ internal sealed class AdvisorRegisteredOperation : IAdvisorOperation, IAdvisorOp
     private bool disposed;
     internal AdvisorRegisteredOperation(AdvisorOperationRegistration registration, IAdvisorGameSupport game, IAdvisorMap map)
     { this.registration = registration; context = new AdvisorOperationContext(game, map, registration.Text); }
+    public string? Version => registration.Version;
     public bool ComposesReservations => registration.Extension is IAdvisorReservationExtension;
     public bool EndsReservationSequence => (registration.Extension as IAdvisorReservationExtension)?.EndsReservationSequence ?? false;
     private static IAdvisorReservationOperation Reservation(Api.IAdvisorOperationHandler handler) => handler as IAdvisorReservationOperation

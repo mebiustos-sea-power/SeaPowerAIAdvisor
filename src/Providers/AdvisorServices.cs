@@ -27,8 +27,10 @@ internal abstract class AdvisorService
 {
     internal abstract string Id { get; }
     internal abstract string Name { get; }
+    internal virtual string? Version => null;
     internal virtual string Caption(AdvisorText text) => Name;
     internal abstract string Protocol { get; }
+    internal virtual string Summary(AdvisorText text) => "";
     internal virtual string Description(AdvisorText text) => "";
     internal virtual bool Independent => false;
     internal virtual string Model(AdvisorApiConfiguration configuration) => configuration.Model;

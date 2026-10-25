@@ -46,6 +46,38 @@ internal static class CommandSdkTests
             Throws<ArgumentException>(() => new AdvisorOperationCatalog().Register(new Client.CommandExtension { Definition = new Api.OperationDefinition(
                 "fixture.invalid", "Invalid", "{\"type\":\"array\"}", new Dictionary<string,string> { ["en"] = Text }) }));
         });
+        check("Individual extension versions remain optional display metadata and inspection performs no execution", () =>
+        {
+            var created = 0;
+            var command = new Client.CommandExtension { Version = "command-0.3.0-beta", Open = _ =>
+            { created++; throw new InvalidOperationException("Inspection created a command session"); } };
+            var adapter = new Client.StandardExtension { Version = "adapter-2.1", Open = (_, _, _, _) =>
+            { created++; throw new InvalidOperationException("Inspection opened an API connection"); } };
+            var commands = new AdvisorOperationCatalog(); commands.Register(command);
+            var adapters = new AdvisorServiceCatalog(Array.Empty<AdvisorService>()); adapters.Register(adapter);
+            command.Version = "changed"; adapter.Version = "changed";
+            var game = new Game(); var operations = Service(commands, game);
+            var shownCommand = operations.Inspect("ja").Single(); var shownAdapter = adapters.Services.Single();
+            Require(shownCommand.Version == "command-0.3.0-beta" && shownAdapter.Version == "adapter-2.1" &&
+                shownCommand.Definition["version"] == null && shownAdapter.Id == adapter.Id && created == 0 && game.Reads == 0,
+                "Display versions were replaced, changed after registration, leaked into AI definitions or opened an execution");
+            operations.Retire();
+            foreach (var missing in new string?[] { null, "", "   " })
+            {
+                var withoutVersion = new AdvisorOperationCatalog(); withoutVersion.Register(new Client.CommandExtension { Version = missing });
+                var unversioned = Service(withoutVersion);
+                Require(unversioned.Inspect("en").Single().Version == null, "An omitted command version was synthesized");
+                unversioned.Retire();
+                var noAdapterVersion = new AdvisorServiceCatalog(Array.Empty<AdvisorService>());
+                noAdapterVersion.Register(new Client.StandardExtension { Version = missing });
+                Require(noAdapterVersion.Services.Single().Version == null, "An omitted adapter version was synthesized");
+            }
+            foreach (var invalid in new[] { "line1\nline2", new string('x', 81) })
+            {
+                Throws<ArgumentException>(() => new AdvisorOperationCatalog().Register(new Client.CommandExtension { Version = invalid }));
+                Throws<ArgumentException>(() => new AdvisorServiceCatalog(Array.Empty<AdvisorService>()).Register(new Client.StandardExtension { Version = invalid }));
+            }
+        });
         check("An API-only command uses the existing approval engine, live revalidation, original order and replay protection", () =>
         {
             var executed = new List<int>(); var validations = new List<int>(); var ready = true; var sessions = 0;

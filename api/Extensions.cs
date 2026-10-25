@@ -42,6 +42,18 @@ public interface IAdvisorExtension
         string testMessage, CancellationToken cancellation);
 }
 
+// Optional display version of this individual command or adapter, independent of ApiVersion and MOD versions.
+public interface IAdvisorExtensionVersion
+{
+    string? Version { get; }
+}
+
+// Optional adapter overview for the Extensions list, separate from connection setup guidance.
+public interface IAdvisorExtensionSummary
+{
+    string GetSummary(string uiLanguage);
+}
+
 // Optional provider-wide guidance for the connection form. Empty text leaves no display area.
 public interface IAdvisorExtensionDescription
 {

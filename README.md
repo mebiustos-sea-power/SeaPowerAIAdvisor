@@ -87,7 +87,7 @@ The request timeout is configurable per connection and also applies to connectio
 
 ## Game commands
 
-Open **Settings → Commands** to enable or disable commands and browse those registered for the current screen. Details show their identifiers, requirements, approval policy, current AI instructions and definition JSON. Shared tool definitions are also available. Commands are enabled by default; an existing saved choice is preserved. Browsing does not send an AI request or inspect live candidates.
+Open **Settings → Extensions → Commands** to enable or disable commands and browse those registered for the current screen. Details show their identifiers, requirements, approval policy, current AI instructions and definition JSON. Shared tool definitions are also available. Commands are enabled by default; an existing saved choice is preserved. Browsing does not send an AI request or inspect live candidates. The **Connection adapters** tab lists registered built-in and external connection types; edit saved connections under **API connections**. Each extension can optionally supply its own display version. Unspecified versions are not shown.
 
 The built-in command schedules **sonobuoy drops** using airborne friendly aircraft carrying supported sonobuoys. To request a plan, type a message such as “Build an effective antisubmarine screen along California's route.” Attach unit badges to specify which aircraft to use, or let the adviser find suitable candidates. Multiple aircraft can be assigned drops within the same proposal. Built-in quick consultations request advice; use a typed message or text template to request operations.
 

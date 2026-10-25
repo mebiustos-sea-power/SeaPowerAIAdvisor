@@ -37,12 +37,14 @@ internal sealed class AdvisorOperationRegistration
 {
     internal IAdvisorOperationExtension Extension { get; }
     internal OperationDefinition Definition { get; }
+    internal string? Version { get; }
     internal AdvisorOperationText Text { get; }
     internal JObject Parameters { get; }
     internal AdvisorOperationPlanPolicy Policy { get; }
     internal AdvisorOperationRegistration(IAdvisorOperationExtension extension)
     {
         Extension = extension;
+        Version = AdvisorExtensionVersion.Read(extension);
         Definition = extension.GetDefinition() ?? throw new InvalidOperationException("The command definition is missing.");
         if (string.IsNullOrWhiteSpace(Definition.Id) || Definition.Id.Length > 80 || !Definition.Id.Contains('.') ||
             Definition.Id.Any(c => !(c is >= 'a' and <= 'z' or >= 'A' and <= 'Z' or >= '0' and <= '9' or '.' or '_' or '-')) ||

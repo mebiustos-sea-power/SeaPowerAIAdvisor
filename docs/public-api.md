@@ -4,6 +4,18 @@ This is the experimental public contract, version 1, introduced in AI Advisor v0
 
 **The SDK and public API are under active development and may undergo breaking changes without prior notice. External extensions may require source changes or rebuilding after an update.** Use the API DLL shipped with the host version you are targeting.
 
+## Optional display version
+
+A command or connection adapter can additionally implement `IAdvisorExtensionVersion` to supply its own display version:
+
+```csharp
+public string? Version => "0.3.0-beta";
+```
+
+This is the version of that individual extension, not its containing MOD, the AI model, or the SDK contract. It is optional: omit the interface or return null, an empty string, or whitespace to hide it. A supplied value must be a single line of at most 80 characters. The host copies it at registration and displays it in **Settings > Extensions**, under **Commands** or **Connection adapters**. It never infers a value from an assembly or MOD, uses it for compatibility checks, or adds it to AI tool definitions. `ApiVersion` remains the separate required contract compatibility value. Built-in commands and adapters explicitly declare their own display versions, independently of the host release version.
+
+The extension lists use the registered command and provider catalogs, including built-in and external entries, and sort each list by case-sensitive ordinal ID order. Viewing an entry does not create an execution session, connect to an API, or read saved credentials. Edit saved connections and their main/sub assignments under **Settings > API connections**.
+
 ## Projects and dependencies
 
 `api/SeaPowerAIAdvisor.Api.csproj` builds `SeaPowerAIAdvisor.Api.dll` for .NET Standard 2.1. Its only reference is the standard library: no Unity, Noesis, Anchor Chain, JSON library or provider SDK dependency. Inputs, schemas and results cross the boundary as JSON strings. The host bridge is in `src/Providers/Extensions/`.
@@ -55,6 +67,8 @@ Gemini, Ollama, OpenRouter and NanoGPT pass through the same catalog registratio
 Declare fields with `ConnectionField`: key, English label, default string, secret flag and optional translated labels. The form supports text and password inputs. Use the `ConnectionField` overload with `numeric: true` for a compact numeric field aligned with the host's numeric settings; the original constructor retains full-width input. `Numeric` is a layout hint only: values remain strings, and the extension owns numeric conversion and validation. Missing translations use the English label.
 
 Providers can optionally also implement `IAdvisorExtensionDescription.GetDescription(string uiLanguage)`. Return a plain-text description of the connection method; the host displays it below provider selection and above all provider-specific fields, updating it when the provider changes. Return an empty string for no description; blank text occupies no display area. Supply English text when a translation is unavailable, and perform no I/O. Both execution interfaces support this optional metadata. Existing extensions need no changes and the contract/assembly version remains 1.
+
+For a concise overview in **Settings > Extensions > Connection adapters**, optionally implement `IAdvisorExtensionSummary.GetSummary(string uiLanguage)`. This overview describes what the adapter supports; connection setup instructions belong to `IAdvisorExtensionDescription` instead. Return English for unsupported languages and perform no I/O. An absent summary leaves the card without a description; setup guidance is not substituted. The standard adapters use a short description such as "Connection adapter for the Gemini API."
 
 `ValidateSettings` receives opaque settings JSON and must perform local validation without network I/O or writes. `GetModel` supplies a display/log identifier, never a credential. Fields named `api_key` or `model` are not mandatory. The existing schema 3 stores provider IDs, settings and main/sub assignments. Loading does not rewrite the settings JSON, and an unavailable provider's settings are preserved rather than replaced. At startup, the host renames an existing `gemini.json` to `api-settings.json` only when the new file is absent; if both exist, it uses the new file without changing the old one.
 

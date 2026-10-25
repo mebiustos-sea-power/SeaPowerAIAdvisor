@@ -34,7 +34,8 @@ internal static partial class ProviderTests
             Require(!fields[0].Numeric && fields[2].Numeric && fields[2].DefaultValue == "8192" &&
                 new BuiltInAdvisorExtension(new OllamaService()).Fields.Single(f => f.Key == "num_ctx").Numeric,
                 "Provider field layout metadata was lost or legacy text fields changed their layout");
-            Require(AdvisorServiceCatalog.BuiltIn.Require(external.Id).Description(AdvisorText.Load("ja")) == "",
+            Require(AdvisorServiceCatalog.BuiltIn.Require(external.Id).Description(AdvisorText.Load("ja")) == "" &&
+                AdvisorServiceCatalog.BuiltIn.Require(external.Id).Summary(AdvisorText.Load("ja")) == "",
                 "An extension without a description acquired a required implementation or a placeholder message");
             var count = AdvisorServiceCatalog.BuiltIn.Services.Count;
             ThrowsPublic<ArgumentException>(() => new Api.AdvisorException("raw service response with credentials"));
@@ -273,6 +274,15 @@ internal static partial class ProviderTests
                     service.Description(AdvisorText.Load("fr")) == service.Description(AdvisorText.Load("en")) &&
                     ((Api.IAdvisorExtensionDescription)extension).GetDescription("fr") == service.Description(AdvisorText.Load("en")),
                     "Provider-wide guidance was lost, translated into the wrong language, or failed its English fallback");
+                foreach (var language in new[] { "ja", "en", "fr" })
+                {
+                    var text = AdvisorText.Load(language);
+                    Require(service.Summary(text) == ((Api.IAdvisorExtensionSummary)extension).GetSummary(text.Language) &&
+                        service.Summary(text).Length > 0 && service.Summary(text) != service.Description(text),
+                        "Adapter overview reused connection setup guidance or lost its translated public metadata");
+                }
+                Require(service.Summary(AdvisorText.Load("fr")) == service.Summary(AdvisorText.Load("en")),
+                    "Adapter overview failed its English fallback");
                 var answer = await RunPrepared(AdvisorServices.Prepare(ExtensionDraft(extension)));
                 Require(answer.Text.Contains("Offline API example", StringComparison.Ordinal) && answer.QueryRounds == 1,
                     "A separately compiled public sample could not retrieve known information");

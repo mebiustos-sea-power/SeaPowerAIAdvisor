@@ -8,10 +8,11 @@ using SeaPowerAIAdvisor.Api;
 
 namespace SeaPowerAIAdvisor;
 
-internal sealed class MovementExtension : IAdvisorOperationExtension, IAdvisorOperationInstructions, IAdvisorReservationExtension
+internal sealed class MovementExtension : IAdvisorOperationExtension, IAdvisorOperationInstructions, IAdvisorReservationExtension, IAdvisorExtensionVersion
 {
     internal const string OperationId = "seapower.schedule_movement";
     public int ApiVersion => AdvisorApi.ContractVersion;
+    public string Version => "1.0.0";
     public bool EndsReservationSequence => false;
     public string GetInstructions() => AdvisorPrompts.Current.Text("battle.json", "operation_movement");
     public OperationDefinition GetDefinition() => new(OperationId, "Schedule an ordered movement route.", new JObject

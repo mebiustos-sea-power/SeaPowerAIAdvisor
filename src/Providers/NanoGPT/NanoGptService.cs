@@ -12,6 +12,8 @@ internal sealed class NanoGptService : AdvisorService
     internal const string DefaultModel = "z-ai/glm-5.3";
     internal override string Id => "nanogpt";
     internal override string Name => "NanoGPT";
+    internal override string Version => "1.0.0";
+    internal override string Summary(AdvisorText text) => text.Format("extensions.adapter_summary", Name);
     internal override string Caption(AdvisorText text) => text["connection.nanogpt_name"];
     internal override string Protocol => "nanogpt_subscription_chat";
     internal override string Description(AdvisorText text) => text["connection.nanogpt_description"];

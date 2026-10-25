@@ -5,9 +5,10 @@ using SeaPowerAIAdvisor.Api;
 namespace SeaPowerAIAdvisor.ExtensionFixture;
 
 // This test client compiles against the API assembly alone, including its optional command contracts.
-public sealed class CommandExtension : IAdvisorOperationExtension
+public sealed class CommandExtension : IAdvisorOperationExtension, IAdvisorExtensionVersion
 {
     public int ApiVersion { get; set; } = AdvisorApi.ContractVersion;
+    public string? Version { get; set; }
     public OperationDefinition Definition { get; set; } = new("fixture.command", "Fixture command.", "{\"type\":\"object\"}",
         new Dictionary<string, string> { ["en"] = "{\"name\":\"Fixture\",\"summary\":\"Summary\",\"requirements\":\"Conditions\"}" });
     public Func<IAdvisorOperationContext, IAdvisorOperationHandler> Open { get; set; } = _ => new CommandHandler();

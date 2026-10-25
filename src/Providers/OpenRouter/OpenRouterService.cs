@@ -12,6 +12,8 @@ internal sealed class OpenRouterService : AdvisorService
     internal const string DefaultModel = "google/gemini-3.5-flash-lite";
     internal override string Id => "openrouter";
     internal override string Name => "OpenRouter";
+    internal override string Version => "1.0.0";
+    internal override string Summary(AdvisorText text) => text.Format("extensions.adapter_summary", Name);
     internal override string Protocol => "openrouter_chat";
     internal override string Description(AdvisorText text) => text["connection.openrouter_description"];
     internal override IReadOnlyList<AdvisorConnectionField> Fields { get; } = Array.AsReadOnly(new[]

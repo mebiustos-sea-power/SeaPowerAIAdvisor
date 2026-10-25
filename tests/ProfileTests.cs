@@ -367,7 +367,7 @@ internal static class ProfileTests
             XElement Named(string name) => root.Descendants().Single(e => (string?)e.Attribute(x + "Name") == name);
             var settings = Named("SettingsPane"); var home = Named("SettingsHome"); var conversation = Named("ConversationPane");
             Require(settings.Parent == root && conversation.Parent == root && (string?)settings.Attribute("Visibility") == "Collapsed", "Settings do not replace the whole conversation");
-            foreach (var button in new[] { "OpenGeneralCategory", "OpenProfileCategory", "OpenTemplatesCategory", "OpenApiCategory", "OpenConsultationCategory", "OpenCommandsCategory", "OpenInformationCategory", "OpenDeveloperCategory", "OpenWipCategory" })
+            foreach (var button in new[] { "OpenGeneralCategory", "OpenProfileCategory", "OpenTemplatesCategory", "OpenApiCategory", "OpenConsultationCategory", "OpenExtensionsCategory", "OpenInformationCategory", "OpenDeveloperCategory", "OpenWipCategory" })
                 Require(Named(button).Ancestors().Contains(home), "A category is inaccessible from the settings home");
             foreach (var control in new[] { "Portrait", "Question", "Transcript", "Send", "Status" })
                 Require(Named(control).Ancestors().Contains(conversation), "Conversation controls leak into settings");
@@ -375,6 +375,13 @@ internal static class ProfileTests
                 Require(Named(control).Ancestors().Contains(Named("ProfileEditor")), "An advisor edit action is not local to its form");
             foreach (var control in new[] { "ApiProvider", "ApiProviderDescription", "ApiProviderFields", "TestConnection", "ConnectionTestStatus", "SaveApiEntry", "CancelApiEntry" })
                 Require(Named(control).Ancestors().Contains(Named("ApiEditor")), "An API edit or test result is not local to its form");
+            var extensionTabs = Named("ExtensionsCategory").Elements().ToArray();
+            Require(extensionTabs.Length == 2 && extensionTabs.All(tab => tab.Name.LocalName == "TabItem") &&
+                Named("CommandList").Ancestors().Contains(extensionTabs[0]) &&
+                Named("CommandDetails").Ancestors().Contains(extensionTabs[0]) &&
+                Named("AdapterEntries").Ancestors().Contains(extensionTabs[1]) &&
+                !Named("EnableUnitOperations").Ancestors().Contains(extensionTabs[1]),
+                "Extension tabs mix connection types with command permissions or hide a registered-capability list");
             Require(Named("CommandList").Parent == Named("CommandDetails").Parent &&
                 (string?)Named("CommandDetails").Attribute("Visibility") == "Collapsed" &&
                 Named("CommandEntries").Ancestors().Contains(Named("CommandList")) &&

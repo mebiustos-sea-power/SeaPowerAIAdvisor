@@ -104,9 +104,14 @@ internal sealed class ExternalAdvisorService : AdvisorService
     private readonly string id, name, protocol;
     internal override string Id => id;
     internal override string Name => name;
+    internal override string? Version { get; }
     internal override string Protocol => protocol;
     internal override IReadOnlyList<AdvisorConnectionField> Fields { get; }
     internal override bool Independent => extension is Api.IIndependentAdvisorExtension;
+    internal override string Summary(AdvisorText text) => extension is Api.IAdvisorExtensionSummary summary
+        ? AdvisorExtensionBridge.Invoke(() => summary.GetSummary(text.Language))
+            ?? throw new InvalidOperationException("The advisor extension returned no adapter summary.")
+        : "";
     internal override string Description(AdvisorText text) => extension is Api.IAdvisorExtensionDescription description
         ? AdvisorExtensionBridge.Invoke(() => description.GetDescription(text.Language))
             ?? throw new InvalidOperationException("The advisor extension returned no connection description.")
@@ -114,6 +119,7 @@ internal sealed class ExternalAdvisorService : AdvisorService
     internal ExternalAdvisorService(Api.IAdvisorExtension extension)
     {
         this.extension = extension; id = extension.Id; name = extension.Name; protocol = extension.Protocol;
+        Version = AdvisorExtensionVersion.Read(extension);
         Fields = Array.AsReadOnly(extension.Fields.Select(field =>
             new AdvisorConnectionField(field.Key, field.Label, field.DefaultValue, field.Secret, field.GetLabel, field.Numeric)).ToArray());
     }

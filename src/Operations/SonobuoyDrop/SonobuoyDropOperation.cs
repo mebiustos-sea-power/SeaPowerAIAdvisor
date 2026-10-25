@@ -7,12 +7,13 @@ using SeaPowerAIAdvisor.Api;
 
 namespace SeaPowerAIAdvisor;
 
-internal sealed class SonobuoyDropExtension : IAdvisorOperationExtension, IAdvisorOperationInstructions, IAdvisorReservationExtension
+internal sealed class SonobuoyDropExtension : IAdvisorOperationExtension, IAdvisorOperationInstructions, IAdvisorReservationExtension, IAdvisorExtensionVersion
 {
     internal const string OperationId = "seapower.schedule_sonobuoy_drop";
     internal const int MaximumDrops = 40;
     public bool EndsReservationSequence => false;
     public int ApiVersion => AdvisorApi.ContractVersion;
+    public string Version => "1.0.0";
     public string GetInstructions() => AdvisorPrompts.Current.Text("battle.json", "operation_sonobuoy_drop");
     public OperationDefinition GetDefinition() => new(OperationId, "Schedule sonobuoy drops.", new JObject
     {
