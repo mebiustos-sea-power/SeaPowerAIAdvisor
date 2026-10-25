@@ -79,7 +79,8 @@ internal sealed class BattleOperationSupport : IAdvisorGameSupport, IAdvisorRese
             active += unit._obp._weaponSystems.Count(w => w._executingEngageTask &&
                 w._ammoForEngage._ap._ammunitionFileName == pair.Key);
             var launchers = unit.GetWeaponSystemsForAmmunition(pair.Key, false);
-            var single = launchers.Count > 0 && launchers.All(w => w is WeaponSystemHardpoint &&
+            // Inventory can include ammunition without an associated launcher.
+            var single = launchers != null && launchers.Count > 0 && launchers.All(w => w is WeaponSystemHardpoint &&
                 (BattleValue.Required(w, "_salvoAmounts") is Dictionary<string, int> amounts
                     ? !amounts.TryGetValue(pair.Key, out var count) || count == 1
                     : throw new InvalidOperationException("The hardpoint salvo amounts are unavailable.")));
