@@ -12,7 +12,7 @@ internal static partial class ProviderTests
     {
         check("Advisory shortcuts never open operation services and retain situation advice across delivery modes and legacy adapters", () => Async(async () =>
         {
-            var opened = 0; var operation = new LookupOperation(); var registry = new AdvisorOperations(() => true); registry.Register(operation);
+            var opened = 0; var operation = new LookupOperation(); var registry = new AdvisorOperations(_ => true); registry.Register(operation);
             using var gateway = new AdvisorOperationGateway(registry);
             var source = new BattleAdvisorSource(() => throw new InvalidOperationException("Unexpected capture"), () => { opened++; return gateway; });
             foreach (var shortcut in new[] { AdvisorShortcut.NextSteps, AdvisorShortcut.KeyRisks, AdvisorShortcut.RadarOperations, AdvisorShortcut.OwnUnits, AdvisorShortcut.Contacts, AdvisorShortcut.MoreDetail })
@@ -50,7 +50,7 @@ internal static partial class ProviderTests
         check("Permitted custom shortcuts retain approval, manual requests remain permitted and neither can override WIP or force execution", () =>
         {
             var enabled = false; var unit = new OperationHelicopter();
-            var registry = new AdvisorOperations(() => enabled); registry.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { unit }));
+            var registry = new AdvisorOperations(_ => enabled); registry.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { unit }));
             using var gateway = new AdvisorOperationGateway(registry);
             var source = new BattleAdvisorSource(() => throw new InvalidOperationException("Unexpected capture"), () => gateway);
             var custom = new AdvisorShortcut("custom.drop", "next_steps", allowOperations: true).Prepare("Drop buoys");

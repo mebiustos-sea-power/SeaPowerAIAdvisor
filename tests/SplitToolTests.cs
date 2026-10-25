@@ -15,7 +15,7 @@ internal static partial class ProviderTests
     {
         check("Split tool calls batch independent snapshot and operation reads in one round and preserve each call's results", () =>
         {
-            var operation = new LookupOperation(); var registry = new AdvisorOperations(() => true); registry.Register(operation);
+            var operation = new LookupOperation(); var registry = new AdvisorOperations(_ => true); registry.Register(operation);
             using var gateway = new AdvisorOperationGateway(registry);
             using var operations = gateway.CreateSession("split", AdvisorPrompts.Current)!;
             var knowledge = ReadKnowledge(); var recording = new AdvisorLocalRun();
@@ -63,7 +63,7 @@ internal static partial class ProviderTests
         });
         check("Split schemas and handlers reject cross-purpose fields and never execute or broaden a forged read", () =>
         {
-            var operation = new LookupOperation(); var registry = new AdvisorOperations(() => true); registry.Register(operation);
+            var operation = new LookupOperation(); var registry = new AdvisorOperations(_ => true); registry.Register(operation);
             using var gateway = new AdvisorOperationGateway(registry);
             using var operations = gateway.CreateSession("forged", AdvisorPrompts.Current)!;
             var context = AdvisorContext.Create(ReadKnowledge(), Array.Empty<ChatExchange>(), operations: operations);
@@ -93,7 +93,7 @@ internal static partial class ProviderTests
         });
         check("The eight-read budget is shared by all split tools before any lookup dispatches", () =>
         {
-            var operation = new LookupOperation(); var registry = new AdvisorOperations(() => true); registry.Register(operation);
+            var operation = new LookupOperation(); var registry = new AdvisorOperations(_ => true); registry.Register(operation);
             using var gateway = new AdvisorOperationGateway(registry);
             using var operations = gateway.CreateSession("split-budget", AdvisorPrompts.Current)!;
             var knowledge = ReadKnowledge(); var context = AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations);
@@ -107,7 +107,7 @@ internal static partial class ProviderTests
         check("Split dispatch preserves reference definitions after a rejected mixed response and cancellation stops subsequent reads", () =>
         {
             var operation = new LookupOperation { Detail = new string('x', 38_000) };
-            var registry = new AdvisorOperations(() => true); registry.Register(operation);
+            var registry = new AdvisorOperations(_ => true); registry.Register(operation);
             using var gateway = new AdvisorOperationGateway(registry);
             using var operations = gateway.CreateSession("split-reference", AdvisorPrompts.Current)!;
             var context = AdvisorContext.Create(ReadKnowledge(referenceText: new string('y', 18_000)), Array.Empty<ChatExchange>(), operations: operations);

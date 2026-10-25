@@ -105,7 +105,7 @@ internal sealed class BattleIntegration
             contactAssessments ??= new BattleContactAssessments(GetAdvisor, () => options.Current.Information, guard);
             contactAssessments.Tick(current.RootControl, host);
             mapNavigation?.Tick();
-            if (options.Current.UnitOperationsEnabled || options.Current.DeveloperApiEnabled) EnsureOperations();
+            EnsureOperations();
             operationGateway?.Pump();
             advisor?.Tick();
             if (options.Current.DeveloperApiEnabled)
@@ -140,7 +140,7 @@ internal sealed class BattleIntegration
     {
         if (operationGateway == null)
         {
-            operations = new AdvisorOperations(() => options.Current.UnitOperationsEnabled);
+            operations = new AdvisorOperations(id => options.Current.IsCommandEnabled(id));
             mapNavigation ??= new BattleMapNavigation(() => model?.Map);
             var support = new BattleOperationSupport(OperationObjects, () => options.Current.Information);
             foreach (var command in AdvisorOperationCatalog.BuiltIn.CreateOperations(support, mapNavigation)) operations.Register(command);

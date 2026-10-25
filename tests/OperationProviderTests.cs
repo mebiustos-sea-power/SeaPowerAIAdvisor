@@ -348,7 +348,7 @@ internal static partial class ProviderTests
         ["arguments"] = SonobuoyFixture.Arguments("extra_mod_buoy")
     };
     private static AdvisorOperations SonobuoyRegistry(OperationHelicopter unit)
-    { var registry = new AdvisorOperations(() => true); registry.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { unit })); return registry; }
+    { var registry = new AdvisorOperations(_ => true); registry.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { unit })); return registry; }
     private sealed class OperationHelicopter : IBattleSonobuoyUnit
     {
         public int Id => 42;

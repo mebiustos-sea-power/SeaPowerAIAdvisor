@@ -18,7 +18,7 @@ internal static partial class ProviderTests
     {
         check("One standard read call combines two routes, operation metadata and two candidates while preserving item errors and contact kind", () =>
         {
-            var operation = new LookupOperation(); var registry = new AdvisorOperations(() => true); registry.Register(operation);
+            var operation = new LookupOperation(); var registry = new AdvisorOperations(_ => true); registry.Register(operation);
             using var gateway = new AdvisorOperationGateway(registry);
             using var operations = gateway.CreateSession("mixed", AdvisorPrompts.Current)!;
             var knowledge = ReadKnowledge(); var recording = new AdvisorLocalRun();
@@ -51,7 +51,7 @@ internal static partial class ProviderTests
         });
         check("Published read variants and dispatch reject historical mixed fields and missing identifiers while valid mixed reads succeed", () =>
         {
-            var operation = new LookupOperation(); var registry = new AdvisorOperations(() => true); registry.Register(operation);
+            var operation = new LookupOperation(); var registry = new AdvisorOperations(_ => true); registry.Register(operation);
             using var gateway = new AdvisorOperationGateway(registry);
             using var operations = gateway.CreateSession("schema-regression", AdvisorPrompts.Current)!;
             var requests = new[] {
@@ -91,7 +91,7 @@ internal static partial class ProviderTests
         });
         check("Read-only dispatch rejects execute, malformed sources and disabled operations without touching native state", () =>
         {
-            var operation = new LookupOperation(); var registry = new AdvisorOperations(() => true); registry.Register(operation);
+            var operation = new LookupOperation(); var registry = new AdvisorOperations(_ => true); registry.Register(operation);
             using var gateway = new AdvisorOperationGateway(registry);
             using var operations = gateway.CreateSession("read-only", AdvisorPrompts.Current)!;
             var context = AdvisorContext.Create(ReadKnowledge(), Array.Empty<ChatExchange>(), operations: operations);
@@ -117,7 +117,7 @@ internal static partial class ProviderTests
         check("A mixed response exceeding its budget leaves first-delivery references available for a smaller retry", () =>
         {
             var operation = new LookupOperation { Detail = new string('x', 38_000) };
-            var registry = new AdvisorOperations(() => true); registry.Register(operation);
+            var registry = new AdvisorOperations(_ => true); registry.Register(operation);
             using var gateway = new AdvisorOperationGateway(registry);
             using var operations = gateway.CreateSession("budget", AdvisorPrompts.Current)!;
             var reads = AdvisorContext.Create(ReadKnowledge(referenceText: new string('y', 18_000)), Array.Empty<ChatExchange>(), operations: operations).Reads;
@@ -134,7 +134,7 @@ internal static partial class ProviderTests
         check("Metadata-only reads share the total response budget and oversized batches dispatch no items", () =>
         {
             var operation = new LookupOperation { Detail = new string('x', 30_000) };
-            var registry = new AdvisorOperations(() => true); registry.Register(operation);
+            var registry = new AdvisorOperations(_ => true); registry.Register(operation);
             using var gateway = new AdvisorOperationGateway(registry);
             using var operations = gateway.CreateSession("metadata-budget", AdvisorPrompts.Current)!;
             var knowledge = ReadKnowledge(); var reads = AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations).Reads;
@@ -156,7 +156,7 @@ internal static partial class ProviderTests
         {
             using var cancellation = new CancellationTokenSource();
             var operation = new LookupOperation { OnCandidates = cancellation.Cancel };
-            var registry = new AdvisorOperations(() => true); registry.Register(operation);
+            var registry = new AdvisorOperations(_ => true); registry.Register(operation);
             using var gateway = new AdvisorOperationGateway(registry);
             using var operations = gateway.CreateSession("cancel", AdvisorPrompts.Current)!;
             var knowledge = ReadKnowledge(); var reads = AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations).Reads;
@@ -171,7 +171,7 @@ internal static partial class ProviderTests
         });
         check("A fallback receives each mixed-read fact once through the existing knowledge and operation ledgers", () =>
         {
-            var operation = new LookupOperation(); var registry = new AdvisorOperations(() => true); registry.Register(operation);
+            var operation = new LookupOperation(); var registry = new AdvisorOperations(_ => true); registry.Register(operation);
             using var gateway = new AdvisorOperationGateway(registry);
             using var operations = gateway.CreateSession("read-handoff", AdvisorPrompts.Current)!;
             var knowledge = ReadKnowledge();

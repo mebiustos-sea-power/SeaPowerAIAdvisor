@@ -379,17 +379,16 @@ internal static class ProfileTests
             Require(extensionTabs.Length == 2 && extensionTabs.All(tab => tab.Name.LocalName == "TabItem") &&
                 Named("CommandList").Ancestors().Contains(extensionTabs[0]) &&
                 Named("CommandDetails").Ancestors().Contains(extensionTabs[0]) &&
-                Named("AdapterEntries").Ancestors().Contains(extensionTabs[1]) &&
-                !Named("EnableUnitOperations").Ancestors().Contains(extensionTabs[1]),
+                Named("AdapterEntries").Ancestors().Contains(extensionTabs[1]),
                 "Extension tabs mix connection types with command permissions or hide a registered-capability list");
             Require(Named("CommandList").Parent == Named("CommandDetails").Parent &&
                 (string?)Named("CommandDetails").Attribute("Visibility") == "Collapsed" &&
                 Named("CommandEntries").Ancestors().Contains(Named("CommandList")) &&
                 new[] { "CommandPrompt", "CommandDefinition" }.All(id => Named(id).Ancestors().Contains(Named("CommandDetails")) &&
                     (string?)Named(id).Attribute("IsReadOnly") == "True"), "Command browsing overlaps the list or permits editing AI definitions");
-            Require(new[] { "EnableUnitOperations", "SaveCommands" }.All(id => Named(id).Ancestors().Contains(Named("CommandList"))) &&
-                !Named("EnableUnitOperations").Ancestors().Contains(Named("WipCategory")),
-                "Command permission is unavailable on its page or still editable under WIP");
+            Require(Named("SaveCommands").Ancestors().Contains(Named("CommandList")) &&
+                Named("CommandEntries").Ancestors().Contains(extensionTabs[0]),
+                "Command choices or their Save action are outside the command tab");
             Require(new[] { "EnableCampaignAdvisor", "SaveWip" }.All(id => Named(id).Ancestors().Contains(Named("WipCategory"))) &&
                 !Named("EnableCampaignAdvisor").Ancestors().Contains(Named("GeneralCategory")),
                 "Campaign alpha settings or their save action are still placed under General");

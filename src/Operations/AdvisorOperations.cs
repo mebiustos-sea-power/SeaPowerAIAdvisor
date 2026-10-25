@@ -45,13 +45,13 @@ internal sealed partial class AdvisorOperations
     private readonly Dictionary<string, IAdvisorOperation> operations = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Receipt> receipts = new(StringComparer.Ordinal);
     private readonly Dictionary<string, AdvisorOperationProposal> proposals = new(StringComparer.Ordinal);
-    private readonly Func<bool> enabled;
+    private readonly Func<string, bool> enabled;
     private bool retired;
     private readonly int thread = System.Environment.CurrentManagedThreadId;
     internal string ScopeId { get; } = Guid.NewGuid().ToString("N");
-    internal AdvisorOperations(Func<bool> enabled) => this.enabled = enabled;
+    internal AdvisorOperations(Func<string, bool> enabled) => this.enabled = enabled;
 
-    internal bool Enabled { get { CheckThread(); return !retired && enabled(); } }
+    internal bool Enabled { get { CheckThread(); return !retired && operations.Keys.Any(enabled); } }
 
     internal void Register(IAdvisorOperation operation)
     {
@@ -73,7 +73,7 @@ internal sealed partial class AdvisorOperations
     {
         CheckThread();
         return new JObject { ["scope_id"] = ScopeId, ["enabled"] = Enabled,
-            ["operations"] = Enabled ? new JArray(operations.Values.Select(Definition)) : new JArray() };
+            ["operations"] = Enabled ? new JArray(operations.Values.Where(o => enabled(o.Id)).Select(Definition)) : new JArray() };
     }
     internal JArray PriorOrders(string owner)
     {
@@ -89,7 +89,7 @@ internal sealed partial class AdvisorOperations
     internal JObject Discover(string search, int offset, int limit)
     {
         CheckEnabled();
-        var matches = operations.Values.OrderBy(o => o.Id, StringComparer.Ordinal)
+        var matches = operations.Values.Where(o => enabled(o.Id)).OrderBy(o => o.Id, StringComparer.Ordinal)
             .Where(o => search.Length == 0 || o.Id.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0 ||
                 o.Description.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0).ToArray();
         return Page(new JArray(matches.Select(o => new JObject { ["id"] = o.Id, ["description"] = o.Description, ["requires_approval"] = o.RequiresApproval })), offset, limit, "operations");
@@ -269,12 +269,16 @@ internal sealed partial class AdvisorOperations
         _ = Text(request, "operation"); _ = Text(request, "target_ref");
         if (scope != ScopeId) throw new AdvisorOperationException(409, "operation_scope_changed");
     }
-    private IAdvisorOperation Operation(string id) => operations.TryGetValue(id, out var operation) ? operation
-        : throw new AdvisorOperationException(404, "unknown_operation");
+    private IAdvisorOperation Operation(string id)
+    {
+        if (!operations.TryGetValue(id, out var operation)) throw new AdvisorOperationException(404, "unknown_operation");
+        if (!enabled(id)) throw new AdvisorOperationException(403, "operation_disabled");
+        return operation;
+    }
     private void CheckEnabled()
     {
         CheckThread();
-        if (retired || !enabled()) throw new AdvisorOperationException(403, "unit_operations_disabled");
+        if (!Enabled) throw new AdvisorOperationException(403, "unit_operations_disabled");
     }
     private void CheckThread()
     {

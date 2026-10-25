@@ -13,7 +13,7 @@ internal static class OperationGatewayTests
     {
         check("Operation discovery pages and searches registered summaries without loading every argument definition", () =>
         {
-            var service = new AdvisorOperations(() => true);
+            var service = new AdvisorOperations(_ => true);
             var entries = Enumerable.Range(0, 47).Select(i => new Operation("custom.operation_" + i.ToString("D2"))).ToArray();
             foreach (var entry in entries.Reverse()) service.Register(entry);
             using var gateway = new AdvisorOperationGateway(service);
@@ -142,7 +142,7 @@ internal static class OperationGatewayTests
     internal static JObject Execute(string operation) => OperationSubmissionFixture.AiRequest(new JObject { ["operation_id"] = operation,
         ["request_id"] = "order-1", ["target_ref"] = "custom:7", ["arguments"] = new JObject() });
     private static AdvisorOperations Registry(Func<bool> enabled, Operation operation)
-    { var registry = new AdvisorOperations(enabled); registry.Register(operation); return registry; }
+    { var registry = new AdvisorOperations(_ => enabled()); registry.Register(operation); return registry; }
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
     private sealed class Operation : IAdvisorOperation
     {

@@ -12,43 +12,48 @@ internal static class OperationTests
 {
     internal static void Run(Action<string, Action> check)
     {
-        check("Command permission defaults on, preserves legacy choices, and survives saves from every other category", () =>
+        check("Per-command settings default on, discard the legacy switch and persist only disabled IDs across category saves", () =>
         {
             var directory = Path.Combine(Path.GetTempPath(), "advisor-operation-options-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(directory);
             try
             {
                 var store = new AdvisorOptionsStore(Path.Combine(directory, "options.json"));
-                Require(store.Current.UnitOperationsEnabled && AdvisorOptions.Parse("{}").UnitOperationsEnabled && !File.Exists(store.Path), "New or unspecified command permission was disabled or reading persisted a default");
-                foreach (var enabled in new[] { false, true })
+                Require(store.Current.IsCommandEnabled("custom.new") && AdvisorOptions.Parse("{}").DisabledCommands.Count == 0 && !File.Exists(store.Path),
+                    "New commands were disabled or reading saved a default");
+                var supplied = new[] { "custom.off" }; var immutable = new AdvisorOptions(disabledCommands: supplied); supplied[0] = "custom.other";
+                Require(!immutable.IsCommandEnabled("custom.off") && immutable.IsCommandEnabled("custom.other") && immutable.IsCommandEnabled("CUSTOM.OFF"),
+                    "The settings retained mutable caller state or changed case-sensitive command identity");
+                var number = 0;
+                foreach (var old in new JToken[] { new JValue(false), new JValue(true), new JValue("unused"), JValue.CreateNull() })
                 {
-                    var path = Path.Combine(directory, "legacy-" + enabled + ".json");
-                    var original = new JObject { ["wip_unit_operations_enabled"] = enabled }.ToString();
-                    File.WriteAllText(path, original);
+                    var path = Path.Combine(directory, "legacy-" + number++ + ".json");
+                    var original = new JObject { ["wip_unit_operations_enabled"] = old }.ToString(); File.WriteAllText(path, original);
                     var legacy = new AdvisorOptionsStore(path);
-                    Require(legacy.Current.UnitOperationsEnabled == enabled && File.ReadAllText(path) == original,
-                        "Loading a legacy command permission changed its value or rewrote the settings");
-                    legacy.SaveUnitOperations(enabled);
-                    Require(new AdvisorOptionsStore(path).Current.UnitOperationsEnabled == enabled,
-                        "Saving command settings changed a legacy permission");
+                    Require(legacy.Current.IsCommandEnabled("custom.new") && File.ReadAllText(path) == original,
+                        "The obsolete switch affected commands or loading rewrote the file");
+                    legacy.SaveCommands(new[] { "custom.off" });
+                    var saved = JObject.Parse(File.ReadAllText(path));
+                    Require(saved["wip_unit_operations_enabled"] == null && !new AdvisorOptionsStore(path).Current.IsCommandEnabled("custom.off") &&
+                        new AdvisorOptionsStore(path).Current.IsCommandEnabled("custom.new"), "Saving retained the obsolete field or lost individual settings");
                 }
-                store.SaveUnitOperations(true); store.EnsureUserName("Commander");
+                store.SaveCommands(new[] { "custom.uninstalled", "custom.off" }); store.EnsureUserName("Commander");
                 store.SaveGeneral(AdvisorTextSize.Large, "Captain", false, true); store.SaveCampaign(true);
                 store.SaveInformation(AdvisorInformation.Default); store.SaveConsultation(3, 1, "brief"); store.SaveDeveloper(true, () => { });
                 var reopened = new AdvisorOptionsStore(store.Path);
-                Require(reopened.Current.UnitOperationsEnabled && reopened.Current.DeveloperApiEnabled && reopened.Current.CommonPrompt == "brief" && !reopened.Current.LinkOwnUnits, "Another category lost the command choice");
-                reopened.SaveUnitOperations(false);
-                Require(!new AdvisorOptionsStore(store.Path).Current.UnitOperationsEnabled && reopened.Current.DeveloperApiEnabled && reopened.Current.UserName == "Captain", "Disabling changed unrelated settings");
-                foreach (var value in new JToken[] { new JValue(1), new JValue("true"), JValue.CreateNull() })
+                Require(reopened.Current.DisabledCommands.SequenceEqual(new[] { "custom.off", "custom.uninstalled" }) &&
+                    reopened.Current.IsCommandEnabled("custom.new") && reopened.Current.DeveloperApiEnabled && reopened.Current.CommonPrompt == "brief" && !reopened.Current.LinkOwnUnits,
+                    "Another category lost disabled or temporarily uninstalled command IDs");
+                foreach (var value in new JToken[] { new JValue(1), new JValue("true"), JValue.CreateNull(), new JArray(""), new JArray("bad id"), new JArray("same", "same"), new JArray(7) })
                 {
-                    try { _ = AdvisorOptions.Parse(new JObject { ["wip_unit_operations_enabled"] = value }.ToString()); }
+                    try { _ = AdvisorOptions.Parse(new JObject { ["disabled_commands"] = value }.ToString()); }
                     catch (AdvisorOptionsException error) when (error.Code == "options_invalid") { continue; }
-                    throw new InvalidOperationException("Malformed command permission was accepted");
+                    throw new InvalidOperationException("Malformed disabled command IDs were accepted");
                 }
                 Directory.Delete(directory, true); File.WriteAllText(directory, "blocked parent");
-                try { reopened.SaveUnitOperations(true); }
+                try { reopened.SaveCommands(Array.Empty<string>()); }
                 catch (AdvisorOptionsException error) when (error.Code == "options_write_failed")
-                { Require(!reopened.Current.UnitOperationsEnabled, "Failed command save changed runtime permission"); return; }
+                { Require(!reopened.Current.IsCommandEnabled("custom.off"), "Failed save enabled a command at runtime"); return; }
                 throw new InvalidOperationException("Command save should have failed");
             }
             finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); else if (File.Exists(directory)) File.Delete(directory); }
@@ -81,7 +86,7 @@ internal static class OperationTests
         });
         check("Unexpected operation errors stay visible and their unknown side effects are never retried blindly", () =>
         {
-            var operations = new AdvisorOperations(() => true); var effect = new FaultyOperation(); operations.Register(effect);
+            var operations = new AdvisorOperations(_ => true); var effect = new FaultyOperation(); operations.Register(effect);
             var request = Request(operations); request["operation"] = effect.Id;
             try { OperationSubmissionFixture.Adopt(operations, request); throw new InvalidOperationException("Expected native error"); }
             catch (IOException) { }
@@ -99,7 +104,7 @@ internal static class OperationTests
         check("Sonobuoy discovery and registration cannot bypass disabled own-unit or ammunition disclosure", () =>
         {
             var unit = new Unit(); var information = AdvisorInformation.Default;
-            var operations = new AdvisorOperations(() => true);
+            var operations = new AdvisorOperations(_ => true);
             operations.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { unit }, () => information));
             foreach (var kind in new[] { InformationKind.BattleUnits, InformationKind.BattleWeapons })
             {
@@ -135,7 +140,7 @@ internal static class OperationTests
                 JValue.CreateNull(), new JObject(), new JArray("above_layer", "below_layer") })
             {
                 var unit = new Unit { Depth = "above_layer" }; var other = new Unit(43) { Depth = "below_layer" };
-                var operations = new AdvisorOperations(() => true);
+                var operations = new AdvisorOperations(_ => true);
                 operations.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { unit, other }));
                 var definition = operations.Catalog()["operations"]![0]!["parameters"]!;
                 Require(definition["properties"]!["depth"] == null, "The first release advertised depth control");
@@ -165,7 +170,7 @@ internal static class OperationTests
         check("Sonobuoy requests recheck the current unit, flight state, available inventory and single-drop support", () =>
         {
             var unit = new Unit(); var current = new List<IBattleSonobuoyUnit> { unit };
-            var operations = new AdvisorOperations(() => true); operations.Register(SonobuoyFixture.Create(() => current));
+            var operations = new AdvisorOperations(_ => true); operations.Register(SonobuoyFixture.Create(() => current));
             _ = operations.Candidates(SonobuoyDropExtension.OperationId);
             unit.UnavailableReason = "unit_not_airborne";
             Expect(() => OperationSubmissionFixture.Adopt(operations, Request(operations, "landed")), "unit_not_airborne");
@@ -224,7 +229,7 @@ internal static class OperationTests
     }
     private static AdvisorOperations Service(Func<bool> enabled, Unit unit)
     {
-        var operations = new AdvisorOperations(enabled); operations.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { unit })); return operations;
+        var operations = new AdvisorOperations(_ => enabled()); operations.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { unit })); return operations;
     }
     private static JObject Request(AdvisorOperations operations, string id = "request-1") => new()
     {

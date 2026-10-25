@@ -38,7 +38,7 @@ internal static class OperationDocumentationTests
             var english = "{\"name\":\"Name\",\"summary\":\"Summary\",\"requirements\":\"Conditions\"}";
             foreach (var invalid in new[] { "{broken", "{\"name\":17}", "{\"name\":\"a\",\"name\":\"b\"}", "{\"typo\":\"Unrecognized\"}" })
                 Throws<InvalidDataException>(() => new AdvisorOperationText(new Dictionary<string, string> { ["en"] = english, ["fr"] = invalid }));
-            var operations = new AdvisorOperations(() => false);
+            var operations = new AdvisorOperations(_ => false);
             Throws<InvalidOperationException>(() => operations.Register(new MissingTextOperation()));
             Require(operations.Inspect("en").Count == 0, "A failed registration left an incomplete command");
         });
@@ -57,7 +57,7 @@ internal static class OperationDocumentationTests
         });
         check("Documentation inspection works with commands disabled and never reads candidates, creates proposals or enables execution", () =>
         {
-            var operation = Command(); var operations = new AdvisorOperations(() => false); operations.Register(operation);
+            var operation = Command(); var operations = new AdvisorOperations(_ => false); operations.Register(operation);
             var english = operations.Inspect("en").Single(); var japanese = operations.Inspect("ja").Single();
             Require(english.Id == japanese.Id && english.Text["name"] != japanese.Text["name"] &&
                 JToken.DeepEquals(english.Definition, japanese.Definition) && (bool?)english.Definition["requires_approval"] == true &&
@@ -75,7 +75,7 @@ internal static class OperationDocumentationTests
         {
             var prompts = AdvisorPrompts.Current;
             var shown = AdvisorOperationTools.Definitions(prompts);
-            var operations = new AdvisorOperations(() => true); operations.Register(Command());
+            var operations = new AdvisorOperations(_ => true); operations.Register(Command());
             using var gateway = new AdvisorOperationGateway(operations);
             using var session = gateway.CreateSession("docs", prompts)!;
             var before = (JObject)session.Tool.DeepClone();

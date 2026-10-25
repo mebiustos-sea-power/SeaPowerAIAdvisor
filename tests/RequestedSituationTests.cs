@@ -78,7 +78,7 @@ internal static partial class ProviderTests
         }));
         check("Operation lookup does not trigger full delivery and mixed full/operation reads retain their individual results", () =>
         {
-            var operation = new LookupOperation(); var registry = new AdvisorOperations(() => true); registry.Register(operation);
+            var operation = new LookupOperation(); var registry = new AdvisorOperations(_ => true); registry.Register(operation);
             using var gateway = new AdvisorOperationGateway(registry);
             using var operations = gateway.CreateSession("requested-mixed", AdvisorPrompts.Current)!;
             var legacyKnowledge = new SnapshotSpy();
@@ -108,7 +108,7 @@ internal static partial class ProviderTests
         });
         check("Invalid full reads, cancelled mixed reads and rejected payloads do not mark a snapshot as supplied", () =>
         {
-            var operation = new LookupOperation(); var registry = new AdvisorOperations(() => true); registry.Register(operation);
+            var operation = new LookupOperation(); var registry = new AdvisorOperations(_ => true); registry.Register(operation);
             using var gateway = new AdvisorOperationGateway(registry);
             using var operations = gateway.CreateSession("requested-cancel", AdvisorPrompts.Current)!;
             var knowledge = new SnapshotSpy(); var recording = new AdvisorLocalRun();

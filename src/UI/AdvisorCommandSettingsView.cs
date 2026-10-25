@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -6,7 +7,7 @@ using Noesis;
 
 namespace SeaPowerAIAdvisor;
 
-// A read-only view of registered definitions. It never opens an operation session or queries live candidates.
+// Registered definitions and permission drafts stay separate; browsing never opens a command session or queries live candidates.
 internal sealed class AdvisorCommandSettingsView
 {
     private readonly Func<AdvisorOperations?> operations;
@@ -18,6 +19,10 @@ internal sealed class AdvisorCommandSettingsView
     private readonly TabControl tabs;
     private readonly Button tools;
     private readonly Action<Action> guard;
+    private readonly Dictionary<string, CheckBox> choices = new(StringComparer.Ordinal);
+    private string[] originalDisabled = Array.Empty<string>();
+    internal IReadOnlyList<string> DisabledCommands => originalDisabled.Where(id => !choices.ContainsKey(id))
+        .Concat(choices.Where(c => c.Value.IsChecked != true).Select(c => c.Key)).OrderBy(id => id, StringComparer.Ordinal).ToArray();
 
     internal AdvisorCommandSettingsView(FrameworkElement content, Func<AdvisorOperations?> operations, Func<AdvisorText> text,
         TypingScope typing, Action<Action> guard)
@@ -35,9 +40,10 @@ internal sealed class AdvisorCommandSettingsView
             box.LostKeyboardFocus += (_, _) => guard(() => typing.Release(box));
         }
     }
-    internal void Open()
+    internal void Open(IReadOnlyList<string> disabledCommands)
     {
         Close();
+        originalDisabled = disabledCommands.ToArray();
         var available = operations()?.Inspect(text().RequestedLanguage);
         if (available == null || available.Count == 0)
             entries.Children.Add(new TextBlock { Text = text()["commands.empty"], TextWrapping = TextWrapping.Wrap });
@@ -46,7 +52,10 @@ internal sealed class AdvisorCommandSettingsView
         {
             var button = new Button { Content = text()["commands.details"], Height = 30, Padding = new Thickness(10, 0, 10, 0), Margin = new Thickness(12, 0, 0, 0) };
             button.Click += (_, _) => guard(() => ShowCommand(entry.Id));
-            entries.Children.Add(AdvisorExtensionCard.Create(entry.Text["name"], entry.Id, entry.Version, entry.Text["summary"], text(), button));
+            var choice = new CheckBox { Content = AdvisorExtensionCard.Heading(entry.Text["name"]),
+                IsChecked = !originalDisabled.Contains(entry.Id, StringComparer.Ordinal), VerticalAlignment = VerticalAlignment.Center };
+            choices.Add(entry.Id, choice);
+            entries.Children.Add(AdvisorExtensionCard.Create(choice, entry.Id, entry.Version, entry.Text["summary"], text(), button));
         }
     }
     private void ShowCommand(string identifier)
@@ -72,5 +81,5 @@ internal sealed class AdvisorCommandSettingsView
     }
     private void CloseDetails() { detail.Visibility = Visibility.Collapsed; list.Visibility = Visibility.Visible; }
     internal void Focus() => tools.Focus();
-    internal void Close() { CloseDetails(); entries.Children.Clear(); title.Text = id.Text = version.Text = help.Text = prompt.Text = definition.Text = ""; }
+    internal void Close() { CloseDetails(); entries.Children.Clear(); choices.Clear(); originalDisabled = Array.Empty<string>(); title.Text = id.Text = version.Text = help.Text = prompt.Text = definition.Text = ""; }
 }

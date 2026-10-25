@@ -20,7 +20,7 @@ internal sealed class AdvisorAdapterSettingsView
         if (available.Length == 0)
             entries.Children.Add(new TextBlock { Text = language["extensions.adapters_empty"], TextWrapping = TextWrapping.Wrap });
         foreach (var service in available)
-            entries.Children.Add(AdvisorExtensionCard.Create(service.Caption(language), service.Id, service.Version,
+            entries.Children.Add(AdvisorExtensionCard.Create(AdvisorExtensionCard.Heading(service.Caption(language)), service.Id, service.Version,
                 service.Summary(language), language));
     }
     internal void Close() => entries.Children.Clear();

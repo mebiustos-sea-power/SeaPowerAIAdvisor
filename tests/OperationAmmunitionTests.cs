@@ -176,7 +176,7 @@ internal static class OperationAmmunitionTests
     {
         internal readonly Helicopter Main = new(42, "mod_buoy"), Other = new(43, "foreign_buoy");
         internal AdvisorInformation Information = AdvisorInformation.Default;
-        internal readonly AdvisorOperations Service = new(() => true);
+        internal readonly AdvisorOperations Service = new(_ => true);
         internal readonly AdvisorOperationGateway Gateway;
         internal Trial()
         {

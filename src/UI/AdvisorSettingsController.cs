@@ -30,7 +30,7 @@ internal sealed class AdvisorSettingsController
     private readonly Action<string> warn;
     private readonly TextBox rounds, history, prompt, userName;
     private readonly ComboBox size;
-    private readonly CheckBox campaign, log, localApi, linkOwnUnits, linkContacts, unitOperations;
+    private readonly CheckBox campaign, log, localApi, linkOwnUnits, linkContacts;
     private readonly TextBlock status, title, testStatus, testError, confirmationText;
     private readonly Button test, accept, cancelConfirmation, throwException;
     private Category? current;
@@ -57,7 +57,6 @@ internal sealed class AdvisorSettingsController
         userName = Named<TextBox>("UserName"); userName.MaxLength = AdvisorOptions.MaxUserNameLength;
         size = Named<ComboBox>("ConversationTextSize"); campaign = Named<CheckBox>("EnableCampaignAdvisor"); log = Named<CheckBox>("LogAiJson");
         localApi = Named<CheckBox>("EnableLocalApi");
-        unitOperations = Named<CheckBox>("EnableUnitOperations");
         linkOwnUnits = Named<CheckBox>("LinkOwnUnits"); linkContacts = Named<CheckBox>("LinkContacts");
         localConnections = new AdvisorLocalConnectionsView(Named<StackPanel>("LocalApiConnections"), Named<ComboBox>("LocalApiDefaultConnection"), Named<CheckBox>("AllowLocalApiModelOverride"), text, guard);
         information = new AdvisorInformationView(Named<StackPanel>("InformationChoices"), text(), guard);
@@ -82,7 +81,7 @@ internal sealed class AdvisorSettingsController
         Bind("SaveConsultation", () => Save(() => options.SaveConsultation(Number(rounds, "query_rounds_invalid"), Number(history, "history_exchanges_invalid"), prompt.Text ?? "")));
         Bind("ResetInformation", () => { if (available) { information.Reset(AdvisorInformation.Default); Notice(""); } });
         Bind("SaveInformation", () => Save(() => options.SaveInformation(information.Value)));
-        Bind("SaveCommands", () => Save(() => options.SaveUnitOperations(unitOperations.IsChecked == true)));
+        Bind("SaveCommands", () => Save(() => options.SaveCommands(commands.DisabledCommands)));
         Bind("SaveWip", () => Save(() => options.SaveCampaign(campaign.IsChecked == true)));
         void SaveDeveloper() => Save(() => options.SaveDeveloper(localApi.IsChecked == true,
             () => apiStore.SaveLogging(log.IsChecked == true), localConnections.Value));
@@ -129,7 +128,7 @@ internal sealed class AdvisorSettingsController
             else if (category == Category.Extensions)
             {
                 Named<TabControl>("ExtensionsCategory").SelectedIndex = 0;
-                unitOperations.IsChecked = options.Read().UnitOperationsEnabled; commands.Open(); adapters.Open(); commands.Focus();
+                commands.Open(options.Read().DisabledCommands); adapters.Open(); commands.Focus();
             }
             else if (category == Category.Wip) { campaign.IsChecked = options.Read().CampaignEnabled; campaign.Focus(); }
             else if (category == Category.Developer)
@@ -169,7 +168,7 @@ internal sealed class AdvisorSettingsController
         Category.General => userName.Text + "\0" + size.SelectedIndex + ":" + linkOwnUnits.IsChecked + ":" + linkContacts.IsChecked,
         Category.Consultation => rounds.Text + "\0" + history.Text + "\0" + prompt.Text,
         Category.Information => information.Value.Key,
-        Category.Extensions => unitOperations.IsChecked.ToString(),
+        Category.Extensions => string.Join("\0", commands.DisabledCommands),
         Category.Wip => campaign.IsChecked.ToString(),
         Category.Developer => log.IsChecked + ":" + localApi.IsChecked + ":" + localConnections.Value.Json().ToString(),
         _ => ""

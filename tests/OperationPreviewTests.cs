@@ -12,7 +12,7 @@ internal static class OperationPreviewTests
     {
         check("Commands supply geographic previews without making them mandatory for other operations", () =>
         {
-            var service = new AdvisorOperations(() => true);
+            var service = new AdvisorOperations(_ => true);
             var text = new TextOperation("custom.text"); var visible = new VisibleOperation("custom.visible");
             service.Register(text); service.Register(visible);
             var proposal = Plan(service, "mixed", text.Id, visible.Id);
@@ -29,7 +29,7 @@ internal static class OperationPreviewTests
         });
         check("Opening, switching and reopening approval previews preserve the map view and only dispose their own drawings", () =>
         {
-            var service = new AdvisorOperations(() => true); var command = new VisibleOperation("custom.visible"); service.Register(command);
+            var service = new AdvisorOperations(_ => true); var command = new VisibleOperation("custom.visible"); service.Register(command);
             var first = Plan(service, "first", command.Id); var second = Plan(service, "second", command.Id);
             var map = new Map { FailCenter = true }; using var unrelated = map.Draw(Array.Empty<AdvisorMapDrawing>());
             using var review = new AdvisorOperationPreview(map);
@@ -47,7 +47,7 @@ internal static class OperationPreviewTests
         {
             foreach (var cause in new[] { "retire", "remove", "replace", "disable", "register", "service" })
             {
-                var enabled = true; var service = new AdvisorOperations(() => enabled);
+                var enabled = true; var service = new AdvisorOperations(_ => enabled);
                 var command = new VisibleOperation("custom.visible"); service.Register(command);
                 var proposal = Plan(service, "turn", command.Id); var map = new Map();
                 using var review = new AdvisorOperationPreview(map); review.Show(service, proposal, "en");
@@ -65,7 +65,7 @@ internal static class OperationPreviewTests
         });
         check("Map preview errors release acquired drawings and propagate instead of masking a broken renderer", () =>
         {
-            var service = new AdvisorOperations(() => true); var command = new VisibleOperation("custom.visible"); service.Register(command);
+            var service = new AdvisorOperations(_ => true); var command = new VisibleOperation("custom.visible"); service.Register(command);
             var proposal = Plan(service, "turn", command.Id);
             var map = new Map { FailCenter = true };
             using var unrelated = map.Draw(Array.Empty<AdvisorMapDrawing>());

@@ -56,7 +56,7 @@ internal static class OperationApprovalTests
                 ReservationRoute = new ReservationRoute(new AdvisorMapCoordinate(28, 128), null) };
             second.Queue.Clear();
             var units = new List<IBattleSonobuoyUnit> { first, second };
-            var operation = SonobuoyFixture.Create(() => units); var service = new AdvisorOperations(() => true);
+            var operation = SonobuoyFixture.Create(() => units); var service = new AdvisorOperations(_ => true);
             service.Register(operation); service.BeginProposal("routes");
             var values = new[] { DropPlan(service, "routes", 0, 2, 0), DropPlan(service, "routes", 1, 9, 7) };
             values[1]["target_ref"] = "unit:43";
@@ -82,7 +82,7 @@ internal static class OperationApprovalTests
         {
             var unit = new Helicopter();
             var information = AdvisorInformation.Default.With(InformationKind.BattleMovementPlans, false);
-            var service = new AdvisorOperations(() => true);
+            var service = new AdvisorOperations(_ => true);
             service.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { unit }, () => information));
             service.BeginProposal("hidden-route");
             OperationSubmissionFixture.Submit(service, "hidden-route", DropPlan(service, "hidden-route", 0, 0, 1));
@@ -136,7 +136,7 @@ internal static class OperationApprovalTests
             foreach (var approval in new[] { true, false })
             foreach (var reason in new[] { AdvisorCompletionReason.RoundLimit, AdvisorCompletionReason.PayloadLimit })
             {
-                var log = new List<string>(); var service = new AdvisorOperations(() => true);
+                var log = new List<string>(); var service = new AdvisorOperations(_ => true);
                 var operation = new Extension("custom.limit", approval, log); service.Register(operation);
                 service.BeginProposal("earlier"); OperationSubmissionFixture.Submit(service, "earlier", Request(service, "earlier", 0, operation.Id));
                 var previous = service.FinishProposal("earlier", true)!;
@@ -167,7 +167,7 @@ internal static class OperationApprovalTests
         });
         check("Mixed operations are held together, use their own summaries and retain original execution order", () =>
         {
-            var log = new List<string>(); var service = new AdvisorOperations(() => true);
+            var log = new List<string>(); var service = new AdvisorOperations(_ => true);
             var first = new Extension("custom.first", false, log); var second = new Extension("custom.second", true, log);
             service.Register(first); service.Register(second); service.BeginProposal("mixed");
             OperationSubmissionFixture.Submit(service, "mixed", Request(service, "mixed", 0, first.Id),
@@ -189,7 +189,7 @@ internal static class OperationApprovalTests
             foreach (var change in new[] { "inventory", "target", "permission", "information" })
             {
                 var enabled = true; var information = AdvisorInformation.Default; var unit = new Helicopter();
-                var units = new List<IBattleSonobuoyUnit> { unit }; var service = new AdvisorOperations(() => enabled);
+                var units = new List<IBattleSonobuoyUnit> { unit }; var service = new AdvisorOperations(_ => enabled);
                 service.Register(SonobuoyFixture.Create(() => units, () => information)); service.BeginProposal("check");
                 OperationSubmissionFixture.Submit(service, "check", DropPlan(service, "check", 0, 0, 1, 2));
                 var proposal = service.FinishProposal("check", true)!;
@@ -223,7 +223,7 @@ internal static class OperationApprovalTests
         });
         check("A proposal with known registration failure stops at the first failure without replaying completed orders", () =>
         {
-            var log = new List<string>(); var service = new AdvisorOperations(() => true);
+            var log = new List<string>(); var service = new AdvisorOperations(_ => true);
             var operation = new Extension("custom.failure", true, log) { RejectAt = 1 }; service.Register(operation); service.BeginProposal("partial");
             OperationSubmissionFixture.Submit(service, "partial", Enumerable.Range(0, 3).Select(i => Request(service, "partial", i, operation.Id)).ToArray());
             var proposal = service.FinishProposal("partial", true)!; service.Approve(proposal); service.Approve(proposal);
@@ -235,7 +235,7 @@ internal static class OperationApprovalTests
         });
         check("Unknown native side effects remain visible and cannot be approved or submitted again", () =>
         {
-            var log = new List<string>(); var service = new AdvisorOperations(() => true);
+            var log = new List<string>(); var service = new AdvisorOperations(_ => true);
             var operation = new Extension("custom.unknown", true, log) { ThrowAt = 1 }; service.Register(operation); service.BeginProposal("unknown");
             OperationSubmissionFixture.Submit(service, "unknown", Enumerable.Range(0, 3).Select(i => Request(service, "unknown", i, operation.Id)).ToArray());
             var proposal = service.FinishProposal("unknown", true)!;
@@ -258,7 +258,7 @@ internal static class OperationApprovalTests
         check("Each alternative carries independent per-unit append or replace plans, descriptions and route origins", () =>
         {
             var first = new Helicopter(); var second = new Helicopter { Id = 43, Name = "Hobby 2" };
-            var service = new AdvisorOperations(() => true);
+            var service = new AdvisorOperations(_ => true);
             service.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { first, second }));
             service.BeginProposal("placement");
             JObject Order(Helicopter unit, string placement, params int[] drops)
@@ -326,7 +326,7 @@ internal static class OperationApprovalTests
             foreach (var placement in new[] { "append", "replace" })
             {
                 var unit = new Helicopter { RejectAt = 1 }; var next = new Helicopter { Id = 43 };
-                var service = new AdvisorOperations(() => true); service.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { unit, next }));
+                var service = new AdvisorOperations(_ => true); service.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { unit, next }));
                 service.BeginProposal("failure"); var first = DropPlan(service, "failure", 0, 0, 1, 2); first["arguments"]!["placement"] = placement;
                 var second = Request(service, "failure", 1); second["target_ref"] = "unit:43";
                 OperationSubmissionFixture.Submit(service, "failure", first, second);
@@ -342,7 +342,7 @@ internal static class OperationApprovalTests
         check("The drop limit counts points across units and invalid nested policies never change existing reservations", () =>
         {
             var first = new Helicopter { Inventory = 40 }; var second = new Helicopter { Id = 43, Inventory = 40 };
-            var service = new AdvisorOperations(() => true); service.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { first, second }));
+            var service = new AdvisorOperations(_ => true); service.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { first, second }));
             service.BeginProposal("limits");
             var other = DropPlan(service, "limits", 1, Enumerable.Range(0, 11).ToArray()); other["target_ref"] = "unit:43";
             Expect(() => OperationSubmissionFixture.Submit(service, "limits",
@@ -353,7 +353,7 @@ internal static class OperationApprovalTests
         });
     }
     private static AdvisorOperations Buoys(Helicopter unit)
-    { var service = new AdvisorOperations(() => true); service.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { unit })); return service; }
+    { var service = new AdvisorOperations(_ => true); service.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { unit })); return service; }
     private static JObject Request(AdvisorOperations service, string owner, int index, string operation = SonobuoyDropExtension.OperationId)
     {
         var args = new JObject { ["latitude"] = 26.5 + index * .001, ["longitude"] = 127.5, ["ammunition"] = "mod_buoy" };

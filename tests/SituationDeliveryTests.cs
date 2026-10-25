@@ -92,7 +92,7 @@ internal static partial class ProviderTests
         });
         check("An upfront read facade rejects duplicate situation retrieval but retains operation lookups without execution", () =>
         {
-            var operation = new LookupOperation(); var registry = new AdvisorOperations(() => true); registry.Register(operation);
+            var operation = new LookupOperation(); var registry = new AdvisorOperations(_ => true); registry.Register(operation);
             using var gateway = new AdvisorOperationGateway(registry);
             using var operations = gateway.CreateSession("upfront", AdvisorPrompts.Current)!;
             var knowledge = DeliveryKnowledge(); var context = AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations);

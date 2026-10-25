@@ -139,7 +139,7 @@ internal static class OperationTargetTests
         internal readonly AdvisorOperationGateway Gateway;
         internal Trial()
         {
-            Service = new AdvisorOperations(() => Enabled);
+            Service = new AdvisorOperations(_ => Enabled);
             Service.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { Main, Other }));
             Gateway = new AdvisorOperationGateway(Service);
         }

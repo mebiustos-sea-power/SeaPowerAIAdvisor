@@ -1,7 +1,6 @@
 {
   "wip.category": "WIP (experimental)",
   "wip.campaign_alpha": "Enable AI on the campaign screen of Bungalow's Dynamic Campaign Mod (alpha)",
-  "commands.enabled": "Enable commands",
   "failure.restart": "Restart advisor",
   "developer.throw_exception": "Throw test exception",
   "developer.throw_exception_note": "Clears the conversation and discards unsaved edits.",
@@ -191,7 +190,7 @@
   "readiness.cooling": "cooling",
   "readiness.lost": "lost",
   "connection.diagnostic_log_error": "Cannot write the AI JSON log. The consultation was stopped. Check the logs folder and available disk space.",
-  "battle.launcher": "Open the battle advisor",
+  "battle.launcher": "Open AI Advisor",
   "battle.diagnostic": "Player-known battle snapshot (no external transmission). Missing values are unknown.",
   "contact.assessment_button": "{0}'s assessment",
   "contact.reassess_friendly": "Reassess as friendly",

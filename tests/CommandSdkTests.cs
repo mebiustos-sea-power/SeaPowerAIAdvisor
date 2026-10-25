@@ -151,7 +151,7 @@ internal static class CommandSdkTests
     }
     private const string Text = "{\"name\":\"Fixture\",\"summary\":\"Summary\",\"requirements\":\"Conditions\"}";
     private static AdvisorOperations Service(AdvisorOperationCatalog catalog, Game? game = null, Map? map = null)
-    { var service = new AdvisorOperations(() => true); foreach (var operation in catalog.CreateOperations(game ?? new Game(), map ?? new Map())) service.Register(operation); return service; }
+    { var service = new AdvisorOperations(_ => true); foreach (var operation in catalog.CreateOperations(game ?? new Game(), map ?? new Map())) service.Register(operation); return service; }
     private static JObject Request(AdvisorOperations service, int index) => new() { ["scope_id"] = service.ScopeId,
         ["request_id"] = "sdk-" + index, ["operation"] = "fixture.command", ["target_ref"] = "fixture:target", ["arguments"] = new JObject { ["index"] = index } };
     private static void Require(bool value, string message) { if (!value) throw new InvalidOperationException(message); }

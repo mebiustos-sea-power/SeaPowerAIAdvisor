@@ -399,14 +399,7 @@
                   <RowDefinition Height="*" />
                   <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
-                <Grid Margin="0,0,0,10">
-                  <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                  </Grid.ColumnDefinitions>
-                  <CheckBox x:Name="EnableUnitOperations" Content="{DynamicResource Advisor.commands.enabled}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                  <Button x:Name="CommandTools" Grid.Column="1" Content="{DynamicResource Advisor.commands.tools}" Height="30" Padding="12,0" />
-                </Grid>
+                <Button x:Name="CommandTools" Content="{DynamicResource Advisor.commands.tools}" Height="30" Padding="12,0" HorizontalAlignment="Right" Margin="0,0,0,10" />
                 <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                   <StackPanel x:Name="CommandEntries" Margin="0,0,8,0" />
                 </ScrollViewer>

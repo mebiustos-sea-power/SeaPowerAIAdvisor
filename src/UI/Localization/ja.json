@@ -1,7 +1,6 @@
 {
   "wip.category": "WIP（試験的機能）",
   "wip.campaign_alpha": "Bungalow's Dynamic Campaign Mod のキャンペーン画面でAIを有効にする（アルファ版）",
-  "commands.enabled": "コマンドを有効にする",
   "failure.restart": "アドバイザーを再起動",
   "developer.throw_exception": "例外を発生させる",
   "developer.throw_exception_note": "会話履歴と編集中の設定は破棄されます。",
@@ -191,7 +190,7 @@
   "readiness.cooling": "再準備待ち",
   "readiness.lost": "喪失",
   "connection.diagnostic_log_error": "AI送受信ログを書き込めないため、相談を停止しました。logsフォルダーとディスクの空き容量を確認してください。",
-  "battle.launcher": "戦闘アドバイザーを開く",
+  "battle.launcher": "AIアドバイザーを開く",
   "battle.diagnostic": "プレイヤー既知の戦闘状況（外部送信なし）。未取得の値は不明です。",
   "contact.assessment_button": "{0}の見解",
   "contact.reassess_friendly": "味方と仮定して再評価",

@@ -12,7 +12,7 @@ internal static class ReservationTests
     {
         check("Developer reservation inspection retains order, ammunition and detached values", () =>
         {
-            var unit = new Unit(42); var service = Service(new AdvisorOperations(() => true), unit);
+            var unit = new Unit(42); var service = Service(new AdvisorOperations(_ => true), unit);
             var view = service.Read(42);
             Require((int?)view["unit_id"] == 42 && (int?)view["count"] == 2 && (string?)view["target_ref"] == "unit:42", "Inspection selected the wrong unit");
             Require(JToken.DeepEquals(view["reservations"], unit.Rows), "Inspection lost reservation order or details");
@@ -21,7 +21,7 @@ internal static class ReservationTests
         });
         check("Reservation reset removes all selected-unit orders and preserves other units and inventory", () =>
         {
-            var first = new Unit(42); var other = new Unit(43); var ops = new AdvisorOperations(() => true);
+            var first = new Unit(42); var other = new Unit(43); var ops = new AdvisorOperations(_ => true);
             var service = Service(ops, first, other); var result = service.Clear(42, ops.ScopeId);
             Require((int?)result["removed_count"] == 2 && (int?)result["count"] == 0 && !((JArray)result["reservations"]!).Any(), "Reset did not report the actual queue change");
             Require(first.Clears == 1 && first.Inventory == 12 && first.Depth == "alternating" && other.Clears == 0 && other.Rows.Count == 2, "Reset changed unrelated game state");
@@ -34,7 +34,7 @@ internal static class ReservationTests
         });
         check("Developer reservation reset runs on the game thread and rejects busy, malformed and stale requests", () =>
         {
-            var enabled = true; var ops = new AdvisorOperations(() => enabled); var unit = new Unit(42);
+            var enabled = true; var ops = new AdvisorOperations(_ => enabled); var unit = new Unit(42);
             var target = new Target(); var owner = new object(); var service = Service(ops, unit);
             var api = Api(e => throw e); api.Attach(owner, "tactical_battle", () => target, ops, service); api.Enable();
             var body = new JObject { ["scope_id"] = ops.ScopeId };
@@ -53,14 +53,14 @@ internal static class ReservationTests
             Require(queued.GetAwaiter().GetResult().Status == 403 && unit.Clears == 1, "Queued reset bypassed current command permission");
             enabled = true;
             var old = api.Enqueue("POST", "/v1/units/42/reservations/clear", Scope(ops));
-            var fresh = new AdvisorOperations(() => true); api.Attach(new object(), "tactical_battle", () => target, fresh, Service(fresh, unit)); api.Pump();
+            var fresh = new AdvisorOperations(_ => true); api.Attach(new object(), "tactical_battle", () => target, fresh, Service(fresh, unit)); api.Pump();
             Require(old.GetAwaiter().GetResult().Status == 409 && unit.Clears == 1, "Old battle request cleared a new battle queue");
             Require(Send(api, "GET", "/v1/units/42/reservations").Status == 200, "Live queue inspection failed");
             api.Disable();
         });
         check("Unavailable and failed native resets are visible and never reported as success", () =>
         {
-            var ops = new AdvisorOperations(() => true); var unit = new Unit(42) { FailClear = true }; var service = Service(ops, unit);
+            var ops = new AdvisorOperations(_ => true); var unit = new Unit(42) { FailClear = true }; var service = Service(ops, unit);
             Exception? observed = null; var api = Api(e => observed = e); var owner = new object();
             api.Attach(owner, "tactical_battle", () => new Target(), ops, service); api.Enable();
             Require(Send(api, "POST", "/v1/units/42/reservations/clear", Scope(ops)).Status == 500 && observed is InvalidOperationException,
@@ -71,7 +71,11 @@ internal static class ReservationTests
             Require(Send(api, "POST", "/v1/units/42/reservations/clear", Scope(ops)).Status == 503 && unit.Clears == 1, "Disabled local API executed reset");
         });
     }
-    private static AdvisorUnitReservations Service(AdvisorOperations ops, params Unit[] units) => new(ops, () => units);
+    private static AdvisorUnitReservations Service(AdvisorOperations ops, params Unit[] units)
+    {
+        ops.Register(SonobuoyFixture.Create(() => Array.Empty<IBattleSonobuoyUnit>()));
+        return new AdvisorUnitReservations(ops, () => units);
+    }
     private static AdvisorLocalApi Api(Action<Exception> unexpected) => new(() => throw new InvalidOperationException("Prompt access"), unexpected,
         () => throw new InvalidOperationException("Connection access"), (_, _, _, _) => throw new InvalidOperationException("AI access"));
     private static JObject Scope(AdvisorOperations ops) => new() { ["scope_id"] = ops.ScopeId };

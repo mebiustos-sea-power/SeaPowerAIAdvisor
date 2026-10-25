@@ -163,7 +163,7 @@ internal static class ReservationCompositionTests
     private static AdvisorOperations Service(Game game, string owner)
     {
         var catalog = new AdvisorOperationCatalog(); catalog.Register(new SonobuoyDropExtension()); catalog.Register(new MovementExtension()); catalog.Register(new FormationReturnExtension());
-        var service = new AdvisorOperations(() => true); foreach (var op in catalog.CreateOperations(game, new Map())) service.Register(op);
+        var service = new AdvisorOperations(_ => true); foreach (var op in catalog.CreateOperations(game, new Map())) service.Register(op);
         service.BeginProposal(owner); return service;
     }
     private static JObject Batch(params JObject[] plans) => new() { ["request_id"] = "composed", ["plans"] = new JArray(plans) };

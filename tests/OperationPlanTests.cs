@@ -15,7 +15,7 @@ internal static class OperationPlanTests
     {
         check("A complete submission preserves mixed operation and target order and executes only the selected alternative", () =>
         {
-            var log = new List<string>(); var service = new AdvisorOperations(() => true);
+            var log = new List<string>(); var service = new AdvisorOperations(_ => true);
             var a = new Command("custom.move", log); var b = new Command("custom.observe", log);
             service.Register(a); service.Register(b); service.BeginProposal("mixed");
             var request = Batch(Plan("a", Order(a, "one", 1), Order(b, "two", 2), Order(a, "two", 3)), Plan("b", Order(b, "one", 4)));
@@ -31,6 +31,34 @@ internal static class OperationPlanTests
             Require((bool?)service.SubmitPlans("mixed", JObject.Parse(original))["registered"] == true && log.Count == 3, "A replay repeated native operations");
             var conflict = JObject.Parse(original); conflict["plans"]![0]!["summary"] = "different";
             Expect("request_id_conflict", () => service.SubmitPlans("mixed", conflict));
+        });
+        check("Individual command switches filter discovery and reject disabled members before submitting or adopting a mixed plan", () =>
+        {
+            var disabled = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal); var log = new List<string>();
+            var a = new Command("custom.move", log); var b = new Command("custom.observe", log);
+            var service = new AdvisorOperations(id => !disabled.Contains(id)); service.Register(a); service.Register(b);
+            service.BeginProposal("later"); service.SubmitPlans("later", Batch(Plan("a", Order(a, "one", 1), Order(b, "two", 2))));
+            var proposal = service.FinishProposal("later", true)!;
+            disabled.Add(b.Id);
+            Require(service.Enabled && service.Inspect("en").Count == 2 &&
+                service.Catalog()["operations"]!.Count() == 1 && (string?)service.Catalog()["operations"]![0]!["id"] == a.Id &&
+                (int?)service.Discover("", 0, 20)["total_count"] == 1, "A disabled command disappeared from settings or remained advertised to AI");
+            Expect("operation_disabled", () => service.Describe(b.Id)); Expect("operation_disabled", () => service.Candidates(b.Id));
+            service.BeginProposal("rejected");
+            Expect("operation_disabled", () => service.SubmitPlans("rejected", Batch(Plan("a", Order(a, "one", 3), Order(b, "two", 4)))));
+            Require(service.Proposal("rejected")!.Orders.Count == 0 && log.Count == 0, "A rejected mixed submission retained a partial plan or wrote orders");
+            service.Approve(proposal, new[] { "a" });
+            Require(proposal.State == AdvisorProposalState.Pending && proposal.ErrorCode == "operation_disabled" && log.Count == 0,
+                "Disabling one command allowed a previously submitted mixed plan to execute partially");
+            disabled.Remove(b.Id); service.Approve(proposal, new[] { "a" });
+            Require(log.SequenceEqual(new[] { "custom.move:one:1", "custom.observe:two:2" }), "Re-enabling failed or reordered the retained plan");
+            disabled.Add(a.Id); disabled.Add(b.Id);
+            using var gateway = new AdvisorOperationGateway(service);
+            Require(!service.Enabled && gateway.CreateSession("none", AdvisorPrompts.Current) == null && service.Catalog()["operations"]!.Count() == 0,
+                "Disabling every command still supplied an operation service");
+            var c = new Command("custom.new", log); service.Register(c);
+            Require(service.Enabled && service.Catalog()["operations"]!.Count() == 1 &&
+                (string?)service.Catalog()["operations"]![0]!["id"] == c.Id, "A newly registered command did not default to enabled");
         });
         check("Each alternative is validated independently, while multi-selection checks the combined demand before any side effect", () =>
         {
@@ -89,7 +117,7 @@ internal static class OperationPlanTests
         check("Operation plan-count policies intersect over the full plan set, with single selection taking precedence", () =>
         {
             var log = new List<string>(); var a = new Command("custom.range", log, 1, 3); var b = new Command("custom.exact", log, 2, 2, AdvisorPlanSelection.Single);
-            var service = new AdvisorOperations(() => true); service.Register(a); service.Register(b); service.BeginProposal("policy");
+            var service = new AdvisorOperations(_ => true); service.Register(a); service.Register(b); service.BeginProposal("policy");
             Expect("plan_count_out_of_range", () => service.SubmitPlans("policy", Batch(Plan("a", Order(a, "one", 1), Order(b, "two", 2)))));
             service.SubmitPlans("policy", Batch(Plan("a", Order(a, "one", 1), Order(b, "two", 2)), Plan("b", Order(a, "one", 3))));
             Require(service.Proposal("policy")!.Selection == AdvisorPlanSelection.Single &&
@@ -366,7 +394,7 @@ internal static class OperationPlanTests
         check("Batch transport normalizes unit and ammunition aliases before retention and labels corrections with plan and operation identity", () =>
         {
             var unit = new BuoyUnit(); var command = SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { unit });
-            var service = new AdvisorOperations(() => true); service.Register(command);
+            var service = new AdvisorOperations(_ => true); service.Register(command);
             using var gateway = new AdvisorOperationGateway(service);
             var references = new AdvisorOperationReferences(new AdvisorUnitReferences(new[] { ("own_unit_1", 42) }),
                 new AdvisorWeaponReferences(new[] { ("weapon_reference_1", "mod_buoy", "Custom buoy") }));
@@ -388,7 +416,7 @@ internal static class OperationPlanTests
         });
     }
     private static AdvisorOperations Service(Command command, string owner)
-    { var service = new AdvisorOperations(() => true); service.Register(command); service.BeginProposal(owner); return service; }
+    { var service = new AdvisorOperations(_ => true); service.Register(command); service.BeginProposal(owner); return service; }
     private static JObject Batch(params JObject[] plans) => new() { ["request_id"] = "submission", ["plans"] = new JArray(plans) };
     private static JObject Plan(string id, params JObject[] orders) => SonobuoyFixture.Queued(new JObject
     { ["plan_id"] = id, ["title"] = "Plan " + id, ["summary"] = "Trade-off " + id, ["operations"] = new JArray(orders) });
