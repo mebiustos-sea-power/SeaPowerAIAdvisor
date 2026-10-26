@@ -200,23 +200,31 @@ internal static class MarkdownTests
             Require(chat.Exchanges.Single().Question == question && chat.Exchanges.Single().Answer == answer,
                 "Interactive display altered copied questions or AI history");
         });
-        check("Track guidance is limited to empty supported conversations and disappeared contacts become plain text", () =>
+        check("Navigation guidance renders Markdown only in empty supported conversations and disappeared contacts become plain text", () =>
         {
-            var known = true;
-            var text = AdvisorText.Load("en");
-            var chat = new AdvisorConversation();
-            var empty = AdvisorTranscript.Render(chat, text, "Michael Reed", "empty", links: new AdvisorUnitLinks(n => known && n == 7008));
-            Require(Visible(XDocument.Parse(empty).Root!).Contains(text["transcript.track_navigation"]), "The initial track instructions were missing");
-            var unsupported = AdvisorTranscript.Render(chat, text, "Michael Reed", "empty");
-            Require(!Visible(XDocument.Parse(unsupported).Root!).Contains(text["transcript.track_navigation"]), "An unsupported mode advertised track navigation");
-            Require(chat.TryAdd("Contact 7008", "**7008**", out _), "The known-track consultation was rejected");
-            var active = AdvisorTranscript.Render(chat, text, "Michael Reed", "empty", links: new AdvisorUnitLinks(n => known && n == 7008));
-            Require(!Visible(XDocument.Parse(active).Root!).Contains(text["transcript.track_navigation"]), "Initial instructions stayed above an active conversation");
-            known = false;
-            var refreshed = XDocument.Parse(AdvisorTranscript.Render(chat, text, "Michael Reed", "empty",
-                links: new AdvisorUnitLinks(n => known && n == 7008))).Root!;
-            Require(!refreshed.Descendants(Ns + "Hyperlink").Any() && Visible(refreshed) == Visible(XDocument.Parse(active).Root!),
-                "A missing contact stayed actionable or its message was removed");
+            foreach (var language in new[] { "en", "ja" })
+            {
+                var known = true;
+                var text = AdvisorText.Load(language);
+                var chat = new AdvisorConversation();
+                var instructions = Visible(AdvisorMarkdown.Render(text["transcript.track_navigation"]));
+                var empty = XDocument.Parse(AdvisorTranscript.Render(chat, text, "Michael Reed", "empty",
+                    links: new AdvisorUnitLinks(n => known && n == 7008))).Root!;
+                Require(Visible(empty).Contains(instructions), "The initial navigation instructions were missing");
+                Require(empty.Descendants(Ns + "Span").Any(e => (string?)e.Attribute("FontWeight") == "Bold") &&
+                    empty.Descendants(Ns + "TextBlock").Any(e => (string?)e.Attribute("Text") == "•") &&
+                    !Visible(empty).Contains("**"), "The initial instructions lost their emphasis or list formatting");
+                var unsupported = AdvisorTranscript.Render(chat, text, "Michael Reed", "empty");
+                Require(!Visible(XDocument.Parse(unsupported).Root!).Contains(instructions), "An unsupported mode advertised navigation");
+                Require(chat.TryAdd("Contact 7008", "**7008**", out _), "The known-track consultation was rejected");
+                var active = AdvisorTranscript.Render(chat, text, "Michael Reed", "empty", links: new AdvisorUnitLinks(n => known && n == 7008));
+                Require(!Visible(XDocument.Parse(active).Root!).Contains(instructions), "Initial instructions stayed above an active conversation");
+                known = false;
+                var refreshed = XDocument.Parse(AdvisorTranscript.Render(chat, text, "Michael Reed", "empty",
+                    links: new AdvisorUnitLinks(n => known && n == 7008))).Root!;
+                Require(!refreshed.Descendants(Ns + "Hyperlink").Any() && Visible(refreshed) == Visible(XDocument.Parse(active).Root!),
+                    "A missing contact stayed actionable or its message was removed");
+            }
         });
         check("Own-unit links resolve complete names and one-token omissions while preserving Markdown and original history", () =>
         {

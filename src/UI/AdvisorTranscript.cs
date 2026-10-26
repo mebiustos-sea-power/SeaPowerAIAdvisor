@@ -19,7 +19,7 @@ internal static class AdvisorTranscript
         if (conversation.Turns.Count == 0 && configurationNotice == null)
         {
             root.Add(Plain(empty));
-            if (links != null || coordinateLinks != null) root.Add(Plain(text["transcript.track_navigation"]));
+            if (links != null || coordinateLinks != null) root.Add(AdvisorMarkdown.Render(text["transcript.track_navigation"]));
         }
         for (var i = 0; i < conversation.Turns.Count; i++)
         {
