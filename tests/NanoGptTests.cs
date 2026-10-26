@@ -120,14 +120,15 @@ internal static partial class ProviderTests
         {
             await InServiceDirectory(async directory =>
             {
-                var draft = NanoDraft(); draft.LogAiJson = true; draft.Main.MaxOutputTokens = 8192;
+                var draft = NanoDraft(); draft.LogAiJson = true; draft.Main.MaxOutputTokens = 8192; draft.Main.Prompt = "CONSULTATION_ONLY_INSTRUCTIONS";
                 var path = Path.Combine(directory, "settings.json"); AdvisorSettings.WriteBytes(path, draft.Data()); var original = File.ReadAllBytes(path);
                 foreach (var compatible in new[] { true, false })
                 {
                     var sends = 0; var handler = new BackendHttpHandler(async (request, token) =>
                     {
                         var body = JObject.Parse(await request.Content!.ReadAsStringAsync(token)); CheckNanoRequest(request, body, 8192);
-                        Require(!body.ToString().Contains("prior_dialogue", StringComparison.Ordinal) && !body.ToString().Contains("victory", StringComparison.Ordinal),
+                        Require(!body.ToString().Contains("prior_dialogue", StringComparison.Ordinal) && !body.ToString().Contains("victory", StringComparison.Ordinal) &&
+                            !body.ToString().Contains("CONSULTATION_ONLY_INSTRUCTIONS", StringComparison.Ordinal),
                             "The NanoGPT probe sent game information");
                         var messages = (JArray)body["messages"]!;
                         if (++sends == 1)

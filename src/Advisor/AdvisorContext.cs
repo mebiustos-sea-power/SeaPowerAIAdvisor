@@ -19,8 +19,8 @@ internal sealed class AdvisorContext
         get { var value = Tools; if (!value.Prepared) value.Prepare(AdvisorSituationDelivery.OnDemand); return value.Reads; }
     }
     private readonly Action<AdvisorProviderInput>? preparedInput;
-    internal AdvisorProviderInput PrepareStandardInput(AdvisorSituationDelivery mode = AdvisorSituationDelivery.OnDemand)
-    { var input = Tools.Prepare(mode); preparedInput?.Invoke(input); return input; }
+    internal AdvisorProviderInput PrepareStandardInput(AdvisorSituationDelivery mode = AdvisorSituationDelivery.OnDemand, string connectionPrompt = "")
+    { var input = Tools.Prepare(mode).WithConnectionPrompt(connectionPrompt); preparedInput?.Invoke(input); return input; }
     internal Action<AdvisorProviderInput>? PreparedInput => preparedInput;
 
     internal AdvisorContext(IAdvisorQuerySession knowledge, AdvisorProviderInput input, Action<AdvisorProgress>? progress = null, IAdvisorOperationSession? operations = null,

@@ -41,6 +41,12 @@ internal sealed class AdvisorProviderInput
     { Data = (JObject)data.DeepClone(); SystemInstruction = systemInstruction;
         Tools = Array.AsReadOnly(tools.Select(t => (JObject)t.DeepClone()).ToArray()); }
     internal AdvisorProviderInput Copy() => new(Data, SystemInstruction, Tools);
+    internal AdvisorProviderInput WithConnectionPrompt(string prompt)
+    {
+        var data = (JObject)Data.DeepClone();
+        if (prompt.Length == 0) data.Remove("connection_prompt"); else data["connection_prompt"] = prompt;
+        return new AdvisorProviderInput(data, SystemInstruction, Tools);
+    }
 }
 
 // Only host-executed query requests/results cross a connection boundary; provider IDs/signatures do not.

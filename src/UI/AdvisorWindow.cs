@@ -708,6 +708,9 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
                     options.Current.MaxQueryRounds, options.Current.Information).InitialInput();
                 appliedProfile?.AddAnswerPreferences(input);
                 input["common_prompt"] = options.Current.CommonPrompt;
+                var connections = AdvisorSettings.Edit(settingsPath);
+                var connectionPrompt = connections.Find(connections.MainId)?.Prompt ?? "";
+                if (connectionPrompt.Length > 0) input["connection_prompt"] = connectionPrompt;
                 input["user_name"] = options.Current.UserName;
                 diagnosticOutput.Text = input.ToString(Newtonsoft.Json.Formatting.Indented);
                 diagnosticStatus.Text = text.Format("diagnostics.input_generated", language);
@@ -724,6 +727,12 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
             diagnosticOutput.Text = AdvisorNotice.Options(error).Message(text);
             diagnosticStatus.Text = text["status.failed"];
             warn("Advisor options unavailable: " + error.Code);
+        }
+        catch (AdvisorConnectionException error)
+        {
+            diagnosticOutput.Text = AdvisorNotice.Connection(error).Message(text);
+            diagnosticStatus.Text = text["status.failed"];
+            warn("API settings unavailable: " + error.Code);
         }
         catch (AdvisorPromptException error)
         {

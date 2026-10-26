@@ -16,11 +16,13 @@ internal sealed class AdvisorEngine : IAdvisorBackend
     private readonly Action<AdvisorConnectionException>? switched;
     private readonly AdvisorContinuation? continuation;
     private readonly AdvisorSituationDelivery delivery, fallbackDelivery;
+    private readonly string connectionPrompt, fallbackPrompt;
     internal AdvisorEngine(IAdvisorProvider main, IAdvisorProvider? sub = null, Action<AdvisorConnectionException>? switched = null,
         AdvisorContinuation? continuation = null, AdvisorSituationDelivery delivery = AdvisorSituationDelivery.OnDemand,
-        AdvisorSituationDelivery? fallbackDelivery = null)
+        AdvisorSituationDelivery? fallbackDelivery = null, string connectionPrompt = "", string fallbackPrompt = "")
     { this.main = main; this.sub = sub; this.switched = switched; this.continuation = continuation;
-        this.delivery = delivery; this.fallbackDelivery = fallbackDelivery ?? delivery; }
+        this.delivery = delivery; this.fallbackDelivery = fallbackDelivery ?? delivery;
+        this.connectionPrompt = connectionPrompt; this.fallbackPrompt = fallbackPrompt; }
 
     public Task<AdviceResult> ConsultAsync(AdvisorContext context, CancellationToken cancellation) => RunAsync(context, cancellation);
 
@@ -37,7 +39,7 @@ internal sealed class AdvisorEngine : IAdvisorBackend
         var lastQueries = Array.Empty<string>();
         var lastApiRequest = 0;
         var retrievals = continuation == null ? new JArray() : (JArray)continuation.Retrievals.DeepClone();
-        using var connection = new AdvisorConnection(main, sub, fallback => context.PrepareStandardInput(fallback ? fallbackDelivery : delivery), error =>
+        using var connection = new AdvisorConnection(main, sub, fallback => context.PrepareStandardInput(fallback ? fallbackDelivery : delivery, fallback ? fallbackPrompt : connectionPrompt), error =>
         {
             usageKnown = false; // A lost response may have consumed tokens that we cannot measure.
             switched?.Invoke(error);

@@ -192,3 +192,8 @@ Build the host and example first. The check copies their DLLs into separate temp
 Automated tests use real separate client DLLs and mock HTTP. They cover both workflows, settings without Gemini field assumptions, disclosure/round limits, byte budgets, cancellation/disposal, both directions of Gemini handoff, terminal sub failure, programming errors, redaction and concurrent diagnostics. Automated checks do not replace in-game validation of third-party extensions or of each provider/model combination.
 
 Keep the host and shipped API DLL together. Registration rejects a declared `ApiVersion` that differs from `AdvisorApi.ContractVersion`; this check does not guarantee backward compatibility throughout the current experimental development period. Follow the SDK notice above when updating. Removing an extension does not delete its saved connection settings.
+
+
+### Per-connection instructions
+
+The host stores an optional connection prompt alongside connection metadata, separately from adapter-specific settings. For consultations, it adds the active connection's nonempty prompt to `ConsultationInput.DataJson` as `connection_prompt`, alongside `common_prompt` and `advisor_preferences`. Standard and independent adapters receive the same field without an additional SDK property. The host switches this field when handing off to a sub connection. Existing system rules still apply; connection tests keep their dedicated test instructions.

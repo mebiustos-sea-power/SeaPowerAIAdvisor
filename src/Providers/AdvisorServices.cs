@@ -135,14 +135,14 @@ internal static class AdvisorServices
                 IAdvisorBackend backend = mainService.Independent || subService?.Independent == true
                     ? new AdvisorExtensionBackend(mainService, subService, main, sub, options, transport, Switched)
                     : new AdvisorEngine(mainService.Open(main, options, false, transport),
-                        sub == null ? null : subService!.Open(sub, options, true, transport), Switched, delivery: main.SituationDelivery, fallbackDelivery: sub?.SituationDelivery);
+                        sub == null ? null : subService!.Open(sub, options, true, transport), Switched, delivery: main.SituationDelivery, fallbackDelivery: sub?.SituationDelivery, connectionPrompt: main.Prompt, fallbackPrompt: sub?.Prompt ?? "");
                 return new AdvisorBackendHandle(new AdvisorErrorBackend(backend, transport), transport);
             }
             catch (Exception error) { transport.CaptureFailure(error); transport.Dispose(); throw; }
         }, main.Name, sub?.Name ?? "", mainService.Independent ? null : main.SituationDelivery);
     }
     private static AdvisorApiConfiguration Delivery(AdvisorApiConfiguration configuration, AdvisorSituationDelivery? mode) => !mode.HasValue ? configuration :
-        new(configuration.Id, configuration.Name, configuration.Provider, configuration.Settings, configuration.RequestTimeoutSeconds, mode.Value, configuration.MaxOutputTokens);
+        new(configuration.Id, configuration.Name, configuration.Provider, configuration.Settings, configuration.RequestTimeoutSeconds, mode.Value, configuration.MaxOutputTokens, configuration.Prompt);
 
     internal static void ValidateDelivery(AdvisorService service, AdvisorApiConfiguration configuration)
     {

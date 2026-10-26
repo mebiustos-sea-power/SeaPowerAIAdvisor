@@ -365,6 +365,9 @@
                       <TextBlock Text="{DynamicResource Advisor.connection.situation_delivery_hint}" FontSize="11" TextWrapping="Wrap" Opacity="0.85" Margin="0,0,0,6" />
                       <ComboBox x:Name="SituationDelivery" MinHeight="30" />
                     </StackPanel>
+                    <TextBlock Text="{DynamicResource Advisor.connection.prompt}" FontSize="12" Margin="0,12,0,4" />
+                    <TextBlock Text="{DynamicResource Advisor.connection.prompt_hint}" FontSize="11" TextWrapping="Wrap" Opacity="0.85" Margin="0,0,0,6" />
+                    <TextBox x:Name="ConnectionPrompt" Height="120" AcceptsReturn="True" AcceptsTab="False" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontSize="14" Padding="7" />
                     <Button x:Name="TestConnection" Content="{DynamicResource Advisor.connection.test}" Height="30" Padding="12,0" Margin="0,12,0,0" />
                     <TextBlock x:Name="ConnectionTestStatus" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0" />
                     <TextBlock x:Name="ConnectionTestError" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0" Foreground="{DynamicResource AdvisorErrorBrush}" Visibility="Collapsed" />

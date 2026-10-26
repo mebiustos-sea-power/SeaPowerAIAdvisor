@@ -73,6 +73,8 @@ Choose a model that supports **tool calling**. These are examples, not a guarant
 
 Prompt tuning and evaluation of adviser responses primarily use **DeepSeek V4.1 Flash 1017 through NanoGPT**. Other supported services and models remain available, but response quality and information retrieval behavior may vary by model.
 
+Each connection can also have an optional **Connection prompt** (up to 2000 characters), added to consultations using that connection. It supplements the common prompt and takes precedence when the two conflict; a switch to the sub connection uses that connection’s instructions. Connection tests use their dedicated test instructions.
+
 Duplicating a connection immediately saves a separate copy of its saved settings and returns to the card list. Pending edits require confirmation before being discarded. The original connection keeps its main/sub assignments; copies are unassigned. Duplicate names are allowed.
 
 **Save** applies to the current tab’s settings or the individual registration being edited. Leaving a settings tab with pending changes asks whether to continue editing or discard them; switching tabs does not save changes.

@@ -14,7 +14,7 @@ internal sealed class AdvisorApiSettingsView
     private readonly ComboBox main, sub, provider, delivery;
     private readonly AdvisorApiConnectionListView cards;
     private readonly FrameworkElement deliveryPanel;
-    private readonly TextBox name, timeout, outputTokens;
+    private readonly TextBox name, timeout, outputTokens, prompt;
     private readonly StackPanel fields;
     private readonly TextBlock providerDescription, providerError;
     private readonly AdvisorServiceCatalog services = AdvisorServiceCatalog.BuiltIn;
@@ -54,6 +54,7 @@ internal sealed class AdvisorApiSettingsView
         cards = new AdvisorApiConnectionListView(Named<StackPanel>("ApiConnectionCards"), services, text, id => Run(() => Edit(id)), guard);
         name = Named<TextBox>("ApiConfigurationName"); timeout = Named<TextBox>("RequestTimeout"); provider = Named<ComboBox>("ApiProvider");
         outputTokens = Named<TextBox>("OutputTokens");
+        prompt = Named<TextBox>("ConnectionPrompt"); prompt.MaxLength = AdvisorApiConfiguration.MaxPromptLength;
         SetNumericLayout(outputTokens); SetNumericLayout(timeout);
         delivery = Named<ComboBox>("SituationDelivery"); deliveryPanel = Named<FrameworkElement>("SituationDeliveryPanel");
         delivery.SelectionChanged += (_, _) => guard(NotifyChanged);
@@ -67,6 +68,8 @@ internal sealed class AdvisorApiSettingsView
         name.TextChanged += (_, _) => guard(NotifyChanged);
         timeout.TextChanged += (_, _) => guard(NotifyChanged);
         outputTokens.TextChanged += (_, _) => guard(NotifyChanged);
+        prompt.TextChanged += (_, _) => guard(NotifyChanged);
+        prompt.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(prompt)); prompt.LostKeyboardFocus += (_, _) => guard(() => typing.Release(prompt));
         outputTokens.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(outputTokens)); outputTokens.LostKeyboardFocus += (_, _) => guard(() => typing.Release(outputTokens));
         timeout.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(timeout)); timeout.LostKeyboardFocus += (_, _) => guard(() => typing.Release(timeout));
         name.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(name)); name.LostKeyboardFocus += (_, _) => guard(() => typing.Release(name));
@@ -92,6 +95,7 @@ internal sealed class AdvisorApiSettingsView
     {
         if (editor == null) return;
         editor.Name = name.Text ?? "";
+        editor.Prompt = prompt.Text ?? "";
         if (delivery.SelectedIndex >= 0) editor.SituationDelivery = deliveryChoices[delivery.SelectedIndex];
         if (includeLimits)
         {
@@ -104,7 +108,7 @@ internal sealed class AdvisorApiSettingsView
     private JObject EditorValues() => new()
     {
         ["name"] = name.Text ?? "", ["provider"] = editor!.Provider, ["timeout"] = timeout.Text ?? "",
-        ["output_tokens"] = outputTokens.Text ?? "", ["delivery"] = delivery.SelectedIndex,
+        ["output_tokens"] = outputTokens.Text ?? "", ["delivery"] = delivery.SelectedIndex, ["prompt"] = prompt.Text ?? "",
         ["fields"] = new JObject(fieldValues.Select(field => new JProperty(field.Key, field.Value())))
     };
     private void ShowFields(Action<Action> guard)
@@ -162,7 +166,7 @@ internal sealed class AdvisorApiSettingsView
         main.IsEnabled = sub.IsEnabled = saveAssignments.IsEnabled = data != null && !busy && !Editing;
         listPane.IsEnabled = add.IsEnabled = data != null && !busy && !Editing;
         duplicate.IsEnabled = remove.IsEnabled = Editing && !adding && !busy;
-        name.IsEnabled = timeout.IsEnabled = outputTokens.IsEnabled = provider.IsEnabled = delivery.IsEnabled = fields.IsEnabled = saveEntry.IsEnabled = cancelEntry.IsEnabled = Editing && !busy;
+        name.IsEnabled = timeout.IsEnabled = outputTokens.IsEnabled = prompt.IsEnabled = provider.IsEnabled = delivery.IsEnabled = fields.IsEnabled = saveEntry.IsEnabled = cancelEntry.IsEnabled = Editing && !busy;
     }
     private void Refresh(AdvisorSettingsDraft? value, bool keepAssignments)
     {
@@ -182,7 +186,7 @@ internal sealed class AdvisorApiSettingsView
             main.SelectedIndex = Array.IndexOf(ids, selectedMain) + 1; sub.SelectedIndex = Array.IndexOf(ids, selectedSub) + 1;
             cards.Show(entries.Select(c => c.Build()).ToArray(), value?.MainId, value?.SubId);
             typing.Release(); editorBaseline = null; listPane.Visibility = Visibility.Visible;
-            editorPane.Visibility = Visibility.Collapsed; name.Text = timeout.Text = outputTokens.Text = ""; provider.Items.Clear(); fields.Children.Clear(); fieldValues.Clear(); providerDrafts.Clear();
+            editorPane.Visibility = Visibility.Collapsed; name.Text = timeout.Text = outputTokens.Text = prompt.Text = ""; provider.Items.Clear(); fields.Children.Clear(); fieldValues.Clear(); providerDrafts.Clear();
             providerDescription.Text = ""; providerDescriptionBox.Visibility = Visibility.Collapsed;
         }
         finally { updating = false; }
@@ -194,7 +198,7 @@ internal sealed class AdvisorApiSettingsView
         editor = value; adding = isNew; updating = true;
         try
         {
-            name.Text = value.Name; timeout.Text = value.RequestTimeoutSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            name.Text = value.Name; prompt.Text = value.Prompt; timeout.Text = value.RequestTimeoutSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
             outputTokens.Text = value.MaxOutputTokens.ToString(System.Globalization.CultureInfo.InvariantCulture); providerDrafts.Clear(); provider.Items.Clear();
             providerChoices = services.Services;
             foreach (var service in providerChoices) provider.Items.Add(new ComboBoxItem { Content = service.Caption(text()) });

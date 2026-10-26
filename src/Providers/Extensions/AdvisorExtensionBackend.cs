@@ -35,8 +35,17 @@ internal sealed class AdvisorExtensionBackend : IAdvisorBackend
             var continuation = knowledge.Continuation(context.Operations?.History);
             var backend = service.Independent
                 ? service.OpenIndependent(configuration, options, fallback, transport, continuation)
-                : new AdvisorEngine(service.Open(configuration, options, fallback, transport), continuation: fallback ? continuation : null, delivery: configuration.SituationDelivery);
-            try { return await backend.ConsultAsync(detached, cancellation).ConfigureAwait(false); }
+                : new AdvisorEngine(service.Open(configuration, options, fallback, transport), continuation: fallback ? continuation : null, delivery: configuration.SituationDelivery, connectionPrompt: configuration.Prompt);
+            try
+            {
+                var active = detached;
+                if (service.Independent)
+                {
+                    active = new AdvisorContext(knowledge, context.Input.WithConnectionPrompt(configuration.Prompt), context.Progress, context.Operations, context.PreparedInput);
+                    context.PreparedInput?.Invoke(active.Input);
+                }
+                return await backend.ConsultAsync(active, cancellation).ConfigureAwait(false);
+            }
             finally { (backend as IDisposable)?.Dispose(); }
         }
         try

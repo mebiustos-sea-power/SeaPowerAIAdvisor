@@ -30,6 +30,32 @@ internal static class SettingsOperationsTests
             var cancelled = store.Read().Find(pending.Id)!; cancelled.ApiKey = "unsaved";
             Require(store.Read().Main.ApiKey == "mock_main", "Canceling an editor altered saved credentials");
         }));
+        check("Connection prompts default empty, preserve multiline instructions and reject invalid edits without changing storage", () => InTemp(directory =>
+        {
+            var path = Path.Combine(directory, "connections.json"); var store = new AdvisorApiSettingsStore(path, () => "API {0}");
+            var pending = store.Read().Add();
+            Require(pending.Prompt == "" && !File.Exists(path), "A new connection acquired instructions or wrote storage");
+            pending.ApiKey = "mock_prompt_key"; pending.Model = "gemini-test";
+            pending.Prompt = "  First line\n日本語\twith a tab  "; store.SaveEntry(pending, true);
+            var saved = store.Read().Find(pending.Id)!;
+            Require(saved.Prompt == "First line\n日本語\twith a tab", "Saving damaged the connection's multiline prompt");
+            var before = File.ReadAllBytes(path);
+            foreach (var bad in new[] { new string('x', AdvisorApiConfiguration.MaxPromptLength + 1), "bad\0text", "bad\ud800text" })
+            {
+                var invalid = store.Read().Find(pending.Id)!; invalid.Prompt = bad;
+                ThrowsApi("prompt_invalid", () => store.SaveEntry(invalid, false));
+                Require(File.ReadAllBytes(path).SequenceEqual(before), "An invalid prompt changed saved connections");
+            }
+            var document = JObject.Parse(File.ReadAllText(path)); var item = (JObject)document["api_configurations"]![0]!;
+            item.Remove("prompt");
+            Require(AdvisorApiLibrary.Read(document).Configurations.Single().Prompt == "" && !item.ContainsKey("prompt"),
+                "An unset prompt was initialized by mutating the source document");
+            foreach (var bad in new JToken[] { JValue.CreateNull(), new JValue(1), new JArray() })
+            { item["prompt"] = bad; ThrowsApi("prompt_invalid", () => AdvisorApiLibrary.Read(document)); }
+            var edge = store.Read().Find(pending.Id)!; edge.Prompt = new string('x', AdvisorApiConfiguration.MaxPromptLength);
+            store.SaveEntry(edge, false);
+            Require(store.Read().Find(pending.Id)!.Prompt == edge.Prompt, "A valid prompt at the length limit was rejected");
+        }));
         check("Duplicating a saved API persists immediately, preserves roles and settings, and permits repeated names", () => InTemp(directory =>
         {
             foreach (var provider in new[] { "gemini", "ollama", "openrouter", "nanogpt" })
@@ -39,28 +65,30 @@ internal static class SettingsOperationsTests
                 var settings = provider == "ollama"
                     ? new JObject { ["base_url"] = "http://localhost:11434/proxy", ["model"] = "qwen3:8b", ["num_ctx"] = "32768" }
                     : new JObject { ["api_key"] = "mock_source_secret", ["model"] = provider == "openrouter" ? "vendor/source" : provider == "gemini" ? "gemini-source" : "source-model" };
-                var original = new AdvisorApiConfiguration("source", "Original", provider, settings, 75, AdvisorSituationDelivery.OnRequest, 32768);
+                var original = new AdvisorApiConfiguration("source", "Original", provider, settings, 75, AdvisorSituationDelivery.OnRequest, 32768, "Saved connection instructions");
                 store.SaveEntry(new AdvisorApiConfigurationDraft(original), true);
                 var sub = new AdvisorApiConfiguration("sub", "Existing sub", "mock_sub_secret", "gemini-sub");
                 store.SaveEntry(new AdvisorApiConfigurationDraft(sub), true); store.Assign(original.Id, sub.Id); store.SaveLogging(true);
                 var before = File.ReadAllBytes(path);
                 ThrowsApi("api_selection_invalid", () => store.Duplicate("missing", " - コピー"));
                 Require(File.ReadAllBytes(path).SequenceEqual(before), "An invalid source changed saved connections");
-                var unsaved = store.Read().Main; unsaved.Name = "Unsaved"; unsaved.Settings["model"] = "unsaved-model";
+                var unsaved = store.Read().Main; unsaved.Name = "Unsaved"; unsaved.Prompt = "Unsaved instructions"; unsaved.Settings["model"] = "unsaved-model";
                 if (provider != "ollama") unsaved.ApiKey = "mock_unsaved_secret";
                 var saved = store.Duplicate(original.Id, " - コピー"); var copy = saved.Configurations.Last();
                 Require(store.Read().Configurations.Count == 3 && copy.Id != original.Id && copy.Name == original.Name + " - コピー" &&
-                    copy.Provider == original.Provider && copy.RequestTimeoutSeconds == 75 && copy.MaxOutputTokens == 32768 && copy.SituationDelivery == AdvisorSituationDelivery.OnRequest &&
+                    copy.Provider == original.Provider && copy.RequestTimeoutSeconds == 75 && copy.MaxOutputTokens == 32768 && copy.SituationDelivery == AdvisorSituationDelivery.OnRequest && copy.Prompt == original.Prompt &&
                     JToken.DeepEquals(copy.Settings, original.Settings), "Duplication used unsaved values, lost fields or did not persist immediately");
                 Require(saved.MainId == original.Id && saved.SubId == sub.Id && saved.LogAiJson &&
                     JToken.DeepEquals(saved.Main.Settings, original.Settings) && saved.Sub!.ApiKey == "mock_sub_secret",
                     "Duplication replaced its source, activated a copy, or changed shared settings");
+                copy.Prompt = "Copy instructions";
                 copy.Model = provider == "openrouter" ? "vendor/changed" : provider == "gemini" ? "gemini-changed" : "changed-model";
                 store.SaveEntry(copy, false);
-                Require(JToken.DeepEquals(store.Read().Main.Settings, original.Settings), "Editing the saved copy changed its source");
+                Require(JToken.DeepEquals(store.Read().Main.Settings, original.Settings) && store.Read().Main.Prompt == original.Prompt &&
+                    store.Read().Find(copy.Id)!.Prompt == "Copy instructions", "Editing the saved copy changed its source or lost its prompt");
                 var repeated = store.Duplicate(original.Id, " - コピー"); var second = repeated.Configurations.Last();
                 Require(repeated.Configurations.Count == 4 && second.Id != copy.Id && second.Name == copy.Name &&
-                    second.Model == original.Model && repeated.MainId == original.Id && repeated.SubId == sub.Id &&
+                    second.Model == original.Model && second.Prompt == original.Prompt && repeated.MainId == original.Id && repeated.SubId == sub.Id &&
                     store.Read().Configurations.Count(c => c.Name == copy.Name) == 2,
                     "A repeated copy was rejected, renamed, conflated with another ID or assigned a role");
                 store.Assign(second.Id, original.Id); var selected = store.Read();

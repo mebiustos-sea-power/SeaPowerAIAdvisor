@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 using Newtonsoft.Json.Linq;
 
 namespace SeaPowerAIAdvisor;
@@ -9,6 +10,8 @@ namespace SeaPowerAIAdvisor;
 // Registered credentials have stable identities; main/sub assignments never move their contents.
 internal sealed class AdvisorApiConfiguration
 {
+    internal const int MaxPromptLength = 2000;
+    internal string Prompt { get; }
     internal string Id { get; }
     internal string Name { get; }
     internal string Provider { get; }
@@ -20,9 +23,18 @@ internal sealed class AdvisorApiConfiguration
     internal string Model => (string?)Settings["model"] ?? "";
     internal AdvisorApiConfiguration(string id, string name, string key, string model, int requestTimeoutSeconds = AdvisorRequestTimeout.DefaultSeconds, int maxOutputTokens = AdvisorOutputTokens.Default)
         : this(id, name, "gemini", new JObject { ["api_key"] = key.Trim(), ["model"] = model.Trim() }, requestTimeoutSeconds, maxOutputTokens: maxOutputTokens) { }
-    internal AdvisorApiConfiguration(string id, string name, string provider, JObject settings, int requestTimeoutSeconds = AdvisorRequestTimeout.DefaultSeconds, AdvisorSituationDelivery situationDelivery = AdvisorSituationDelivery.OnDemand, int maxOutputTokens = AdvisorOutputTokens.Default)
-    { MaxOutputTokens = AdvisorOutputTokens.Validate(maxOutputTokens); SituationDelivery = situationDelivery; _ = situationDelivery.Code(); Id = id; Name = name.Trim(); Provider = provider; Settings = (JObject)settings.DeepClone(); RequestTimeoutSeconds = AdvisorRequestTimeout.Validate(requestTimeoutSeconds); }
-    internal JObject Json() => new() { ["id"] = Id, ["name"] = Name, ["provider"] = Provider, ["settings"] = Settings.DeepClone(), ["request_timeout_seconds"] = RequestTimeoutSeconds, ["max_output_tokens"] = MaxOutputTokens, ["situation_delivery"] = SituationDelivery.Code() };
+    internal AdvisorApiConfiguration(string id, string name, string provider, JObject settings, int requestTimeoutSeconds = AdvisorRequestTimeout.DefaultSeconds, AdvisorSituationDelivery situationDelivery = AdvisorSituationDelivery.OnDemand, int maxOutputTokens = AdvisorOutputTokens.Default, string prompt = "")
+    { Prompt = ValidatePrompt(prompt); MaxOutputTokens = AdvisorOutputTokens.Validate(maxOutputTokens); SituationDelivery = situationDelivery; _ = situationDelivery.Code(); Id = id; Name = name.Trim(); Provider = provider; Settings = (JObject)settings.DeepClone(); RequestTimeoutSeconds = AdvisorRequestTimeout.Validate(requestTimeoutSeconds); }
+    internal JObject Json() => new() { ["id"] = Id, ["name"] = Name, ["provider"] = Provider, ["settings"] = Settings.DeepClone(), ["request_timeout_seconds"] = RequestTimeoutSeconds, ["max_output_tokens"] = MaxOutputTokens, ["situation_delivery"] = SituationDelivery.Code(), ["prompt"] = Prompt };
+    private static string ValidatePrompt(string value)
+    {
+        value = value.Trim();
+        if (value.Length > MaxPromptLength || value.Any(c => char.IsControl(c) && c != '\r' && c != '\n' && c != '\t'))
+            throw new AdvisorConnectionException("prompt_invalid");
+        try { _ = new UTF8Encoding(false, true).GetByteCount(value); }
+        catch (EncoderFallbackException) { throw new AdvisorConnectionException("prompt_invalid"); }
+        return value;
+    }
 }
 
 internal sealed class AdvisorApiLibrary
@@ -64,13 +76,15 @@ internal sealed class AdvisorApiLibrary
         {
             var legacy = (int)source["schema_version"]! == 2;
             var fields = legacy ? new[] { "id", "name", "api_key", "model" } : new[] { "id", "name", "provider", "settings" };
-            if (entry is not JObject item || item.Properties().Any(p => !fields.Contains(p.Name) && (legacy || (p.Name != "request_timeout_seconds" && p.Name != "situation_delivery" && p.Name != "max_output_tokens"))) ||
+            if (entry is not JObject item || item.Properties().Any(p => !fields.Contains(p.Name) && (legacy || (p.Name != "request_timeout_seconds" && p.Name != "situation_delivery" && p.Name != "max_output_tokens" && p.Name != "prompt"))) ||
                 fields.Any(f => item[f]?.Type != (f == "settings" ? JTokenType.Object : JTokenType.String))) throw Invalid();
             if (legacy)
             {
                 items.Add(new AdvisorApiConfiguration((string)item["id"]!, (string)item["name"]!, (string)item["api_key"]!, (string)item["model"]!, legacyTimeout));
                 continue;
             }
+            if (item["prompt"] != null && item["prompt"]!.Type != JTokenType.String)
+                throw new AdvisorConnectionException("prompt_invalid");
             var settings = (JObject)item["settings"]!.DeepClone();
             var outputTokens = AdvisorOutputTokens.Read(item);
             // Move the former NanoGPT field into connection metadata; never inherit the old shared budget.
@@ -84,7 +98,7 @@ internal sealed class AdvisorApiLibrary
                 settings.Remove("max_output_tokens");
             }
             items.Add(new AdvisorApiConfiguration((string)item["id"]!, (string)item["name"]!, (string)item["provider"]!, settings,
-                AdvisorRequestTimeout.Read(item, legacyTimeout), AdvisorSituationDeliverySetting.Read(item), outputTokens));
+                AdvisorRequestTimeout.Read(item, legacyTimeout), AdvisorSituationDeliverySetting.Read(item), outputTokens, (string?)item["prompt"] ?? ""));
         }
         var result = new AdvisorApiLibrary(items, (string?)source["main_api_id"], (string?)source["sub_api_id"]);
         result.ValidateAssignments();
@@ -135,6 +149,7 @@ internal sealed class AdvisorApiLibrary
 
 internal sealed class AdvisorApiConfigurationDraft
 {
+    internal string Prompt { get; set; }
     internal string Id { get; }
     internal string Name { get; set; }
     internal string Provider { get; set; }
@@ -145,6 +160,6 @@ internal sealed class AdvisorApiConfigurationDraft
     internal string ApiKey { get => (string?)Settings["api_key"] ?? ""; set => Settings["api_key"] = value.Trim(); }
     internal string Model { get => (string?)Settings["model"] ?? ""; set => Settings["model"] = value.Trim(); }
     internal AdvisorApiConfigurationDraft(AdvisorApiConfiguration value)
-    { Id = value.Id; Name = value.Name; Provider = value.Provider; Settings = (JObject)value.Settings.DeepClone(); RequestTimeoutSeconds = value.RequestTimeoutSeconds; MaxOutputTokens = value.MaxOutputTokens; SituationDelivery = value.SituationDelivery; }
-    internal AdvisorApiConfiguration Build() => new(Id, Name, Provider, Settings, RequestTimeoutSeconds, SituationDelivery, MaxOutputTokens);
+    { Prompt = value.Prompt; Id = value.Id; Name = value.Name; Provider = value.Provider; Settings = (JObject)value.Settings.DeepClone(); RequestTimeoutSeconds = value.RequestTimeoutSeconds; MaxOutputTokens = value.MaxOutputTokens; SituationDelivery = value.SituationDelivery; }
+    internal AdvisorApiConfiguration Build() => new(Id, Name, Provider, Settings, RequestTimeoutSeconds, SituationDelivery, MaxOutputTokens, Prompt);
 }

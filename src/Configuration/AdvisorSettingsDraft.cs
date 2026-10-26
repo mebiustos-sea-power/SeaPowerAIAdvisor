@@ -49,7 +49,7 @@ internal sealed class AdvisorSettingsDraft
         var original = Find(id) ?? throw new AdvisorConnectionException("api_selection_invalid");
         var copy = new AdvisorApiConfigurationDraft(new AdvisorApiConfiguration(
             "api-" + Guid.NewGuid().ToString("N"), original.Name + nameSuffix,
-            original.Provider, original.Settings, original.RequestTimeoutSeconds, original.SituationDelivery, original.MaxOutputTokens));
+            original.Provider, original.Settings, original.RequestTimeoutSeconds, original.SituationDelivery, original.MaxOutputTokens, original.Prompt));
         configurations.Add(copy);
         return copy;
     }

@@ -20,7 +20,7 @@ internal sealed class AdvisorNotice
             "model_invalid" => "model_invalid",
             "fallback_model_invalid" => "fallback_model_invalid",
             "settings_invalid" => "settings_invalid",
-            "request_timeout_invalid" or "provider_unavailable" or "server_url_invalid" or "ollama_model_invalid" or "context_length_invalid" => error.Code,
+            "prompt_invalid" or "request_timeout_invalid" or "provider_unavailable" or "server_url_invalid" or "ollama_model_invalid" or "context_length_invalid" => error.Code,
             "openrouter_model_invalid" or "nanogpt_model_invalid" or "tool_call_test_failed" or "insufficient_credits" or "subscription_unavailable" => error.Code,
             "api_configuration_name_invalid" or "api_main_missing" or "api_selection_invalid" or "api_selection_same" => error.Code,
             "fallback_policy_unavailable" => "fallback_policy_unavailable",
