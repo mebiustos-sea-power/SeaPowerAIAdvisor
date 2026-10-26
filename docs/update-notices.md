@@ -8,6 +8,12 @@ An optional developer-authored notice appears in a separate game-standard window
 
 For a release without a notice, replace the entire JSON document with `null`. An absent or invalid embedded definition is a build/content error, not a way to disable notices. No version-specific C# branches or history of old notice bodies are needed. Users who skip releases see only the notice in their installed build. Include any still-relevant guidance from skipped releases in that current notice if necessary.
 
+## Body formatting and preview
+
+Notice bodies use the same Markdown renderer as the conversation: headings, emphasis, lists, paragraphs and inline code are supported. Titles remain plain text in the native title bar. Unit/map actions and external-link navigation are not attached to notice content.
+
+With the developer local API enabled and a mission loaded, run `python3 tools/advisor_dev.py notices preview`. This displays the bundled notice even if it has been read and opens the main adviser window if needed. Previewing and closing a preview do not read or write receipt files. Settings, approval, active-consultation and IME-composition states reject the request. A currently open normal notice is not converted into a preview. Missing notice content is reported as `notice_unavailable`.
+
 ## Read receipts
 
 Read notice IDs are stored locally in `SeaPowerAIAdvisor/read-notices.json` under the game's persistent data directory. This file is independent of settings, conversations, and mission saves. Receipts survive restarts, language changes, and switching missions. Keeping all read IDs also prevents an older notice from reappearing after a downgrade.

@@ -153,6 +153,23 @@ internal static partial class LocalApiTests
             }
             api.Disable();
         });
+        check("Notice preview is opt-in, dispatched on the game thread and does not start an AI consultation", () =>
+        {
+            var target = new Target(); var api = Api(); var owner = new object(); api.Attach(owner, "tactical_battle", () => target);
+            Require(Send(api, "POST", "/v1/notices/preview").Status == 503 && target.PreviewCalls == 0, "Disabled API displayed a notice");
+            api.Enable();
+            Require(Send(api, "POST", "/v1/notices/preview", new JObject { ["body"] = "arbitrary text" }).Status == 400 && target.PreviewCalls == 0,
+                "Preview accepted arbitrary content or ignored an invalid body");
+            var pending = api.Enqueue("POST", "/v1/notices/preview", new());
+            Require(!pending.IsCompleted && target.PreviewCalls == 0, "Preview accessed UI outside the game thread pump");
+            api.Pump(); var response = pending.GetAwaiter().GetResult();
+            Require(response.Status == 200 && (bool?)response.Data["shown"] == true && (bool?)response.Data["preview"] == true &&
+                target.PreviewCalls == 1 && target.Thread == Environment.CurrentManagedThreadId && !target.Called && target.Run == null,
+                "Preview lost its response or started a consultation");
+            api.Detach(owner);
+            Require(Send(api, "POST", "/v1/notices/preview").Status == 409 && target.PreviewCalls == 1, "A detached game displayed a preview");
+            api.Disable();
+        });
         check("Local prompt patches merge atomically, preserve consultation snapshots and reset without writing files", () =>
         {
             var original = AdvisorPrompts.Load(AdvisorPrompts.DefaultDirectory); var overrides = new AdvisorPromptOverrides(original);
@@ -208,6 +225,7 @@ internal static partial class LocalApiTests
         private readonly Action clear;
         internal GuardedTarget(Action<Action> guard, Action clear) { this.guard = guard; this.clear = clear; }
         public JObject LocalStatus() => new();
+        public JObject LocalPreviewNotice() => throw new InvalidOperationException("Unexpected notice preview");
         public void LocalClear() => AdvisorLocalApi.InvokeGuarded(guard, clear);
         public void LocalCancel() => throw new InvalidOperationException("Unexpected cancellation");
         public AdvisorLocalRun LocalConsult(string? question, string? shortcut, bool fallback, Func<AdvisorSituationDelivery?, AdvisorBackendSetup> prepare,
@@ -216,7 +234,7 @@ internal static partial class LocalApiTests
     private sealed class Target : IAdvisorLocalTarget
     {
         internal bool Called, Busy, Cleared, Editing;
-        internal int Thread;
+        internal int Thread, PreviewCalls;
         internal string? Shortcut;
         internal AdvisorLocalRun? Run;
         internal AdvisorTurn? Turn;
@@ -232,6 +250,11 @@ internal static partial class LocalApiTests
             Called = Busy = true; Thread = Environment.CurrentManagedThreadId; Shortcut = shortcut;
             Turn = new AdvisorTurn(request, 0, plainAdvisor ? AdvisorProfile.DefaultName : "Michael", "default");
             Run = new AdvisorLocalRun(allowFallback, plainAdvisor, request.AllowOperations, execution); Run.Attach(Turn); return Run;
+        }
+        public JObject LocalPreviewNotice()
+        {
+            PreviewCalls++; Thread = Environment.CurrentManagedThreadId;
+            return new JObject { ["shown"] = true, ["notice_id"] = "fixture-notice", ["preview"] = true };
         }
         public void LocalClear() { if (Busy) throw new AdvisorLocalApiException(409, "consultation_in_progress"); Cleared = true; }
         public void LocalCancel() { Turn!.Cancel(); Run!.Finish(); Busy = false; }

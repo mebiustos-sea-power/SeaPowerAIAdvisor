@@ -13,9 +13,11 @@ internal sealed class AdvisorUpdateNoticeStore
 {
     private readonly string path;
     internal AdvisorUpdateNoticeStore(string directory) => path = Path.Combine(directory, "read-notices.json");
-    internal AdvisorUpdateNotice? Unread(AdvisorUpdateNotice? notice) => notice == null || Read().Contains(notice.Id) ? null : notice;
-    internal void MarkRead(AdvisorUpdateNotice notice)
+    internal AdvisorUpdateNotice? Unread(AdvisorUpdateNotice? notice, bool preview = false) =>
+        notice != null && (preview || !Read().Contains(notice.Id)) ? notice : null;
+    internal void MarkRead(AdvisorUpdateNotice notice, bool preview = false)
     {
+        if (preview) return;
         var ids = Read();
         if (!ids.Add(notice.Id)) return;
         var value = new JObject { ["read_notice_ids"] = new JArray(ids.OrderBy(id => id, StringComparer.Ordinal)) };

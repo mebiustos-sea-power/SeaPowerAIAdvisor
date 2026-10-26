@@ -33,6 +33,7 @@ Each command has its own `--help`:
 | `discover` | Read public Temp metadata without accessing the HTTP API. |
 | `status` | Read current game/adviser state. |
 | `connections` | Read currently permitted connection IDs and the developer default. |
+| `notices preview` | Display the bundled notice without changing read receipts; opens the adviser if needed and makes no AI request. |
 | `prompts get [--id ID]` | Fetch the full temporary prompt snapshot, or one field's exact text. |
 | `prompts set` | Apply text/file/batch input to temporary prompts. |
 | `prompts reset` | Explicitly restore all prompts loaded at game startup. |

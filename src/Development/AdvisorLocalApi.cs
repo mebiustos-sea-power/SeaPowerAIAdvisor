@@ -12,6 +12,7 @@ namespace SeaPowerAIAdvisor;
 internal interface IAdvisorLocalTarget
 {
     JObject LocalStatus();
+    JObject LocalPreviewNotice();
     AdvisorLocalRun LocalConsult(string? question, string? shortcut, bool allowFallback, Func<AdvisorSituationDelivery?, AdvisorBackendSetup> prepare, bool plainAdvisor, bool? allowOperations, AdvisorSituationDelivery? situationDelivery);
     void LocalClear();
     void LocalCancel();
@@ -172,6 +173,7 @@ internal sealed class AdvisorLocalApi
             return new(200, new JObject { ["enabled"] = true, ["mode"] = mode, ["advisor"] = target?.Invoke().LocalStatus(), ["last_consultation_id"] = last?.Id });
         if (method == "GET" && path.StartsWith("/v1/consultations/", StringComparison.Ordinal))
             return last != null && path == "/v1/consultations/" + last.Id ? new(200, last.Snapshot()) : AdvisorLocalResponse.Error(404, "consultation_not_retained");
+        if (method == "POST" && path == "/v1/notices/preview") { Empty(body); return new(200, Target().LocalPreviewNotice()); }
         if (method == "GET" && path == "/v1/prompts") return PromptState();
         if (method == "PATCH" && path == "/v1/prompts")
         {

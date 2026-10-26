@@ -213,7 +213,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         }
     }
 
-    internal void Toggle()
+    internal void Toggle(bool previewNotice = false)
     {
         if (IsOpen) { Close(); return; }
         var resultScroll = HasUnreadResult ? pendingScroll : null;
@@ -226,7 +226,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         HasUnreadResult = false;
         if (resultScroll != null) pendingScroll = resultScroll;
         // Reopen the conversation intact; offer the current notice only after the host has displayed it.
-        if (!updateNotice.Show()) questionInput.RequestFocus();
+        if (!updateNotice.Show(previewNotice)) questionInput.RequestFocus();
     }
 
     internal void Tick()
@@ -411,6 +411,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
 
     JObject IAdvisorLocalTarget.LocalStatus() => new()
     {
+        ["window_open"] = IsOpen, ["notice_open"] = updateNotice.IsOpen, ["notice_preview"] = updateNotice.IsPreview,
         ["proposal_review_open"] = operationReview.IsOpen, ["busy"] = active != null, ["settings_open"] = conversationPane.Visibility != Visibility.Visible,
         ["advisor_name"] = DisplayName, ["answered_exchanges"] = conversation.Exchanges.Count
     };
@@ -438,6 +439,19 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         AdvisorLocalApi.InvokeGuarded(guard, () => { if (!IsOpen) Toggle(); StartConsultation(request, recording: run, prepared: execution); });
         if (!run.Attached) throw new AdvisorLocalApiException(409, "advisor_unavailable");
         return run;
+    }
+    JObject IAdvisorLocalTarget.LocalPreviewNotice()
+    {
+        RequireLocalReady();
+        if (QuestionInputController.IsComposing) throw new AdvisorLocalApiException(409, "input_composing");
+        var notice = AdvisorUpdateNotice.Current ?? throw new AdvisorLocalApiException(409, "notice_unavailable");
+        if (updateNotice.IsOpen && !updateNotice.IsPreview) throw new AdvisorLocalApiException(409, "notice_already_open");
+        AdvisorLocalApi.InvokeGuarded(guard, () =>
+        {
+            if (!IsOpen) Toggle(previewNotice: true);
+            else updateNotice.Show(preview: true);
+        });
+        return new JObject { ["shown"] = updateNotice.IsOpen, ["notice_id"] = notice.Id, ["preview"] = updateNotice.IsPreview };
     }
     void IAdvisorLocalTarget.LocalClear() { RequireLocalReady(); AdvisorLocalApi.InvokeGuarded(guard, Clear); }
     void IAdvisorLocalTarget.LocalCancel() { AdvisorLocalApi.InvokeGuarded(guard, CancelActive); }

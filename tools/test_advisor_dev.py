@@ -60,6 +60,8 @@ class MockApi:
                         self.close_connection = True
                         return
                     value = {"scope_id": "loaded-game", "unit_id": 42, "removed_count": 2, "count": 0, "reservations": []}
+                elif self.path == "/v1/notices/preview":
+                    value = {"shown": True, "notice_id": "fixture-notice", "preview": True}
                 elif self.path == "/v1/prompts/reset":
                     api.fields["common.json:system"] = "Original\n日本語"
                     value = {"reset": True}
@@ -139,6 +141,13 @@ class CliTests(unittest.TestCase):
             self.assertEqual(api.run("reservations", "clear", "--unit-id", "42", "--scope-id", "loaded-game")[0], 1)
             self.assertEqual(len(api.calls), 1, "A lost acknowledgement retried the reservation reset")
             self.assertEqual(api.calls[0][:3], ("POST", "/v1/units/42/reservations/clear", {"scope_id": "loaded-game"}))
+
+    def test_notice_preview_does_not_submit_a_consultation_or_change_settings(self):
+        with MockApi() as api:
+            code, raw, error = api.run("notices", "preview")
+            self.assertEqual((code, error), (0, ""))
+            self.assertEqual(json.loads(raw), {"shown": True, "notice_id": "fixture-notice", "preview": True})
+            self.assertEqual([c[:3] for c in api.calls], [("POST", "/v1/notices/preview", {})])
 
     def test_consult_sends_once_preserves_unicode_and_records_effective_result(self):
         with MockApi() as api, tempfile.TemporaryDirectory() as temporary:

@@ -250,6 +250,7 @@ internal static class OperationTests
         public JObject LocalStatus() => new();
         public AdvisorLocalRun LocalConsult(string? question, string? shortcut, bool allowFallback, Func<AdvisorSituationDelivery?, AdvisorBackendSetup> prepare,
             bool plainAdvisor, bool? allowOperations, AdvisorSituationDelivery? situationDelivery) => throw new InvalidOperationException("AI access");
+        public JObject LocalPreviewNotice() => throw new InvalidOperationException("Unexpected notice preview");
         public void LocalClear() => throw new InvalidOperationException("Conversation access");
         public void LocalCancel() => throw new InvalidOperationException("Conversation access");
     }

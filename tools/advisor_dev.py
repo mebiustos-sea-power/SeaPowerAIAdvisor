@@ -348,6 +348,8 @@ def parser():
     commands = root.add_subparsers(dest="command", required=True)
     for name in ("discover", "status", "connections", "cancel"):
         add_output(commands.add_parser(name))
+    notices = commands.add_parser("notices").add_subparsers(dest="notice_command", required=True)
+    add_output(notices.add_parser("preview"))
     operations = commands.add_parser("operations").add_subparsers(dest="operation_command", required=True)
     add_output(operations.add_parser("list"))
     candidates = operations.add_parser("candidates"); candidates.add_argument("operation"); add_output(candidates)
@@ -451,6 +453,8 @@ def main(argv=None):
                 value = client.request("PATCH", "/v1/prompts", prompt_changes(args))
             else:
                 value = client.request("POST", "/v1/prompts/reset", {})
+        elif args.command == "notices":
+            value = client.request("POST", "/v1/notices/preview", {})
         elif args.command == "conversation":
             value = client.request("POST", "/v1/conversation/clear", {})
         elif args.command == "cancel":

@@ -1,5 +1,5 @@
 {
-  "id": "output-token-limits-8192",
-  "title_key": "update_notice.output_tokens.title",
-  "body_key": "update_notice.output_tokens.body"
+  "id": "nanogpt-recommended-deepseek-1017",
+  "title_key": "update_notice.recommended_model.title",
+  "body_key": "update_notice.recommended_model.body"
 }

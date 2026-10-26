@@ -45,6 +45,22 @@ internal static class UpdateNoticeTests
             Require(File.ReadAllBytes(path).SequenceEqual(before) && File.ReadAllText(Path.Combine(directory, "options.json")) == "unrelated settings" &&
                 !Directory.EnumerateFiles(directory, "*.tmp").Any(), "Dismissal rewrote settings, changed an existing receipt or left a temporary file");
         }));
+        check("Notice previews bypass read receipts without creating, rewriting or repairing user state", () => InTemp(directory =>
+        {
+            var notice = Notice("preview"); var store = new AdvisorUpdateNoticeStore(directory); var path = Path.Combine(directory, "read-notices.json");
+            Require(store.Unread(notice, preview: true) == notice, "A fresh notice could not be previewed");
+            store.MarkRead(notice, preview: true);
+            Require(!File.Exists(path) && store.Unread(notice) == notice, "Preview dismissal acknowledged an unread notice");
+            store.MarkRead(notice); var read = File.ReadAllBytes(path);
+            Require(store.Unread(notice) == null && store.Unread(notice, preview: true) == notice, "Read notices were not previewable");
+            store.MarkRead(notice, preview: true);
+            Require(File.ReadAllBytes(path).SequenceEqual(read), "Preview rewrote read receipts");
+            File.WriteAllText(path, "{broken"); var broken = File.ReadAllBytes(path);
+            Require(store.Unread(notice, preview: true) == notice && store.Unread(null, preview: true) == null, "Preview consulted receipt state");
+            store.MarkRead(notice, preview: true);
+            Require(File.ReadAllBytes(path).SequenceEqual(broken), "Preview replaced corrupt receipt state");
+            Expect("notice_state_invalid", () => store.Unread(notice));
+        }));
         check("Only the installed notice is offered after skipped releases, with receipts independent of language and retaining earlier acknowledgements", () => InTemp(directory =>
         {
             var old = Notice("old"); var latest = Notice("latest");

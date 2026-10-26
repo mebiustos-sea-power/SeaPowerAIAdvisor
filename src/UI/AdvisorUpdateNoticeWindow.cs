@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text;
+using System.Xml.Linq;
 using Noesis;
 using SeapowerUI;
 
@@ -12,7 +13,7 @@ internal sealed class AdvisorUpdateNoticeWindow
     private readonly FrameworkElement view;
     private readonly WindowHost host;
     private readonly Window owner, window;
-    private readonly TextBlock body, failure;
+    private readonly TextBlock failure;
     private readonly ScrollViewer scroll;
     private readonly Button close;
     private readonly AdvisorUpdateNoticeStore store;
@@ -20,6 +21,7 @@ internal sealed class AdvisorUpdateNoticeWindow
     private readonly Action releaseInput, closed;
     private readonly Action<AdvisorUpdateNoticeException> report;
     private AdvisorUpdateNotice? current;
+    private bool preview;
     internal AdvisorUpdateNoticeWindow(FrameworkElement view, WindowHost host, Window owner, AdvisorUpdateNoticeStore store,
         Func<AdvisorText> text, Action<Action> guard, Action releaseInput, Action closed, Action<AdvisorUpdateNoticeException> report)
     {
@@ -30,7 +32,7 @@ internal sealed class AdvisorUpdateNoticeWindow
         using var reader = new StreamReader(source, Encoding.UTF8);
         var content = GUI.ParseXaml(reader.ReadToEnd()) as FrameworkElement
             ?? throw new InvalidOperationException("The update notice view is not a FrameworkElement.");
-        body = Find<TextBlock>(content, "UpdateNoticeBody"); failure = Find<TextBlock>(content, "UpdateNoticeFailure");
+        failure = Find<TextBlock>(content, "UpdateNoticeFailure");
         scroll = Find<ScrollViewer>(content, "UpdateNoticeScroll"); close = Find<Button>(content, "CloseUpdateNotice");
         var ownerContent = owner.Content as FrameworkElement
             ?? throw new InvalidOperationException("The advisor window content is unavailable.");
@@ -47,23 +49,26 @@ internal sealed class AdvisorUpdateNoticeWindow
         close.Click += (_, _) => guard(Dismiss);
         window.OnClosed += (_, _) => guard(OnClosed);
     }
-    private bool IsOpen => host.Windows.Contains(window);
-    internal bool Show()
+    internal bool IsOpen => host.Windows.Contains(window);
+    internal bool IsPreview => IsOpen && preview;
+    internal bool Show(bool preview = false)
     {
         if (IsOpen) return true;
         var notice = AdvisorUpdateNotice.Current;
         if (notice == null) return false;
         failure.Text = "";
-        try { if (store.Unread(notice) == null) return false; }
+        try { if (store.Unread(notice, preview) == null) return false; }
         catch (AdvisorUpdateNoticeException error) { failure.Text = text()["update_notice.error." + error.Code]; report(error); }
-        window.Header = text()[notice.TitleKey]; body.Text = text()[notice.BodyKey]; close.Content = text()["action.close"];
+        window.Header = text()[notice.TitleKey]; close.Content = text()["action.close"];
+        scroll.Content = GUI.ParseXaml(AdvisorMarkdown.Render(text()[notice.BodyKey]).ToString(SaveOptions.DisableFormatting)) as FrameworkElement
+            ?? throw new InvalidOperationException("The Markdown notice view is not a FrameworkElement.");
         var width = Math.Min(520, view.ActualWidth - 40); var height = Math.Min(340, view.ActualHeight - 80);
         window.Width = width; window.Height = height;
         window.MinWidth = Math.Min(360, width); window.MinHeight = Math.Min(220, height);
         window.MaxWidth = view.ActualWidth - 20; window.MaxHeight = view.ActualHeight - 40;
         window.X = (float)Math.Max(10, Math.Min(view.ActualWidth - width - 10, owner.X + (owner.Width - width) / 2));
         window.Y = (float)Math.Max(10, Math.Min(view.ActualHeight - height - 10, owner.Y + (owner.Height - height) / 2));
-        releaseInput(); current = notice; owner.IsEnabled = false;
+        releaseInput(); current = notice; this.preview = preview; owner.IsEnabled = false;
         try
         {
             WindowHostCommands.OpenWindowCommand.Execute(window, view);
@@ -76,17 +81,17 @@ internal sealed class AdvisorUpdateNoticeWindow
     internal void Dismiss() { if (IsOpen) window.CloseWindowNow(); }
     private void OnClosed()
     {
-        var notice = current; current = null;
+        var notice = current; var wasPreview = preview; current = null; preview = false;
         owner.IsEnabled = true;
         if (notice == null) return;
-        try { store.MarkRead(notice); }
+        try { store.MarkRead(notice, wasPreview); }
         catch (AdvisorUpdateNoticeException error) { report(error); }
         closed();
     }
     // Clear the pending acknowledgement before native close events during fault or scene teardown.
     internal void Hide()
     {
-        current = null;
+        current = null; preview = false;
         try { if (IsOpen) window.CloseWindowNow(); }
         finally { owner.IsEnabled = true; }
     }
