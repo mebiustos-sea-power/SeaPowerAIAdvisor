@@ -22,15 +22,11 @@ internal static partial class LocalApiTests
             {
                 var path = Path.Combine(directory, "options.json"); var options = new AdvisorOptionsStore(path);
                 Require(!options.Current.DeveloperApiEnabled && !File.Exists(path), "Developer listener was implicitly enabled");
-                options.SaveDeveloper(true, () => { }); options.EnsureUserName("司令官");
+                options.SaveDeveloper(true); options.EnsureUserName("司令官");
                 options.SaveGeneral(AdvisorTextSize.Large, "Captain"); options.SaveCampaign(true);
                 options.SaveConsultation(3, 2, "Test"); options.SaveInformation(AdvisorInformation.Default);
                 Require(new AdvisorOptionsStore(path).Current.DeveloperApiEnabled, "Another category disabled the API");
-                var before = File.ReadAllBytes(path);
-                try { options.SaveDeveloper(false, () => throw new IOException("test write failure")); }
-                catch (IOException) { }
-                Require(options.Current.DeveloperApiEnabled && File.ReadAllBytes(path).SequenceEqual(before), "Partial developer save was published");
-                options.SaveDeveloper(false, () => { });
+                options.SaveDeveloper(false);
                 Require(!new AdvisorOptionsStore(path).Current.DeveloperApiEnabled, "Disabling was not saved");
             }
             finally { Directory.Delete(directory, true); }

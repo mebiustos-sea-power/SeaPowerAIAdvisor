@@ -93,6 +93,25 @@ internal static class SettingsOperationsTests
             store.Remove(two.Id); store.SaveLogging(true);
             Require(store.Read().Configurations.Count == 0 && store.Read().LogAiJson, "An empty API library prevented developer settings from saving");
         }));
+        check("Developer logging and local API permissions save independently without overwriting another tab", () => InTemp(directory =>
+        {
+            var apiPath = Path.Combine(directory, "api-settings.json");
+            var api = new AdvisorApiSettingsStore(apiPath, () => "API {0}");
+            var options = new AdvisorOptionsStore(Path.Combine(directory, "options.json"));
+            api.SaveLogging(false);
+            var permissions = new AdvisorLocalConnections(new[] { "one" }, "one", true);
+            var beforeApi = File.ReadAllBytes(apiPath);
+            options.SaveDeveloper(true, permissions);
+            Require(File.ReadAllBytes(apiPath).SequenceEqual(beforeApi) && !api.Read().LogAiJson,
+                "Saving local API permissions also saved hidden logging edits");
+            var beforeOptions = File.ReadAllBytes(options.Path);
+            api.SaveLogging(true);
+            Require(File.ReadAllBytes(options.Path).SequenceEqual(beforeOptions) && new AdvisorOptionsStore(options.Path).Current.DeveloperApiEnabled &&
+                options.Current.LocalConnections.DefaultId == "one", "Saving logging changed local API permissions");
+            beforeApi = File.ReadAllBytes(apiPath);
+            options.SaveDeveloper(false, AdvisorLocalConnections.Empty);
+            Require(api.Read().LogAiJson && File.ReadAllBytes(apiPath).SequenceEqual(beforeApi), "Disabling the API reset the logging tab");
+        }));
         check("Profile registration, editing, activation and removal are independent durable operations", () => InTemp(directory =>
         {
             var original = new AdvisorProfile("Existing", "portrait.png", true, "Original default"); original.Save(directory);

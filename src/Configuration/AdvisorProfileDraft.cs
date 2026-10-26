@@ -60,6 +60,7 @@ internal sealed class AdvisorProfileDraft
     internal byte[] ReadActivePortrait(string directory, Func<byte[]> defaultPortrait) => UseDefault ? defaultPortrait() :
         selectedPortraits.TryGetValue(Custom.Id, out var image) ? image :
         new AdvisorProfile(Custom.Name, Custom.PortraitFile).ReadPortrait(directory);
+    internal bool HasSelectedPortrait => selectedPortraits.ContainsKey(SelectedId);
     internal byte[]? SelectedPortrait(string id) => selectedPortraits.TryGetValue(id, out var bytes) ? (byte[])bytes.Clone() : null;
     internal AdvisorProfile Build() => new(advisers.Select(a => a.Build()), SelectedCustomId, UseDefault, defaultPersonality);
     internal AdvisorProfile Save(string directory)

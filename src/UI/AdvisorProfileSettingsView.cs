@@ -30,9 +30,12 @@ internal sealed class AdvisorProfileSettingsView
     private Task<string?>? selection;
     private string[] ids = Array.Empty<string>();
     private bool updating, adding;
+    private (string Name, string Role, string Personality) editorBaseline;
+    private (string Name, string Role, string Personality) EditorValues => (name.Text ?? "", role.Text ?? "", personality.Text ?? "");
     private string? SelectedId => selector.SelectedIndex < 0 ? null : ids[selector.SelectedIndex];
     private string? ActiveId => active.SelectedIndex < 0 ? null : ids[active.SelectedIndex];
-    internal bool HasChanges => form != null || (data != null && ActiveId != data.ActiveId);
+    internal bool HasChanges(int tab) => tab == 0 ? data != null && ActiveId != data.ActiveId :
+        form != null && (adding || EditorValues != editorBaseline || form.HasSelectedPortrait);
     internal AdvisorProfileSettingsView(FrameworkElement content, string directory, Func<AdvisorText> text, Func<byte[]> defaultPortrait,
         Action<Action> guard, TypingScope typing, Action<AdvisorProfile> saved, Action changed, Action<AdvisorProfileException> error,
         Action<string, Action> confirmDelete, Action<string> warn)
@@ -54,13 +57,14 @@ internal sealed class AdvisorProfileSettingsView
         { input.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(input)); input.LostKeyboardFocus += (_, _) => guard(() => typing.Release(input)); }
     }
     private void Run(Action action) { try { action(); } catch (AdvisorProfileException failure) { error(failure); } }
-    internal void Open() { form = null; Refresh(store.Read(), null, false); }
+    internal void Open() { var saved = store.Read(); form = null; selection = null; Refresh(saved, null, false); }
     internal void Close() { form = null; selection = null; Refresh(null, null, false); }
     internal void Focus() { if (active.IsEnabled) active.Focus(); }
     private void Controls()
     {
         var editing = form != null; var available = data != null && !editing;
-        active.IsEnabled = use.IsEnabled = useTab.IsEnabled = available;
+        useTab.IsEnabled = data != null;
+        active.IsEnabled = use.IsEnabled = available;
         selector.IsEnabled = add.IsEnabled = available;
         edit.IsEnabled = available && SelectedId != null; remove.IsEnabled = available && SelectedId != null && SelectedId != AdvisorProfile.DefaultId;
         saveEntry.IsEnabled = cancelEntry.IsEnabled = editing && selection == null;
@@ -95,6 +99,7 @@ internal sealed class AdvisorProfileSettingsView
         form = value; adding = isNew;
         name.Text = value.UseDefault ? AdvisorProfile.DefaultName : value.CustomName;
         role.Text = value.UseDefault ? text()["advisor.role"] : value.CustomRole; personality.Text = value.Personality;
+        editorBaseline = EditorValues;
         editorPane.Visibility = Visibility.Visible; saveEntry.Content = text()[adding ? "settings.register" : "settings.save_form"];
         changed(); Controls(); Preview(); typing.Release(); (value.UseDefault ? personality : name).Focus();
     }

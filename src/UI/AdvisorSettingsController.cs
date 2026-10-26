@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using Noesis;
@@ -29,11 +30,13 @@ internal sealed class AdvisorSettingsController
     private readonly Func<bool> consultationBusy;
     private readonly Action<string> warn;
     private readonly TextBox rounds, history, prompt, userName;
-    private readonly ComboBox size;
-    private readonly CheckBox campaign, log, localApi, linkOwnUnits, linkContacts;
+    private readonly ComboBox size, templateInsertion;
+    private readonly CheckBox campaign, log, localApi, linkOwnUnits, linkContacts, showSystemTemplates;
     private readonly TextBlock status, title, testStatus, testError, confirmationText;
     private readonly Button test, accept, cancelConfirmation, throwException;
+    private readonly Dictionary<Category, AdvisorSettingsTabNavigation> tabs = new();
     private Category? current;
+    private int ActiveTab => current.HasValue && tabs.TryGetValue(current.Value, out var navigation) ? navigation.Current : 0;
     private string baseline = "", testingName = "";
     private Action? confirmed;
     private AdvisorJob? testing;
@@ -57,6 +60,7 @@ internal sealed class AdvisorSettingsController
         userName = Named<TextBox>("UserName"); userName.MaxLength = AdvisorOptions.MaxUserNameLength;
         size = Named<ComboBox>("ConversationTextSize"); campaign = Named<CheckBox>("EnableCampaignAdvisor"); log = Named<CheckBox>("LogAiJson");
         localApi = Named<CheckBox>("EnableLocalApi");
+        showSystemTemplates = Named<CheckBox>("ShowSystemTemplates"); templateInsertion = Named<ComboBox>("TemplateInsertion");
         linkOwnUnits = Named<CheckBox>("LinkOwnUnits"); linkContacts = Named<CheckBox>("LinkContacts");
         localConnections = new AdvisorLocalConnectionsView(Named<StackPanel>("LocalApiConnections"), Named<ComboBox>("LocalApiDefaultConnection"), Named<CheckBox>("AllowLocalApiModelOverride"), text, guard);
         information = new AdvisorInformationView(Named<StackPanel>("InformationChoices"), text(), guard);
@@ -76,16 +80,18 @@ internal sealed class AdvisorSettingsController
             .Select(Named<FrameworkElement>).ToArray();
         var buttons = new[] { "OpenGeneralCategory", "OpenProfileCategory", "OpenTemplatesCategory", "OpenApiCategory", "OpenConsultationCategory", "OpenInformationCategory", "OpenDeveloperCategory", "OpenWipCategory", "OpenExtensionsCategory" };
         for (var i = 0; i < buttons.Length; i++) { var category = (Category)i; Bind(buttons[i], () => OpenCategory(category)); }
+        foreach (var category in new[] { Category.Profile, Category.Templates, Category.Api, Category.Extensions, Category.Developer })
+            BindTabs(category);
         Bind("BackToSettings", BackToHome); Bind("BackToConversation", () => { Close(); back(); });
         Bind("SaveGeneral", () => Save(() => options.SaveGeneral((AdvisorTextSize)size.SelectedIndex, userName.Text ?? "", linkOwnUnits.IsChecked == true, linkContacts.IsChecked == true)));
         Bind("SaveConsultation", () => Save(() => options.SaveConsultation(Number(rounds, "query_rounds_invalid"), Number(history, "history_exchanges_invalid"), prompt.Text ?? "")));
         Bind("ResetInformation", () => { if (available) { information.Reset(AdvisorInformation.Default); Notice(""); } });
         Bind("SaveInformation", () => Save(() => options.SaveInformation(information.Value)));
         Bind("SaveCommands", () => Save(() => options.SaveCommands(commands.DisabledCommands)));
+        Bind("SaveTemplateOptions", () => Save(() => options.SaveTemplates(new AdvisorTemplateOptions(showSystemTemplates.IsChecked == true, (AdvisorTemplateInsertion)templateInsertion.SelectedIndex))));
         Bind("SaveWip", () => Save(() => options.SaveCampaign(campaign.IsChecked == true)));
-        void SaveDeveloper() => Save(() => options.SaveDeveloper(localApi.IsChecked == true,
-            () => apiStore.SaveLogging(log.IsChecked == true), localConnections.Value));
-        Bind("SaveDeveloper", SaveDeveloper); Bind("SaveLocalApi", SaveDeveloper);
+        Bind("SaveDeveloper", () => Save(() => apiStore.SaveLogging(log.IsChecked == true)));
+        Bind("SaveLocalApi", () => Save(() => options.SaveDeveloper(localApi.IsChecked == true, localConnections.Value)));
         Bind("TestConnection", TestConnection);
         Bind("ThrowTestException", () =>
         {
@@ -99,6 +105,17 @@ internal sealed class AdvisorSettingsController
     }
     private T Named<T>(string name) where T : class => content.FindName(name) as T ?? throw new InvalidOperationException("Missing settings control: " + name);
     private void Bind(string name, Action action) => Named<Button>(name).Click += (_, _) => guard(action);
+    private void BindTabs(Category category)
+    {
+        var control = (TabControl)pages[(int)category];
+        var navigation = new AdvisorSettingsTabNavigation(index => control.SelectedIndex = index,
+            () => { if (available) { baseline = Snapshot(); Notice(""); } });
+        tabs.Add(category, navigation);
+        control.SelectionChanged += (_, _) => guard(() =>
+        {
+            if (available && current == category) navigation.Request(control.SelectedIndex);
+        });
+    }
     internal void Open()
     {
         Close(); releaseInput(); chat.Visibility = Visibility.Collapsed; pane.Visibility = Visibility.Visible;
@@ -106,7 +123,7 @@ internal sealed class AdvisorSettingsController
     }
     internal void Close()
     {
-        CancelTest(); HideConfirmation(); profiles.Close(); api.Close(); promptEditor.Close(); errorHistory.Close(); templates.Close(); commands.Close(); adapters.Close(); current = null; available = false;
+        available = false; CancelTest(); HideConfirmation(); profiles.Close(); api.Close(); promptEditor.Close(); errorHistory.Close(); templates.Close(); commands.Close(); adapters.Close(); current = null; available = false;
         Notice(""); pane.Visibility = Visibility.Collapsed; chat.Visibility = Visibility.Visible;
     }
     private void OpenCategory(Category category)
@@ -117,23 +134,29 @@ internal sealed class AdvisorSettingsController
         title.Text = text()[new[] { "general.tab", "profile.tab", "templates.category", "settings.api_category", "ai.consultation", "information.tab", "diagnostics.heading", "wip.category", "extensions.category" }[(int)category]];
         try
         {
-            if (category == Category.Profile) { Named<TabControl>("ProfileCategory").SelectedIndex = 0; profiles.Open(); profiles.Focus(); }
-            else if (category == Category.Templates) { templates.Open(); templates.Focus(); }
+            if (category == Category.Profile) { tabs[category].Reset(); profiles.Open(); profiles.Focus(); }
+            else if (category == Category.Templates)
+            {
+                tabs[category].Reset();
+                var saved = options.Read().Templates;
+                showSystemTemplates.IsChecked = saved.ShowSystem; templateInsertion.SelectedIndex = (int)saved.Insertion;
+                templates.Open(); showSystemTemplates.Focus();
+            }
             else if (category == Category.Api)
             {
-                Named<TabControl>("ApiCategory").SelectedIndex = 0;
+                tabs[category].Reset();
                 Named<TabItem>("ApiUseTab").IsEnabled = Named<TabItem>("ApiEditTab").IsEnabled = true;
                 api.Open(); api.Focus();
             }
             else if (category == Category.Extensions)
             {
-                Named<TabControl>("ExtensionsCategory").SelectedIndex = 0;
+                tabs[category].Reset();
                 commands.Open(options.Read().DisabledCommands); adapters.Open(); commands.Focus();
             }
             else if (category == Category.Wip) { campaign.IsChecked = options.Read().CampaignEnabled; campaign.Focus(); }
             else if (category == Category.Developer)
             {
-                Named<TabControl>("DeveloperCategory").SelectedIndex = 0;
+                tabs[category].Reset();
                 var developer = options.Read(); var connections = apiStore.Read();
                 log.IsChecked = connections.LogAiJson; localApi.IsChecked = developer.DeveloperApiEnabled;
                 localConnections.Open(developer.LocalConnections, connections); promptEditor.Open(); log.Focus();
@@ -158,7 +181,7 @@ internal sealed class AdvisorSettingsController
         {
             // Error history must remain reachable when the saved connection settings are unreadable.
             Named<TabItem>("ApiUseTab").IsEnabled = Named<TabItem>("ApiEditTab").IsEnabled = false;
-            Named<TabControl>("ApiCategory").SelectedIndex = 2;
+            tabs[Category.Api].Reset(2);
         }
         else if (current.HasValue) pages[(int)current.Value].IsEnabled = false;
         Named<Button>("BackToSettings").Focus();
@@ -168,24 +191,68 @@ internal sealed class AdvisorSettingsController
         Category.General => userName.Text + "\0" + size.SelectedIndex + ":" + linkOwnUnits.IsChecked + ":" + linkContacts.IsChecked,
         Category.Consultation => rounds.Text + "\0" + history.Text + "\0" + prompt.Text,
         Category.Information => information.Value.Key,
-        Category.Extensions => string.Join("\0", commands.DisabledCommands),
+        Category.Templates when ActiveTab == 0 => showSystemTemplates.IsChecked + ":" + templateInsertion.SelectedIndex,
+        Category.Extensions when ActiveTab == 0 => string.Join("\0", commands.DisabledCommands),
         Category.Wip => campaign.IsChecked.ToString(),
-        Category.Developer => log.IsChecked + ":" + localApi.IsChecked + ":" + localConnections.Value.Json().ToString(),
+        Category.Developer when ActiveTab == 0 => log.IsChecked.ToString(),
+        Category.Developer when ActiveTab == 1 => localApi.IsChecked + ":" + localConnections.Value.Json().ToString(),
         _ => ""
     };
     private bool HasChanges => available && (current switch
     {
-        Category.Profile => profiles.HasChanges,
-        Category.Api => api.HasChanges,
-        Category.Templates => templates.HasChanges,
-        Category.Developer => promptEditor.HasChanges || Snapshot() != baseline,
+        Category.Profile => profiles.HasChanges(ActiveTab),
+        Category.Api => api.HasChanges(ActiveTab),
+        Category.Templates when ActiveTab == 1 => templates.HasChanges,
+        Category.Developer when ActiveTab == 2 => promptEditor.HasChanges,
         _ => Snapshot() != baseline
     });
     private void BackToHome()
     {
         void Go() { CancelTest(); profiles.Close(); api.Close(); promptEditor.Close(); errorHistory.Close(); templates.Close(); commands.Close(); adapters.Close(); current = null; available = false; releaseInput(); page.Visibility = Visibility.Collapsed; home.Visibility = Visibility.Visible; Named<Button>("OpenGeneralCategory").Focus(); }
-        if (HasChanges) Confirm(text()["settings.discard_question"], text()["settings.discard_action"], Go, "settings.continue_editing"); else Go();
+        if (HasChanges) ConfirmDiscard(Go); else Go();
     }
+    private bool DiscardTab(Category category)
+    {
+        try
+        {
+            releaseInput();
+            switch (category)
+            {
+                case Category.Profile: profiles.Open(); break;
+                case Category.Api:
+                    CancelTest(); ClearTest();
+                    if (ActiveTab != 2) api.Open();
+                    break;
+                case Category.Templates:
+                    if (ActiveTab == 0)
+                    {
+                        var saved = options.Read().Templates;
+                        showSystemTemplates.IsChecked = saved.ShowSystem; templateInsertion.SelectedIndex = (int)saved.Insertion;
+                    }
+                    else templates.Open();
+                    break;
+                case Category.Developer:
+                    if (ActiveTab == 0) log.IsChecked = apiStore.Read().LogAiJson;
+                    else if (ActiveTab == 1)
+                    {
+                        var saved = options.Read(); var connections = apiStore.Read();
+                        localApi.IsChecked = saved.DeveloperApiEnabled; localConnections.Open(saved.LocalConnections, connections);
+                    }
+                    else promptEditor.Open();
+                    break;
+                case Category.Extensions:
+                    if (ActiveTab == 0) commands.Open(options.Read().DisabledCommands);
+                    break;
+            }
+            return true;
+        }
+        catch (AdvisorOptionsException error) { OptionsError(error); }
+        catch (AdvisorConnectionException error) { ApiError(error); }
+        catch (AdvisorProfileException error) { ProfileError(error); }
+        catch (AdvisorTemplateException error) { TemplateError(error); }
+        return false;
+    }
+    private void ConfirmDiscard(Action action) => Confirm(text()["settings.discard_question"], text()["settings.discard_action"], action, "settings.continue_editing");
     private void ConfirmDuplicate(Action action) => Confirm(text()["connection.duplicate_discard_question"], text()["settings.duplicate"], action, "settings.continue_editing");
     private void ConfirmDelete(string name, Action action) => Confirm(text().Format("settings.delete_question", name), text()["profile.remove"], action);
     private void Confirm(string message, string caption, Action action, string cancelKey = "settings.cancel")
@@ -265,6 +332,9 @@ internal sealed class AdvisorSettingsController
     }
     internal void Tick()
     {
+        var category = current;
+        if (available && category.HasValue && tabs.TryGetValue(category.Value, out var navigation) && navigation.HasPending)
+            navigation.Pump(HasChanges, () => DiscardTab(category.Value), ConfirmDiscard);
         profiles.Tick();
         Named<TextBlock>("LocalApiStatus").Text = AdvisorLocalApiDriver.Status;
         errorHistory.Tick(current == Category.Api && Named<TabControl>("ApiCategory").SelectedIndex == 2);

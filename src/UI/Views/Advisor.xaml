@@ -252,41 +252,63 @@
             </ScrollViewer>
           </TabItem>
         </TabControl>
-        <Grid x:Name="TemplatesCategory" Visibility="Collapsed">
-          <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-          </Grid.RowDefinitions>
-          <Grid Margin="0,8,0,12">
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="*" />
-              <ColumnDefinition Width="Auto" />
-              <ColumnDefinition Width="Auto" />
-              <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <ComboBox x:Name="TemplateSelector" MinHeight="30" />
-            <Button x:Name="AddTemplate" Grid.Column="1" Content="{DynamicResource Advisor.templates.add}" Height="30" Padding="10,0" Margin="8,0,0,0" />
-            <Button x:Name="EditTemplate" Grid.Column="2" Content="{DynamicResource Advisor.settings.edit}" Height="30" Padding="10,0" Margin="8,0,0,0" />
-            <Button x:Name="RemoveTemplate" Grid.Column="3" Content="{DynamicResource Advisor.templates.remove}" Height="30" Padding="10,0" Margin="8,0,0,0" />
-          </Grid>
-          <Grid x:Name="TemplateEditor" Grid.Row="1" Visibility="Collapsed">
-            <Grid.RowDefinitions>
-              <RowDefinition Height="Auto" />
-              <RowDefinition Height="Auto" />
-              <RowDefinition Height="Auto" />
-              <RowDefinition Height="*" />
-              <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
-            <TextBlock Text="{DynamicResource Advisor.templates.name}" FontSize="12" Margin="0,0,0,4" />
-            <TextBox x:Name="TemplateName" Grid.Row="1" FontSize="14" Padding="7" />
-            <TextBlock Grid.Row="2" Text="{DynamicResource Advisor.templates.message}" FontSize="12" Margin="0,12,0,4" />
-            <TextBox x:Name="TemplateMessage" Grid.Row="3" AcceptsReturn="True" AcceptsTab="False" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" FontSize="14" Padding="7" />
-            <WrapPanel Grid.Row="4" HorizontalAlignment="Right" Margin="0,12,0,0">
-              <Button x:Name="CancelTemplate" Content="{DynamicResource Advisor.settings.cancel}" Height="30" Padding="12,0" />
-              <Button x:Name="SaveTemplate" Content="{DynamicResource Advisor.settings.save_form}" Height="30" Padding="12,0" Margin="8,0,0,0" />
-            </WrapPanel>
-          </Grid>
-        </Grid>
+        <TabControl x:Name="TemplatesCategory" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+          <TabItem Header="{DynamicResource Advisor.action.settings}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+              <StackPanel Margin="0,8,8,0">
+                <CheckBox x:Name="ShowSystemTemplates" Content="{DynamicResource Advisor.templates.show_system}" FontSize="13" />
+                <TextBlock Text="{DynamicResource Advisor.templates.insertion}" FontSize="12" Margin="0,12,0,4" />
+                <ComboBox x:Name="TemplateInsertion" MinHeight="30">
+                  <ComboBoxItem Content="{DynamicResource Advisor.templates.replace}" />
+                  <ComboBoxItem Content="{DynamicResource Advisor.templates.append}" />
+                </ComboBox>
+                <WrapPanel HorizontalAlignment="Right" Margin="0,8,0,0">
+                  <Button x:Name="SaveTemplateOptions" Content="{DynamicResource Advisor.settings.save_form}" Height="30" Padding="12,0" />
+                </WrapPanel>
+              </StackPanel>
+            </ScrollViewer>
+          </TabItem>
+          <TabItem Header="{DynamicResource Advisor.settings.registration_tab}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+            <Grid Margin="0,8,0,0">
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+              </Grid.RowDefinitions>
+              <StackPanel Grid.Row="0">
+                <TextBlock Text="{DynamicResource Advisor.templates.user}" FontSize="14" FontWeight="Bold" />
+                <Grid Margin="0,8,0,12">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <ComboBox x:Name="TemplateSelector" MinHeight="30" />
+                  <Button x:Name="AddTemplate" Grid.Column="1" Content="{DynamicResource Advisor.templates.add}" Height="30" Padding="10,0" Margin="8,0,0,0" />
+                  <Button x:Name="EditTemplate" Grid.Column="2" Content="{DynamicResource Advisor.settings.edit}" Height="30" Padding="10,0" Margin="8,0,0,0" />
+                  <Button x:Name="RemoveTemplate" Grid.Column="3" Content="{DynamicResource Advisor.templates.remove}" Height="30" Padding="10,0" Margin="8,0,0,0" />
+                </Grid>
+              </StackPanel>
+              <Grid x:Name="TemplateEditor" Grid.Row="1" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="*" />
+                  <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock Text="{DynamicResource Advisor.templates.name}" FontSize="12" Margin="0,0,0,4" />
+                <TextBox x:Name="TemplateName" Grid.Row="1" FontSize="14" Padding="7" />
+                <TextBlock Grid.Row="2" Text="{DynamicResource Advisor.templates.message}" FontSize="12" Margin="0,12,0,4" />
+                <TextBox x:Name="TemplateMessage" Grid.Row="3" AcceptsReturn="True" AcceptsTab="False" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" FontSize="14" Padding="7" />
+                <WrapPanel Grid.Row="4" HorizontalAlignment="Right" Margin="0,12,0,0">
+                  <Button x:Name="CancelTemplate" Content="{DynamicResource Advisor.settings.cancel}" Height="30" Padding="12,0" />
+                  <Button x:Name="SaveTemplate" Content="{DynamicResource Advisor.settings.save_form}" Height="30" Padding="12,0" Margin="8,0,0,0" />
+                </WrapPanel>
+              </Grid>
+            </Grid>
+          </TabItem>
+        </TabControl>
         <TabControl x:Name="ApiCategory" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
           <TabItem x:Name="ApiUseTab" Header="{DynamicResource Advisor.settings.selection_tab}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">

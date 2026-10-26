@@ -142,6 +142,7 @@ internal static class Program
         GeminiTests.Run(args[0], Check);
         ProfileTests.Run(args[1], Check);
         SettingsOperationsTests.Run(Check);
+        SettingsNavigationTests.Run(Check);
         TemplateTests.Run(Check);
         UpdateNoticeTests.Run(Check);
         TemplateTests.RunInstalled(args[1], Check);

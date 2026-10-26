@@ -162,17 +162,12 @@ internal static partial class LocalApiTests
                     store.Current.LocalConnections.AllowedIds.Count == 0 && store.Current.LocalConnections.DefaultId == null,
                     "An existing installation implicitly permitted connections");
                 var policy = new AdvisorLocalConnections(new[] { "local" }, "local", true);
-                store.SaveDeveloper(true, () => { }, policy);
+                store.SaveDeveloper(true, policy);
                 store.EnsureUserName("Commander"); store.SaveGeneral(AdvisorTextSize.Small, "Commander"); store.SaveCampaign(true);
                 store.SaveConsultation(4, 2, ""); store.SaveInformation(AdvisorInformation.Default); store.SaveCommands(new[] { "custom.off" });
                 var reopened = new AdvisorOptionsStore(store.Path);
                 Require(reopened.Current.LocalConnections.AllowModelOverride && reopened.Current.LocalConnections.DefaultId == "local" && reopened.Current.LocalConnections.AllowedIds.SequenceEqual(new[] { "local" }),
                     "Another category or restart lost permitted/default connection choices");
-                var before = File.ReadAllBytes(store.Path);
-                try { reopened.SaveDeveloper(false, () => throw new IOException("blocked"), AdvisorLocalConnections.Empty); }
-                catch (IOException) { }
-                Require(reopened.Current.DeveloperApiEnabled && reopened.Current.LocalConnections.AllowModelOverride && reopened.Current.LocalConnections.DefaultId == "local" &&
-                    File.ReadAllBytes(store.Path).SequenceEqual(before), "A failed developer save partly published or persisted connection permissions");
                 var discovery = new AdvisorLocalDiscovery(Path.Combine(directory, "developer-api.json"), 123);
                 var metadata = policy.Describe(LocalLibrary()); discovery.Write(metadata);
                 var file = JObject.Parse(File.ReadAllText(discovery.FilePath));

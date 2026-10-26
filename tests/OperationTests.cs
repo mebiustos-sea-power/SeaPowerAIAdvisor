@@ -39,7 +39,7 @@ internal static class OperationTests
                 }
                 store.SaveCommands(new[] { "custom.uninstalled", "custom.off" }); store.EnsureUserName("Commander");
                 store.SaveGeneral(AdvisorTextSize.Large, "Captain", false, true); store.SaveCampaign(true);
-                store.SaveInformation(AdvisorInformation.Default); store.SaveConsultation(3, 1, "brief"); store.SaveDeveloper(true, () => { });
+                store.SaveInformation(AdvisorInformation.Default); store.SaveConsultation(3, 1, "brief"); store.SaveDeveloper(true);
                 var reopened = new AdvisorOptionsStore(store.Path);
                 Require(reopened.Current.DisabledCommands.SequenceEqual(new[] { "custom.off", "custom.uninstalled" }) &&
                     reopened.Current.IsCommandEnabled("custom.new") && reopened.Current.DeveloperApiEnabled && reopened.Current.CommonPrompt == "brief" && !reopened.Current.LinkOwnUnits,

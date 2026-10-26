@@ -40,7 +40,8 @@ internal sealed class AdvisorApiSettingsView
     private string? MainId => main.SelectedIndex <= 0 ? null : ids[main.SelectedIndex - 1];
     private string? SubId => sub.SelectedIndex <= 0 ? null : ids[sub.SelectedIndex - 1];
     private bool EditorChanged => editor != null && !JToken.DeepEquals(editorBaseline, EditorValues());
-    internal bool HasChanges => EditorChanged || (data != null && (MainId != data.MainId || SubId != data.SubId));
+    internal bool HasChanges(int tab) => tab == 0 ? data != null && (MainId != data.MainId || SubId != data.SubId) :
+        tab == 1 && editor != null && (adding || EditorChanged);
 
     internal AdvisorApiSettingsView(FrameworkElement content, AdvisorApiSettingsStore store, Func<AdvisorText> text,
         Action<Action> guard, TypingScope typing, Action changed, Action saved, Action compositionNotice, Action<AdvisorConnectionException> error, Action<string, Action> confirmDelete, Action<Action> confirmDuplicate)
@@ -80,7 +81,7 @@ internal sealed class AdvisorApiSettingsView
         renderFields = () => ShowFields(guard);
     }
     private void Run(Action action) { try { action(); } catch (AdvisorConnectionException failure) { error(failure); } }
-    internal void Open() { editor = null; Refresh(store.Read(), false); }
+    internal void Open() { var saved = store.Read(); editor = null; Refresh(saved, false); }
     internal void Close() { editor = null; Refresh(null, false); }
     internal void Focus() { if (main.IsEnabled) main.Focus(); }
     internal AdvisorApiConfiguration TestConfiguration()
@@ -157,7 +158,8 @@ internal sealed class AdvisorApiSettingsView
     internal void SetBusy(bool value)
     {
         busy = value;
-        main.IsEnabled = sub.IsEnabled = saveAssignments.IsEnabled = useTab.IsEnabled = data != null && !busy && !Editing;
+        useTab.IsEnabled = data != null;
+        main.IsEnabled = sub.IsEnabled = saveAssignments.IsEnabled = data != null && !busy && !Editing;
         listPane.IsEnabled = add.IsEnabled = data != null && !busy && !Editing;
         duplicate.IsEnabled = remove.IsEnabled = Editing && !adding && !busy;
         name.IsEnabled = timeout.IsEnabled = outputTokens.IsEnabled = provider.IsEnabled = delivery.IsEnabled = fields.IsEnabled = saveEntry.IsEnabled = cancelEntry.IsEnabled = Editing && !busy;

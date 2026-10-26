@@ -62,18 +62,72 @@ internal static class TemplateTests
             Throws("templates_unreadable", () => store.SaveEntry(entry, true));
             Require(Directory.Exists(path) && !Directory.GetFiles(directory, "*.tmp").Any(), "A failed operation replaced a directory or left temporary files");
         }));
-        check("A saved template can be edited and sent with existing badges using ordinary manual-input policies", () => InTemp(directory =>
+        check("Template preferences preserve existing defaults, round-trip and survive saves from other categories", () => InTemp(directory =>
+        {
+            var path = Path.Combine(directory, "options.json"); var store = new AdvisorOptionsStore(path);
+            var defaults = AdvisorOptions.Parse("{}").Templates;
+            Require(defaults.ShowSystem && defaults.Insertion == AdvisorTemplateInsertion.Replace &&
+                store.Current.Templates.ShowSystem && !File.Exists(path), "Opening unconfigured preferences changed their defaults or wrote a file");
+            store.SaveConsultation(9, 2, "Keep my common prompt");
+            store.SaveTemplates(new AdvisorTemplateOptions(false, AdvisorTemplateInsertion.Append));
+            Require(store.Current.MaxQueryRounds == 9 && store.Current.HistoryExchanges == 2 && store.Current.CommonPrompt == "Keep my common prompt",
+                "Saving template preferences changed consultation settings");
+            foreach (var save in new Action[] { () => store.EnsureUserName("Commander"),
+                () => store.SaveGeneral(AdvisorTextSize.Large, "Admiral"), () => store.SaveCampaign(true),
+                () => store.SaveConsultation(8, 3, "Updated prompt"), () => store.SaveInformation(AdvisorInformation.Default),
+                () => store.SaveDeveloper(false), () => store.SaveCommands(new[] { "custom.disabled" }) })
+            {
+                save(); var reloaded = new AdvisorOptionsStore(path).Current.Templates;
+                Require(!reloaded.ShowSystem && reloaded.Insertion == AdvisorTemplateInsertion.Append,
+                    "Saving another settings category reset the template preferences");
+            }
+            var saved = File.ReadAllBytes(path);
+            foreach (var invalid in new[] { "null", "[]", "{\"show_system\":\"yes\"}", "{\"insertion\":3}",
+                "{\"insertion\":\"unknown\"}", "{\"unexpected\":true}" })
+            {
+                try { AdvisorOptions.Parse("{\"template_options\":" + invalid + "}"); throw new InvalidOperationException("Invalid preferences accepted"); }
+                catch (AdvisorOptionsException failure) { Require(failure.Code == "options_invalid", "The settings error was hidden"); }
+            }
+            Require(File.ReadAllBytes(path).SequenceEqual(saved), "Invalid preferences changed a saved file");
+        }));
+        check("System templates use localized messages and English fallback without modifying the user library", () => InTemp(directory =>
+        {
+            var store = new AdvisorTextTemplateStore(directory); var user = new AdvisorTextTemplate("user", "My template", "Keep this message");
+            store.SaveEntry(user, true); var before = File.ReadAllBytes(Path.Combine(directory, "templates.json"));
+            var english = AdvisorSystemTemplates.Read(AdvisorText.Load("en"));
+            var japanese = AdvisorSystemTemplates.Read(AdvisorText.Load("ja"));
+            var fallback = AdvisorSystemTemplates.Read(AdvisorText.Load("de"));
+            Require(english.Count > 0 && english.Select(e => e.Id).SequenceEqual(japanese.Select(e => e.Id)) &&
+                english[0].Name != japanese[0].Name && english[0].Text != japanese[0].Text &&
+                fallback[0].Name == english[0].Name && fallback[0].Text == english[0].Text,
+                "System messages lost their identity, localization or English fallback");
+            Require(File.ReadAllBytes(Path.Combine(directory, "templates.json")).SequenceEqual(before) && store.Read().Single().Text == user.Text,
+                "Reading bundled templates changed the editable user library");
+        }));
+        check("System and user templates replace or append editable messages while retaining badges and ordinary manual-input policies", () => InTemp(directory =>
         {
             var store = new AdvisorTextTemplateStore(directory);
             store.SaveEntry(new AdvisorTextTemplate("patrol", "Patrol", "指定したヘリで対潜哨戒網を構築して。\nまず状況を確認して。"), true);
-            var selected = store.Read().Single(); var units = new AdvisorDraft(); units.Add(1029, "Hobby 1"); units.Add(1040, "Hobby 2");
-            var edited = selected.Text + "\n既存予約は維持して。";
-            var request = units.Prepare(edited);
-            Require(!request.IsShortcut && request.AllowOperations && request.SituationDelivery == null && request.DisplayBody == edited &&
-                request.Units.Select(u => u.Id).SequenceEqual(new[] { 1029, 1040 }) &&
-                request.Text.Contains("unit_id: 1029", StringComparison.Ordinal) && request.Text.Contains("unit_id: 1040", StringComparison.Ordinal),
-                "Template input carried shortcut policies, lost edits or omitted the target identities");
-            Require(store.Read().Single().Text == selected.Text, "Editing the message input modified the saved template");
+            var saved = store.Read().Single(); var draft = new AdvisorDraft(); draft.Add(1029, "Hobby 1"); draft.Add(1040, "Hobby 2");
+            draft.AddLocation(new SeaPowerAIAdvisor.Api.AdvisorMapCoordinate(26.6, 127.3), "Point {0}");
+            foreach (var selected in new[] { saved }.Concat(AdvisorSystemTemplates.Read(AdvisorText.Load("ja"))))
+            foreach (var mode in new[] { AdvisorTemplateInsertion.Replace, AdvisorTemplateInsertion.Append })
+            {
+                var preference = new AdvisorTemplateOptions(insertion: mode);
+                var inserted = preference.Insert("My situation", selected.Text);
+                Require(inserted == (mode == AdvisorTemplateInsertion.Replace ? selected.Text : "My situation\n" + selected.Text),
+                    "Template selection replaced text in append mode or retained text in replacement mode");
+                Require(preference.Insert("", selected.Text) == selected.Text &&
+                    new AdvisorTemplateOptions(insertion: AdvisorTemplateInsertion.Append).Insert("Existing\n", selected.Text) == "Existing\n" + selected.Text,
+                    "Insertion added an unnecessary leading or duplicate line break");
+                var edited = inserted + "\n既存予約は維持して。";
+                var request = draft.Prepare(edited);
+                Require(!request.IsShortcut && request.AllowOperations && request.SituationDelivery == null && request.DisplayBody == edited &&
+                    request.Units.Select(u => u.Id).SequenceEqual(new[] { 1029, 1040 }) && request.Locations.Count == 1 &&
+                    request.Text.Contains("unit_id: 1029", StringComparison.Ordinal) && request.Text.Contains("unit_id: 1040", StringComparison.Ordinal),
+                    "Template input carried shortcut policies, lost edits or omitted unit/location badges");
+            }
+            Require(store.Read().Single().Text == saved.Text, "Editing the message input modified the saved template");
         }));
     }
     internal static void RunInstalled(string assemblyPath, Action<string, Action> check)
@@ -91,9 +145,13 @@ internal static class TemplateTests
                 !Named("UnitBadgeArea").Ancestors().Contains(menu) && (string?)menu.Attribute("Visibility") == "Collapsed" &&
                 Named("OtherConsultations").Name.LocalName == "ToggleButton" && Named("OtherConsultations").Ancestors().Contains(Named("ConversationPane")),
                 "The selector shares the history frame, hides input or badges, or loses its toggle navigation");
-            var category = Named("TemplatesCategory");
+            var category = Named("TemplatesCategory"); var tabs = category.Elements().ToArray();
+            Require(category.Name.LocalName == "TabControl" && tabs.Length == 2 && tabs.All(tab => tab.Name.LocalName == "TabItem"),
+                "Template preferences and library editing do not have separate tabs");
+            foreach (var name in new[] { "ShowSystemTemplates", "TemplateInsertion", "SaveTemplateOptions" })
+                Require(Named(name).Ancestors().Contains(tabs[0]), "A template preference control is mixed into library editing");
             foreach (var name in new[] { "TemplateSelector", "AddTemplate", "EditTemplate", "RemoveTemplate", "TemplateName", "TemplateMessage", "SaveTemplate", "CancelTemplate" })
-                Require(Named(name).Ancestors().Contains(category), "A template edit control is outside its settings category");
+                Require(Named(name).Ancestors().Contains(tabs[1]), "A template edit control is mixed into general template preferences");
             var buttons = Named("OpenProfileCategory").Parent!.Elements().Where(e => e.Name.LocalName == "Button" && e.Attribute("Grid.Row") != null)
                 .OrderBy(e => (int)e.Attribute("Grid.Row")!).ThenBy(e => (int)e.Attribute("Grid.Column")!).Select(e => (string?)e.Attribute(x + "Name")).ToArray();
             Require(Array.IndexOf(buttons, "OpenTemplatesCategory") == Array.IndexOf(buttons, "OpenProfileCategory") + 1,

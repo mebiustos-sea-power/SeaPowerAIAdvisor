@@ -21,8 +21,9 @@ internal sealed class AdvisorTemplateSettingsView
     private IReadOnlyList<AdvisorTextTemplate> entries = Array.Empty<AdvisorTextTemplate>();
     private string? editingId;
     private bool adding;
+    private (string Name, string Message) baseline;
     private AdvisorTextTemplate? Selected => selector.SelectedIndex >= 0 && selector.SelectedIndex < entries.Count ? entries[selector.SelectedIndex] : null;
-    internal bool HasChanges => editingId != null;
+    internal bool HasChanges => editingId != null && (adding || (name.Text ?? "", message.Text ?? "") != baseline);
 
     internal AdvisorTemplateSettingsView(FrameworkElement content, AdvisorTextTemplateStore store, Func<AdvisorText> text,
         Action<Action> guard, TypingScope typing, Action saved, Action changed, Action composing,
@@ -44,9 +45,8 @@ internal sealed class AdvisorTemplateSettingsView
         { input.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(input)); input.LostKeyboardFocus += (_, _) => guard(() => typing.Release(input)); }
     }
     private void Run(Action action) { try { action(); } catch (AdvisorTemplateException failure) { error(failure); } }
-    internal void Open() { editingId = null; Refresh(store.Read(), null); }
+    internal void Open() { var saved = store.Read(); editingId = null; Refresh(saved, null); }
     internal void Close() { editingId = null; Refresh(Array.Empty<AdvisorTextTemplate>(), null); }
-    internal void Focus() { if (entries.Count == 0) add.Focus(); else selector.Focus(); }
     private void Controls()
     {
         var editing = editingId != null;
@@ -67,6 +67,7 @@ internal sealed class AdvisorTemplateSettingsView
     {
         adding = entry == null; editingId = entry?.Id ?? "template-" + Guid.NewGuid().ToString("N");
         name.Text = entry?.Name ?? ""; message.Text = entry?.Text ?? "";
+        baseline = (name.Text ?? "", message.Text ?? "");
         save.Content = text()[adding ? "settings.register" : "settings.save_form"];
         changed(); Controls(); typing.Release(); name.Focus();
     }

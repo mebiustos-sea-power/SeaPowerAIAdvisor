@@ -160,7 +160,7 @@ internal static class OptionsTests
                     store.SaveGeneral(AdvisorTextSize.Small, "Commander", own, contacts);
                     store.SaveConsultation(5, 3, "");
                     store.SaveInformation(AdvisorInformation.Default);
-                    store.SaveDeveloper(false, () => { });
+                    store.SaveDeveloper(false);
                     store.SaveGeneral(AdvisorTextSize.Standard, "Commander");
                     var saved = new AdvisorOptionsStore(store.Path).Current;
                     Require(saved.LinkOwnUnits == own && saved.LinkContacts == contacts,

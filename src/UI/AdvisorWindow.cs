@@ -129,7 +129,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
 
         questionInput = new QuestionInputController(question, typing, () => active != null, StartConsultation, guard);
         var templates = new AdvisorTextTemplateStore(profileDirectory);
-        consultationMenu = new AdvisorConsultationMenu(content, templates, () => text, ChooseTemplate, guard, warn);
+        consultationMenu = new AdvisorConsultationMenu(content, templates, () => text, ChooseTemplate, guard, warn, () => options.Current.Templates);
         otherConsultations = Named<ToggleButton>(content, "OtherConsultations");
         otherConsultations.Click += (_, _) => guard(() =>
         {
@@ -388,7 +388,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     private void ChooseTemplate(AdvisorTextTemplate template)
     {
         if (!CanEditDraft()) return;
-        questionInput.Reset(); question.Text = template.Text;
+        questionInput.Reset(); question.Text = options.Current.Templates.Insert(question.Text ?? "", template.Text);
         consultationMenu.Close();
         question.SelectionStart = question.Text.Length; question.SelectionLength = 0; questionInput.RequestFocus();
     }
