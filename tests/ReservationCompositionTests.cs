@@ -6,10 +6,11 @@ using Newtonsoft.Json.Linq;
 using SeaPowerAIAdvisor;
 using SeaPowerAIAdvisor.Api;
 
-internal static class ReservationCompositionTests
+internal static partial class ReservationCompositionTests
 {
     internal static void Run(Action<string, Action> check)
     {
+        RunRevisions(check);
         check("A mixed multi-unit plan replaces each queue once and connects movement/drop/return segments in execution order", () =>
         {
             var game = new Game(); var service = Service(game, "mixed");

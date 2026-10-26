@@ -9,10 +9,11 @@ using System.Xml.Linq;
 using Newtonsoft.Json.Linq;
 using SeaPowerAIAdvisor;
 
-internal static class OperationPlanTests
+internal static partial class OperationPlanTests
 {
     internal static void Run(Action<string, Action> check)
     {
+        RunRevisions(check);
         check("A complete submission preserves mixed operation and target order and executes only the selected alternative", () =>
         {
             var log = new List<string>(); var service = new AdvisorOperations(_ => true);

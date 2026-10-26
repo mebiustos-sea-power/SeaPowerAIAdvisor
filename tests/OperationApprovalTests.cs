@@ -245,7 +245,7 @@ internal static class OperationApprovalTests
             Require((string?)OperationSubmissionFixture.Submit(service, "unknown",
                 Enumerable.Range(0, 3).Select(i => Request(service, "unknown", i, operation.Id)).ToArray())["status"] == "unknown" && log.Count == 1,
                 "Unknown batch was replayed or lost its outcome");
-            Expect(() => OperationSubmissionFixture.Submit(service, "unknown", Request(service, "unknown", 1, operation.Id)), "request_id_conflict");
+            Expect(() => OperationSubmissionFixture.Submit(service, "unknown", Request(service, "unknown", 1, operation.Id)), "proposal_closed");
         });
         check("Staging validates aggregate stock across all segments before accepting any work", () =>
         {

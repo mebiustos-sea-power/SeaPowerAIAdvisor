@@ -22,6 +22,9 @@ internal enum AdvisorProposalState { Collecting, Pending, Executing, Registered,
 internal sealed class AdvisorOperationProposal
 {
     private readonly List<AdvisorOperationPlan> plans = new();
+    private readonly Dictionary<string, JObject> submissions = new(StringComparer.Ordinal);
+    internal int SubmissionCount => submissions.Count;
+    internal JObject? Submitted(string id) => submissions.TryGetValue(id, out var value) ? value : null;
     internal string Owner { get; }
     internal IReadOnlyList<AdvisorOperationPlan> Plans => plans.AsReadOnly();
     internal IReadOnlyList<AdvisorOperationOrder> Orders => plans.SelectMany(p => p.Orders).ToArray();
@@ -36,6 +39,7 @@ internal sealed class AdvisorOperationProposal
     internal void Submit(JObject submission, IEnumerable<AdvisorOperationPlan> values, AdvisorPlanSelection selection)
     {
         Submission = (JObject)submission.DeepClone();
+        submissions.Add((string)Submission["request_id"]!, Submission);
         plans.Clear(); plans.AddRange(values); Selection = selection;
     }
 }

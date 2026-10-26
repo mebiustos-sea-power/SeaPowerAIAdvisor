@@ -16,19 +16,24 @@ internal sealed partial class AdvisorOperations
     internal JObject SubmitPlans(string owner, JObject request)
     {
         CheckEnabled(); AdvisorOperationPlanBatch.Validate(request);
-        if (planSubmissions.TryGetValue(owner, out var prior))
+        var id = (string)request["request_id"]!;
+        planSubmissions.TryGetValue(owner, out var prior);
+        if (prior?.Submitted(id) is JObject accepted)
         {
-            if (!JToken.DeepEquals(prior.Submission, request)) throw new AdvisorOperationException(409, "request_id_conflict");
-            return SubmissionResult(prior);
+            if (!JToken.DeepEquals(accepted, request)) throw new AdvisorOperationException(409, "request_id_conflict");
+            if ((string?)prior.Submission!["request_id"] == id) return SubmissionResult(prior);
+            return new JObject { ["request_id"] = id, ["status"] = "superseded", ["registered"] = false,
+                ["current_submission"] = SubmissionResult(prior) };
         }
-        var proposal = Proposal(owner);
-        if (proposal == null || proposal.State != AdvisorProposalState.Collecting) throw new AdvisorOperationException(409, "proposal_closed");
-        if (proposal.Orders.Count != 0) throw new AdvisorOperationException(409, "proposal_already_submitted");
+        var proposal = prior ?? Proposal(owner);
+        if (proposal == null || proposal.State != AdvisorProposalState.Collecting || !ReferenceEquals(proposal, Proposal(owner)))
+            throw new AdvisorOperationException(409, "proposal_closed");
+        var prefix = owner + "." + proposal.SubmissionCount.ToString(CultureInfo.InvariantCulture) + ".";
         var index = 0;
         var plans = ((JArray)request["plans"]!).Cast<JObject>().Select(p => new AdvisorOperationPlan((string)p["plan_id"]!,
             (string)p["title"]!, (string)p["summary"]!, ((JArray)p["operations"]!).Cast<JObject>().Select(o => new AdvisorOperationOrder(new JObject
             {
-                ["scope_id"] = ScopeId, ["request_id"] = owner + "." + (index++).ToString(CultureInfo.InvariantCulture),
+                ["scope_id"] = ScopeId, ["request_id"] = prefix + (index++).ToString(CultureInfo.InvariantCulture),
                 ["operation"] = o["operation_id"]!.DeepClone(), ["target_ref"] = o["target_ref"]!.DeepClone(), ["arguments"] = o["arguments"]!.DeepClone()
             })), (JArray)p["reservation_updates"]!)).ToArray();
         var orders = plans.SelectMany(p => p.Orders).ToArray();
@@ -43,13 +48,15 @@ internal sealed partial class AdvisorOperations
             ValidateRequest(order.Request);
             if (receipts.ContainsKey(order.Id)) throw new AdvisorOperationException(409, "request_id_conflict");
         }
-        // Validate alternatives independently. No receipts, reservations or partial plans survive a rejected set.
+        // Validate the complete revision before changing any accepted plans or receipts.
         foreach (var plan in plans) ValidatePlan(plan);
+        foreach (var order in proposal.Orders)
+            receipts[order.Id].Result = new JObject { ["request_id"] = order.Id, ["status"] = "superseded", ["registered"] = false };
         foreach (var order in orders)
             receipts.Add(order.Id, new Receipt() { Result = new JObject { ["request_id"] = order.Id, ["status"] = "proposed", ["registered"] = false } });
         proposal.Submit(request, plans, selection);
         proposal.RequiresApproval = plans.Length > 1 || orders.Any(o => Operation(o.OperationId).RequiresApproval);
-        planSubmissions.Add(owner, proposal);
+        planSubmissions[owner] = proposal;
         return SubmissionResult(proposal);
     }
     // Explicit, AI-free development execution through the same proposal validation and ordered approval path.
@@ -95,6 +102,7 @@ internal sealed partial class AdvisorOperations
         ["request_id"] = proposal.Submission!["request_id"]!.DeepClone(),
         ["status"] = proposal.State is AdvisorProposalState.Collecting or AdvisorProposalState.Pending ? "proposed" : proposal.State.ToString().ToLowerInvariant(),
         ["registered"] = proposal.State == AdvisorProposalState.Registered, ["requires_approval"] = proposal.RequiresApproval,
+        ["replaces_previous_submission"] = proposal.SubmissionCount > 1,
         ["selection"] = proposal.Selection == AdvisorPlanSelection.Single ? "single" : "multiple",
         ["plans"] = new JArray(proposal.Plans.Select(p => new JObject { ["plan_id"] = p.Id, ["operation_count"] = p.Orders.Count }))
     };
