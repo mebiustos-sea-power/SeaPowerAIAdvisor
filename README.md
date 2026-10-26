@@ -6,25 +6,33 @@ An in-game operations adviser for **Sea Power: Naval Combat in the Missile Age**
 
 [Download releases](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/releases) · [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3821064016) · [Report an issue](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/issues)
 
-## What's new in v0.17.1
+## What's new in v0.18.0
 
-Output token limits are now easier to adjust when the AI reaches its limit before completing an answer or operation proposal.
+Specify destinations directly from the map and request plans that combine movement, sonobuoy deployment and formation return. Review and adopt a proposal before its orders are added to the game.
 
-- **Output token limits can now be configured for every API connection.**
-  Gemini, Ollama and OpenRouter connections now offer this setting in the connection editor, alongside NanoGPT.
+- **Location badges:** Ctrl+left-click empty map space while AI Advisor is open to attach a point to your message.
+- **Movement and formation return:** plan routes using unit-specific speed, altitude and depth presets, combine different operations and units, and review `Append` / `Replace` choices before adoption.
+- **Consult while hidden:** consultations continue when the window is hidden; the AI button shows a yellow dot while consulting and a green dot when a result is ready.
+- **Connection-specific prompts:** configure supplementary instructions for individual connections or models.
+- **System text templates:** use Weapon employment or your own saved messages, with replacement or append insertion.
+- **External command SDK:** add commands without changing the host; built-in commands use the same public contract.
 
-- **The default output token limit is now 8192.**
-  This applies to new connections and connections without a saved limit. Existing limits saved for NanoGPT connections are retained.
+**When updating:**
 
-- **Added update notices.**
-  Versions with an announcement display it the first time you open the main adviser window. Once dismissed, that notice will not appear again.
+- **NanoGPT:** we strongly recommend **DeepSeek V4.1 Flash 1017 (non-thinking)**, model ID `deepseek/deepseek-v4.1-flash-1017`. Existing saved connection models are unchanged.
+- **Command settings:** commands default to enabled, including newly added ones; the former global OFF setting is not carried over.
+- **External extensions:** extensions using the previous public API contract require updates and rebuilding for contract version 2.
+
+See the [v0.18.0 release notes](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/releases/tag/v0.18.0) for all changes.
 
 ## Features
 
 - **Gemini, Ollama, OpenRouter and NanoGPT connections.** Register named connections and choose a main connection and an optional sub connection. Duplicate a connection to reuse its settings with another model.
 - **On-demand tactical advice.** Ask your own question or use **Next steps**, **Key risks**, **Radar operations**, **Own units** and **Contacts**.
-- **AI-assisted sonobuoy deployment.** Ask the adviser to plan drops at multiple locations using one or more airborne aircraft carrying sonobuoys. Review and approve a proposal before its orders are added to the game.
-- **Alternative proposals with map previews.** Compare planned drop locations and travel routes, choose one proposal to adopt, and retain its number and title in conversation history.
+- **AI-assisted game commands.** Request movement, sonobuoy deployment and formation return, including combined plans for one or more units. Review and approve a proposal before its orders are added to the game.
+- **Map location badges.** Ctrl+left-click empty map space while the conversation is open to attach destinations or drop locations to your question. Click draft badges to locate their units or points on the map.
+- **Consultations continue while hidden.** A yellow dot on the AI button means a consultation is running; green means a result is ready. Both dots are hidden while the adviser window is open.
+- **Alternative proposals with map previews.** Compare planned locations and travel routes, choose one proposal to adopt, and retain its number and title in conversation history.
 - **Text templates.** Choose a built-in message or register your own reusable messages in settings, then select them through **Text templates**. Edit the message and attach unit or location badges before sending.
 - **Unidentified-contact assessments.** Open an unidentified contact’s information window and click the **[adviser name]’s assessment** button. The adviser evaluates its displayed candidates, confirmed features and relevant known contacts. Buttons below the reply let you reassess assuming a friendly or enemy affiliation.
 - **Player-known information only.** Friendly capabilities, sensor operating states and specifications, launched missiles and torpedoes with player-visible target information, aircraft and bases, applicable altitude/depth, movement plans, observed contacts and detection methods, mission briefing, objectives and published reports are available as needed. Currently displayed mission circles are included with basic mission information, using their labels, center coordinates and radii. Hidden enemy state is not supplied.
@@ -71,7 +79,7 @@ For an unidentified contact, open its information window and use **[adviser name
 
 Choose a model that supports **tool calling**. These are examples, not a guarantee that every model will interpret the supplied data correctly. OpenRouter and NanoGPT connection tests check a tool-call/result round trip as well as the final response.
 
-Prompt tuning and evaluation of adviser responses primarily use **DeepSeek V4.1 Flash 1017 through NanoGPT**. Other supported services and models remain available, but response quality and information retrieval behavior may vary by model.
+For NanoGPT, we strongly recommend **DeepSeek V4.1 Flash 1017 (non-thinking)**, the primary model used for prompt tuning and evaluation of adviser responses. Other supported services and models remain available, but response quality and information retrieval behavior may vary by model.
 
 Each connection can also have an optional **Connection prompt** (up to 2000 characters), added to consultations using that connection. It supplements the common prompt and takes precedence when the two conflict; a switch to the sub connection uses that connection’s instructions. Connection tests use their dedicated test instructions.
 
@@ -81,7 +89,7 @@ Duplicating a connection immediately saves a separate copy of its saved settings
 
 Each connection has an **Output token limit (including reasoning)** field, defaulting to **8192**. Increase it if a model exhausts its output budget before producing an answer or complete tool call. The limit is applied to each API response, including connection tests. Previously saved NanoGPT connection limits are retained; connections without their own limit use the new default rather than the retired shared setting.
 
-Connection settings are stored in `api-settings.json`. On the first startup after this update, an existing `gemini.json` is renamed automatically if the new file does not exist. Its contents are preserved.
+Connection settings are stored in `api-settings.json`. An existing `gemini.json` is renamed automatically if `api-settings.json` does not exist. Its contents are preserved.
 
 NanoGPT uses its subscription-only API for both consultations and connection tests. An active subscription and an included model are required; requests outside the subscription allowance fail without retrying through NanoGPT's pay-as-you-go endpoint. Model names are editable. Any separately configured sub connection still follows the normal fallback policy.
 
@@ -93,11 +101,19 @@ The request timeout is configurable per connection and also applies to connectio
 
 Open **Settings → Extensions → Commands** to enable or disable commands and browse those registered for the current screen. Details show their identifiers, requirements, approval policy, current AI instructions and definition JSON. Shared tool definitions are also available. Each command has its own checkbox. Commands, including newly added ones, default to enabled; only individually disabled command IDs are saved. The former global command switch is ignored and removed the next time options are saved. Browsing does not send an AI request or inspect live candidates. The **Connection adapters** tab lists registered built-in and external connection types; edit saved connections under **API connections**. Each extension can optionally supply its own display version. Unspecified versions are not shown.
 
-The built-in command schedules **sonobuoy drops** using airborne friendly aircraft carrying supported sonobuoys. To request a plan, type a message such as “Build an effective antisubmarine screen along California's route.” Attach unit badges to specify which aircraft to use, or let the adviser find suitable candidates. Multiple aircraft can be assigned drops within the same proposal. Built-in quick consultations request advice; use a typed message or text template to request operations.
+The built-in commands support:
 
-Before any orders are added, open the proposal review window. Compare the planned drop locations and travel routes on the map, and switch between proposals when alternatives are available. The adviser aims to provide two alternatives; one valid proposal can also be accepted. Choose one proposal and select **Adopt** to approve it. Its number and title remain in conversation history.
+- **Movement reservations:** set ordered waypoints with the unit's available speed, altitude and depth presets. Settings take effect when travel toward the corresponding waypoint begins; omitted settings remain unchanged. A following unit switches to independent action, while moving a formation leader preserves the game's normal follower behavior.
+- **Sonobuoy drop reservations:** schedule drops at multiple points using airborne friendly aircraft carrying supported sonobuoys. The aircraft's current sonobuoy depth setting is preserved.
+- **Formation return:** return an eligible unit to its existing formation after earlier reservations finish.
 
-For each aircraft, the adviser chooses whether to append its drop plan to existing reservations or replace that aircraft's entire existing reservation queue. The approval description shows the choice, and the map preview starts at the corresponding route origin. The aircraft's current sonobuoy depth setting is preserved. The game handles the queued movement and deployment. This feature creates reservations; it does not continuously monitor or replan their execution.
+For example, ask “Build an effective antisubmarine screen along California's route.” Attach unit and location badges to specify the units and points to use, or let the adviser find suitable candidates. One proposal can combine different commands and units; the same unit can move, deploy sonobuoys and then return to formation. Built-in quick consultations request advice; use a typed message or text template to request operations.
+
+Before any orders are added, open the proposal review window. Compare planned locations and travel routes on the map, and switch between proposals when alternatives are available. Commands specify their proposal-count policies; sonobuoy plans aim for two alternatives and accept one valid proposal when a meaningful alternative is unavailable. Choose one proposal and select **Adopt** to approve it. Its number and title remain in conversation history. During a consultation, the AI can revise its submitted proposal set before the consultation finishes.
+
+For each unit, the adviser chooses whether to append its plan to existing reservations or replace that unit's entire existing reservation queue, following any explicit constraints in your request. The approval window shows `Append` / `Replace` badges, and the map preview starts at the corresponding route origin. The game handles queued movement and deployment; these features do not continuously monitor or replan execution.
+
+Hiding the adviser does not cancel an active consultation. While the window is hidden, a yellow dot on the AI button indicates an ongoing consultation and green indicates a result is ready. Reopen the adviser to read it, or use the consultation's stop button to cancel an active request.
 
 ## Information, token usage and response time
 
@@ -125,7 +141,7 @@ Bug reports are welcome through [GitHub issues](https://github.com/mebiustos-sea
 
 ## For developers
 
-The host ships `SeaPowerAIAdvisor.Api.dll` for external Anchor Chain mods. The current SDK contract is version 2; adapter inputs use the `ToolsJson` list exclusively. Extensions can use the standard retrieval engine or implement an independent consultation workflow. See the [public API guide](docs/public-api.md) and [offline example](examples/ExternalAdapter/Examples.cs). The SDK and public API are experimental and may undergo breaking changes without prior notice; external extensions may require updates or rebuilding. See the [SDK stability notice](docs/public-api.md). Developer-authored update announcements are configured as described in the [update notice guide](docs/update-notices.md).
+The host ships `SeaPowerAIAdvisor.Api.dll` for external Anchor Chain mods. The current SDK contract is version 2; adapter inputs use the `ToolsJson` list exclusively. Extensions can use the standard retrieval engine or implement an independent consultation workflow. Register custom commands without rebuilding the host; built-in commands use the same public command contract. See the [public API guide](docs/public-api.md), [external command example and build guide](examples/ExternalCommand/README.md), and [offline connection adapter example](examples/ExternalAdapter/Examples.cs). The SDK and public API are experimental and may undergo breaking changes without prior notice; external extensions may require updates or rebuilding. See the [SDK stability notice](docs/public-api.md). Developer-authored update announcements are configured as described in the [update notice guide](docs/update-notices.md).
 
 To build on Windows, install Python 3 and the .NET SDK specified by `global.json`. Copy `Directory.Build.local.props.example` to `Directory.Build.local.props` and set your Sea Power and Anchor Chain directories. The full test script also expects Bungalow's Dynamic Campaign Mod's Workshop files for campaign tests; it remains optional at runtime.
 

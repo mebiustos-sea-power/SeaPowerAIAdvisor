@@ -2,7 +2,7 @@
 
 This is an independent Anchor Chain MOD that registers `example.seapower.sonobuoy_drop` with AI Advisor. It adds **Example: sonobuoy drop reservation** alongside the built-in command. Adopting its proposal appends real movement/drop reservations; loading the MOD does not issue orders.
 
-The example uses only `SeaPowerAIAdvisor.Api.dll`, Anchor Chain and the game's Newtonsoft.Json library. It references neither the host implementation DLL nor host sources and has no project references. The SDK DLL must come from a command-SDK build: the published v0.17.1 API does not contain these contracts.
+The example uses only `SeaPowerAIAdvisor.Api.dll`, Anchor Chain and the game's Newtonsoft.Json library. It references neither the host implementation DLL nor host sources and has no project references. Use the contract-version-2 SDK DLL shipped with AI Advisor v0.18.0 or a compatible build of that contract.
 
 ## Build without rebuilding AI Advisor
 
@@ -56,7 +56,7 @@ The host owns proposal lifetime, approval, request IDs and duplicate-request pro
 
 ## Test
 
-Enable **Commands**, own-unit information and weapon information in AI Advisor. In a paused battle with an eligible aircraft, inspect the example in Settings > Commands, then ask explicitly for the **Example: sonobuoy drop reservation** command so the AI can distinguish it from the built-in command. Review and adopt the proposal before resuming the game. Check the existing queue remains intact and the current depth setting is unchanged.
+Enable the example under **Settings > Extensions > Commands**, along with own-unit information and weapon information in AI Advisor. In a paused battle with an eligible aircraft, inspect the example in Settings > Extensions > Commands, then ask explicitly for the **Example: sonobuoy drop reservation** command so the AI can distinguish it from the built-in command. Review and adopt the proposal before resuming the game. Check the existing queue remains intact and the current depth setting is unchanged.
 
 The developer API can also list candidates and use `operations submit --request-file FILE` with one plan, an empty `reservation_updates` array, and operations using this operation ID. That direct test endpoint bypasses the AI approval UI; it does not demonstrate that the approval screen was operated. Use a disposable copy of a test save and do not overwrite the master.
 
