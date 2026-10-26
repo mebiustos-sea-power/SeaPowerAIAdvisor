@@ -67,11 +67,11 @@ For an unidentified contact, open its information window and use **[adviser name
 | Gemini | API key, Gemini model ID | `gemini-3.5-flash-lite` |
 | Ollama | Server URL, installed model, context length | `qwen3:8b` |
 | OpenRouter | API key, model ID in `provider/model` form | `google/gemini-3.5-flash-lite` |
-| NanoGPT | API key, subscription-included model ID | `z-ai/glm-5.3` |
+| NanoGPT | API key, subscription-included model ID | `deepseek/deepseek-v4.1-flash-1017` |
 
 Choose a model that supports **tool calling**. These are examples, not a guarantee that every model will interpret the supplied data correctly. OpenRouter and NanoGPT connection tests check a tool-call/result round trip as well as the final response.
 
-Future prompt tuning and evaluation of adviser responses will primarily use **GLM 5.3 through NanoGPT**. Other supported services and models remain available, but response quality and information retrieval behavior may vary by model.
+Prompt tuning and evaluation of adviser responses primarily use **DeepSeek V4.1 Flash 1017 through NanoGPT**. Other supported services and models remain available, but response quality and information retrieval behavior may vary by model.
 
 Duplicating a connection immediately saves a separate copy of its saved settings and returns to the card list. Pending edits require confirmation before being discarded. The original connection keeps its main/sub assignments; copies are unassigned. Duplicate names are allowed.
 

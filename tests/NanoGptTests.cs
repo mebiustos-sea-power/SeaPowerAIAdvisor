@@ -21,7 +21,7 @@ internal static partial class ProviderTests
                 var store = new AdvisorApiSettingsStore(path, () => "API");
                 var registration = store.Read().Add(); registration.Provider = "nanogpt";
                 registration.Settings = AdvisorServiceCatalog.BuiltIn.Find("nanogpt")!.Defaults();
-                Require(registration.Model == "z-ai/glm-5.3" && !File.Exists(path),
+                Require(registration.Model == "deepseek/deepseek-v4.1-flash-1017" && !File.Exists(path),
                     "A new NanoGPT connection used the wrong suggested model or saved before registration");
                 var existing = new AdvisorApiConfiguration("existing", "Existing", "mock_existing_secret", "gemini-existing");
                 store.SaveEntry(new AdvisorApiConfigurationDraft(existing), true);

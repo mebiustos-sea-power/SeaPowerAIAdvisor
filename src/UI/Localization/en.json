@@ -416,7 +416,7 @@
   "settings.error.settings_migration_failed": "Could not rename gemini.json to api-settings.json. Check file permissions and conflicting folders.",
   "connection.nanogpt_name": "NanoGPT (Subscription)",
   "connection.nanogpt_description": "Connection method: Resends conversation history with each API request. Choose a subscription-included model that supports tool calling.",
-  "connection.nanogpt_model_invalid": "Enter a NanoGPT model ID, such as z-ai/glm-5.3.",
+  "connection.nanogpt_model_invalid": "Enter a NanoGPT model ID, such as deepseek/deepseek-v4.1-flash-1017.",
   "connection.subscription_unavailable": "This request is not available under the NanoGPT subscription. Check your subscription, included model and remaining allowance.",
   "connection.openrouter_model_invalid": "Enter an OpenRouter model ID in provider/model format.",
   "connection.tool_call_test_failed": "Could not verify the tool-calling round trip. Check that the model supports tool calling and try again.",

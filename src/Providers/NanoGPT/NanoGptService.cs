@@ -9,7 +9,7 @@ namespace SeaPowerAIAdvisor;
 
 internal sealed class NanoGptService : AdvisorService
 {
-    internal const string DefaultModel = "z-ai/glm-5.3";
+    internal const string DefaultModel = "deepseek/deepseek-v4.1-flash-1017";
     internal override string Id => "nanogpt";
     internal override string Name => "NanoGPT";
     internal override string Version => "1.0.0";
