@@ -1,5 +1,5 @@
 {
-  "id": "nanogpt-recommended-deepseek-1017",
+  "id": "model-and-command-guidance",
   "title_key": "update_notice.title",
-  "body_key": "update_notice.recommended_model.body"
+  "body_key": "update_notice.current.body"
 }

@@ -14,6 +14,7 @@ internal sealed class AdvisorUpdateNoticeWindow
     private readonly WindowHost host;
     private readonly Window owner, window;
     private readonly TextBlock failure;
+    private readonly Run changelogLabel;
     private readonly ScrollViewer scroll;
     private readonly Button close;
     private readonly AdvisorUpdateNoticeStore store;
@@ -33,6 +34,9 @@ internal sealed class AdvisorUpdateNoticeWindow
         var content = GUI.ParseXaml(reader.ReadToEnd()) as FrameworkElement
             ?? throw new InvalidOperationException("The update notice view is not a FrameworkElement.");
         failure = Find<TextBlock>(content, "UpdateNoticeFailure");
+        changelogLabel = Find<Run>(content, "UpdateNoticeChangelogLabel");
+        Find<Hyperlink>(content, "UpdateNoticeChangelog").Click += (_, _) => guard(() =>
+            UnityEngine.Application.OpenURL("https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/releases"));
         scroll = Find<ScrollViewer>(content, "UpdateNoticeScroll"); close = Find<Button>(content, "CloseUpdateNotice");
         var ownerContent = owner.Content as FrameworkElement
             ?? throw new InvalidOperationException("The advisor window content is unavailable.");
@@ -63,9 +67,10 @@ internal sealed class AdvisorUpdateNoticeWindow
         var version = typeof(AdvisorUpdateNoticeWindow).Assembly.GetName().Version
             ?? throw new InvalidOperationException("The advisor assembly version is missing.");
         window.Header = text().Format(notice.TitleKey, version.ToString(3)); close.Content = text()["action.close"];
+        changelogLabel.Text = text()["update_notice.changelog"];
         scroll.Content = GUI.ParseXaml(AdvisorMarkdown.Render(text()[notice.BodyKey]).ToString(SaveOptions.DisableFormatting)) as FrameworkElement
             ?? throw new InvalidOperationException("The Markdown notice view is not a FrameworkElement.");
-        var width = Math.Min(520, view.ActualWidth - 40); var height = Math.Min(340, view.ActualHeight - 80);
+        var width = Math.Min(520, view.ActualWidth - 40); var height = Math.Min(620, view.ActualHeight - 80);
         window.Width = width; window.Height = height;
         window.MinWidth = Math.Min(360, width); window.MinHeight = Math.Min(220, height);
         window.MaxWidth = view.ActualWidth - 20; window.MaxHeight = view.ActualHeight - 40;

@@ -505,7 +505,8 @@
   "commands.definition": "Definition JSON",
   "commands.back": "Back to list",
   "update_notice.title": "(Notice) v{0}",
-  "update_notice.recommended_model.body": "### Model selection\n\nFor NanoGPT, we strongly recommend **DeepSeek V4.1 Flash 1017 (non-thinking)**, the primary model used to test the mod and tune its prompts.\n\nModel ID: `deepseek/deepseek-v4.1-flash-1017`",
+  "update_notice.current.body": "### Model selection\n\nFor NanoGPT, we strongly recommend **DeepSeek V4.1 Flash 1017 (non-thinking)**, the primary model used to test the mod and tune its prompts.\n\nModel ID: `deepseek/deepseek-v4.1-flash-1017`  \n&nbsp;\n\n### New feature highlights\n\n**Specify locations from the map**\n\nWhile AI Advisor is open, **Ctrl+left-click** empty map space to add a **location badge** to your message. Use it to specify a destination or a sonobuoy drop location.\n\n**Movement reservations**\n\nAsk the AI to propose a route for your selected units, then review and adopt a proposal to schedule their movement. You can also request plans that combine movement with sonobuoy drops or other supported commands.\n\n**Consultations continue while hidden**\n\nHiding AI Advisor during a consultation no longer stops it. While the window is hidden, the AI button at the bottom right shows a **yellow dot while consulting and a green dot when a result is ready**.",
+  "update_notice.changelog": "See the changelog on GitHub for other changes.",
   "update_notice.error.notice_state_invalid": "The notice read history is invalid. This notice may appear again.",
   "update_notice.error.notice_state_unreadable": "The notice read history could not be read. This notice may appear again.",
   "update_notice.error.notice_state_write_failed": "The notice could not be marked as read. It may appear again."
