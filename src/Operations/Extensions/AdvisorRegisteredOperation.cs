@@ -72,8 +72,11 @@ internal sealed class AdvisorRegisteredOperation : IAdvisorOperation, IAdvisorOp
         context.CheckThread();
         if (disposed) return;
         disposed = true;
-        try { handler?.Dispose(); }
-        finally { handler = null; context.Dispose(); }
+        var errors = new List<Exception>();
+        try { handler?.Dispose(); } catch (Exception error) { errors.Add(error); }
+        finally { handler = null; }
+        try { context.Dispose(); } catch (Exception error) { errors.Add(error); }
+        if (errors.Count != 0) throw new AggregateException("Command session could not be fully disposed.", errors);
     }
     private sealed class References : IAdvisorOperationReferences
     {

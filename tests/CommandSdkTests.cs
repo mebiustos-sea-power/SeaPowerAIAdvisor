@@ -134,6 +134,34 @@ internal static class CommandSdkTests
                 "A failed external cleanup stranded a queued consultation task");
             Throws<ObjectDisposedException>(() => support!.GetUnits());
         });
+        check("SDK cleanup retains handler and drawing failures and remains idempotent after errors", () =>
+        {
+            foreach (var failures in new (bool Handler, bool Drawing)[] { (false, false), (true, false), (false, true), (true, true) })
+            {
+                var handlerError = new InvalidOperationException("Handler cleanup failed");
+                var drawingError = new InvalidOperationException("Drawing cleanup failed");
+                var closed = 0; var drawingsClosed = 0; Api.IAdvisorGameSupport? support = null;
+                var map = new Map { Close = () => { drawingsClosed++; if (failures.Drawing) throw drawingError; } };
+                var catalog = new AdvisorOperationCatalog();
+                catalog.Register(new Client.CommandExtension { Open = context =>
+                {
+                    support = context.Game;
+                    _ = context.Map.Draw(Array.Empty<Api.AdvisorMapDrawing>());
+                    return new Client.CommandHandler { Close = () => { closed++; if (failures.Handler) throw handlerError; } };
+                } });
+                var service = Service(catalog, map: map); service.Candidates("fixture.command");
+                var errors = Array.Empty<Exception>();
+                try { service.Retire(); }
+                catch (AggregateException error) { errors = error.Flatten().InnerExceptions.ToArray(); }
+                Require(errors.Length == (failures.Handler ? 1 : 0) + (failures.Drawing ? 1 : 0) &&
+                    errors.Contains(handlerError) == failures.Handler && errors.Contains(drawingError) == failures.Drawing,
+                    "SDK cleanup hid or replaced an original failure");
+                service.Retire();
+                Require(closed == 1 && drawingsClosed == 1 && map.Active == 0,
+                    "A cleanup failure skipped another resource or caused duplicate disposal");
+                Throws<ObjectDisposedException>(() => support!.GetUnits());
+            }
+        });
         check("Malformed SDK results and unexpected failures remain faults and cannot be blindly replayed", () =>
         {
             foreach (var malformed in new[] { false, true })
@@ -170,12 +198,13 @@ internal static class CommandSdkTests
     private sealed class Map : Api.IAdvisorMap
     {
         internal int Active;
+        internal Action Close = () => { };
         public void Center(Api.AdvisorMapCoordinate position) { }
         public IDisposable Draw(IReadOnlyList<Api.AdvisorMapDrawing> drawings) { Active++; return new Drawing(this); }
         private sealed class Drawing : IDisposable
         {
             private Map? owner; internal Drawing(Map owner) => this.owner = owner;
-            public void Dispose() { if (owner == null) return; owner.Active--; owner = null; }
+            public void Dispose() { if (owner == null) return; var previous = owner; owner = null; previous.Active--; previous.Close(); }
         }
     }
 }
