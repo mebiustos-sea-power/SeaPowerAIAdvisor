@@ -19,6 +19,10 @@ internal static partial class ReservationCompositionTests
             service.SubmitPlans("mixed", batch); var proposal = service.FinishProposal("mixed", true)!;
             var text = service.DescribeProposal(proposal, "ja"); var preview = service.PreviewProposal(proposal, "en");
             Require(game.Log.Count == 0 && text.IndexOf("移動予約", StringComparison.Ordinal) < text.IndexOf("ソノブイ", StringComparison.Ordinal), "Review changed the game or reordered command explanations");
+            var frame = AdvisorOperationTargets.Render(new[] { proposal.Plans[0] }, AdvisorText.Load("en"), id => "Unit " + id);
+            var rows = frame.Descendants().Where(e => e.Name.LocalName == "WrapPanel").ToArray();
+            Require(rows.Length == 2 && rows.All(row => row.Elements().Count(e => e.Name.LocalName == "Border") == 1),
+                "Interleaved commands repeated a target's queue policy or merged different units");
             var lines = preview.Drawings.Where(d => d.Kind == AdvisorMapDrawingKind.Line).ToArray();
             Require(lines.Select(l => l.Coordinates[0].Latitude).SequenceEqual(new[] { 0d, 1d, 10d, 2d, 3d }) &&
                 lines.Select(l => l.Coordinates.Last().Latitude).SequenceEqual(new[] { 1d, 2d, 8d, 3d, 4d }), "Preview segments ignored a preceding command or another target's queue");

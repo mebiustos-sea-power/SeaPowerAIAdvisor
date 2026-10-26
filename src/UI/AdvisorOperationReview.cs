@@ -1,4 +1,5 @@
 using System;
+using System.Xml.Linq;
 using Noesis;
 using SeaPowerAIAdvisor.Api;
 
@@ -8,8 +9,9 @@ namespace SeaPowerAIAdvisor;
 internal sealed class AdvisorOperationReview
 {
     private readonly FrameworkElement overlay, conversation, navigation, selection;
-    private readonly TextBlock details, counter, selectedCount, failure, targets;
-    private readonly ScrollViewer detailScroll, targetScroll;
+    private readonly TextBlock details, counter, selectedCount, failure;
+    private readonly ScrollViewer detailScroll;
+    private readonly Border targets;
     private readonly CheckBox include;
     private readonly Button execute, back, previous, next;
     private readonly Func<AdvisorOperations?> operations;
@@ -34,8 +36,7 @@ internal sealed class AdvisorOperationReview
         details = Find<TextBlock>(root, "OperationReviewText");
         detailScroll = Find<ScrollViewer>(root, "OperationReviewScroll");
         failure = Find<TextBlock>(root, "OperationReviewFailure");
-        targets = Find<TextBlock>(root, "OperationReviewTargets");
-        targetScroll = Find<ScrollViewer>(root, "OperationReviewTargetsScroll");
+        targets = Find<Border>(root, "OperationReviewTargets");
         execute = Find<Button>(root, "ExecuteProposal"); back = Find<Button>(root, "CloseProposal");
         previous = Find<Button>(root, "PreviousOperationPlan"); next = Find<Button>(root, "NextOperationPlan");
         back.Click += (_, _) => guard(Close);
@@ -93,8 +94,9 @@ internal sealed class AdvisorOperationReview
     private void UpdateTargets()
     {
         if (review == null) return;
-        targets.Text = review.FormatTargets(text(), id => unitNavigation?.GetUnit(id)?.Name);
-        targetScroll.ScrollToVerticalOffset(0, false);
+        var markup = AdvisorOperationTargets.Render(review.SelectedPlans, text(), id => unitNavigation?.GetUnit(id)?.Name);
+        targets.Child = GUI.ParseXaml(markup.ToString(SaveOptions.DisableFormatting)) as StackPanel
+            ?? throw new InvalidOperationException("The operation targets view is invalid.");
     }
     private void UpdateState(AdvisorOperations service)
     {

@@ -48,7 +48,7 @@ internal static class OperationDocumentationTests
             Require(en.Language == "en" && ja.Language == "ja" && en["name"] != ja["name"] &&
                 operation.Documentation.For("de")["name"] == en["name"], "Standard command resources or unsupported-language fallback are missing");
             foreach (var text in new[] { en, ja })
-                Require(new[] { "name", "summary", "requirements", "proposal_append", "proposal_replace", "proposal_depth" }.All(key => !string.IsNullOrWhiteSpace(text[key])) &&
+                Require(new[] { "name", "summary", "requirements", "proposal_depth" }.All(key => !string.IsNullOrWhiteSpace(text[key])) &&
                     text.Format("proposal_summary", "Hobby 1", 2).Contains("Hobby 1", StringComparison.Ordinal), "A standard language cannot render its explanation or approval summary");
             Require((string?)operation.Definition()["description"] == operation.Description &&
                 (string?)operation.Definition()["id"] == SonobuoyDropExtension.OperationId &&

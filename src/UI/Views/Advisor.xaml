@@ -2,6 +2,8 @@
   <Grid.Resources>
     <SolidColorBrush x:Key="AdvisorConversationBackgroundBrush" Color="#202B38" />
     <SolidColorBrush x:Key="AdvisorErrorBrush" Color="#FF9B8F" />
+    <SolidColorBrush x:Key="AdvisorReservationAppendBrush" Color="#2D6384" />
+    <SolidColorBrush x:Key="AdvisorReservationReplaceBrush" Color="#965C2E" />
     <SolidColorBrush x:Key="AdvisorPlayerNameBrush" Color="#9BC7FF" />
     <SolidColorBrush x:Key="AdvisorNameBrush" Color="#E8D39A" />
     <SolidColorBrush x:Key="AdvisorTrackNormalBrush" Color="#B9A883" />
@@ -616,11 +618,7 @@
           <TextBlock x:Name="OperationReviewText" TextWrapping="Wrap" FontSize="14" />
         </ScrollViewer>
         <TextBlock x:Name="OperationReviewFailure" TextWrapping="Wrap" FontSize="12" Margin="0,8,0,0" Foreground="{StaticResource AdvisorErrorBrush}" />
-        <Border BorderBrush="#55606B" BorderThickness="1" Padding="8" Margin="0,12,0,0">
-          <ScrollViewer x:Name="OperationReviewTargetsScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="80">
-            <TextBlock x:Name="OperationReviewTargets" TextWrapping="Wrap" FontSize="14" FontWeight="Bold" />
-          </ScrollViewer>
-        </Border>
+        <Border x:Name="OperationReviewTargets" BorderBrush="#55606B" BorderThickness="1" Padding="8" Margin="0,12,0,0" />
         <WrapPanel HorizontalAlignment="Right" Margin="0,20,0,0">
           <Button x:Name="CloseProposal" Content="{DynamicResource Advisor.operation.back}" Height="30" Padding="12,0" />
           <Button x:Name="ExecuteProposal" Content="{DynamicResource Advisor.operation.accept}" Height="30" Padding="12,0" Margin="8,0,0,0" />

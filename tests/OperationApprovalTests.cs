@@ -276,11 +276,25 @@ internal static class OperationApprovalTests
             var proposal = service.FinishProposal("placement", true)!;
             foreach (var language in new[] { "en", "ja" })
             {
-                var text = service.DescribeProposal(proposal, language, "a");
-                Require(text.Contains("Hobby 1", StringComparison.Ordinal) && text.Contains("Hobby 2", StringComparison.Ordinal) &&
-                    text.Contains(language == "en" ? "Existing reservations: replace" : "既存予約: 置換", StringComparison.Ordinal) &&
-                    text.Contains(language == "en" ? "Existing reservations: append" : "既存予約: 追記", StringComparison.Ordinal),
-                    "Approval hid a unit's reservation policy");
+                var state = new AdvisorOperationReviewState(proposal, "a"); var text = AdvisorText.Load(language);
+                var frame = AdvisorOperationTargets.Render(state.SelectedPlans, text, id => id == first.Id ? "Hobby 1" : "Hobby 2");
+                var rows = frame.Descendants().Where(e => e.Name.LocalName == "WrapPanel").ToArray();
+                var badges = rows.Select(row => row.Elements().Single(e => e.Name.LocalName == "Border")).ToArray();
+                Require(rows.Select(row => (string)row.Elements().First().Attribute("Text")!).SequenceEqual(new[] {
+                        "Hobby 1 (" + first.Id + ")", "Hobby 2 (" + second.Id + ")" }) &&
+                    badges.Select(badge => (string)badge.Elements().Single().Attribute("Text")!).SequenceEqual(new[] {
+                        "Replace", "Append" }) &&
+                    (string?)badges[0].Attribute("Background") != (string?)badges[1].Attribute("Background") &&
+                    (string?)frame.Elements().Last().Attribute("Text") == text["operation.reservation.replace_warning"],
+                    "Approval hid, merged or assigned the wrong colored reservation policy or lost the visible replacement warning");
+                state.Move(1);
+                var next = AdvisorOperationTargets.Render(state.SelectedPlans, text, id => id == first.Id ? "Hobby 1" : "Hobby 2");
+                var nextBadges = next.Descendants().Where(e => e.Name.LocalName == "Border").ToArray();
+                Require(nextBadges.Select(badge => (string)badge.Elements().Single().Attribute("Text")!).SequenceEqual(new[] {
+                        "Append", "Replace" }) &&
+                    (string?)nextBadges[0].Attribute("Background") == (string?)badges[1].Attribute("Background") &&
+                    (string?)nextBadges[1].Attribute("Background") == (string?)badges[0].Attribute("Background") &&
+                    first.ClearCalls == 0 && second.ClearCalls == 0, "Browsing retained another proposal's badge or changed game reservations");
             }
             var lines = service.PreviewProposal(proposal, "en", "a").Drawings.Where(d => d.Kind == AdvisorMapDrawingKind.Line).ToArray();
             Require(lines.Select(l => l.Coordinates[0].Latitude).SequenceEqual(new[] { 26.2, 26.4 }) && first.ClearCalls == 0 && second.ClearCalls == 0,

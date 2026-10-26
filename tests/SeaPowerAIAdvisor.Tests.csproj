@@ -32,6 +32,7 @@
     <Compile Include="..\src\Development\AdvisorLocalDiscovery.cs" Link="AdvisorLocalDiscovery.cs" />
     <Compile Include="..\src\Development\AdvisorLocalApi.cs" Link="AdvisorLocalApi.cs" />
     <Compile Include="..\src\UI\AdvisorOperationReviewState.cs" Link="AdvisorOperationReviewState.cs" />
+    <Compile Include="..\src\UI\AdvisorOperationTargets.cs" Link="AdvisorOperationTargets.cs" />
     <Compile Include="..\src\Operations\AdvisorOperationPreview.cs" Link="AdvisorOperationPreview.cs" />
     <Compile Include="..\src\Operations\AdvisorReservationPlans.cs" Link="AdvisorReservationPlans.cs" />
     <Compile Include="..\src\Operations\AdvisorOperationPlan.cs" Link="AdvisorOperationPlan.cs" />

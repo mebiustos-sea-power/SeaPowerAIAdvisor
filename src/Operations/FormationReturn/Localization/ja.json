@@ -1,6 +1,4 @@
 {
-  "proposal_append": "既存予約: 追記",
-  "proposal_replace": "既存予約: 置換 (既存予約をすべて消去)",
   "proposal_independent": "対象ユニットは個別行動に切り替わります。",
   "name": "編隊への復帰",
   "summary": "先行する予約の後で、現在所属している編隊への復帰を予約します。",

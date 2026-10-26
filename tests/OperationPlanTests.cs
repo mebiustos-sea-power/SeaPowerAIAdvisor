@@ -277,29 +277,39 @@ internal static partial class OperationPlanTests
             {
                 var text = AdvisorText.Load(language); var lookups = new List<int>();
                 string? Name(int id) { lookups.Add(id); return id is 1029 or 1030 ? "Hobby 1" : null; }
+                string[] Targets(AdvisorOperationReviewState state)
+                {
+                    var view = AdvisorOperationTargets.Render(state.SelectedPlans, text, Name);
+                    Require(!view.Descendants().Any(e => e.Name.LocalName == "Border"), "A nonreservation command displayed a queue-policy badge");
+                    return view.Descendants().Where(e => e.Name.LocalName == "WrapPanel")
+                        .Select(row => (string)row.Elements().First().Attribute("Text")!).ToArray();
+                }
                 var state = new AdvisorOperationReviewState(proposal, "b");
-                Require(state.FormatTargets(text, Name) == text.Format("operation.targets", "Hobby 1 (1029)") &&
-                    lookups.SequenceEqual(new[] { 1029 }), "Browsing an unchecked plan changed targets or repeated an identity lookup");
+                Require(Targets(state).SequenceEqual(new[] { "Hobby 1 (1029)" }) && lookups.SequenceEqual(new[] { 1029 }),
+                    "Browsing an unchecked plan changed targets or repeated an identity lookup");
                 state.IncludeCurrent(true); state.Move(1);
-                Require(state.FormatTargets(text, Name) == text.Format("operation.targets", "Hobby 1 (1029), Hobby 1 (1030)"),
+                Require(Targets(state).SequenceEqual(new[] { "Hobby 1 (1029)", "Hobby 1 (1030)" }),
                     "Same-name units merged, repeated reservations duplicated a target or targets followed browsing instead of execution order");
                 state.IncludeCurrent(true);
-                Require(state.FormatTargets(text, Name) == text.Format("operation.targets", "Hobby 1 (1029), Hobby 1 (1030), unit:999, zone:alpha"),
+                Require(Targets(state).SequenceEqual(new[] { "Hobby 1 (1029)", "Hobby 1 (1030)", "unit:999", "zone:alpha" }),
                     "An unavailable name or non-unit reference was dropped or invented");
                 state.IncludeCurrent(false); state.Move(1); state.IncludeCurrent(false); state.Move(1); state.IncludeCurrent(false);
-                Require(state.SelectedPlanIds.Count == 0 && state.FormatTargets(text, Name) ==
-                    text.Format("operation.targets", text["operation.no_targets"]) && log.Count == 0,
-                    "Empty selection retained targets or review formatting executed game orders");
+                var empty = AdvisorOperationTargets.Render(state.SelectedPlans, text, Name);
+                Require(state.SelectedPlanIds.Count == 0 && Targets(state).Length == 0 &&
+                    empty.Descendants().Where(e => e.Name.LocalName == "TextBlock").Select(e => (string)e.Attribute("Text")!)
+                        .SequenceEqual(new[] { text["operation.targets"], text["operation.no_targets"] }) && log.Count == 0,
+                    "Empty selection retained targets, queue warnings or review formatting executed game orders");
             }
             var singleCommand = new Command("custom.single_targets", log, selection: AdvisorPlanSelection.Single);
             var single = Service(singleCommand, "single");
             single.SubmitPlans("single", Batch(Plan("a", Order(singleCommand, "unit:1029", 1)), Plan("b", Order(singleCommand, "unit:1030", 2))));
             var singleProposal = single.FinishProposal("single", true)!;
             var selection = new AdvisorOperationReviewState(singleProposal, "b"); var en = AdvisorText.Load("en");
-            string? UnitName(int id) => "Hobby 1";
-            Require(selection.FormatTargets(en, UnitName) == "Operation targets: Hobby 1 (1030)", "Direct selection displayed another unit");
+            string[] SingleTargets() => AdvisorOperationTargets.Render(selection.SelectedPlans, en, _ => "Hobby 1")
+                .Descendants().Where(e => e.Name.LocalName == "WrapPanel").Select(row => (string)row.Elements().First().Attribute("Text")!).ToArray();
+            Require(SingleTargets().SequenceEqual(new[] { "Hobby 1 (1030)" }), "Direct selection displayed another unit");
             selection.Move(1);
-            Require(selection.FormatTargets(en, UnitName) == "Operation targets: Hobby 1 (1029)", "Switching a single-choice plan left old targets");
+            Require(SingleTargets().SequenceEqual(new[] { "Hobby 1 (1029)" }), "Switching a single-choice plan left old targets");
             single.Approve(singleProposal, selection.SelectedPlanIds);
             Require(log.SequenceEqual(new[] { "custom.single_targets:unit:1029:1" }), "Displayed targets and approved targets diverged");
         });

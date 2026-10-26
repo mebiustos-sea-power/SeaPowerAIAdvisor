@@ -54,12 +54,8 @@ internal abstract class MovementOperationBase : IAdvisorOperationHandler, IAdvis
     }
     protected static JObject Position(AdvisorMapCoordinate? position) => position is AdvisorMapCoordinate value
         ? new JObject { ["latitude_deg"] = value.Latitude, ["longitude_deg"] = value.Longitude } : new JObject();
-    protected string QueueDescription(ReservationOrder order, string language)
-    {
-        if (order.Index != 0) return "";
-        return "\n" + Context.Text.Get(language, order.Placement == ReservationPlacement.Replace ? "proposal_replace" : "proposal_append") +
-            (order.Queue.BecomesIndependent ? "\n" + Context.Text.Get(language, "proposal_independent") : "");
-    }
+    protected string FormationDescription(ReservationOrder order, string language) => order.Index == 0 && order.Queue.BecomesIndependent
+        ? "\n" + Context.Text.Get(language, "proposal_independent") : "";
     public void Dispose() { }
     public abstract string GetCandidates();
     public abstract void ValidateReservations(IReadOnlyList<ReservationOrder> orders);
@@ -119,7 +115,7 @@ internal sealed class MovementOperation : MovementOperationBase
     public override string DescribeReservation(ReservationOrder order, string language)
     {
         var data = Read(order);
-        return Context.Text.Format(language, "proposal_summary", data.Unit.Unit.Name, data.Points.Count) + QueueDescription(order, language) +
+        return Context.Text.Format(language, "proposal_summary", data.Unit.Unit.Name, data.Points.Count) + FormationDescription(order, language) +
             (data.Unit.IsFormationLeader ? "\n" + Context.Text.Get(language, "proposal_followers") : "") + "\n\n" +
             string.Join("\n", data.Points.Select((p, i) => (i + 1).ToString(CultureInfo.InvariantCulture) + ". " +
                 p.Position.Latitude.ToString("F5", CultureInfo.InvariantCulture) + ", " + p.Position.Longitude.ToString("F5", CultureInfo.InvariantCulture) +

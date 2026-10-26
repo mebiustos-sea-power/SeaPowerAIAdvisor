@@ -1,6 +1,4 @@
 {
-  "proposal_append": "Existing reservations: append",
-  "proposal_replace": "Existing reservations: replace (clear all existing reservations)",
   "proposal_independent": "The unit will act independently while following these reservations.",
   "name": "Return to formation",
   "summary": "Schedule a return to the current formation after preceding reservations.",

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 
 namespace SeaPowerAIAdvisor;
@@ -15,7 +14,8 @@ internal sealed class AdvisorOperationReviewState
     internal bool Single => Proposal.Selection == AdvisorPlanSelection.Single;
     internal bool CanNavigate => Proposal.Plans.Count > 1;
     internal bool IncludesCurrent => selected.Contains(Current.Id);
-    internal IReadOnlyList<string> SelectedPlanIds => Proposal.Plans.Where(p => selected.Contains(p.Id)).Select(p => p.Id).ToArray();
+    internal IEnumerable<AdvisorOperationPlan> SelectedPlans => Proposal.Plans.Where(p => selected.Contains(p.Id));
+    internal IReadOnlyList<string> SelectedPlanIds => SelectedPlans.Select(p => p.Id).ToArray();
 
     internal AdvisorOperationReviewState(AdvisorOperationProposal proposal, string? planId = null)
     {
@@ -35,18 +35,6 @@ internal sealed class AdvisorOperationReviewState
         Index = (Index + direction + Proposal.Plans.Count) % Proposal.Plans.Count;
         if (Single) { selected.Clear(); selected.Add(Current.Id); }
         return true;
-    }
-    internal string FormatTargets(AdvisorText text, Func<int, string?> unitName)
-    {
-        var targets = Proposal.Plans.Where(p => selected.Contains(p.Id)).SelectMany(p => p.Orders)
-            .Select(order => order.Target).Distinct(StringComparer.Ordinal).Select(target =>
-            {
-                if (!target.StartsWith("unit:", StringComparison.Ordinal) ||
-                    !int.TryParse(target.Substring(5), NumberStyles.None, CultureInfo.InvariantCulture, out var id)) return target;
-                var name = unitName(id);
-                return string.IsNullOrWhiteSpace(name) ? target : name + " (" + id.ToString(CultureInfo.InvariantCulture) + ")";
-            }).ToArray();
-        return text.Format("operation.targets", targets.Length == 0 ? text["operation.no_targets"] : string.Join(", ", targets));
     }
     internal void IncludeCurrent(bool include)
     {

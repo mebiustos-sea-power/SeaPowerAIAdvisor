@@ -1,6 +1,4 @@
 {
-  "proposal_append": "Existing reservations: append",
-  "proposal_replace": "Existing reservations: replace (clear all existing reservations)",
   "proposal_independent": "The unit will act independently while following these reservations.",
   "name": "Movement reservation",
   "summary": "Schedule an ordered route, optionally setting speed, altitude or depth for each leg.",
