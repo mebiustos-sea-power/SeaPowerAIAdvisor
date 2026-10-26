@@ -298,7 +298,7 @@ internal static partial class OperationPlanTests
                 Require(state.SelectedPlanIds.Count == 0 && Targets(state).Length == 0 &&
                     empty.Descendants().Where(e => e.Name.LocalName == "TextBlock").Select(e => (string)e.Attribute("Text")!)
                         .SequenceEqual(new[] { text["operation.targets"], text["operation.no_targets"] }) && log.Count == 0,
-                    "Empty selection retained targets, queue warnings or review formatting executed game orders");
+                    "Empty selection retained targets or review formatting executed game orders");
             }
             var singleCommand = new Command("custom.single_targets", log, selection: AdvisorPlanSelection.Single);
             var single = Service(singleCommand, "single");

@@ -284,9 +284,8 @@ internal static class OperationApprovalTests
                         "Hobby 1 (" + first.Id + ")", "Hobby 2 (" + second.Id + ")" }) &&
                     badges.Select(badge => (string)badge.Elements().Single().Attribute("Text")!).SequenceEqual(new[] {
                         "Replace", "Append" }) &&
-                    (string?)badges[0].Attribute("Background") != (string?)badges[1].Attribute("Background") &&
-                    (string?)frame.Elements().Last().Attribute("Text") == text["operation.reservation.replace_warning"],
-                    "Approval hid, merged or assigned the wrong colored reservation policy or lost the visible replacement warning");
+                    (string?)badges[0].Attribute("Background") != (string?)badges[1].Attribute("Background"),
+                    "Approval hid, merged or assigned the wrong colored reservation policy");
                 state.Move(1);
                 var next = AdvisorOperationTargets.Render(state.SelectedPlans, text, id => id == first.Id ? "Hobby 1" : "Hobby 2");
                 var nextBadges = next.Descendants().Where(e => e.Name.LocalName == "Border").ToArray();

@@ -16,7 +16,7 @@ internal static class AdvisorOperationTargets
         var selected = plans.ToArray();
         var policies = selected.SelectMany(p => p.ReservationUpdates.Cast<JObject>())
             .ToLookup(p => (string)p["target_ref"]!, StringComparer.Ordinal);
-        var rows = Element("StackPanel"); var replaces = false;
+        var rows = Element("StackPanel");
         foreach (var target in selected.SelectMany(p => p.Orders).Select(o => o.Target).Distinct(StringComparer.Ordinal))
         {
             var row = Element("WrapPanel", new XAttribute("Margin", "0,0,0,4"),
@@ -35,19 +35,15 @@ internal static class AdvisorOperationTargets
                     new XAttribute("CornerRadius", "3"), new XAttribute("Padding", "6,1"), new XAttribute("Margin", "0,0,6,2"),
                     new XAttribute("VerticalAlignment", "Center"), Element("TextBlock", Text("Text", label),
                         new XAttribute("FontSize", "12"), new XAttribute("FontWeight", "Bold"), new XAttribute("Foreground", "#FFFFFF"))));
-                replaces |= placement == "replace";
             }
             rows.Add(row);
         }
         if (!rows.HasElements) rows.Add(Element("TextBlock", Text("Text", text["operation.no_targets"]), new XAttribute("FontSize", "14")));
-        var result = Element("StackPanel",
+        return Element("StackPanel",
             Element("TextBlock", Text("Text", text["operation.targets"]), new XAttribute("FontSize", "14"),
                 new XAttribute("FontWeight", "Bold"), new XAttribute("Margin", "0,0,0,6")),
             Element("ScrollViewer", new XAttribute("VerticalScrollBarVisibility", "Auto"),
                 new XAttribute("HorizontalScrollBarVisibility", "Disabled"), new XAttribute("MaxHeight", "80"), rows));
-        if (replaces) result.Add(Element("TextBlock", Text("Text", text["operation.reservation.replace_warning"]),
-            new XAttribute("TextWrapping", "Wrap"), new XAttribute("FontSize", "12"), new XAttribute("Margin", "0,4,0,0")));
-        return result;
     }
     private static string Name(string target, Func<int, string?> unitName)
     {

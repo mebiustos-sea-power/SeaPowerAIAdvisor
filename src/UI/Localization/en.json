@@ -442,7 +442,6 @@
   "progress.proposed": "Proposal received. Waiting for response…",
   "operation.review": "Review proposal…",
   "operation.targets": "Operation targets",
-  "operation.reservation.replace_warning": "All existing reservations will be cleared for units marked Replace.",
   "operation.no_targets": "None",
   "operation.title": "Review proposal",
   "operation.accept": "Accept",
