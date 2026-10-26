@@ -25,8 +25,8 @@ internal sealed class MovementExtension : IAdvisorOperationExtension, IAdvisorOp
                     ["latitude"] = new JObject { ["type"] = "number", ["minimum"] = -90, ["maximum"] = 90 },
                     ["longitude"] = new JObject { ["type"] = "number", ["minimum"] = -180, ["maximum"] = 180 },
                     ["speed"] = new JObject { ["type"] = "string", ["description"] = "An ID from the target's speed_options. Omit to preserve its speed command." },
-                    ["altitude_ft"] = new JObject { ["type"] = "number", ["minimum"] = 0, ["description"] = "An altitude from altitude_options_ft. Applies while travelling TO this point; omit to preserve target altitude." },
-                    ["depth"] = new JObject { ["type"] = "string", ["description"] = "A depth_options ID. Applies while travelling TO this point; do not combine with altitude_ft." }
+                    ["altitude"] = new JObject { ["type"] = "string", ["description"] = "An ID from the target's altitude_options. Applies while travelling TO this point; omit to preserve target altitude." },
+                    ["depth"] = new JObject { ["type"] = "string", ["description"] = "An ID from the target's depth_options. Applies while travelling TO this point; do not combine with altitude." }
                 } } } }
     }.ToString(Formatting.None), AdvisorText.ReadResources(typeof(MovementExtension).Assembly,
         "SeaPowerAIAdvisor.Commands.Movement.Localization.", "en", "ja"), true, new OperationPlanPolicy(2, 1, 2, OperationPlanSelection.Single));
@@ -74,8 +74,10 @@ internal sealed class MovementOperation : MovementOperationBase
         ["position"] = Position(unit.Unit.Position), ["formation_leader"] = unit.LeaderTarget,
         ["formation_leader_name"] = unit.LeaderName, ["is_formation_leader"] = unit.IsFormationLeader,
         ["following_formation"] = unit.IsFollowingFormation,
-        ["speed_options"] = new JArray(unit.Speeds), ["altitude_options_ft"] = new JArray(unit.AltitudesFeet), ["depth_options"] = new JArray(unit.Depths)
+        ["speed_options"] = Presets(unit.Speeds), ["altitude_options"] = Presets(unit.Altitudes), ["depth_options"] = Presets(unit.Depths)
     })).ToString(Formatting.None);
+    private static JArray Presets(IEnumerable<MovementPreset> presets) => new(presets.Select(p => new JObject
+        { ["id"] = p.Id, ["name"] = p.Name, ["value"] = p.Value, ["unit"] = p.Unit }));
     private static IReadOnlyList<MovementWaypoint> Parse(OperationOrder order)
     {
         var args = JObject.Parse(order.ArgumentsJson);
@@ -83,7 +85,7 @@ internal sealed class MovementOperation : MovementOperationBase
             throw new OperationException(400, "invalid_movement_arguments");
         return points.Select(value =>
         {
-            if (value is not JObject point || point.Properties().Any(p => p.Name is not ("latitude" or "longitude" or "speed" or "altitude_ft" or "depth")))
+            if (value is not JObject point || point.Properties().Any(p => p.Name is not ("latitude" or "longitude" or "speed" or "altitude" or "depth")))
                 throw new OperationException(400, "invalid_movement_arguments");
             string? Text(string field) => point[field] == null ? null : point[field]!.Type == JTokenType.String && !string.IsNullOrWhiteSpace((string?)point[field])
                 ? (string)point[field]! : throw new OperationException(400, "invalid_movement_arguments");
@@ -95,8 +97,8 @@ internal sealed class MovementOperation : MovementOperationBase
                 return number;
             }
             var depth = Text("depth"); var speed = Text("speed");
-            var altitude = point["altitude_ft"] == null ? (double?)null : Number("altitude_ft", 0, double.MaxValue);
-            if (altitude.HasValue && depth != null) throw new OperationException(400, "invalid_movement_arguments");
+            var altitude = Text("altitude");
+            if (altitude != null && depth != null) throw new OperationException(400, "invalid_movement_arguments");
             return new MovementWaypoint(new AdvisorMapCoordinate(Number("latitude", -90, 90), Number("longitude", -180, 180)), speed, altitude, depth);
         }).ToArray();
     }
@@ -104,8 +106,8 @@ internal sealed class MovementOperation : MovementOperationBase
     {
         var unit = Unit(order.Order.Target); var points = Parse(order.Order);
         foreach (var point in points)
-            if (point.Speed != null && !unit.Speeds.Contains(point.Speed) || point.AltitudeFeet.HasValue && !unit.AltitudesFeet.Contains(point.AltitudeFeet.Value) ||
-                point.Depth != null && !unit.Depths.Contains(point.Depth)) throw new OperationException(400, "movement_setting_not_supported");
+            if (point.Speed != null && !unit.Speeds.Any(p => p.Id == point.Speed) || point.Altitude != null && !unit.Altitudes.Any(p => p.Id == point.Altitude) ||
+                point.Depth != null && !unit.Depths.Any(p => p.Id == point.Depth)) throw new OperationException(400, "movement_setting_not_supported");
         return (unit, points);
     }
     public override void ValidateReservations(IReadOnlyList<ReservationOrder> orders)
@@ -120,7 +122,7 @@ internal sealed class MovementOperation : MovementOperationBase
             string.Join("\n", data.Points.Select((p, i) => (i + 1).ToString(CultureInfo.InvariantCulture) + ". " +
                 p.Position.Latitude.ToString("F5", CultureInfo.InvariantCulture) + ", " + p.Position.Longitude.ToString("F5", CultureInfo.InvariantCulture) +
                 (p.Speed == null ? "" : " / " + Context.Text.Format(language, "setting_speed", Context.Text.Get(language, "speed_" + p.Speed))) +
-                (p.AltitudeFeet == null ? "" : " / " + Context.Text.Format(language, "setting_altitude", p.AltitudeFeet.Value)) +
+                (p.Altitude == null ? "" : " / " + Context.Text.Format(language, "setting_altitude", data.Unit.Altitudes.Single(a => a.Id == p.Altitude).Value)) +
                 (p.Depth == null ? "" : " / " + Context.Text.Format(language, "setting_depth", Context.Text.Get(language, "depth_" + p.Depth))))) + "\n" + Context.Text.Get(language, "proposal_settings");
     }
     public override ReservationPreview PreviewReservation(ReservationOrder order, string language)

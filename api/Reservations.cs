@@ -61,6 +61,23 @@ public interface IAdvisorMovementSupport
     void AppendFormationReturn(string target);
 }
 
+// A detached, unit-specific preset. Value is a target/reference in Unit, resolved under current conditions.
+// Select by Id: relative settings (for example below the thermocline) retain their native meaning at activation.
+public sealed class MovementPreset
+{
+    public string Id { get; }
+    public string Name { get; }
+    public double Value { get; }
+    public string Unit { get; }
+    public MovementPreset(string id, string name, double value, string unit)
+    {
+        if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(unit))
+            throw new ArgumentException("A movement preset needs an ID, name and unit.");
+        if (double.IsNaN(value) || double.IsInfinity(value)) throw new ArgumentOutOfRangeException(nameof(value));
+        Id = id; Name = name; Value = value; Unit = unit;
+    }
+}
+
 public sealed class MovementUnitInfo
 {
     public GameUnitInfo Unit { get; }
@@ -69,27 +86,25 @@ public sealed class MovementUnitInfo
     public string? LeaderName { get; }
     public bool IsFormationLeader { get; }
     public bool IsFollowingFormation { get; }
-    public IReadOnlyList<string> Speeds { get; }
-    public IReadOnlyList<double> AltitudesFeet { get; }
-    public IReadOnlyList<string> Depths { get; }
+    public IReadOnlyList<MovementPreset> Speeds { get; }
+    public IReadOnlyList<MovementPreset> Altitudes { get; }
+    public IReadOnlyList<MovementPreset> Depths { get; }
     public MovementUnitInfo(GameUnitInfo unit, string kind, string? leaderTarget, string? leaderName,
-        bool isFormationLeader, bool isFollowingFormation, IEnumerable<string> speeds, IEnumerable<double> altitudesFeet, IEnumerable<string> depths)
+        bool isFormationLeader, bool isFollowingFormation, IEnumerable<MovementPreset> speeds, IEnumerable<MovementPreset> altitudes, IEnumerable<MovementPreset> depths)
     { Unit = unit; Kind = kind; LeaderTarget = leaderTarget; LeaderName = leaderName;
         IsFormationLeader = isFormationLeader; IsFollowingFormation = isFollowingFormation;
-        Speeds = new List<string>(speeds).AsReadOnly(); AltitudesFeet = new List<double>(altitudesFeet).AsReadOnly(); Depths = new List<string>(depths).AsReadOnly(); }
+        Speeds = new List<MovementPreset>(speeds).AsReadOnly(); Altitudes = new List<MovementPreset>(altitudes).AsReadOnly(); Depths = new List<MovementPreset>(depths).AsReadOnly(); }
 }
 
 public sealed class MovementWaypoint
 {
     public AdvisorMapCoordinate Position { get; }
     public string? Speed { get; }
-    public double? AltitudeFeet { get; }
+    public string? Altitude { get; }
     public string? Depth { get; }
-    public MovementWaypoint(AdvisorMapCoordinate position, string? speed = null, double? altitudeFeet = null, string? depth = null)
+    public MovementWaypoint(AdvisorMapCoordinate position, string? speed = null, string? altitude = null, string? depth = null)
     {
-        if (altitudeFeet.HasValue && (double.IsNaN(altitudeFeet.Value) || double.IsInfinity(altitudeFeet.Value) || altitudeFeet < 0))
-            throw new ArgumentOutOfRangeException(nameof(altitudeFeet));
-        if (altitudeFeet.HasValue && depth != null) throw new ArgumentException("Choose altitude or depth.");
-        Position = position; Speed = speed; AltitudeFeet = altitudeFeet; Depth = depth;
+        if (altitude != null && depth != null) throw new ArgumentException("Choose altitude or depth.");
+        Position = position; Speed = speed; Altitude = altitude; Depth = depth;
     }
 }

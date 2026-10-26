@@ -72,12 +72,13 @@ internal static partial class ReservationCompositionTests
             var game = new Game(); var service = Service(game, "settings");
             var bad = Move(42, 1); bad["arguments"]!["waypoints"]![0]!["speed"] = "ahead_flank";
             Expect("movement_setting_not_supported", () => service.SubmitPlans("settings", Batch(Plan(new[] { Policy(42, "append") }, bad))));
-            var good = Move(42, 1, 2); good["arguments"]!["waypoints"]![0]!["altitude_ft"] = 1000;
+            var good = Move(42, 1, 2); good["arguments"]!["waypoints"]![0]!["altitude"] = "preset_1";
             service.SubmitPlans("settings", Batch(Plan(new[] { Policy(42, "append") }, good))); service.Approve(service.FinishProposal("settings", true)!);
-            Require(game.Movements.Count == 2 && game.Movements[0].AltitudeFeet == 1000 && game.Movements[1].AltitudeFeet == null &&
+            Require(game.Movements.Count == 2 && game.Movements[0].Altitude == "preset_1" && game.Movements[1].Altitude == null &&
                 game.Movements[1].Speed == null && game.Movements[1].Depth == null && game.Log.All(l => !l.StartsWith("clear", StringComparison.Ordinal)),
                 "A later waypoint stamped captured defaults, changed another setting or cleared an append plan");
         });
+        RunPresets(check);
         check("A follower can enter independent movement, drop and queue a return without changing control during review", () =>
         {
             var game = new Game { Following = true }; var service = Service(game, "follower");
@@ -195,6 +196,7 @@ internal static partial class ReservationCompositionTests
         internal readonly Dictionary<int, List<string>> Queues = new() { [42] = new() { "old" }, [43] = new() { "old" } };
         internal readonly Dictionary<int, string> Depths = new() { [42] = "alternating", [43] = "alternating" };
         internal readonly List<MovementWaypoint> Movements = new();
+        internal IReadOnlyList<MovementUnitInfo>? MovementUnits;
         private static int Id(string target) => int.Parse(target.Substring(5), CultureInfo.InvariantCulture);
         public bool IsInformationEnabled(string category) => true;
         public IReadOnlyList<GameUnitInfo> GetUnits() => new[] { 42, 43 }.Select(id => new GameUnitInfo(id, "Hobby " + (id - 41), new AdvisorMapCoordinate(0, 127), true, true,
@@ -218,9 +220,10 @@ internal static partial class ReservationCompositionTests
             if (independent) { Following = false; Log.Add("independent:42"); }
             return placement == ReservationPlacement.Replace || independent;
         }
-        public IReadOnlyList<MovementUnitInfo> GetMovementUnits() => GetUnits().Select(unit => new MovementUnitInfo(
+        public IReadOnlyList<MovementUnitInfo> GetMovementUnits() => MovementUnits ?? GetUnits().Select(unit => new MovementUnitInfo(
             new GameUnitInfo(unit.Id, unit.Name, unit.Position, true, true, UnavailableTarget == unit.Id ? "target_not_controllable" : null),
-            "helicopter", "unit:44", "California", false, Following && unit.Id == 42, Array.Empty<string>(), new[] { 150d, 1000d }, Array.Empty<string>())).ToArray();
+            "helicopter", "unit:44", "California", false, Following && unit.Id == 42, Array.Empty<MovementPreset>(), new[] {
+                new MovementPreset("preset_0", "150 ft", 150, "ft"), new MovementPreset("preset_1", "1000 ft", 1000, "ft") }, Array.Empty<MovementPreset>())).ToArray();
         public void AppendMovement(string target, MovementWaypoint point)
         { Check(); var id = Id(target); Movements.Add(point); Queues[id].Add("move"); Log.Add("move:" + id + ":" + point.Position.Latitude.ToString(CultureInfo.InvariantCulture)); }
         public void AppendSonobuoyDrop(string target, string ammo, AdvisorMapCoordinate position)

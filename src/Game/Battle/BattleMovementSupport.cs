@@ -11,21 +11,16 @@ namespace SeaPowerAIAdvisor;
 
 internal sealed partial class BattleOperationSupport : IAdvisorReservationSequenceSupport, IAdvisorMovementSupport
 {
-    private static readonly string[] ShipSpeeds = { "ahead_one_third", "ahead_two_thirds", "ahead_standard", "ahead_full", "ahead_flank" };
-    private static readonly string[] PlaneSpeeds = { "loiter", "cruise", "max" };
-    private static readonly string[] SubDepths = { "surface", "periscope", "shallow", "above_layer", "below_layer", "deep", "very_deep" };
-    private const double FeetPerUnity = 220.4727;
     private static string? MovementUnavailableReason(ObjectBase unit) => unit.IsDestroyed || unit.Disabled ? "target_unavailable"
         : !unit.AcceptsOrdersFromPlayer ? "target_not_controllable"
         : unit._userRoot == null ? "target_not_ready"
         : unit.CurrentOrder.Value.OrderType != Order.Type.None ? "current_order_conflict"
         : unit is LandUnit ground && !ground._isMobile ? "unit_not_mobile"
         : unit is Aircraft aircraft && !aircraft._isInFlight || unit is Helicopter helicopter && !helicopter._isInFlight ? "unit_not_airborne"
-        : unit._patrolZone != null ? "patrol_assignment_conflict" : null;
+        : unit._patrolZone != null ? "patrol_assignment_conflict"
+        : unit is Vessel or Submarine or Aircraft or Helicopter or LandUnit ? null : "movement_not_supported";
     private static string Target(ObjectBase unit) => "unit:" + unit.Id.ToString(CultureInfo.InvariantCulture);
     private static AdvisorMapCoordinate Coordinate(ObjectBase unit) => new(unit.Position.Value.Latitude, unit.Position.Value.Longitude);
-    private static float[] Altitudes(ObjectBase unit) => unit is Aircraft plane ? plane.Ap._presetAltitudes
-        : unit is Helicopter helicopter ? helicopter._hp._presetAltitudes : Array.Empty<float>();
     public IReadOnlyList<MovementUnitInfo> GetMovementUnits()
     {
         Require("battle_units"); Require("battle_movement_plans");
@@ -37,13 +32,11 @@ internal sealed partial class BattleOperationSupport : IAdvisorReservationSequen
             var kind = unit is Submarine ? "submarine" : unit is Vessel ? "vessel" : unit is Aircraft ? "aircraft"
                 : unit is Helicopter ? "helicopter" : unit is LandUnit ? "ground_unit" : "other";
             var reason = MovementUnavailableReason(unit);
-            if (kind == "other") reason ??= "movement_not_supported";
             return new MovementUnitInfo(new GameUnitInfo(unit.Id, unit.Name.Value, Coordinate(unit), unit.IsAirUnit,
                 unit is Aircraft plane ? plane._isInFlight : unit is Helicopter helicopter && helicopter._isInFlight, reason),
                 kind, leader == null ? null : Target(leader), leader?.Name.Value, unit.IsFormationLeader,
                 !unit.IsFormationLeader && unit.FollowingFormation,
-                unit is Vessel || unit is Submarine ? ShipSpeeds : unit is Aircraft ? PlaneSpeeds : Array.Empty<string>(),
-                Altitudes(unit).Select(a => Math.Round(a * FeetPerUnity)), unit is Submarine ? SubDepths : Array.Empty<string>());
+                BattleMovementPresets.Speeds(unit), BattleMovementPresets.Altitudes(unit), BattleMovementPresets.Depths(unit));
         }).ToArray();
     }
     // Only a native, non-reachable relative follower task is discarded implicitly. Mixed/unknown queues require explicit replacement.
@@ -89,40 +82,26 @@ internal sealed partial class BattleOperationSupport : IAdvisorReservationSequen
     public void AppendMovement(string target, MovementWaypoint waypoint)
     {
         Require("battle_movement_plans"); var unit = Unit(target);
-        var info = GetMovementUnits().Single(u => u.Unit.Target == target);
-        if (info.Unit.OrderUnavailableReason is string reason) throw new OperationException(409, reason);
+        if (MovementUnavailableReason(unit) is string reason) throw new OperationException(409, reason);
         if (unit.FollowingFormation && !unit.IsFormationLeader) throw new OperationException(409, "following_formation");
-        if (waypoint.Speed != null && !info.Speeds.Contains(waypoint.Speed) ||
-            waypoint.AltitudeFeet.HasValue && !info.AltitudesFeet.Contains(waypoint.AltitudeFeet.Value) ||
-            waypoint.Depth != null && !info.Depths.Contains(waypoint.Depth)) throw new OperationException(400, "movement_setting_not_supported");
         AddMovement(unit, waypoint, false);
     }
     private static void AddMovement(ObjectBase unit, MovementWaypoint waypoint, bool returnToFormation)
     {
         var position = new GeoPosition(waypoint.Position.Latitude, waypoint.Position.Longitude, 0);
         var heightState = WaypointData.WaypointHeightState.NoChange;
-        if (waypoint.AltitudeFeet.HasValue)
+        if (waypoint.Altitude != null)
         {
-            position._height = Altitudes(unit).Single(a => Math.Round(a * FeetPerUnity) == waypoint.AltitudeFeet.Value);
+            position._height = BattleMovementPresets.AltitudeValue(unit, waypoint.Altitude);
             heightState = WaypointData.WaypointHeightState.Number;
         }
-        if (waypoint.Depth != null)
-            heightState = waypoint.Depth switch
-            {
-                "surface" => WaypointData.WaypointHeightState.Surface, "periscope" => WaypointData.WaypointHeightState.Periscope,
-                "shallow" => WaypointData.WaypointHeightState.VeryLow, "above_layer" => WaypointData.WaypointHeightState.Low,
-                "below_layer" => WaypointData.WaypointHeightState.Medium, "deep" => WaypointData.WaypointHeightState.High,
-                "very_deep" => WaypointData.WaypointHeightState.VeryHigh,
-                _ => throw new OperationException(400, "movement_setting_not_supported")
-            };
+        if (waypoint.Depth != null) heightState = BattleMovementPresets.DepthState(unit, waypoint.Depth);
+        // Resolve every requested setting before creating or appending a task.
+        var speedState = waypoint.Speed == null ? (ObjectSpeed.SpeedSettings?)null : BattleMovementPresets.SpeedState(unit, waypoint.Speed);
         var task = NodeCanvas.Framework.Task.Create<GoToWaypointTask>(unit._userRoot.graph);
         task._baseObject = unit; task._waypointGeoPos = position; task.wpName = "wp";
         task._heightState = heightState; task._isReachable = true; task._returnToFormation = returnToFormation;
-        if (waypoint.Speed != null)
-        {
-            var index = Array.IndexOf(unit is Aircraft ? PlaneSpeeds : ShipSpeeds, waypoint.Speed);
-            task._setSpeed = true; task._speedState = (ObjectSpeed.SpeedSettings)(unit is Aircraft ? index + 2 : index + 1);
-        }
+        if (speedState.HasValue) { task._setSpeed = true; task._speedState = speedState.Value; }
         // Append explicitly: the standard factory inserts after the UI-selected waypoint instead.
         unit._userRoot.AddTask(task);
         if (!unit._userRoot.TaskViewModels.Any(v => ReferenceEquals(v?.Task, task)))
