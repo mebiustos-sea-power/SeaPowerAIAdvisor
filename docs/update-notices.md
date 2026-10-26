@@ -10,7 +10,7 @@ For a release without a notice, replace the entire JSON document with `null`. An
 
 ## Body formatting and preview
 
-Notice bodies use the same Markdown renderer as the conversation: headings, emphasis, lists, paragraphs and inline code are supported. Titles remain plain text in the native title bar. Unit/map actions and external-link navigation are not attached to notice content.
+Notice bodies use the same Markdown renderer as the conversation: headings, emphasis, lists, paragraphs and inline code are supported. Use the shared `update_notice.title` key for the native title bar; its format argument is the installed MOD assembly version, rendered as three components. Topic names belong in body headings. The header uses a green brush scoped to this notice window, retaining the game template and leaving other windows unchanged. Unit/map actions and external-link navigation are not attached to notice content.
 
 With the developer local API enabled and a mission loaded, run `python3 tools/advisor_dev.py notices preview`. This displays the bundled notice even if it has been read and opens the main adviser window if needed. Previewing and closing a preview do not read or write receipt files. Settings, approval, active-consultation and IME-composition states reject the request. A currently open normal notice is not converted into a preview. Missing notice content is reported as `notice_unavailable`.
 

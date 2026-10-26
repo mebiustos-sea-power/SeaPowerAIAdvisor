@@ -27,7 +27,7 @@ internal static class UpdateNoticeTests
                 foreach (var language in new[] { "en", "ja", "fr" })
                 {
                     var text = AdvisorText.Load(language);
-                    Require(!string.IsNullOrWhiteSpace(text[bundled.TitleKey]) && !string.IsNullOrWhiteSpace(text[bundled.BodyKey]),
+                    Require(!string.IsNullOrWhiteSpace(text.Format(bundled.TitleKey, typeof(AdvisorUpdateNotice).Assembly.GetName().Version!.ToString(3))) && !string.IsNullOrWhiteSpace(text[bundled.BodyKey]),
                         "The installed notice cannot be displayed in a supported or fallback language");
                 }
         }));

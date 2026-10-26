@@ -43,6 +43,7 @@ internal sealed class AdvisorUpdateNoticeWindow
             Content = content, Draggable = true, CanResize = true,
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top
         };
+        window.Resources["Brush.Window.Header"] = new SolidColorBrush(Color.FromArgb(255, 40, 84, 58));
         window.DataContext = window;
         window.Template = view.TryFindResource("WindowLayoutNoScroll") as ControlTemplate
             ?? throw new InvalidOperationException("The game's window template is unavailable.");
@@ -59,7 +60,9 @@ internal sealed class AdvisorUpdateNoticeWindow
         failure.Text = "";
         try { if (store.Unread(notice, preview) == null) return false; }
         catch (AdvisorUpdateNoticeException error) { failure.Text = text()["update_notice.error." + error.Code]; report(error); }
-        window.Header = text()[notice.TitleKey]; close.Content = text()["action.close"];
+        var version = typeof(AdvisorUpdateNoticeWindow).Assembly.GetName().Version
+            ?? throw new InvalidOperationException("The advisor assembly version is missing.");
+        window.Header = text().Format(notice.TitleKey, version.ToString(3)); close.Content = text()["action.close"];
         scroll.Content = GUI.ParseXaml(AdvisorMarkdown.Render(text()[notice.BodyKey]).ToString(SaveOptions.DisableFormatting)) as FrameworkElement
             ?? throw new InvalidOperationException("The Markdown notice view is not a FrameworkElement.");
         var width = Math.Min(520, view.ActualWidth - 40); var height = Math.Min(340, view.ActualHeight - 80);

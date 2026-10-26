@@ -504,8 +504,8 @@
   "commands.prompt": "AIへの指示",
   "commands.definition": "定義JSON",
   "commands.back": "一覧に戻る",
-  "update_notice.recommended_model.title": "(お知らせ) NanoGPTの推奨モデルについて",
-  "update_notice.recommended_model.body": "NanoGPTでは、**DeepSeek V4.1 Flash 1017（通常版）**の利用を強く推奨します。\n\n本MODの動作確認とプロンプト調整は、主にこのモデルで行っています。\n\nモデルID: `deepseek/deepseek-v4.1-flash-1017`",
+  "update_notice.title": "(お知らせ) v{0}",
+  "update_notice.recommended_model.body": "### 利用モデルについて\n\nNanoGPTでは、本MODの動作確認・プロンプト調整に使用している **DeepSeek V4.1 Flash 1017（通常版）** の利用を強く推奨します。\n\nモデルID: `deepseek/deepseek-v4.1-flash-1017`",
   "update_notice.error.notice_state_invalid": "お知らせの既読情報が不正です。次回も表示される場合があります。",
   "update_notice.error.notice_state_unreadable": "お知らせの既読情報を読み取れませんでした。次回も表示される場合があります。",
   "update_notice.error.notice_state_write_failed": "お知らせを既読として保存できませんでした。次回も表示される場合があります。"
