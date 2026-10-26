@@ -90,6 +90,8 @@ With the default, a selected-connection failure ends the consultation. When expl
 
 `false` withholds all operation lookup/proposal tools and the host operation service from standard, legacy and independent backends. Situation retrieval and written advice remain available. `true` permits operation tools only when commands are enabled and the game source allows them; it does not force a command or bypass approval. The accepted response and retained result report the resolved `allow_operations` policy, which is preserved on retry and fallback and is not saved as a global preference. Null/non-boolean values return HTTP 400 `invalid_operation_policy` before execution. Existing direct developer operation/reservation endpoints retain their separate command permissions.
 
+`connection_prompt` optionally replaces the selected connection's saved prompt for this consultation only. Omit it to use the saved prompt; send `"connection_prompt": ""` to omit connection-specific instructions. It uses the same 2000-character limit and validation as the connection editor. This does not change saved settings, subsequent consultations or the sub connection's prompt on fallback, and does not require model-override permission. Null and non-string values are rejected. The effective prompt appears in the existing captured consultation input.
+
 `plain_advisor` is an optional boolean, default **false**. Set it to true to use **Michael Reed with empty personality/tone and empty user-configured Common instructions for this consultation only**:
 
 ```json

@@ -88,7 +88,7 @@ internal static partial class LocalApiTests
             var runtime = new AdvisorRuntime("tactical_battle", logs.Add, () => stops++);
             var target = new GuardedTarget(runtime.Guard, () => { calls++; if (fail) throw original; });
             var api = new AdvisorLocalApi(() => AdvisorPromptOverrides.Session, unexpected.Add, () => new JObject(),
-                (_, _, _, _) => throw new InvalidOperationException("Unexpected connection preparation"));
+                (_, _, _, _, _) => throw new InvalidOperationException("Unexpected connection preparation"));
             api.Attach(new object(), "tactical_battle", () => target); api.Enable();
             try
             {
@@ -214,7 +214,7 @@ internal static partial class LocalApiTests
     private static AdvisorLocalApi Api(AdvisorPromptOverrides? overrides = null) => new(
         () => overrides ?? new AdvisorPromptOverrides(AdvisorPrompts.Load(AdvisorPrompts.DefaultDirectory)), error => throw error,
         () => new JObject { ["default_connection_id"] = "test", ["connections"] = new JArray(new JObject { ["id"] = "test" }) },
-        (_, fallback, _, delivery) => AdvisorServices.Prepare(new AdvisorSettingsDraft(new JObject { ["api_key"] = "mock-local-key" }), allowFallback: fallback, situationDelivery: delivery));
+        (_, fallback, _, delivery, _) => AdvisorServices.Prepare(new AdvisorSettingsDraft(new JObject { ["api_key"] = "mock-local-key" }), allowFallback: fallback, situationDelivery: delivery));
     private static AdvisorLocalResponse Send(AdvisorLocalApi api, string method, string path, JObject? body = null)
     { var task = api.Enqueue(method, path, body ?? new()); api.Pump(); return task.GetAwaiter().GetResult(); }
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }

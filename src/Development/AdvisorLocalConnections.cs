@@ -43,22 +43,23 @@ internal sealed class AdvisorLocalConnections
                 ["situation_delivery"] = AdvisorServiceCatalog.BuiltIn.Find(c.Provider)?.Independent == true ? null : c.SituationDelivery.Code() }))
         };
     }
-    internal void Select(AdvisorSettingsDraft settings, string id, bool allowFallback, string? model = null)
+    internal void Select(AdvisorSettingsDraft settings, string id, bool allowFallback, string? model = null, string? prompt = null)
     {
-        if (!AllowedIds.Contains(id) || settings.Find(id) == null)
+        var selected = settings.Find(id);
+        if (!AllowedIds.Contains(id) || selected == null)
             throw new AdvisorLocalApiException(403, "connection_not_allowed");
         if (model != null)
         {
             if (!AllowModelOverride) throw new AdvisorLocalApiException(403, "model_override_not_allowed");
             if (string.IsNullOrWhiteSpace(model) || model.Length > 200 || model.Any(char.IsControl))
                 throw new AdvisorLocalApiException(400, "invalid_model");
-            var selected = settings.Find(id)!;
             var service = AdvisorServiceCatalog.BuiltIn.Require(selected.Provider);
             if (!service.Fields.Any(f => f.Key == "model" && !f.Secret))
                 throw new AdvisorLocalApiException(400, "model_override_unavailable");
             // The caller supplies a detached consultation draft, never a saved settings editor.
             selected.Model = model;
         }
+        if (prompt != null) selected.Prompt = prompt;
         var sub = settings.SubId;
         settings.MainId = id;
         settings.SubId = allowFallback && sub != id && sub != null && AllowedIds.Contains(sub) ? sub : null;

@@ -121,6 +121,8 @@ python3 tools/advisor_dev.py --quiet consult --shortcut key_risks --plain-adviso
 
 The same option can be supplied as `"plain_advisor": true` in a request file. `--no-plain-advisor` overrides that file back to the selected adviser. Omitting both uses the request file's value, or normal configured preferences when the field is absent. The MOD must include support for this new developer API option.
 
+`--connection-prompt TEXT` or `--connection-prompt-file FILE` overrides the selected connection's prompt for this consultation only. An empty string disables it; omitting both uses the request file's `connection_prompt`, or the saved value when that field is absent. Saved prompts and the sub connection's prompt on fallback remain unchanged. Invalid prompt input is rejected before any history clearing or consultation request.
+
 Explicit connection/fallback/plain-adviser flags override their fields in the file. The tool uses registered game connections; it does not read API-key settings or authenticate directly with providers.
 
 Result directories contain `request.json`, `status-before.json`, `accepted.json`, `latest.json`, changed `progress.jsonl` entries, the complete `result.json` (including separate operation request/receipt records when commands are used), and `answer.md` when answered. Explicit history clearing also saves `clear-response.json`; operational failures save `error.txt`. The final JSON retains the API's captured effective input, retrievals, progress and reported usage without rewriting their content.

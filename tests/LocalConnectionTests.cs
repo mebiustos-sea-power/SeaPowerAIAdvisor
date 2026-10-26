@@ -14,10 +14,10 @@ internal static partial class LocalApiTests
             var policy = new AdvisorLocalConnections(new[] { "local", "sub" }, "local");
             var target = new Target(); var selected = "";
             var api = new AdvisorLocalApi(() => new AdvisorPromptOverrides(AdvisorPrompts.Load(AdvisorPrompts.DefaultDirectory)), error => throw error,
-                () => policy.Describe(settings), (id, fallback, model, delivery) =>
+                () => policy.Describe(settings), (id, fallback, model, delivery, prompt) =>
                 {
                     selected = id;
-                    var draft = LocalLibrary(); policy.Select(draft, id, fallback, model);
+                    var draft = LocalLibrary(); policy.Select(draft, id, fallback, model, prompt);
                     return AdvisorServices.Prepare(draft, allowFallback: fallback, situationDelivery: delivery);
                 });
             api.Attach(new object(), "tactical_battle", () => target); api.Enable();
@@ -53,10 +53,10 @@ internal static partial class LocalApiTests
             var original = settings.Data(); var policy = new AdvisorLocalConnections(new[] { "local", "sub" }, "local");
             var target = new Target(); var prepared = 0;
             var api = new AdvisorLocalApi(() => new AdvisorPromptOverrides(AdvisorPrompts.Load(AdvisorPrompts.DefaultDirectory)), error => throw error,
-                () => policy.Describe(settings), (id, fallback, model, delivery) =>
+                () => policy.Describe(settings), (id, fallback, model, delivery, prompt) =>
                 {
                     var draft = new AdvisorSettingsDraft(JObject.Parse(System.Text.Encoding.UTF8.GetString(original)));
-                    policy.Select(draft, id, fallback, model); prepared++;
+                    policy.Select(draft, id, fallback, model, prompt); prepared++;
                     Require(draft.Find("sub")!.SituationDelivery == AdvisorSituationDelivery.OnDemand && draft.MainId == "local",
                         "A delivery override changed another connection");
                     return AdvisorServices.Prepare(draft, allowFallback: fallback, situationDelivery: delivery);
@@ -116,10 +116,10 @@ internal static partial class LocalApiTests
             var policy = new AdvisorLocalConnections(new[] { "local", "sub" }, "local");
             var target = new Target();
             var api = new AdvisorLocalApi(() => new AdvisorPromptOverrides(AdvisorPrompts.Load(AdvisorPrompts.DefaultDirectory)), error => throw error,
-                () => policy.Describe(settings), (id, fallback, model, delivery) =>
+                () => policy.Describe(settings), (id, fallback, model, delivery, prompt) =>
                 {
                     var draft = new AdvisorSettingsDraft(JObject.Parse(System.Text.Encoding.UTF8.GetString(original)));
-                    policy.Select(draft, id, fallback, model);
+                    policy.Select(draft, id, fallback, model, prompt);
                     return AdvisorServices.Prepare(draft, allowFallback: fallback, situationDelivery: delivery);
                 });
             api.Attach(new object(), "tactical_battle", () => target); api.Enable();
@@ -148,6 +148,41 @@ internal static partial class LocalApiTests
             accepted = Send(api, "POST", "/v1/consultations", new JObject { ["shortcut"] = "key_risks" });
             Require(accepted.Status == 202 && (string?)accepted.Data["model"] == "gemini-test-model" &&
                 settings.Data().SequenceEqual(original), "The override leaked into the next consultation or registered settings");
+            api.Disable();
+        });
+        check("Developer connection prompts distinguish omission from empty text, enforce the allowlist and never change saved or sub prompts", () =>
+        {
+            var saved = LocalLibrary(); saved.Find("local")!.Prompt = "SAVED_MAIN"; saved.Find("sub")!.Prompt = "SAVED_SUB";
+            var document = saved.Data(); var policy = new AdvisorLocalConnections(new[] { "local", "sub" }, "local");
+            var target = new Target(); var effective = "";
+            var api = new AdvisorLocalApi(() => new AdvisorPromptOverrides(AdvisorPrompts.Load(AdvisorPrompts.DefaultDirectory)), error => throw error,
+                () => policy.Describe(saved), (id, fallback, model, delivery, prompt) =>
+                {
+                    var draft = new AdvisorSettingsDraft(JObject.Parse(System.Text.Encoding.UTF8.GetString(document)));
+                    policy.Select(draft, id, fallback, model, prompt);
+                    var setup = AdvisorServices.Prepare(draft, allowFallback: fallback, situationDelivery: delivery);
+                    effective = draft.Main.Build().Prompt;
+                    Require(draft.Find("sub")!.Prompt == "SAVED_SUB", "The override changed sub-connection instructions");
+                    return setup;
+                });
+            api.Attach(new object(), "tactical_battle", () => target); api.Enable();
+            foreach (var invalid in new JToken[] { JValue.CreateNull(), new JValue(false), new JValue(1), new JObject(), new JArray(),
+                new JValue(new string('x', 2001)), new JValue("bad\u0001control") })
+            {
+                var rejected = Send(api, "POST", "/v1/consultations", new JObject { ["question"] = "Question", ["connection_prompt"] = invalid });
+                Require(rejected.Status == 400 && !target.Called, "An invalid connection prompt reached consultation execution");
+            }
+            Require(Send(api, "POST", "/v1/consultations", new JObject { ["question"] = "Question", ["connection_id"] = "normal",
+                ["connection_prompt"] = "override" }).Status == 403 && !target.Called, "A prompt override bypassed connection permissions");
+            foreach (var prompt in new string?[] { "TEMPORARY\n日本語", "", null })
+            {
+                var body = new JObject { ["question"] = "Question", ["allow_fallback"] = true };
+                if (prompt != null) body["connection_prompt"] = prompt;
+                Require(Send(api, "POST", "/v1/consultations", body).Status == 202 && effective == (prompt ?? "SAVED_MAIN"),
+                    "An omitted or empty prompt was interpreted incorrectly or a previous override survived");
+                Send(api, "POST", "/v1/consultations/cancel");
+            }
+            Require(saved.Data().SequenceEqual(document) && saved.MainId == "normal" && saved.SubId == "sub", "The override changed saved settings");
             api.Disable();
         });
         check("Developer choices persist independently and the Temp discovery file follows the effective permitted metadata", () =>

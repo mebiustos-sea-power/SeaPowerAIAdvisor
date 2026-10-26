@@ -77,7 +77,7 @@ internal static class ReservationTests
         return new AdvisorUnitReservations(ops, () => units);
     }
     private static AdvisorLocalApi Api(Action<Exception> unexpected) => new(() => throw new InvalidOperationException("Prompt access"), unexpected,
-        () => throw new InvalidOperationException("Connection access"), (_, _, _, _) => throw new InvalidOperationException("AI access"));
+        () => throw new InvalidOperationException("Connection access"), (_, _, _, _, _) => throw new InvalidOperationException("AI access"));
     private static JObject Scope(AdvisorOperations ops) => new() { ["scope_id"] = ops.ScopeId };
     private static AdvisorLocalResponse Send(AdvisorLocalApi api, string method, string path, JObject? body = null)
     { var task = api.Enqueue(method, path, body ?? new()); api.Pump(); return task.GetAwaiter().GetResult(); }

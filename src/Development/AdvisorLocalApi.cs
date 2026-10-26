@@ -51,7 +51,7 @@ internal sealed class AdvisorLocalApi
     private readonly Func<AdvisorPromptOverrides> prompts;
     private readonly Action<Exception> unexpected;
     private readonly Func<JObject> connections;
-    private readonly Func<string, bool, string?, AdvisorSituationDelivery?, AdvisorBackendSetup> prepareConnection;
+    private readonly Func<string, bool, string?, AdvisorSituationDelivery?, string?, AdvisorBackendSetup> prepareConnection;
     private object? owner;
     private string mode = "";
     private Func<IAdvisorLocalTarget>? target;
@@ -59,7 +59,7 @@ internal sealed class AdvisorLocalApi
     private AdvisorOperations? operations;
     private AdvisorUnitReservations? reservations;
     internal AdvisorLocalApi(Func<AdvisorPromptOverrides> prompts, Action<Exception> unexpected,
-        Func<JObject> connections, Func<string, bool, string?, AdvisorSituationDelivery?, AdvisorBackendSetup> prepareConnection)
+        Func<JObject> connections, Func<string, bool, string?, AdvisorSituationDelivery?, string?, AdvisorBackendSetup> prepareConnection)
     { this.prompts = prompts; this.unexpected = unexpected; this.connections = connections; this.prepareConnection = prepareConnection; }
     // UI guards still record and stop a broken adviser; API callers must also receive the failure.
     internal static void InvokeGuarded(Action<Action> guard, Action action)
@@ -193,7 +193,7 @@ internal sealed class AdvisorLocalApi
         if (method == "POST" && path == "/v1/consultations")
         {
             var question = body["question"]; var shortcut = body["shortcut"]; var fallback = body["allow_fallback"];
-            if (body.Properties().Any(p => p.Name != "question" && p.Name != "shortcut" && p.Name != "allow_fallback" && p.Name != "connection_id" && p.Name != "plain_advisor" && p.Name != "model" && p.Name != "situation_delivery" && p.Name != "allow_operations") ||
+            if (body.Properties().Any(p => p.Name != "question" && p.Name != "shortcut" && p.Name != "allow_fallback" && p.Name != "connection_id" && p.Name != "plain_advisor" && p.Name != "model" && p.Name != "situation_delivery" && p.Name != "allow_operations" && p.Name != "connection_prompt") ||
                 (question == null) == (shortcut == null) || (question != null && question.Type != JTokenType.String) ||
                 (shortcut != null && shortcut.Type != JTokenType.String))
                 throw new AdvisorLocalApiException(400, "specify_question_or_shortcut");
@@ -206,6 +206,9 @@ internal sealed class AdvisorLocalApi
             var operationPermission = body["allow_operations"];
             if (operationPermission != null && operationPermission.Type != JTokenType.Boolean)
                 throw new AdvisorLocalApiException(400, "invalid_operation_policy");
+            var connectionPrompt = body["connection_prompt"];
+            if (connectionPrompt != null && connectionPrompt.Type != JTokenType.String)
+                throw new AdvisorLocalApiException(400, "invalid_connection_prompt");
             var model = body["model"];
             if (model != null && model.Type != JTokenType.String)
                 throw new AdvisorLocalApiException(400, "invalid_model");
@@ -225,7 +228,7 @@ internal sealed class AdvisorLocalApi
             if (!((JArray)info["connections"]!).Any(c => (string?)c["id"] == id))
                 throw new AdvisorLocalApiException(403, "connection_not_allowed");
             last = Target().LocalConsult((string?)question, (string?)shortcut, (bool?)fallback ?? false,
-                chosen => prepareConnection(id, (bool?)fallback ?? false, (string?)model, chosen),
+                chosen => prepareConnection(id, (bool?)fallback ?? false, (string?)model, chosen, (string?)connectionPrompt),
                 (bool?)plain ?? false, (bool?)operationPermission, delivery);
             return new(202, new JObject { ["connection_id"] = id, ["connection_name"] = last.ConnectionName, ["model"] = last.Model,
                 ["situation_delivery"] = last.SituationDelivery?.Code(),

@@ -106,6 +106,37 @@ internal static partial class ProviderTests
                 }
             });
         }));
+        check("Developer prompt overrides reach the wire without affecting saved settings, later consultations or fallback instructions", () => Async(async () =>
+        {
+            await InServiceDirectory(async directory =>
+            {
+                var saved = NanoDraft(); saved.Main.Prompt = "SAVED_MAIN";
+                var sub = new AdvisorApiConfigurationDraft(new AdvisorApiConfiguration("prompt-sub", "Sub", "nanogpt", saved.Main.Settings, prompt: "SAVED_SUB"));
+                saved.Put(sub); saved.SubId = sub.Id;
+                var path = System.IO.Path.Combine(directory, "settings.json"); AdvisorSettings.WriteBytes(path, saved.Data());
+                var original = System.IO.File.ReadAllBytes(path); var policy = new AdvisorLocalConnections(new[] { "nano", sub.Id }, "nano");
+                foreach (var prompt in new string?[] { "TEMPORARY\n日本語", "", null })
+                foreach (var useSub in new[] { false, true })
+                {
+                    var draft = AdvisorSettings.Edit(path); policy.Select(draft, "nano", useSub, prompt: prompt);
+                    var expected = prompt ?? "SAVED_MAIN"; var sends = 0;
+                    var setup = AdvisorServices.Prepare(draft, allowFallback: useSub, transportFactory: trace => new AdvisorHttpTransport(new BackendHttpHandler(async (request, token) =>
+                    {
+                        var body = JObject.Parse(await request.Content!.ReadAsStringAsync(token));
+                        var data = JObject.Parse((string)body["messages"]![1]!["content"]!); var first = ++sends == 1;
+                        var activePrompt = first ? expected : "SAVED_SUB";
+                        Require(activePrompt.Length == 0 ? data["connection_prompt"] == null : (string?)data["connection_prompt"] == activePrompt,
+                            "A developer override was lost, replaced by later edits or leaked into the sub connection");
+                        if (first && useSub) return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) { Content = new StringContent("busy") };
+                        return JsonResponse(NanoReply("Prompt override"));
+                    }), trace));
+                    draft.Main.Prompt = "EDITED_AFTER_PREPARATION";
+                    var result = await AdvisorConsultation.RunAsync(setup, AdvisorContext.Create(DeliveryKnowledge(), Array.Empty<ChatExchange>()), directory, new AdvisorQuestion("Question"), default);
+                    Require(result.Completed && result.ApiRequests == (useSub ? 2 : 1) && System.IO.File.ReadAllBytes(path).SequenceEqual(original) &&
+                        AdvisorSettings.Edit(path).Main.Prompt == "SAVED_MAIN", "The temporary prompt was saved or changed consultation accounting");
+                }
+            });
+        }));
         check("Developer model override reuses NanoGPT subscription credentials and records the actual model without saving it", () => Async(async () =>
         {
             await InServiceDirectory(async directory =>

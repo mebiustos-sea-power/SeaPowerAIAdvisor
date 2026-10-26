@@ -256,6 +256,26 @@ class CliTests(unittest.TestCase):
             self.assertEqual(api.run("consult", "--request-file", path)[0], 1)
             self.assertEqual(api.calls, [])
 
+    def test_connection_prompt_override_accepts_text_files_and_empty_without_leaking_or_clearing_on_invalid_input(self):
+        with MockApi() as api, tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); prompt = root / "connection-prompt.txt"; request = root / "request.json"
+            text = "日本語\n\"引用\" $() `text` 𠮷"
+            prompt.write_text(text, encoding="utf-8")
+            self.assertEqual(api.run("consult", "--question", "q", "--connection-prompt-file", prompt, "--no-wait")[0], 0)
+            self.assertEqual(api.calls[-1][2]["connection_prompt"], text)
+            request.write_text(tool.encode({"question": "q", "connection_prompt": "FROM_FILE"}), encoding="utf-8")
+            self.assertEqual(api.run("consult", "--request-file", request, "--connection-prompt", "", "--no-wait")[0], 0)
+            self.assertEqual(api.calls[-1][2]["connection_prompt"], "")
+            self.assertEqual(api.run("consult", "--request-file", request, "--no-wait")[0], 0)
+            self.assertEqual(api.calls[-1][2]["connection_prompt"], "FROM_FILE")
+            self.assertEqual(api.run("consult", "--question", "q", "--no-wait")[0], 0)
+            self.assertNotIn("connection_prompt", api.calls[-1][2])
+            api.calls.clear()
+            for invalid in (None, False, 7, {}, [], "x" * 2001, "bad\x01control", "𠮷" * 1001):
+                request.write_text(tool.encode({"question": "q", "connection_prompt": invalid}), encoding="utf-8")
+                self.assertEqual(api.run("consult", "--request-file", request, "--clear-history")[0], 1)
+                self.assertEqual(api.calls, [], "Invalid prompt reached the API or cleared conversation history")
+
     def test_prompt_text_batch_snapshot_restore_and_empty_value(self):
         with MockApi() as api, tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary); snapshot = root / "snapshot.json"
