@@ -23,7 +23,7 @@ internal sealed class SonobuoyCommandExtension : IAdvisorOperationExtension, IAd
 {
     public int ApiVersion => AdvisorApi.ContractVersion;
     public string Version => "0.1.0";
-    public OperationDefinition GetDefinition() => new("example.seapower.sonobuoy_drop",
+    public OperationDefinition GetDefinition() => new("example.seapower.sonobuoy_drop", OperationExecutionMode.Reservation,
         "External SDK example: append a move-and-drop reservation for a player-controlled unit carrying sonobuoys. " +
         "Aircraft must be airborne. Each operation drops one sonobuoy; a plan may contain several operations. " +
         "Use a carried ammunition ID from candidates, preserve the player's depth setting, and plan travel order with drop positions.",

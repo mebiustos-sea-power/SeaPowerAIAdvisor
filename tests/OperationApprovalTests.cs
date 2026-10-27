@@ -268,8 +268,11 @@ internal static class OperationApprovalTests
                 return new JObject { ["operation_id"] = SonobuoyDropExtension.OperationId,
                     ["target_ref"] = "unit:" + unit.Id, ["arguments"] = request["arguments"]!.DeepClone() };
             }
-            JObject Plan(string id, params JObject[] orders) => SonobuoyFixture.Queued(new JObject { ["plan_id"] = id, ["title"] = id,
-                ["summary"] = "Alternative", ["operations"] = new JArray(orders) });
+            JObject Plan(string id, params JObject[] orders)
+            {
+                var plan = (JObject)OperationSubmissionFixture.Batch(orders)["plans"]![0]!;
+                plan["plan_id"] = id; plan["title"] = id; plan["summary"] = "Alternative"; return plan;
+            }
             service.SubmitPlans("placement", new JObject { ["request_id"] = "placement",
                 ["plans"] = new JArray(Plan("a", Order(first, "replace", 0, 1), Order(second, "append", 2, 3)),
                     Plan("b", Order(first, "append", 4, 5), Order(second, "replace", 6, 7))) });
@@ -410,6 +413,7 @@ internal static class OperationApprovalTests
         public string Id { get; }
         public AdvisorOperationText Documentation => OperationDocumentationTests.Example;
         public string Description => "Custom operation";
+        public SeaPowerAIAdvisor.Api.OperationExecutionMode ExecutionMode => SeaPowerAIAdvisor.Api.OperationExecutionMode.Immediate;
         public bool RequiresApproval { get; }
         private readonly List<string> log;
         internal int RejectAt = -1, ThrowAt = -1;

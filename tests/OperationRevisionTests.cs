@@ -71,7 +71,7 @@ internal static partial class OperationPlanTests
             Require(JToken.DeepEquals(proposal.Submission, first) && proposal.Orders.Select(o => o.Id).SequenceEqual(ids) &&
                 !proposal.RequiresApproval && proposal.SubmissionCount == 1 && JToken.DeepEquals(service.SubmitPlans("atomic-revision", first), firstReceipt) && log.Count == 0,
                 "A rejected revision changed valid plans, flags, receipts or game state");
-            bad["plans"]![1]!["operations"]![0]!["arguments"]!["index"] = 3;
+            bad["plans"]![1]!["immediate_operations"]![0]!["arguments"]!["index"] = 3;
             service.SubmitPlans("atomic-revision", bad);
             Require(proposal.SubmissionCount == 2 && proposal.RequiresApproval && proposal.Plans.Count == 2,
                 "A corrected rejected request ID was poisoned or kept the old approval policy");
@@ -139,11 +139,11 @@ internal static partial class ReservationCompositionTests
         {
             var game = new Game(); var service = Service(game, "route-revision");
             var first = Batch(Plan(new[] { Policy(42, "replace") }, Move(42, 45.579233))); first["request_id"] = "hiei-searchlegs-a";
-            first["plans"]![0]!["operations"]![0]!["arguments"]!["waypoints"]![0]!["longitude"] = 45.4;
+            first["plans"]![0]!["reservation_operations"]![0]!["arguments"]!["waypoints"]![0]!["longitude"] = 45.4;
             service.SubmitPlans("route-revision", first);
             var latitudes = new[] { 45.63468, 45.69683, 45.75433, 45.81993, 45.87981, 45.94688, 46.03265307345113 };
             var latest = Batch(Plan(new[] { Policy(42, "append") }, Move(42, latitudes))); latest["request_id"] = "hiei-searchlegs-a2";
-            foreach (var point in (JArray)latest["plans"]![0]!["operations"]![0]!["arguments"]!["waypoints"]!) point["longitude"] = 145.95787210501481;
+            foreach (var point in (JArray)latest["plans"]![0]!["reservation_operations"]![0]!["arguments"]!["waypoints"]!) point["longitude"] = 145.95787210501481;
             service.SubmitPlans("route-revision", latest);
             Require(game.Log.Count == 0 && game.Queues[42].SequenceEqual(new[] { "old" }), "Submitting a revision cleared or changed native reservations");
             Require((string?)service.SubmitPlans("route-revision", first)["status"] == "superseded", "Replaying the one-point plan rolled back the route");

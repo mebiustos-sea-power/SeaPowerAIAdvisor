@@ -9,7 +9,7 @@ public sealed class CommandExtension : IAdvisorOperationExtension, IAdvisorExten
 {
     public int ApiVersion { get; set; } = AdvisorApi.ContractVersion;
     public string? Version { get; set; }
-    public OperationDefinition Definition { get; set; } = new("fixture.command", "Fixture command.", "{\"type\":\"object\"}",
+    public OperationDefinition Definition { get; set; } = new("fixture.command", OperationExecutionMode.Immediate, "Fixture command.", "{\"type\":\"object\"}",
         new Dictionary<string, string> { ["en"] = "{\"name\":\"Fixture\",\"summary\":\"Summary\",\"requirements\":\"Conditions\"}" });
     public Func<IAdvisorOperationContext, IAdvisorOperationHandler> Open { get; set; } = _ => new CommandHandler();
     public OperationDefinition GetDefinition() => Definition;

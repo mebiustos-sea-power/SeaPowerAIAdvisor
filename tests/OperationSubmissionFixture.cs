@@ -10,20 +10,22 @@ internal static class OperationSubmissionFixture
     internal static JObject Batch(params JObject[] orders)
     {
         var updates = new JArray(); var targets = new HashSet<string>(StringComparer.Ordinal);
-        var steps = new JArray(orders.Select(order =>
+        var immediate = new JArray(); var reservations = new JArray();
+        foreach (var order in orders)
         {
             var operation = (string?)order["operation"] ?? (string)order["operation_id"]!;
             var target = (string)order["target_ref"]!; var args = (JObject)order["arguments"]!.DeepClone();
-            if (operation is SonobuoyDropExtension.OperationId or MovementExtension.OperationId or FormationReturnExtension.OperationId)
+            var reserved = operation is SonobuoyDropExtension.OperationId or MovementExtension.OperationId or FormationReturnExtension.OperationId;
+            if (reserved)
             {
                 if (targets.Add(target)) updates.Add(new JObject { ["target_ref"] = target, ["placement"] = args["placement"]?.DeepClone() ?? new JValue("append") });
                 args.Remove("placement");
             }
-            return new JObject { ["operation_id"] = operation, ["target_ref"] = target, ["arguments"] = args };
-        }));
+            (reserved ? reservations : immediate).Add(new JObject { ["operation_id"] = operation, ["target_ref"] = target, ["arguments"] = args });
+        }
         return new JObject { ["request_id"] = orders.Length == 0 ? "empty" : orders[0]["request_id"]?.DeepClone() ?? new JValue("submission"),
             ["plans"] = new JArray(new JObject { ["plan_id"] = "one", ["title"] = "Test plan", ["summary"] = "Test operations",
-                ["reservation_updates"] = updates, ["operations"] = steps }) };
+                ["reservation_updates"] = updates, ["immediate_operations"] = immediate, ["reservation_operations"] = reservations }) };
     }
     internal static JObject Submit(AdvisorOperations service, string owner, params JObject[] orders) => service.SubmitPlans(owner, Batch(orders));
     internal static JObject DeveloperRequest(params JObject[] orders)
@@ -31,7 +33,11 @@ internal static class OperationSubmissionFixture
     internal static JObject Adopt(AdvisorOperations service, params JObject[] orders) => service.SubmitAndApprove(DeveloperRequest(orders));
     internal static JObject AiRequest(JObject order)
     { var batch = Batch(order); batch["action"] = "submit"; return batch; }
-    internal static JObject Arguments(JObject batch) => (JObject)batch["plans"]![0]!["operations"]![0]!["arguments"]!;
+    internal static JObject Arguments(JObject batch)
+    {
+        var plan = batch["plans"]![0]!;
+        return (JObject)((JArray)plan["immediate_operations"]!).Concat((JArray)plan["reservation_operations"]!).First()["arguments"]!;
+    }
     internal static JToken? TargetResolution(JObject result) => result["target_ref_resolution"] ??
         (result["plan_resolutions"] as JArray)?.FirstOrDefault(x => x["target_ref_resolution"] != null)?["target_ref_resolution"];
     internal static JArray ArgumentResolutions(JObject result) => (JArray?)(result["argument_resolutions"] ??

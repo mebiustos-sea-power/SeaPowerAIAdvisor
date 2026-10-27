@@ -16,7 +16,7 @@
     <None Update="_info.ini" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <Target Name="CheckSdkReferences" BeforeTargets="ResolveReferences">
-    <Error Condition="'$(AdvisorApiPath)' == '' Or !Exists('$(AdvisorApiPath)')" Text="Set AdvisorApiPath to a built contract-version-2 SeaPowerAIAdvisor.Api.dll." />
+    <Error Condition="'$(AdvisorApiPath)' == '' Or !Exists('$(AdvisorApiPath)')" Text="Set AdvisorApiPath to a built contract-version-3 SeaPowerAIAdvisor.Api.dll." />
     <Error Condition="!Exists('$(AnchorChainDir)\AnchorChain.dll')" Text="Set AnchorChainDir to the Anchor Chain MOD directory." />
     <Error Condition="!Exists('$(SeaPowerDir)\Sea Power_Data\Managed\Newtonsoft.Json.dll')" Text="Set SeaPowerDir to the Sea Power installation directory." />
   </Target>

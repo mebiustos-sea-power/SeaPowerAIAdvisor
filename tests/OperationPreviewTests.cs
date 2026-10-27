@@ -92,6 +92,7 @@ internal static class OperationPreviewTests
         public string Id { get; }
         public AdvisorOperationText Documentation => OperationDocumentationTests.Example;
         public string Description => "Example operation";
+        public SeaPowerAIAdvisor.Api.OperationExecutionMode ExecutionMode => SeaPowerAIAdvisor.Api.OperationExecutionMode.Immediate;
         public bool RequiresApproval => true;
         internal int Executions;
         internal TextOperation(string id) => Id = id;

@@ -127,17 +127,18 @@ internal sealed class AdvisorOperationGateway : IDisposable
                             var correction = new JObject(); updates[u] = NormalizeTarget(update, references, correction);
                             if (correction.Count > 0) { correction["plan_id"] = plan["plan_id"]!.DeepClone(); correction["reservation_index"] = u; fixes.Add(correction); }
                         }
-                    for (var i = 0; i < ((JArray)plan["operations"]!).Count; i++)
+                    foreach (var field in AdvisorOperationPlanBatch.OperationFields)
+                    for (var i = 0; i < ((JArray)plan[field]!).Count; i++)
                     {
-                        var order = (JObject)plan["operations"]![i]!; var correction = new JObject();
+                        var order = (JObject)plan[field]![i]!; var correction = new JObject();
                         var normalized = NormalizeTarget(order, references, correction);
                         var argumentsFixed = new JArray();
                         normalized["arguments"] = operations.NormalizeArguments(Text(normalized, "operation_id"), Text(normalized, "target_ref"),
                             (JObject)normalized["arguments"]!, references, argumentsFixed);
                         if (argumentsFixed.Count > 0) correction["argument_resolutions"] = argumentsFixed;
                         if (correction.Count > 0)
-                        { correction["plan_id"] = plan["plan_id"]!.DeepClone(); correction["operation_index"] = i; fixes.Add(correction); }
-                        plan["operations"]![i] = normalized;
+                        { correction["plan_id"] = plan["plan_id"]!.DeepClone(); correction["operation_array"] = field; correction["operation_index"] = i; fixes.Add(correction); }
+                        plan[field]![i] = normalized;
                     }
                 }
                 return operations.SubmitPlans(owner, submission);

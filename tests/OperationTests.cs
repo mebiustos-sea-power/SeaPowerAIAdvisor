@@ -275,6 +275,7 @@ internal static class OperationTests
     }
     private sealed class FaultyOperation : IAdvisorOperation
     {
+        public SeaPowerAIAdvisor.Api.OperationExecutionMode ExecutionMode => SeaPowerAIAdvisor.Api.OperationExecutionMode.Immediate;
         public bool RequiresApproval => false;
         public void Validate(IReadOnlyList<AdvisorOperationOrder> orders) { }
         public string DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => "Custom operation";

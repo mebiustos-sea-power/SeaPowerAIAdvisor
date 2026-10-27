@@ -33,6 +33,7 @@ internal sealed class AdvisorRegisteredOperation : IAdvisorOperation, IAdvisorOp
     public string Id => registration.Definition.Id;
     public string Description => registration.Instructions;
     public AdvisorOperationText Documentation => registration.Text;
+    public OperationExecutionMode ExecutionMode => registration.Definition.ExecutionMode;
     public bool RequiresApproval => registration.Definition.RequiresApproval;
     public AdvisorOperationPlanPolicy PlanPolicy => registration.Policy;
     public JObject Definition() => new() { ["id"] = Id, ["description"] = Description, ["parameters"] = registration.Parameters.DeepClone() };
@@ -48,7 +49,7 @@ internal sealed class AdvisorRegisteredOperation : IAdvisorOperation, IAdvisorOp
         return action(handler);
     });
     private static IAdvisorOperationActions Actions(Api.IAdvisorOperationHandler handler) => handler as IAdvisorOperationActions
-        ?? throw new InvalidOperationException("A non-reservation command must implement its action contract.");
+        ?? throw new InvalidOperationException("A command outside reservation composition must implement its action contract.");
     private static IReadOnlyList<OperationOrder> Orders(IReadOnlyList<AdvisorOperationOrder> orders) =>
         Array.AsReadOnly(orders.Select(o => new OperationOrder(o.Target, o.Arguments.ToString(Formatting.None))).ToArray());
     public JArray Candidates() => Call(h => JArray.Parse(h.GetCandidates()));

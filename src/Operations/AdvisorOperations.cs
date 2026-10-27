@@ -12,6 +12,7 @@ internal interface IAdvisorOperation
     string Id { get; }
     string Description { get; }
     AdvisorOperationText Documentation { get; }
+    OperationExecutionMode ExecutionMode { get; }
     bool RequiresApproval { get; }
     void Validate(IReadOnlyList<AdvisorOperationOrder> orders);
     string DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language);
@@ -57,7 +58,8 @@ internal sealed partial class AdvisorOperations
     {
         CheckThread();
         if (operation == null) throw new ArgumentNullException(nameof(operation));
-        if (!Identifier(operation.Id) || operations.ContainsKey(operation.Id))
+        if (!Identifier(operation.Id) || operations.ContainsKey(operation.Id) ||
+            !Enum.IsDefined(typeof(OperationExecutionMode), operation.ExecutionMode))
             throw new InvalidOperationException("Invalid or duplicate operation ID: " + operation.Id);
         if (operation.Documentation == null) throw new InvalidOperationException("Command text is missing: " + operation.Id);
         operations.Add(operation.Id, operation);
@@ -92,7 +94,7 @@ internal sealed partial class AdvisorOperations
         var matches = operations.Values.Where(o => enabled(o.Id)).OrderBy(o => o.Id, StringComparer.Ordinal)
             .Where(o => search.Length == 0 || o.Id.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0 ||
                 o.Description.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0).ToArray();
-        return Page(new JArray(matches.Select(o => new JObject { ["id"] = o.Id, ["description"] = o.Description, ["requires_approval"] = o.RequiresApproval })), offset, limit, "operations");
+        return Page(new JArray(matches.Select(o => new JObject { ["id"] = o.Id, ["description"] = o.Description, ["requires_approval"] = o.RequiresApproval, ["execution_mode"] = Mode(o) })), offset, limit, "operations");
     }
     internal JObject Describe(string id)
     { CheckEnabled(); return new JObject { ["operation"] = Definition(Operation(id)) }; }
@@ -118,9 +120,11 @@ internal sealed partial class AdvisorOperations
         CheckEnabled();
         return new JObject { ["scope_id"] = ScopeId, ["operation"] = id, ["candidates"] = Operation(id).Candidates().DeepClone() };
     }
+    private static string Mode(IAdvisorOperation operation) => operation.ExecutionMode == OperationExecutionMode.Immediate ? "immediate" : "reservation";
     private static JObject Definition(IAdvisorOperation operation)
     {
         var definition = (JObject)operation.Definition().DeepClone();
+        definition["execution_mode"] = Mode(operation);
         definition["requires_approval"] = operation.RequiresApproval;
         definition["plan_policy"] = Policy(operation).Json();
         if (operation is IAdvisorReservationCommand reservation && reservation.ComposesReservations)
@@ -186,7 +190,8 @@ internal sealed partial class AdvisorOperations
         proposal.State = AdvisorProposalState.Executing;
         foreach (var order in proposal.Orders.Except(orders))
             receipts[order.Id].Result = new JObject { ["request_id"] = order.Id, ["status"] = "not_selected" };
-        // Preserve request order. Preflight is not a transaction: native side effects cannot be rolled back.
+        // SelectedOrders preserves order within each phase, with all immediate actions before reservation registration.
+        // Preflight is not a transaction: native side effects cannot be rolled back.
         var begun = new HashSet<string>(StringComparer.Ordinal);
         foreach (var order in orders)
         {

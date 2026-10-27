@@ -2,7 +2,7 @@
 
 This is an independent Anchor Chain MOD that registers `example.seapower.sonobuoy_drop` with AI Advisor. It adds **Example: sonobuoy drop reservation** alongside the built-in command. Adopting its proposal appends real movement/drop reservations; loading the MOD does not issue orders.
 
-The example uses only `SeaPowerAIAdvisor.Api.dll`, Anchor Chain and the game's Newtonsoft.Json library. It references neither the host implementation DLL nor host sources and has no project references. Use the contract-version-2 SDK DLL shipped with AI Advisor v0.18.0 or a compatible build of that contract.
+The example uses only `SeaPowerAIAdvisor.Api.dll`, Anchor Chain and the game's Newtonsoft.Json library. It references neither the host implementation DLL nor host sources and has no project references. Use the contract-version-3 SDK DLL from the matching development build. This sample no longer builds against the contract-2 DLL shipped in v0.18.0.
 
 ## Build without rebuilding AI Advisor
 
@@ -50,7 +50,7 @@ Use actual current candidate IDs, ammunition and coordinates, not the example va
 
 Preview returns points and lines to the host, which owns their display and cleanup. When movement-plan information is allowed, the line starts at the existing reservation endpoint or current position. Preview does not recenter the map or draw directly. Executing the command uses the same public game support as the built-in command. It does not monitor arrival, release or deployment completion.
 
-The session implements `IAdvisorOperationHandler` for candidates/disposal and `IAdvisorOperationActions` for validation, localized explanation and the post-approval action. This sample is a noncomposing command: its plan uses an empty `reservation_updates` array. A command that shares a target queue with movement or other commands instead implements the reservation contracts in [the public API guide](../../docs/public-api.md).
+The session implements `IAdvisorOperationHandler` for candidates/disposal and `IAdvisorOperationActions` for validation, localized explanation and the post-approval action. Its definition explicitly declares `OperationExecutionMode.Reservation`: execution registers an order rather than performing the drop immediately. This sample is a noncomposing command: its plan uses empty `immediate_operations` and `reservation_updates` arrays, and puts its operations in `reservation_operations`. A command that shares a target queue with movement or other commands instead implements the reservation contracts in [the public API guide](../../docs/public-api.md).
 
 The host owns proposal lifetime, approval, request IDs and duplicate-request protection. The external handler does not implement a second approval workflow or HTTP listener.
 
@@ -58,7 +58,7 @@ The host owns proposal lifetime, approval, request IDs and duplicate-request pro
 
 Enable the example under **Settings > Extensions > Commands**, along with own-unit information and weapon information in AI Advisor. In a paused battle with an eligible aircraft, inspect the example in Settings > Extensions > Commands, then ask explicitly for the **Example: sonobuoy drop reservation** command so the AI can distinguish it from the built-in command. Review and adopt the proposal before resuming the game. Check the existing queue remains intact and the current depth setting is unchanged.
 
-The developer API can also list candidates and use `operations submit --request-file FILE` with one plan, an empty `reservation_updates` array, and operations using this operation ID. That direct test endpoint bypasses the AI approval UI; it does not demonstrate that the approval screen was operated. Use a disposable copy of a test save and do not overwrite the master.
+The developer API can also list candidates and use `operations submit --request-file FILE` with one plan, empty `immediate_operations` and `reservation_updates` arrays, and `reservation_operations` using this operation ID. That direct test endpoint bypasses the AI approval UI; it does not demonstrate that the approval screen was operated. Use a disposable copy of a test save and do not overwrite the master.
 
 Offline behavior checks use a fake public game context and the **already-built** sample DLL. With a .NET 10 SDK:
 

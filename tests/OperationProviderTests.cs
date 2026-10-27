@@ -146,7 +146,7 @@ internal static partial class ProviderTests
                 var request = PlanRequest(BuoyRequest());
                 foreach (var plan in ((JArray)request["plans"]!).Cast<JObject>())
                 {
-                    plan["operations"]![0]!["arguments"]!["drops"] = new JArray(Enumerable.Range(0, count).Select(i =>
+                    plan["reservation_operations"]![0]!["arguments"]!["drops"] = new JArray(Enumerable.Range(0, count).Select(i =>
                         new JObject { ["latitude"] = 26.5 + i * .001, ["longitude"] = 127.5, ["ammunition"] = "extra_mod_buoy" }));
                 }
                 var provider = new FakeProvider("batch-model", (session, send, _, _) =>
@@ -326,7 +326,12 @@ internal static partial class ProviderTests
     {
         var order = (JObject)request.DeepClone(); order.Remove("action"); order.Remove("request_id");
         return new JObject { ["request_id"] = request["request_id"]!.DeepClone(), ["plans"] = new JArray(new[] { "a", "b" }.Select(id =>
-            SonobuoyFixture.Queued(new JObject { ["plan_id"] = id, ["title"] = "Plan " + id, ["summary"] = "Comparison " + id, ["operations"] = new JArray(order.DeepClone()) }))) };
+            Plan(id))) };
+        JObject Plan(string id)
+        {
+            var plan = (JObject)OperationSubmissionFixture.Batch(order)["plans"]![0]!;
+            plan["plan_id"] = id; plan["title"] = "Plan " + id; plan["summary"] = "Comparison " + id; return plan;
+        }
     }
     private static JObject BuoyRequest() => new()
     {

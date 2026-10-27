@@ -41,19 +41,6 @@ internal static class SonobuoyFixture
         var catalog = new AdvisorOperationCatalog(); catalog.Register(new SonobuoyDropExtension());
         return catalog.CreateOperations(new Game(units, information ?? (() => AdvisorInformation.Default)), new Map()).Single();
     }
-    // Converts the pre-composition test builders to the public plan-level queue policy.
-    internal static JObject Queued(JObject plan)
-    {
-        var updates = new JArray();
-        foreach (var order in ((JArray)plan["operations"]!).Cast<JObject>().Where(o => (string?)o["operation_id"] == SonobuoyDropExtension.OperationId))
-        {
-            var args = (JObject)order["arguments"]!;
-            updates.Add(new JObject { ["target_ref"] = order["target_ref"]!.DeepClone(), ["placement"] = args["placement"]!.DeepClone() });
-            args.Remove("placement");
-        }
-        plan["reservation_updates"] = updates;
-        return plan;
-    }
     private sealed class Game : IAdvisorGameSupport, IAdvisorReservationSupport, IAdvisorReservationSequenceSupport
     {
         private readonly Func<IReadOnlyList<IBattleSonobuoyUnit>> units;

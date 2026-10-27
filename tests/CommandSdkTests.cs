@@ -31,20 +31,21 @@ internal static class CommandSdkTests
         check("SDK metadata is immutable, translated and inspectable without creating command sessions or reading game state", () =>
         {
             var localizations = new Dictionary<string, string> { ["en"] = Text, ["ja"] = "{\"name\":\"操作\"}" };
-            var created = 0; var extension = new Client.CommandExtension { Definition = new Api.OperationDefinition("fixture.metadata", "Original", "{\"type\":\"object\"}", localizations),
+            var created = 0; var extension = new Client.CommandExtension { Definition = new Api.OperationDefinition("fixture.metadata", Api.OperationExecutionMode.Immediate, "Original", "{\"type\":\"object\"}", localizations),
                 Open = _ => { created++; throw new InvalidOperationException("Metadata created a session"); } };
             var catalog = new AdvisorOperationCatalog(); catalog.Register(extension);
             localizations["en"] = "broken";
-            extension.Definition = new Api.OperationDefinition("changed.id", "Changed", "{\"type\":\"object\"}", new Dictionary<string,string> { ["en"] = Text });
+            extension.Definition = new Api.OperationDefinition("changed.id", Api.OperationExecutionMode.Reservation, "Changed", "{\"type\":\"object\"}", new Dictionary<string,string> { ["en"] = Text });
             var service = Service(catalog);
             Require(service.Inspect("ja-JP").Single().Text["name"] == "操作" && service.Inspect("de").Single().Text["name"] == "Fixture" &&
-                (string?)service.Inspect("en").Single().Definition["description"] == "Original" && created == 0, "Registration metadata changed or inspection used live game state");
+                (string?)service.Inspect("en").Single().Definition["description"] == "Original" &&
+                (string?)service.Inspect("en").Single().Definition["execution_mode"] == "immediate" && created == 0, "Registration metadata changed or inspection used live game state");
             service.Retire(); Require(created == 0, "Retiring an unused command created its handler");
             foreach (var bad in new[] { "{broken", "{}", "{\"name\":17}" })
                 Throws<InvalidDataException>(() => new AdvisorOperationCatalog().Register(new Client.CommandExtension { Definition = new Api.OperationDefinition(
-                    "fixture.invalid", "Invalid", "{\"type\":\"object\"}", new Dictionary<string,string> { ["en"] = bad }) }));
+                    "fixture.invalid", Api.OperationExecutionMode.Immediate, "Invalid", "{\"type\":\"object\"}", new Dictionary<string,string> { ["en"] = bad }) }));
             Throws<ArgumentException>(() => new AdvisorOperationCatalog().Register(new Client.CommandExtension { Definition = new Api.OperationDefinition(
-                "fixture.invalid", "Invalid", "{\"type\":\"array\"}", new Dictionary<string,string> { ["en"] = Text }) }));
+                "fixture.invalid", Api.OperationExecutionMode.Immediate, "Invalid", "{\"type\":\"array\"}", new Dictionary<string,string> { ["en"] = Text }) }));
         });
         check("Individual extension versions remain optional display metadata and inspection performs no execution", () =>
         {
@@ -91,7 +92,7 @@ internal static class CommandSdkTests
             service.BeginProposal("test"); var first = Request(service, 0); var second = Request(service, 1);
             OperationSubmissionFixture.Submit(service, "test", first, second);
             var proposal = service.FinishProposal("test", true)!;
-            Require(executed.Count == 0 && service.DescribeProposal(proposal, "en") == "Fixture proposal" && service.PreviewProposal(proposal, "en").Drawings.Count == 0,
+            Require(executed.Count == 0 && service.DescribeProposal(proposal, "en").EndsWith("Fixture proposal", StringComparison.Ordinal) && service.PreviewProposal(proposal, "en").Drawings.Count == 0,
                 "A command ran before approval or required an optional preview");
             service.Approve(proposal); service.Approve(proposal); OperationSubmissionFixture.Submit(service, "test", first, second);
             Require(executed.SequenceEqual(new[] { 0, 1 }) && validations.SequenceEqual(new[] { 2, 2, 2, 2 }), "Approval changed order, skipped combined validation or executed twice");
@@ -123,7 +124,7 @@ internal static class CommandSdkTests
         {
             var catalog = new AdvisorOperationCatalog(); var closed = 0; Api.IAdvisorGameSupport? support = null;
             catalog.Register(new Client.CommandExtension { Open = _ => new Client.CommandHandler { Close = () => throw new InvalidOperationException("cleanup failure") } });
-            catalog.Register(new Client.CommandExtension { Definition = new Api.OperationDefinition("fixture.second", "Second", "{\"type\":\"object\"}", new Dictionary<string,string> { ["en"] = Text }),
+            catalog.Register(new Client.CommandExtension { Definition = new Api.OperationDefinition("fixture.second", Api.OperationExecutionMode.Immediate, "Second", "{\"type\":\"object\"}", new Dictionary<string,string> { ["en"] = Text }),
                 Open = context => { support = context.Game; return new Client.CommandHandler { Close = () => closed++ }; } });
             var service = Service(catalog); service.Candidates("fixture.command"); service.Candidates("fixture.second");
             using var gateway = new AdvisorOperationGateway(service);

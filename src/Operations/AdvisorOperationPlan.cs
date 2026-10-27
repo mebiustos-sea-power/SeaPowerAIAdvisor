@@ -34,15 +34,21 @@ internal sealed class AdvisorOperationPlanPolicy
 
 internal sealed class AdvisorOperationPlan
 {
-    private readonly List<AdvisorOperationOrder> orders;
     internal JArray ReservationUpdates { get; }
     internal string Id { get; }
     internal string Title { get; }
     internal string Summary { get; }
-    internal IReadOnlyList<AdvisorOperationOrder> Orders => orders.AsReadOnly();
-    internal AdvisorOperationPlan(string id, string title, string summary, IEnumerable<AdvisorOperationOrder> orders, JArray reservationUpdates)
-    { Id = id; Title = title; Summary = summary; this.orders = orders.ToList();
-        ReservationUpdates = (JArray)reservationUpdates.DeepClone(); }
+    internal IReadOnlyList<AdvisorOperationOrder> ImmediateOrders { get; }
+    internal IReadOnlyList<AdvisorOperationOrder> ReservationOrders { get; }
+    internal IReadOnlyList<AdvisorOperationOrder> Orders => ImmediateOrders.Concat(ReservationOrders).ToArray();
+    internal AdvisorOperationPlan(string id, string title, string summary, IEnumerable<AdvisorOperationOrder> immediateOrders,
+        IEnumerable<AdvisorOperationOrder> reservationOrders, JArray reservationUpdates)
+    {
+        Id = id; Title = title; Summary = summary;
+        ImmediateOrders = Array.AsReadOnly(immediateOrders.ToArray());
+        ReservationOrders = Array.AsReadOnly(reservationOrders.ToArray());
+        ReservationUpdates = (JArray)reservationUpdates.DeepClone();
+    }
 }
 
 // The wire contract is shared by tool publication and request validation. Command arguments stay opaque here.
@@ -50,6 +56,7 @@ internal static class AdvisorOperationPlanBatch
 {
     internal const int MaximumPlans = 8;
     internal const int MaximumOrders = 40;
+    internal static readonly string[] OperationFields = { "immediate_operations", "reservation_operations" };
     internal static JObject Schema(JObject target, string requestDescription) => Object(new JObject
     {
         ["request_id"] = new JObject { ["type"] = "string", ["minLength"] = 1, ["maxLength"] = 40,
@@ -59,17 +66,23 @@ internal static class AdvisorOperationPlanBatch
             ["plan_id"] = new JObject { ["type"] = "string", ["minLength"] = 1, ["maxLength"] = 40, ["pattern"] = "^[A-Za-z0-9._-]+$" },
             ["title"] = new JObject { ["type"] = "string", ["minLength"] = 1, ["maxLength"] = 120 },
             ["summary"] = new JObject { ["type"] = "string", ["minLength"] = 1, ["maxLength"] = 1200, ["description"] = "Purpose and main trade-off." },
+            ["immediate_operations"] = Orders(target, "Immediate-mode commands execute on acceptance, before any reservations are registered. Preserve their intended order; use [] if unused. Both operation arrays together must contain 1 to 40 operations."),
+            ["reservation_operations"] = Orders(target, "Reservation-mode commands register game reservations after all immediate operations. Preserve their intended queue order; use [] if unused."),
             ["reservation_updates"] = new JObject { ["type"] = "array", ["maxItems"] = MaximumOrders,
-                ["description"] = "One queue policy per target used by reservation_sequence commands. Replacement happens once before that target's first operation; all its operations then append in order. Use an empty array for plans with no reservation_sequence commands.",
+                ["description"] = "One queue policy per target using reservation_sequence commands. Replacement happens once before that target's first reservation segment. Use [] when no command participates in shared reservation composition.",
                 ["items"] = Object(new JObject { ["target_ref"] = target.DeepClone(),
-                    ["placement"] = new JObject { ["type"] = "string", ["enum"] = new JArray("append", "replace") } }) },
-            ["operations"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = MaximumOrders, ["items"] = Object(new JObject
-            {
-                ["operation_id"] = new JObject { ["type"] = "string", ["minLength"] = 1, ["maxLength"] = 200 },
-                ["target_ref"] = target.DeepClone(), ["arguments"] = new JObject { ["type"] = "object" }
-            }) }
+                    ["placement"] = new JObject { ["type"] = "string", ["enum"] = new JArray("append", "replace") } }) }
         }) }
     });
+    private static JObject Orders(JObject target, string description) => new()
+    {
+        ["type"] = "array", ["maxItems"] = MaximumOrders, ["description"] = description,
+        ["items"] = Object(new JObject
+        {
+            ["operation_id"] = new JObject { ["type"] = "string", ["minLength"] = 1, ["maxLength"] = 200 },
+            ["target_ref"] = target.DeepClone(), ["arguments"] = new JObject { ["type"] = "object" }
+        })
+    };
     private static JObject Object(JObject fields) => new() { ["type"] = "object", ["additionalProperties"] = false,
         ["required"] = new JArray(fields.Properties().Select(p => p.Name)), ["properties"] = fields };
     internal static void Validate(JObject request)
@@ -81,19 +94,25 @@ internal static class AdvisorOperationPlanBatch
         foreach (var item in (JArray)request["plans"]!)
         {
             if (item is not JObject plan) { Invalid(); return; }
-            Fields(plan, "plan_id", "title", "summary", "reservation_updates", "operations");
+            Fields(plan, "plan_id", "title", "summary", "reservation_updates", "immediate_operations", "reservation_operations");
             if (plan["reservation_updates"] is not JArray updates || updates.Count > MaximumOrders) Invalid();
             Identifier(plan, "plan_id");
             if (!ids.Add((string)plan["plan_id"]!)) throw new AdvisorOperationException(400, "duplicate_plan_id");
             Text(plan, "title", 120); Text(plan, "summary", 1200);
-            if (plan["operations"] is not JArray orders || orders.Count < 1 || orders.Count > MaximumOrders) Invalid();
-            foreach (var value in (JArray)plan["operations"]!)
+            var total = 0;
+            foreach (var field in OperationFields)
             {
-                if (value is not JObject order) { Invalid(); return; }
-                Fields(order, "operation_id", "target_ref", "arguments");
-                Text(order, "operation_id", 200); Text(order, "target_ref", 200);
-                if (order["arguments"] is not JObject) Invalid();
+                if (plan[field] is not JArray orders) { Invalid(); return; }
+                total += orders.Count;
+                foreach (var value in orders)
+                {
+                    if (value is not JObject order) { Invalid(); return; }
+                    Fields(order, "operation_id", "target_ref", "arguments");
+                    Text(order, "operation_id", 200); Text(order, "target_ref", 200);
+                    if (order["arguments"] is not JObject) Invalid();
+                }
             }
+            if (total < 1 || total > MaximumOrders) Invalid();
         }
     }
     private static void Fields(JObject value, params string[] names)

@@ -444,6 +444,8 @@
   "progress.topic.operation_proposal": "proposal details",
   "progress.proposed": "Proposal received. Waiting for response…",
   "operation.review": "Review proposal…",
+  "operation.immediate_heading": "Execute on acceptance",
+  "operation.reservation_heading": "Register game reservations",
   "operation.targets": "Operation targets",
   "operation.no_targets": "None",
   "operation.title": "Review proposal",

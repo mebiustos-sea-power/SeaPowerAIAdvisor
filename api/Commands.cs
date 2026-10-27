@@ -12,18 +12,23 @@ public interface IAdvisorOperationExtension
     IAdvisorOperationHandler CreateSession(IAdvisorOperationContext context);
 }
 
+// Immediate actions run on adoption; reservations are registered only after all selected immediate actions.
+public enum OperationExecutionMode { Immediate, Reservation }
+
 public sealed class OperationDefinition
 {
     public string Id { get; }
+    public OperationExecutionMode ExecutionMode { get; }
     public string Description { get; }
     public string ParametersJson { get; }
     public bool RequiresApproval { get; }
     public OperationPlanPolicy PlanPolicy { get; }
     public IReadOnlyDictionary<string, string> Localizations { get; }
-    public OperationDefinition(string id, string description, string parametersJson,
+    public OperationDefinition(string id, OperationExecutionMode executionMode, string description, string parametersJson,
         IReadOnlyDictionary<string, string> localizations, bool requiresApproval = true, OperationPlanPolicy? planPolicy = null)
     {
-        Id = id; Description = description; ParametersJson = parametersJson; RequiresApproval = requiresApproval;
+        if (!Enum.IsDefined(typeof(OperationExecutionMode), executionMode)) throw new ArgumentOutOfRangeException(nameof(executionMode));
+        Id = id; ExecutionMode = executionMode; Description = description; ParametersJson = parametersJson; RequiresApproval = requiresApproval;
         PlanPolicy = planPolicy ?? new OperationPlanPolicy(1, 1, 1, OperationPlanSelection.Single);
         Localizations = new ReadOnlyDictionary<string, string>(new Dictionary<string, string>(
             localizations ?? throw new ArgumentNullException(nameof(localizations))));
@@ -59,7 +64,7 @@ public interface IAdvisorOperationHandler : IDisposable
     string GetCandidates();
 }
 
-// Commands outside reservation composition own their validation, explanation and post-approval action.
+// Immediate actions and noncomposing reservation commands own validation, explanation and post-approval action.
 public interface IAdvisorOperationActions
 {
     void Validate(IReadOnlyList<OperationOrder> orders);

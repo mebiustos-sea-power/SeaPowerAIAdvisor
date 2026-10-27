@@ -33,14 +33,17 @@ internal sealed partial class AdvisorOperations
     }
     private ReservationPlan ValidatePlan(AdvisorOperationPlan plan)
     {
+        if (plan.ImmediateOrders.Any(o => Operation(o.OperationId).ExecutionMode != OperationExecutionMode.Immediate) ||
+            plan.ReservationOrders.Any(o => Operation(o.OperationId).ExecutionMode != OperationExecutionMode.Reservation))
+            throw new AdvisorOperationException(400, "operation_phase_mismatch");
         var placements = ReadPlacements(plan.ReservationUpdates);
         var result = new ReservationPlan(placements);
-        var targets = new HashSet<string>(plan.Orders.Where(o => ReservationCommand(o) != null).Select(o => o.Target), StringComparer.Ordinal);
+        var targets = new HashSet<string>(plan.ReservationOrders.Where(o => ReservationCommand(o) != null).Select(o => o.Target), StringComparer.Ordinal);
         if (!targets.SetEquals(placements.Keys)) throw new AdvisorOperationException(400,
             targets.Count > 0 && placements.Count == 0 ? "missing_reservation_updates" : "reservation_policy_mismatch");
         var indexes = new Dictionary<string, int>(StringComparer.Ordinal);
         var ended = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var order in plan.Orders)
+        foreach (var order in plan.ReservationOrders)
         {
             var command = ReservationCommand(order);
             if (command == null)
@@ -86,20 +89,35 @@ internal sealed partial class AdvisorOperations
     }
     private string DescribePlan(AdvisorOperationPlan plan, string language)
     {
-        var prepared = ValidatePlan(plan);
-        if (prepared.Steps.Count == 0) return string.Join("\n\n", plan.Orders.GroupBy(o => o.OperationId).Select(g => Operation(g.Key).DescribeProposal(g.ToArray(), language)));
-        return string.Join("\n\n", plan.Orders.Select(order => ReservationCommand(order) is IAdvisorReservationCommand command
-            ? command.DescribeReservation(prepared.Steps[order.Id], language)
-            : Operation(order.OperationId).DescribeProposal(new[] { order }, language)));
+        var prepared = ValidatePlan(plan); var text = AdvisorText.Load(language); var sections = new List<string>();
+        if (plan.ImmediateOrders.Count > 0)
+            sections.Add(text["operation.immediate_heading"] + "\n" + string.Join("\n\n", plan.ImmediateOrders.GroupBy(o => o.OperationId)
+                .Select(g => Operation(g.Key).DescribeProposal(g.ToArray(), language))));
+        if (plan.ReservationOrders.Count > 0)
+        {
+            var descriptions = prepared.Steps.Count == 0
+                ? plan.ReservationOrders.GroupBy(o => o.OperationId).Select(g => Operation(g.Key).DescribeProposal(g.ToArray(), language))
+                : plan.ReservationOrders.Select(order => ReservationCommand(order) is IAdvisorReservationCommand command
+                    ? command.DescribeReservation(prepared.Steps[order.Id], language)
+                    : Operation(order.OperationId).DescribeProposal(new[] { order }, language));
+            sections.Add(text["operation.reservation_heading"] + "\n" + string.Join("\n\n", descriptions));
+        }
+        return string.Join("\n\n", sections);
     }
     private AdvisorMapPreview PreviewPlan(AdvisorOperationPlan plan, string language)
     {
         var prepared = ValidatePlan(plan);
-        if (prepared.Steps.Count == 0) return new AdvisorMapPreview(plan.Orders.GroupBy(o => o.OperationId)
-            .SelectMany(g => Operation(g.Key) is IAdvisorOperationPreview p ? p.Preview(g.ToArray(), language).Drawings : Array.Empty<AdvisorMapDrawing>()));
         var tails = new Dictionary<string, AdvisorMapCoordinate?>(StringComparer.Ordinal);
         var drawings = new List<AdvisorMapDrawing>();
-        foreach (var order in plan.Orders)
+        foreach (var group in plan.ImmediateOrders.GroupBy(o => o.OperationId))
+            if (Operation(group.Key) is IAdvisorOperationPreview preview) drawings.AddRange(preview.Preview(group.ToArray(), language).Drawings);
+        if (prepared.Steps.Count == 0)
+        {
+            foreach (var group in plan.ReservationOrders.GroupBy(o => o.OperationId))
+                if (Operation(group.Key) is IAdvisorOperationPreview preview) drawings.AddRange(preview.Preview(group.ToArray(), language).Drawings);
+            return new AdvisorMapPreview(drawings);
+        }
+        foreach (var order in plan.ReservationOrders)
         {
             if (ReservationCommand(order) is IAdvisorReservationCommand command)
             {
@@ -108,8 +126,8 @@ internal sealed partial class AdvisorOperations
                 var preview = command.PreviewReservation(new ReservationOrder(step.Order, step.Placement, step.Queue, start, step.Index), language);
                 drawings.AddRange(preview.Preview.Drawings); tails[order.Target] = preview.EndPosition;
             }
-            else if (Operation(order.OperationId) is IAdvisorOperationPreview legacy)
-                drawings.AddRange(legacy.Preview(new[] { order }, language).Drawings);
+            else if (Operation(order.OperationId) is IAdvisorOperationPreview preview)
+                drawings.AddRange(preview.Preview(new[] { order }, language).Drawings);
         }
         return new AdvisorMapPreview(drawings);
     }
@@ -126,6 +144,6 @@ internal sealed partial class AdvisorOperations
             }
             seen.Add(target, placement); updates.Add(value.DeepClone());
         }
-        return new AdvisorOperationPlan("selected", "", "", plans.SelectMany(p => p.Orders), updates);
+        return new AdvisorOperationPlan("selected", "", "", plans.SelectMany(p => p.ImmediateOrders), plans.SelectMany(p => p.ReservationOrders), updates);
     }
 }

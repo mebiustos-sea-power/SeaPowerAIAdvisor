@@ -105,11 +105,11 @@ internal static partial class OperationPlanTests
             var valid = Batch(Plan("a", Order(command, "one", 1)), Plan("b", Order(command, "two", 2)));
             var duplicate = (JObject)valid.DeepClone(); duplicate["plans"]![1]!["plan_id"] = "a";
             Expect("duplicate_plan_id", () => service.SubmitPlans("atomic", duplicate));
-            var bad = (JObject)valid.DeepClone(); bad["plans"]![1]!["operations"]![0]!["arguments"]!["index"] = -1;
+            var bad = (JObject)valid.DeepClone(); bad["plans"]![1]!["immediate_operations"]![0]!["arguments"]!["index"] = -1;
             Expect("invalid_command_argument", () => service.SubmitPlans("atomic", bad));
-            var extra = (JObject)valid.DeepClone(); extra["plans"]![0]!["operations"]![0]!["request_id"] = "unexpected";
+            var extra = (JObject)valid.DeepClone(); extra["plans"]![0]!["immediate_operations"]![0]!["request_id"] = "unexpected";
             Expect("invalid_plan_submission", () => service.SubmitPlans("atomic", extra));
-            var tooMany = (JObject)valid.DeepClone(); tooMany["plans"]![0]!["operations"] = new JArray(Enumerable.Range(0, 41).Select(i => Order(command, "one", i)));
+            var tooMany = (JObject)valid.DeepClone(); tooMany["plans"]![0]!["immediate_operations"] = new JArray(Enumerable.Range(0, 41).Select(i => Order(command, "one", i)));
             Expect("invalid_plan_submission", () => service.SubmitPlans("atomic", tooMany));
             Require(service.Proposal("atomic")!.Orders.Count == 0 && service.PriorOrders("atomic").Count == 0, "Rejected alternatives leaked receipts or work");
             service.SubmitPlans("atomic", valid);
@@ -134,7 +134,7 @@ internal static partial class OperationPlanTests
                 var owner = "flexible-" + count; service.BeginProposal(owner);
                 JObject Alternative(string id) => Plan(id, Order(a, "one", 1), Order(flexible, "two", 2));
                 Expect("plan_count_out_of_range", () => service.SubmitPlans(owner, Batch(Alternative("a"), Alternative("b"), Alternative("c"))));
-                var invalid = Batch(Alternative("a")); invalid["plans"]![0]!["operations"]![1]!["arguments"]!["index"] = -1;
+                var invalid = Batch(Alternative("a")); invalid["plans"]![0]!["immediate_operations"]![1]!["arguments"]!["index"] = -1;
                 Expect("invalid_command_argument", () => service.SubmitPlans(owner, invalid));
                 Require(service.PriorOrders(owner).Count == 0 && service.Proposal(owner)!.Orders.Count == 0 && log.Count == 0,
                     "An invalid single plan or excessive plan set retained partial work");
@@ -236,7 +236,7 @@ internal static partial class OperationPlanTests
             Require(map.Active == 1 && map.Latitudes.SequenceEqual(new[] { 1d, 3d, 1d, 2d, 3d, 1d, 3d }) &&
                 state.Current.Id == "c" && state.SelectedPlanIds.SequenceEqual(new[] { "c" }) && log.Count == 0,
                 "Browsing changed the game, mixed previews or kept an invisible execution target");
-            Require(service.DescribeProposal(proposal, "en", state.Current.Id) == "custom.browse:1", "The inspected description used another plan");
+            Require(service.DescribeProposal(proposal, "en", state.Current.Id).EndsWith("custom.browse:1", StringComparison.Ordinal), "The inspected description used another plan");
             service.Approve(proposal, state.SelectedPlanIds); preview.Tick(service);
             Require(log.Single() == "custom.browse:three:3" && map.Active == 0, "Approval executed a different plan or left a stale preview");
             var reopened = new AdvisorOperationReviewState(proposal);
@@ -416,10 +416,12 @@ internal static partial class OperationPlanTests
             var result = OperationGatewayTests.Finish(gateway, session.ExecuteAsync(request, CancellationToken.None));
             var proposal = service.Proposal("aliases")!;
             Require((string?)result["status"] == "proposed" && result["plan_resolutions"]?.Count() == 4 &&
-                (string?)result["plan_resolutions"]?[3]?["plan_id"] == "b" && (int?)result["plan_resolutions"]?[3]?["operation_index"] == 0 &&
+                (string?)result["plan_resolutions"]?[3]?["plan_id"] == "b" &&
+                (string?)result["plan_resolutions"]?[3]?["operation_array"] == "reservation_operations" &&
+                (int?)result["plan_resolutions"]?[3]?["operation_index"] == 0 &&
                 (string?)result["plan_resolutions"]?[3]?["argument_resolutions"]?[0]?["resolved"] == "mod_buoy" &&
                 proposal.Plans.All(p => p.Orders.Single().Target == "unit:42" && (string?)p.Orders.Single().Arguments["drops"]![0]!["ammunition"] == "mod_buoy") &&
-                (string?)session.History[0]?["request"]?["plans"]?[0]?["operations"]?[0]?["target_ref"] == "own_unit_1",
+                (string?)session.History[0]?["request"]?["plans"]?[0]?["reservation_operations"]?[0]?["target_ref"] == "own_unit_1",
                 "Normalization lost canonical identities, plan boundaries or original evidence");
             _ = OperationGatewayTests.Finish(gateway, session.ExecuteAsync(request, CancellationToken.None));
             service.FinishProposal("aliases", true); service.Approve(proposal, new[] { "b" });
@@ -429,8 +431,12 @@ internal static partial class OperationPlanTests
     private static AdvisorOperations Service(Command command, string owner)
     { var service = new AdvisorOperations(_ => true); service.Register(command); service.BeginProposal(owner); return service; }
     private static JObject Batch(params JObject[] plans) => new() { ["request_id"] = "submission", ["plans"] = new JArray(plans) };
-    private static JObject Plan(string id, params JObject[] orders) => SonobuoyFixture.Queued(new JObject
-    { ["plan_id"] = id, ["title"] = "Plan " + id, ["summary"] = "Trade-off " + id, ["operations"] = new JArray(orders) });
+    private static JObject Plan(string id, params JObject[] orders)
+    {
+        var plan = (JObject)OperationSubmissionFixture.Batch(orders)["plans"]![0]!;
+        plan["plan_id"] = id; plan["title"] = "Plan " + id; plan["summary"] = "Trade-off " + id;
+        return plan;
+    }
     private static JObject Order(Command operation, string target, int index) => new()
     { ["operation_id"] = operation.Id, ["target_ref"] = target, ["arguments"] = new JObject { ["index"] = index } };
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
@@ -444,6 +450,7 @@ internal static partial class OperationPlanTests
         public string Id { get; }
         public AdvisorOperationText Documentation => OperationDocumentationTests.Example;
         public string Description => "Example";
+        public SeaPowerAIAdvisor.Api.OperationExecutionMode ExecutionMode => SeaPowerAIAdvisor.Api.OperationExecutionMode.Immediate;
         public bool RequiresApproval => Approval;
         public AdvisorOperationPlanPolicy PlanPolicy { get; }
         internal bool Approval = true, Unknown;

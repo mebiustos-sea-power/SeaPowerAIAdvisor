@@ -15,7 +15,7 @@ internal sealed class SonobuoyDropExtension : IAdvisorOperationExtension, IAdvis
     public int ApiVersion => AdvisorApi.ContractVersion;
     public string Version => "1.0.0";
     public string GetInstructions() => AdvisorPrompts.Current.Text("battle.json", "operation_sonobuoy_drop");
-    public OperationDefinition GetDefinition() => new(OperationId, "Schedule sonobuoy drops.", new JObject
+    public OperationDefinition GetDefinition() => new(OperationId, OperationExecutionMode.Reservation, "Schedule sonobuoy drops.", new JObject
     {
         ["type"] = "object", ["additionalProperties"] = false,
         ["required"] = new JArray("drops"),

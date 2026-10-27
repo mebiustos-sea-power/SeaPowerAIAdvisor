@@ -49,6 +49,8 @@ internal sealed class AdvisorOperationRegistration
         if (string.IsNullOrWhiteSpace(Definition.Id) || Definition.Id.Length > 80 || !Definition.Id.Contains('.') ||
             Definition.Id.Any(c => !(c is >= 'a' and <= 'z' or >= 'A' and <= 'Z' or >= '0' and <= '9' or '.' or '_' or '-')) ||
             string.IsNullOrWhiteSpace(Definition.Description)) throw new ArgumentException("Invalid operation definition.", nameof(extension));
+        if (extension is IAdvisorReservationExtension && Definition.ExecutionMode != OperationExecutionMode.Reservation)
+            throw new ArgumentException("Reservation composition requires reservation execution mode.", nameof(extension));
         Parameters = JObject.Parse(Definition.ParametersJson);
         if ((string?)Parameters["type"] != "object") throw new ArgumentException("Command arguments must have an object schema.", nameof(extension));
         Text = new AdvisorOperationText(Definition.Localizations);

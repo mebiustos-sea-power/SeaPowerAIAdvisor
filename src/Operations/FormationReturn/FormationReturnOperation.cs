@@ -13,7 +13,7 @@ internal sealed class FormationReturnExtension : IAdvisorOperationExtension, IAd
     public string Version => "1.0.0";
     public bool EndsReservationSequence => true;
     public string GetInstructions() => AdvisorPrompts.Current.Text("battle.json", "operation_formation_return");
-    public OperationDefinition GetDefinition() => new(OperationId, "Return to formation after preceding reservations.",
+    public OperationDefinition GetDefinition() => new(OperationId, OperationExecutionMode.Reservation, "Return to formation after preceding reservations.",
         new JObject { ["type"] = "object", ["additionalProperties"] = false, ["properties"] = new JObject() }.ToString(Formatting.None),
         AdvisorText.ReadResources(typeof(FormationReturnExtension).Assembly, "SeaPowerAIAdvisor.Commands.FormationReturn.Localization.", "en", "ja"),
         true, new OperationPlanPolicy(1, 1, 2, OperationPlanSelection.Single));

@@ -116,7 +116,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(api.run("operations", "candidates", "seapower.schedule_sonobuoy_drop")[0], 0)
             path = Path(temporary) / "order.json"
             body = {"scope_id": "loaded-game", "request_id": "one-reservation", "plans": [{"plan_id": "one", "title": "Drop", "summary": "One buoy",
-                    "reservation_updates": [{"target_ref": "unit:42", "placement": "append"}], "operations": [{"operation_id": "seapower.schedule_sonobuoy_drop",
+                    "reservation_updates": [{"target_ref": "unit:42", "placement": "append"}], "immediate_operations": [], "reservation_operations": [{"operation_id": "seapower.schedule_sonobuoy_drop",
                     "target_ref": "unit:42", "arguments": {"drops": [{"latitude": 26.5, "longitude": 127.5, "ammunition": "custom_buoy"}], "depth": "above_layer"}}]}]}
             path.write_text(tool.encode(body), encoding="utf-8")
             self.assertEqual(api.run("operations", "submit", "--request-file", path)[0], 0)
@@ -429,7 +429,7 @@ class ComposedPlanCliTests(unittest.TestCase):
     def test_plan_keeps_explicit_scope_selection_and_order(self):
         body = {"scope_id": "saved-scope", "request_id": "planned-1", "selected_plan_ids": ["a"],
                 "plans": [{"plan_id": "a", "reservation_updates": [{"target_ref": "unit:42", "placement": "replace"}],
-                           "operations": [{"operation_id": "move", "target_ref": "unit:42"}, {"operation_id": "drop", "target_ref": "unit:42"}]}]}
+                           "immediate_operations": [], "reservation_operations": [{"operation_id": "move", "target_ref": "unit:42"}, {"operation_id": "drop", "target_ref": "unit:42"}]}]}
         with tempfile.TemporaryDirectory() as directory, MockApi() as api:
             request = Path(directory) / "plan.json"
             request.write_text(json.dumps(body), encoding="utf-8")

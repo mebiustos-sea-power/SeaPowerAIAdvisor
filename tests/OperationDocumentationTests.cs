@@ -93,6 +93,7 @@ internal static class OperationDocumentationTests
         public string Id => "example.missing";
         public string Description => "Invalid example";
         public AdvisorOperationText Documentation => null!;
+        public SeaPowerAIAdvisor.Api.OperationExecutionMode ExecutionMode => SeaPowerAIAdvisor.Api.OperationExecutionMode.Immediate;
         public bool RequiresApproval => true;
         public JObject Definition() => new();
         public JArray Candidates() => throw new InvalidOperationException();

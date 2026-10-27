@@ -15,7 +15,7 @@ internal sealed class MovementExtension : IAdvisorOperationExtension, IAdvisorOp
     public string Version => "1.0.0";
     public bool EndsReservationSequence => false;
     public string GetInstructions() => AdvisorPrompts.Current.Text("battle.json", "operation_movement");
-    public OperationDefinition GetDefinition() => new(OperationId, "Schedule an ordered movement route.", new JObject
+    public OperationDefinition GetDefinition() => new(OperationId, OperationExecutionMode.Reservation, "Schedule an ordered movement route.", new JObject
     {
         ["type"] = "object", ["additionalProperties"] = false, ["required"] = new JArray("waypoints"),
         ["properties"] = new JObject { ["waypoints"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = 40,

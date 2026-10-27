@@ -444,6 +444,8 @@
   "progress.topic.operation_proposal": "提案内容",
   "progress.proposed": "提案を受け付けました。回答待ち…",
   "operation.review": "提案を確認…",
+  "operation.immediate_heading": "採用時に実行",
+  "operation.reservation_heading": "予約に登録",
   "operation.targets": "操作対象",
   "operation.no_targets": "なし",
   "operation.title": "提案の確認",

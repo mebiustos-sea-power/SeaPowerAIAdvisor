@@ -5,7 +5,7 @@ namespace SeaPowerAIAdvisor.Api;
 
 public enum ReservationPlacement { Append, Replace }
 
-// Optional extension/handler contracts for commands that append to the same native reservation queue.
+// Optional queue-composition contracts for commands declaring OperationExecutionMode.Reservation.
 public interface IAdvisorReservationExtension { bool EndsReservationSequence { get; } }
 public interface IAdvisorReservationOperation
 {

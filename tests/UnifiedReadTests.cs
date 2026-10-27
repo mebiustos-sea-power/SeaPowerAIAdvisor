@@ -205,6 +205,7 @@ internal static partial class ProviderTests
         public string Id => "example.inspect";
         public AdvisorOperationText Documentation => OperationDocumentationTests.Example;
         public string Description => "An externally defined example operation";
+        public SeaPowerAIAdvisor.Api.OperationExecutionMode ExecutionMode => SeaPowerAIAdvisor.Api.OperationExecutionMode.Immediate;
         public bool RequiresApproval => true;
         public JObject Definition() => new() { ["id"] = Id, ["parameters"] = new JObject { ["type"] = "object" } };
         public JArray Candidates()

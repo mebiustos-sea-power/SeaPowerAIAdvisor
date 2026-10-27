@@ -127,9 +127,11 @@ internal static class OperationAmmunitionTests
             using var trial = new Trial();
             var custom = new CustomOperation(); trial.Service.Register(custom);
             using var session = trial.Gateway.CreateSession("custom", AdvisorPrompts.Current, References())!;
-            var request = Request("Shared buoy"); request["plans"]![0]!["operations"]![0]!["operation_id"] = custom.Id;
-            request["plans"]![0]!["reservation_updates"] = new JArray();
-            request["plans"]![0]!["operations"]![0]!["arguments"] = new JObject { ["ammunition"] = "Shared buoy" };
+            var request = Request("Shared buoy"); var plan = (JObject)request["plans"]![0]!;
+            var order = (JObject)plan["reservation_operations"]![0]!.DeepClone();
+            order["operation_id"] = custom.Id; order["arguments"] = new JObject { ["ammunition"] = "Shared buoy" };
+            plan["reservation_operations"] = new JArray(); plan["immediate_operations"] = new JArray(order);
+            plan["reservation_updates"] = new JArray();
             Require((string?)Send(trial, session, request)["status"] == "proposed", "A custom operation stopped accepting its arguments");
             trial.Service.FinishProposal("custom", true);
             Require(custom.Value == "Shared buoy", "The host interpreted an arbitrary command's ammunition field");
@@ -205,6 +207,7 @@ internal static class OperationAmmunitionTests
         public string Id => "custom.keep_arguments";
         public AdvisorOperationText Documentation => OperationDocumentationTests.Example;
         public string Description => "Unrelated arguments";
+        public SeaPowerAIAdvisor.Api.OperationExecutionMode ExecutionMode => SeaPowerAIAdvisor.Api.OperationExecutionMode.Immediate;
         public bool RequiresApproval => false;
         internal string? Value;
         public JObject Definition() => new();

@@ -30,12 +30,15 @@ internal sealed partial class AdvisorOperations
             throw new AdvisorOperationException(409, "proposal_closed");
         var prefix = owner + "." + proposal.SubmissionCount.ToString(CultureInfo.InvariantCulture) + ".";
         var index = 0;
-        var plans = ((JArray)request["plans"]!).Cast<JObject>().Select(p => new AdvisorOperationPlan((string)p["plan_id"]!,
-            (string)p["title"]!, (string)p["summary"]!, ((JArray)p["operations"]!).Cast<JObject>().Select(o => new AdvisorOperationOrder(new JObject
+        AdvisorOperationOrder[] ReadOrders(JObject plan, string field) => ((JArray)plan[field]!).Cast<JObject>()
+            .Select(o => new AdvisorOperationOrder(new JObject
             {
                 ["scope_id"] = ScopeId, ["request_id"] = prefix + (index++).ToString(CultureInfo.InvariantCulture),
                 ["operation"] = o["operation_id"]!.DeepClone(), ["target_ref"] = o["target_ref"]!.DeepClone(), ["arguments"] = o["arguments"]!.DeepClone()
-            })), (JArray)p["reservation_updates"]!)).ToArray();
+            })).ToArray();
+        var plans = ((JArray)request["plans"]!).Cast<JObject>().Select(p => new AdvisorOperationPlan((string)p["plan_id"]!,
+            (string)p["title"]!, (string)p["summary"]!, ReadOrders(p, "immediate_operations"),
+            ReadOrders(p, "reservation_operations"), (JArray)p["reservation_updates"]!)).ToArray();
         var orders = plans.SelectMany(p => p.Orders).ToArray();
         var policies = orders.Select(o => Operation(o.OperationId)).Distinct().Select(Policy).ToArray();
         var minimum = policies.Max(p => p.Minimum); var maximum = policies.Min(p => p.Maximum);
@@ -114,7 +117,8 @@ internal sealed partial class AdvisorOperations
         if (ids.Length == 0 || ids.Distinct(StringComparer.Ordinal).Count() != ids.Length ||
             proposal.Selection == AdvisorPlanSelection.Single && ids.Length != 1 || ids.Any(id => !proposal.Plans.Any(p => p.Id == id)))
             throw new AdvisorOperationException(400, "invalid_plan_selection");
-        // Selection click order cannot reorder plans or their operations.
-        return proposal.Plans.Where(p => ids.Contains(p.Id, StringComparer.Ordinal)).SelectMany(p => p.Orders).ToArray();
+        // Across all selected plans, immediate actions precede reservation registration. Click order cannot reorder either phase.
+        var plans = proposal.Plans.Where(p => ids.Contains(p.Id, StringComparer.Ordinal)).ToArray();
+        return plans.SelectMany(p => p.ImmediateOrders).Concat(plans.SelectMany(p => p.ReservationOrders)).ToArray();
     }
 }

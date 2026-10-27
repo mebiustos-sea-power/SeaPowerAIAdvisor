@@ -146,6 +146,7 @@ internal static class OperationGatewayTests
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
     private sealed class Operation : IAdvisorOperation
     {
+        public SeaPowerAIAdvisor.Api.OperationExecutionMode ExecutionMode => SeaPowerAIAdvisor.Api.OperationExecutionMode.Immediate;
         public bool RequiresApproval => false;
         public void Validate(IReadOnlyList<AdvisorOperationOrder> orders) { }
         public string DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => "Custom operation";

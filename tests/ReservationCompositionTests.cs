@@ -11,6 +11,7 @@ internal static partial class ReservationCompositionTests
     internal static void Run(Action<string, Action> check)
     {
         RunRevisions(check);
+        RunPhases(check);
         check("A mixed multi-unit plan replaces each queue once and connects movement/drop/return segments in execution order", () =>
         {
             var game = new Game(); var service = Service(game, "mixed");
@@ -121,7 +122,7 @@ internal static partial class ReservationCompositionTests
             service.DiscardProposalsExcept(System.Array.Empty<string>());
             Require((bool?)service.SubmitAndApprove(request)["registered"] == true && game.Log.Count == 3,
                 "Removing a history owner forgot a developer result or replayed its mutations");
-            request["plans"]![0]!["operations"]![0]!["arguments"]!["waypoints"]![0]!["latitude"] = 5;
+            request["plans"]![0]!["reservation_operations"]![0]!["arguments"]!["waypoints"]![0]!["latitude"] = 5;
             Expect("request_id_conflict", () => service.SubmitAndApprove(request));
         });
         check("Ownership changes on another target prevent every queue mutation at adoption", () =>
@@ -174,7 +175,7 @@ internal static partial class ReservationCompositionTests
     }
     private static JObject Batch(params JObject[] plans) => new() { ["request_id"] = "composed", ["plans"] = new JArray(plans) };
     private static JObject Plan(IEnumerable<JObject> updates, params JObject[] orders) => new() {
-        ["plan_id"] = "one", ["title"] = "Combined plan", ["summary"] = "Move, drop and return", ["reservation_updates"] = new JArray(updates), ["operations"] = new JArray(orders) };
+        ["plan_id"] = "one", ["title"] = "Combined plan", ["summary"] = "Move, drop and return", ["reservation_updates"] = new JArray(updates), ["immediate_operations"] = new JArray(), ["reservation_operations"] = new JArray(orders) };
     private static JObject Policy(int target, string placement) => new() { ["target_ref"] = "unit:" + target, ["placement"] = placement };
     private static JObject Order(string id, int target, JObject args) => new() { ["operation_id"] = id, ["target_ref"] = "unit:" + target, ["arguments"] = args };
     private static JObject Move(int target, params double[] latitudes) => Order(MovementExtension.OperationId, target, new JObject { ["waypoints"] = new JArray(latitudes.Select(lat => new JObject { ["latitude"] = lat, ["longitude"] = 127 })) });

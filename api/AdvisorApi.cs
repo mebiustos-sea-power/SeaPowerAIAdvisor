@@ -10,7 +10,7 @@ namespace SeaPowerAIAdvisor.Api;
 // after the advisor entry point; loading a DLL alone never activates its provider.
 public static class AdvisorApi
 {
-    public const int ContractVersion = 2;
+    public const int ContractVersion = 3;
     public const string HostModId = "mebiustos.seapower.aiadvisor";
     private static readonly object Sync = new();
     private static Func<IAdvisorExtension, bool>? register;

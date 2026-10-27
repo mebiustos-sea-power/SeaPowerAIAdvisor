@@ -577,17 +577,71 @@ AIはユーザーの目的と取得した状況から各案の内容・違い・
       "plan_id": "a",
       "title": "推奨案",
       "summary": "配置と移動の主な理由・負担。比較軸はAIが考える。",
-      "operations": [
-        {"operation_id": "seapower.schedule_sonobuoy_drop", "target_ref": "unit:1029", "arguments": {"latitude": 26.5, "longitude": 127.1, "ammunition": "usn_ssq-41"}},
-        {"operation_id": "seapower.schedule_sonobuoy_drop", "target_ref": "unit:1030", "arguments": {"latitude": 26.4, "longitude": 127.1, "ammunition": "usn_ssq-41"}}
+      "immediate_operations": [],
+      "reservation_operations": [
+        {
+          "operation_id": "seapower.schedule_sonobuoy_drop",
+          "target_ref": "unit:1029",
+          "arguments": {
+            "drops": [
+              {
+                "latitude": 26.5,
+                "longitude": 127.1,
+                "ammunition": "usn_ssq-41"
+              }
+            ]
+          }
+        },
+        {
+          "operation_id": "seapower.schedule_sonobuoy_drop",
+          "target_ref": "unit:1030",
+          "arguments": {
+            "drops": [
+              {
+                "latitude": 26.4,
+                "longitude": 127.1,
+                "ammunition": "usn_ssq-41"
+              }
+            ]
+          }
+        }
+      ],
+      "reservation_updates": [
+        {
+          "target_ref": "unit:1029",
+          "placement": "append"
+        },
+        {
+          "target_ref": "unit:1030",
+          "placement": "append"
+        }
       ]
     },
     {
       "plan_id": "b",
       "title": "代替案",
       "summary": "推奨案との違い。",
-      "operations": [
-        {"operation_id": "seapower.schedule_sonobuoy_drop", "target_ref": "unit:1029", "arguments": {"latitude": 26.45, "longitude": 127.2, "ammunition": "usn_ssq-41"}}
+      "immediate_operations": [],
+      "reservation_operations": [
+        {
+          "operation_id": "seapower.schedule_sonobuoy_drop",
+          "target_ref": "unit:1029",
+          "arguments": {
+            "drops": [
+              {
+                "latitude": 26.45,
+                "longitude": 127.2,
+                "ammunition": "usn_ssq-41"
+              }
+            ]
+          }
+        }
+      ],
+      "reservation_updates": [
+        {
+          "target_ref": "unit:1029",
+          "placement": "append"
+        }
       ]
     }
   ]
@@ -719,7 +773,7 @@ AI向け説明は操作可能な自軍ユニットへ一般化し、1回の操�
 
 ### 18.1 共通受付とコマンドの責務
 
-`plans[].operations[]` の順序を維持する。各案の `reservation_updates[]` に、予約合成へ参加する対象ごとの追記／置換を1件だけ指定する。同じ対象へ異なる方式を混在させず、別対象・別案では異なる方式を選べる。個々の操作引数には方式を重複して置かない。単体操作も同じ `submit` の1案・1操作で提出する。旧 `execute` 受付と単体専用の予約処理は削除し、開発APIも同じプラン検証と採用経路を通す。AIへ公開するスキーマでは配列を必須にし、非参加コマンドだけなら空配列を渡す。非参加コマンドだけの案も空配列を明示し、省略形式の互換分岐は設けない。
+`plans[].immediate_operations[]` と `plans[].reservation_operations[]` を必須とし、未使用側は空配列にする。採用時は選択した全案の即時操作を先に実行し、その後で予約登録を行う。各段階内の案・操作の提出順を維持する。旧 `operations[]` は受け付けない。各案の `reservation_updates[]` に、予約合成へ参加する対象ごとの追記／置換を1件だけ指定する。同じ対象へ異なる方式を混在させず、別対象・別案では異なる方式を選べる。個々の操作引数には方式を重複して置かない。単体操作も同じ `submit` の1案・1操作で提出する。旧 `execute` 受付と単体専用の予約処理は削除し、開発APIも同じプラン検証と採用経路を通す。AIへ公開するスキーマでは配列を必須にし、非参加コマンドだけなら空配列を渡す。非参加コマンドだけの案も空配列を明示し、省略形式の互換分岐は設けない。
 
 ```json
 {
@@ -727,7 +781,8 @@ AI向け説明は操作可能な自軍ユニットへ一般化し、1回の操�
   "plans": [{
     "plan_id": "a", "title": "移動と対潜哨戒", "summary": "移動、投下、移動後に編隊へ戻る",
     "reservation_updates": [{"target_ref": "unit:1029", "placement": "replace"}],
-    "operations": [
+    "immediate_operations": [],
+    "reservation_operations": [
       {"operation_id": "seapower.schedule_movement", "target_ref": "unit:1029", "arguments": {"waypoints": [{"latitude": 26.4, "longitude": 127.3}]}},
       {"operation_id": "seapower.schedule_sonobuoy_drop", "target_ref": "unit:1029", "arguments": {"drops": [{"latitude": 26.42, "longitude": 127.32, "ammunition": "ACTUAL_CARRIED_ID"}]}},
       {"operation_id": "seapower.schedule_movement", "target_ref": "unit:1029", "arguments": {"waypoints": [{"latitude": 26.43, "longitude": 127.33}]}},
@@ -737,7 +792,7 @@ AI向け説明は操作可能な自軍ユニットへ一般化し、1回の操�
 }
 ```
 
-これは形式例であり、実在する対象・弾薬・利用可能な編隊関係を示さない。別対象の操作も同じ `operations` 配列へ入れられる。
+これは形式例であり、実在する対象・弾薬・利用可能な編隊関係を示さない。別対象の操作も同じ `reservation_operations` 配列へ入れられる。
 
 共通受付は対象・方式の整合、終端操作後の予約禁止、全体の検証、対象ごとに一度の予約準備、元の順序での登録を担当する。ソノブイ・移動などの操作IDや引数の意味を共通受付へ埋め込まない。コマンドは自身の全区間をまとめて検証し、弾数・地点数・設定の適合性、説明、プレビュー、追加登録を担当する。全対象の事前検証が通ってからゲームを変更する。
 
@@ -778,7 +833,7 @@ AI向け説明は操作可能な自軍ユニットへ一般化し、1回の操�
 
 ### 18.5 SDKとプレビュー
 
-[任意の予約合成契約](../api/Reservations.cs) を追加した。拡張側は `IAdvisorReservationExtension`、セッションは `IAdvisorReservationOperation` を実装する。予約合成へ参加しないコマンドを同じ対象に混在させると、順序や予約消去の影響を保証できないため拒否する。別対象なら混在できる。
+[任意の予約合成契約](../api/Reservations.cs) を追加した。拡張側は `IAdvisorReservationExtension`、セッションは `IAdvisorReservationOperation` を実装する。予約合成へ参加しない予約コマンドを同じ対象に混在させると、順序や予約消去の影響を保証できないため拒否する。即時コマンドは予約準備より先に実行するので同じ対象でも利用できる。別対象なら混在できる。
 
 `IAdvisorReservationSequenceSupport` は現在キューの確認と対象単位の準備、`IAdvisorMovementSupport` は候補設定の取得・移動追加・編隊復帰予約を提供する。公開値にUnity・Noesis・ゲームの生オブジェクト・JSONライブラリの型を持ち込まない。既存コンテキストのゲームスレッド・寿命制御を利用する。
 
@@ -822,3 +877,12 @@ AI向け説明は操作可能な自軍ユニットへ一般化し、1回の操�
 予約照会・準備も公開SDKの通常エラー変換を通し、対象消失や情報公開OFFを予期しない基盤障害にしない。予期しない例外は既存の障害処理へ伝播する。旧 `execute` 受付と単体専用の重複実装は削除し、単体も `submit` の1案・1操作で提出する。任意の非予約操作の実処理は `IAdvisorOperationActions` に残し、予約操作は `IAdvisorReservationOperation` で共通の対象単位の準備へ参加する。開発CLIの登録入口は `operations submit` に統一する。
 
 本体515・外部サンプル8チェックが成功。B6実機でDeepSeek通常版の2相談を実施し、単体1操作と同一ユニットの移動→投下→移動を各4API要求・約21秒/19秒で受理。開発APIからの採用で追記・置換・順序・再送時の重複防止を照合し、実投下（残12→11、深度alternating維持）も確認。存在しない対象は通常エラーとなり既存予約を変更しなかった。承認画面の実操作は今回も検証対象外。
+
+
+## 19. 即時・予約の2段階提出（2026-10-27）
+
+実行方式はコマンド定義の必須 `ExecutionMode` が所有し、カタログの `execution_mode` でAIへ伝える。共通受付は配列と宣言を照合し、不一致は `operation_phase_mismatch` で拒否する。旧形式の受付・変換・フォールバックは削除し、開発API・標準コマンド・外部サンプルも新形式へ揃える。公開SDK契約は3へ更新する。詳細は [公開API](public-api.md#immediate-execution-and-reservation-registration) を参照。
+
+`Immediate` は採用時に直接実行する。`Reservation` は即時操作の段階後にゲームの予約を登録する。この区分は予約行動自体の完了時刻を表さず、即時操作を「移動完了後」に遅らせる機能ではない。両配列は合計1～40操作で、同一ユニット・別ユニット・複数採用のすべてで即時→予約登録を維持する。
+
+予約合成への参加は実行方式と別属性。非合成の予約コマンドは従来のアクション契約を使える。即時操作と同対象の合成予約は併用できるが、キューへの影響を宣言しない予約操作と合成予約の同対象併用は従来どおり拒否する。採用前の全体再検証と既存の失敗結果管理を再利用し、新たなロールバック・完了監視は追加しない。承認画面は各段階の見出しとコマンドが作成した説明を表示する。
