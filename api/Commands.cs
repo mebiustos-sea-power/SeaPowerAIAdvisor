@@ -12,7 +12,7 @@ public interface IAdvisorOperationExtension
     IAdvisorOperationHandler CreateSession(IAdvisorOperationContext context);
 }
 
-// Immediate actions run on adoption; reservations are registered only after all selected immediate actions.
+// On adoption, register all selected reservations before running immediate actions; do not wait for queued work to finish.
 public enum OperationExecutionMode { Immediate, Reservation }
 
 public sealed class OperationDefinition

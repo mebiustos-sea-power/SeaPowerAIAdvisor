@@ -77,7 +77,7 @@ internal static class SensorOperationTests
                     "A rejected revision replaced the accepted work or changed sensors");
             }
         });
-        check("Real sensor commands compose with movement and all immediate changes precede reservation preparation", () =>
+        check("Real sensor commands compose with movement and run after reservation registration", () =>
         {
             var game = new Game(); var service = Service(game, true);
             var move = Order(MovementExtension.OperationId, 42, new JObject { ["waypoints"] = new JArray(new JObject { ["latitude"] = 26, ["longitude"] = 127 }) });
@@ -88,8 +88,8 @@ internal static class SensorOperationTests
             service.SubmitPlans("test", batch); var proposal = service.FinishProposal("test", true)!;
             service.Approve(proposal, new[] { "one" });
             Require(proposal.State == AdvisorProposalState.Registered && game.Log.SequenceEqual(new[]
-                { "unit:42:radar.power:on", "emcon:unit:43", "begin:unit:42", "move:unit:42" }),
-                "Sensors forced a single alternative, ran after queue changes or mutated a different target");
+                { "begin:unit:42", "move:unit:42", "unit:42:radar.power:on", "emcon:unit:43" }),
+                "Sensors forced a single alternative, ran before queue changes or mutated a different target");
         });
         check("Public sensor support retains the existing battle lifetime and game-thread protections", () =>
         {

@@ -40,7 +40,7 @@ internal sealed class AdvisorOperationPlan
     internal string Summary { get; }
     internal IReadOnlyList<AdvisorOperationOrder> ImmediateOrders { get; }
     internal IReadOnlyList<AdvisorOperationOrder> ReservationOrders { get; }
-    internal IReadOnlyList<AdvisorOperationOrder> Orders => ImmediateOrders.Concat(ReservationOrders).ToArray();
+    internal IReadOnlyList<AdvisorOperationOrder> Orders => ReservationOrders.Concat(ImmediateOrders).ToArray();
     internal AdvisorOperationPlan(string id, string title, string summary, IEnumerable<AdvisorOperationOrder> immediateOrders,
         IEnumerable<AdvisorOperationOrder> reservationOrders, JArray reservationUpdates)
     {
@@ -56,7 +56,7 @@ internal static class AdvisorOperationPlanBatch
 {
     internal const int MaximumPlans = 8;
     internal const int MaximumOrders = 40;
-    internal static readonly string[] OperationFields = { "immediate_operations", "reservation_operations" };
+    internal static readonly string[] OperationFields = { "reservation_operations", "immediate_operations" };
     internal static JObject Schema(JObject target, string requestDescription) => Object(new JObject
     {
         ["request_id"] = new JObject { ["type"] = "string", ["minLength"] = 1, ["maxLength"] = 40,
@@ -66,8 +66,8 @@ internal static class AdvisorOperationPlanBatch
             ["plan_id"] = new JObject { ["type"] = "string", ["minLength"] = 1, ["maxLength"] = 40, ["pattern"] = "^[A-Za-z0-9._-]+$" },
             ["title"] = new JObject { ["type"] = "string", ["minLength"] = 1, ["maxLength"] = 120 },
             ["summary"] = new JObject { ["type"] = "string", ["minLength"] = 1, ["maxLength"] = 1200, ["description"] = "Purpose and main trade-off." },
-            ["immediate_operations"] = Orders(target, "Immediate-mode commands execute on acceptance, before any reservations are registered. Preserve their intended order; use [] if unused. Both operation arrays together must contain 1 to 40 operations."),
-            ["reservation_operations"] = Orders(target, "Reservation-mode commands register game reservations after all immediate operations. Preserve their intended queue order; use [] if unused."),
+            ["reservation_operations"] = Orders(target, "Reservation-mode commands register game reservations on acceptance, before all immediate operations. Preserve their intended queue order; use [] if unused. Both operation arrays together must contain 1 to 40 operations."),
+            ["immediate_operations"] = Orders(target, "Immediate-mode commands execute on acceptance after all reservations are registered, without waiting for reserved actions to finish. Preserve their intended order; use [] if unused."),
             ["reservation_updates"] = new JObject { ["type"] = "array", ["maxItems"] = MaximumOrders,
                 ["description"] = "One queue policy per target using reservation_sequence commands. Replacement happens once before that target's first reservation segment. Use [] when no command participates in shared reservation composition.",
                 ["items"] = Object(new JObject { ["target_ref"] = target.DeepClone(),

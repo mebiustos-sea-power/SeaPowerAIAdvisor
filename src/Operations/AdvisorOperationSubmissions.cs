@@ -117,8 +117,8 @@ internal sealed partial class AdvisorOperations
         if (ids.Length == 0 || ids.Distinct(StringComparer.Ordinal).Count() != ids.Length ||
             proposal.Selection == AdvisorPlanSelection.Single && ids.Length != 1 || ids.Any(id => !proposal.Plans.Any(p => p.Id == id)))
             throw new AdvisorOperationException(400, "invalid_plan_selection");
-        // Across all selected plans, immediate actions precede reservation registration. Click order cannot reorder either phase.
+        // Across all selected plans, reservation registration precedes immediate actions. Click order cannot reorder either phase.
         var plans = proposal.Plans.Where(p => ids.Contains(p.Id, StringComparer.Ordinal)).ToArray();
-        return plans.SelectMany(p => p.ImmediateOrders).Concat(plans.SelectMany(p => p.ReservationOrders)).ToArray();
+        return plans.SelectMany(p => p.ReservationOrders).Concat(plans.SelectMany(p => p.ImmediateOrders)).ToArray();
     }
 }

@@ -190,7 +190,7 @@ internal sealed partial class AdvisorOperations
         proposal.State = AdvisorProposalState.Executing;
         foreach (var order in proposal.Orders.Except(orders))
             receipts[order.Id].Result = new JObject { ["request_id"] = order.Id, ["status"] = "not_selected" };
-        // SelectedOrders preserves order within each phase, with all immediate actions before reservation registration.
+        // SelectedOrders preserves order within each phase, with all reservations registered before immediate actions.
         // Preflight is not a transaction: native side effects cannot be rolled back.
         var begun = new HashSet<string>(StringComparer.Ordinal);
         foreach (var order in orders)

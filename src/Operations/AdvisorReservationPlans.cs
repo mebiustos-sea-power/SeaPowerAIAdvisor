@@ -90,9 +90,6 @@ internal sealed partial class AdvisorOperations
     private string DescribePlan(AdvisorOperationPlan plan, string language)
     {
         var prepared = ValidatePlan(plan); var text = AdvisorText.Load(language); var sections = new List<string>();
-        if (plan.ImmediateOrders.Count > 0)
-            sections.Add(text["operation.immediate_heading"] + "\n" + string.Join("\n\n", plan.ImmediateOrders.GroupBy(o => o.OperationId)
-                .Select(g => Operation(g.Key).DescribeProposal(g.ToArray(), language))));
         if (plan.ReservationOrders.Count > 0)
         {
             var descriptions = prepared.Steps.Count == 0
@@ -102,6 +99,9 @@ internal sealed partial class AdvisorOperations
                     : Operation(order.OperationId).DescribeProposal(new[] { order }, language));
             sections.Add(text["operation.reservation_heading"] + "\n" + string.Join("\n\n", descriptions));
         }
+        if (plan.ImmediateOrders.Count > 0)
+            sections.Add(text["operation.immediate_heading"] + "\n" + string.Join("\n\n", plan.ImmediateOrders.GroupBy(o => o.OperationId)
+                .Select(g => Operation(g.Key).DescribeProposal(g.ToArray(), language))));
         return string.Join("\n\n", sections);
     }
     private AdvisorMapPreview PreviewPlan(AdvisorOperationPlan plan, string language)
@@ -109,26 +109,28 @@ internal sealed partial class AdvisorOperations
         var prepared = ValidatePlan(plan);
         var tails = new Dictionary<string, AdvisorMapCoordinate?>(StringComparer.Ordinal);
         var drawings = new List<AdvisorMapDrawing>();
-        foreach (var group in plan.ImmediateOrders.GroupBy(o => o.OperationId))
-            if (Operation(group.Key) is IAdvisorOperationPreview preview) drawings.AddRange(preview.Preview(group.ToArray(), language).Drawings);
         if (prepared.Steps.Count == 0)
         {
             foreach (var group in plan.ReservationOrders.GroupBy(o => o.OperationId))
                 if (Operation(group.Key) is IAdvisorOperationPreview preview) drawings.AddRange(preview.Preview(group.ToArray(), language).Drawings);
-            return new AdvisorMapPreview(drawings);
         }
-        foreach (var order in plan.ReservationOrders)
+        else
         {
-            if (ReservationCommand(order) is IAdvisorReservationCommand command)
+            foreach (var order in plan.ReservationOrders)
             {
-                var step = prepared.Steps[order.Id];
-                var start = tails.TryGetValue(order.Target, out var tail) ? tail : step.StartPosition;
-                var preview = command.PreviewReservation(new ReservationOrder(step.Order, step.Placement, step.Queue, start, step.Index), language);
-                drawings.AddRange(preview.Preview.Drawings); tails[order.Target] = preview.EndPosition;
+                if (ReservationCommand(order) is IAdvisorReservationCommand command)
+                {
+                    var step = prepared.Steps[order.Id];
+                    var start = tails.TryGetValue(order.Target, out var tail) ? tail : step.StartPosition;
+                    var preview = command.PreviewReservation(new ReservationOrder(step.Order, step.Placement, step.Queue, start, step.Index), language);
+                    drawings.AddRange(preview.Preview.Drawings); tails[order.Target] = preview.EndPosition;
+                }
+                else if (Operation(order.OperationId) is IAdvisorOperationPreview preview)
+                    drawings.AddRange(preview.Preview(new[] { order }, language).Drawings);
             }
-            else if (Operation(order.OperationId) is IAdvisorOperationPreview preview)
-                drawings.AddRange(preview.Preview(new[] { order }, language).Drawings);
         }
+        foreach (var group in plan.ImmediateOrders.GroupBy(o => o.OperationId))
+            if (Operation(group.Key) is IAdvisorOperationPreview preview) drawings.AddRange(preview.Preview(group.ToArray(), language).Drawings);
         return new AdvisorMapPreview(drawings);
     }
     private static AdvisorOperationPlan CombinePlans(IEnumerable<AdvisorOperationPlan> selected)
