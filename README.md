@@ -101,6 +101,8 @@ The request timeout is configurable per connection and also applies to connectio
 
 Open **Settings → Extensions → Commands** to enable or disable commands and browse those registered for the current screen. Details show their identifiers, requirements, approval policy, current AI instructions and definition JSON. Shared tool definitions are also available. Each command has its own checkbox. Commands, including newly added ones, default to enabled; only individually disabled command IDs are saved. The former global command switch is ignored and removed the next time options are saved. Browsing does not send an AI request or inspect live candidates. The **Connection adapters** tab lists registered built-in and external connection types; edit saved connections under **API connections**. Each extension can optionally supply its own display version. Unspecified versions are not shown.
 
+The development build also supports immediate **Attack** (observed target, carried ammunition, shot count, and add/switch) and **Cease fire** for an explicitly named unit. On adoption, reservations are registered first, followed by immediate operations. The game controls actual attack approach and firing. Switching attacks retains movement/sonobuoy reservations; standard cease fire can cancel attack reservations and affect weapon guidance. The approval screen explains these effects.
+
 The built-in commands support:
 
 - **Movement reservations:** set ordered waypoints with the unit's available speed, altitude and depth presets. Settings take effect when travel toward the corresponding waypoint begins; omitted settings remain unchanged. A following unit switches to independent action, while moving a formation leader preserves the game's normal follower behavior.

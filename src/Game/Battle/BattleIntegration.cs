@@ -142,7 +142,7 @@ internal sealed class BattleIntegration
         {
             operations = new AdvisorOperations(id => options.Current.IsCommandEnabled(id));
             mapNavigation ??= new BattleMapNavigation(() => model?.Map);
-            var support = new BattleOperationSupport(OperationObjects, () => options.Current.Information);
+            var support = new BattleOperationSupport(OperationObjects, () => options.Current.Information, OperationKnownUnits);
             foreach (var command in AdvisorOperationCatalog.BuiltIn.CreateOperations(support, mapNavigation)) operations.Register(command);
             operationGateway = new AdvisorOperationGateway(operations);
             reservations = new AdvisorUnitReservations(operations, () => OperationObjects()
@@ -164,6 +164,15 @@ internal sealed class BattleIntegration
             throw new AdvisorOperationException(409, "battle_unavailable");
         return Globals._playerTaskforce.TaskforceObjects.OfType<ObjectBase>()
             .Where(unit => unit != null && !unit.IsDestroyed).ToArray();
+    }
+
+    private static bool EnemyControlEnabled =>
+        (bool)BattleValue.Required(typeof(Globals).GetProperty("AllowControlOfEnemyUnits")!.GetValue(null)!, "Value");
+    private IReadOnlyList<MapUnitViewModel> OperationKnownUnits()
+    {
+        OperationObjects();
+        if (EnemyControlEnabled) throw new SeaPowerAIAdvisor.Api.OperationException(403, "battle_disclosure");
+        return model!.Map.MapKnownUnits.AllUnits.ToArray();
     }
 
     private BattleSnapshot Capture()
@@ -214,7 +223,7 @@ internal sealed class BattleIntegration
         }
         return reader.Capture(map.MapKnownUnits.AllUnits, player!, MissionManager.Instance.Objectives, MissionManager.Instance.OnMapAreas, EventLog.Instance,
             now, SceneCreator.Instance.CurrentMissionName,
-            (bool)BattleValue.Member(typeof(Globals).GetProperty("AllowControlOfEnemyUnits")!.GetValue(null)!, "Value")!,
+            EnemyControlEnabled,
             new BattleCapabilityReader(references, Atmosphere.SpeedOfSound), xmlBriefing, briefingUnavailable, briefingFromBase);
     }
 

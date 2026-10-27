@@ -11,8 +11,10 @@ internal sealed partial class BattleOperationSupport : IAdvisorGameSupport, IAdv
 {
     private readonly Func<IReadOnlyList<ObjectBase>> units;
     private readonly Func<AdvisorInformation> information;
-    internal BattleOperationSupport(Func<IReadOnlyList<ObjectBase>> units, Func<AdvisorInformation> information)
-    { this.units = units; this.information = information; }
+    private readonly Func<IReadOnlyList<SeapowerUI.MapUnitViewModel>> knownUnits;
+    internal BattleOperationSupport(Func<IReadOnlyList<ObjectBase>> units, Func<AdvisorInformation> information,
+        Func<IReadOnlyList<SeapowerUI.MapUnitViewModel>> knownUnits)
+    { this.units = units; this.information = information; this.knownUnits = knownUnits; }
     public bool IsInformationEnabled(string category)
     {
         var item = AdvisorInformation.Items.SingleOrDefault(i => i.Id == category)

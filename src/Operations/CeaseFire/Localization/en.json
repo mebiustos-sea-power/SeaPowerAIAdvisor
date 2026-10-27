@@ -1,0 +1,7 @@
+{
+  "name": "Cease fire (WIP)",
+  "summary": "Apply the standard cease-fire action to the specified unit only.",
+  "requirements": "Requires own-unit information and a unit accepting player orders. Does not propagate to formation members.",
+  "proposal_summary": "{0}: cease fire",
+  "execution_note": "Cancels current attacks and attack-at-waypoint reservations, including sonobuoy drops. The standard action also ends attack alignment, laser guidance and jamming; launched weapons may lose guidance. Movement waypoints remain. Does not disable autonomous engagement settings."
+}

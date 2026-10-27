@@ -20,6 +20,8 @@ internal sealed class AdvisorOperationCatalog
         catalog.Register(new FormationReturnExtension());
         catalog.Register(new SensorExtension());
         catalog.Register(new EmconExtension());
+        catalog.Register(new AttackExtension());
+        catalog.Register(new CeaseFireExtension());
         return catalog;
     }
     internal string Register(IAdvisorOperationExtension extension)

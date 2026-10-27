@@ -1,0 +1,10 @@
+{
+  "name": "Attack",
+  "summary": "Issue attacks against observed targets using selected ammunition and shot counts.",
+  "requirements": "Requires own-unit, weapon and contact information; an actor accepting player orders; compatible carried ammunition and sufficient uncommitted rounds.",
+  "proposal_summary": "{0}: {1}",
+  "mode_append": "add attacks",
+  "mode_replace": "switch attacks",
+  "attack_line": "{0} / {1} x {2}",
+  "execution_note": "Issues attack instructions on adoption. The game controls approach, alignment, sensor activation and firing; acceptance does not mean a weapon has launched. Switching retains reservations and uses the game’s guidance-preserving attack cleanup."
+}

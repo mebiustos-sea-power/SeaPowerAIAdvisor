@@ -5,7 +5,7 @@ using SeaPowerAIAdvisor.Api;
 namespace SeaPowerAIAdvisor;
 
 // Revokes retained SDK services on battle retirement; never exports native objects or permits worker-thread game access.
-internal sealed class AdvisorOperationContext : IAdvisorOperationContext, IAdvisorGameSupport, IAdvisorReservationSupport, IAdvisorReservationSequenceSupport, IAdvisorMovementSupport, IAdvisorSensorSupport, IAdvisorMap, IAdvisorOperationText, IDisposable
+internal sealed class AdvisorOperationContext : IAdvisorOperationContext, IAdvisorGameSupport, IAdvisorReservationSupport, IAdvisorReservationSequenceSupport, IAdvisorMovementSupport, IAdvisorSensorSupport, IAdvisorCombatSupport, IAdvisorMap, IAdvisorOperationText, IDisposable
 {
     private readonly IAdvisorGameSupport game;
     private readonly IAdvisorMap map;
@@ -33,6 +33,13 @@ internal sealed class AdvisorOperationContext : IAdvisorOperationContext, IAdvis
         ?? throw new InvalidOperationException("The game adapter does not provide movement support.");
     private IAdvisorSensorSupport Sensors => game as IAdvisorSensorSupport
         ?? throw new InvalidOperationException("The game adapter does not provide sensor support.");
+    private IAdvisorCombatSupport Combat => game as IAdvisorCombatSupport
+        ?? throw new InvalidOperationException("The game adapter does not provide combat support.");
+    public IReadOnlyList<GameUnitInfo> GetCombatUnits() { Check(); return Combat.GetCombatUnits(); }
+    public IReadOnlyList<CombatTargetInfo> GetAttackTargets() { Check(); return Combat.GetAttackTargets(); }
+    public IReadOnlyList<AttackUnitInfo> GetAttackUnits() { Check(); return Combat.GetAttackUnits(); }
+    public void IssueAttack(string target, AttackUpdateMode mode, IReadOnlyList<AttackInstruction> attacks) { Check(); Combat.IssueAttack(target, mode, attacks); }
+    public void CeaseFire(string target) { Check(); Combat.CeaseFire(target); }
     public IReadOnlyList<SensorUnitInfo> GetSensorUnits() { Check(); return Sensors.GetSensorUnits(); }
     public void SetSensorControls(string target, IReadOnlyList<SensorControlChange> changes) { Check(); Sensors.SetSensorControls(target, changes); }
     public void ApplyEmcon(string target) { Check(); Sensors.ApplyEmcon(target); }

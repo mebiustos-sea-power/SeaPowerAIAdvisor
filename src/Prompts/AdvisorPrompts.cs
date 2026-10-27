@@ -121,7 +121,7 @@ internal sealed class AdvisorPrompts
         "tool_offset", "tool_limit", "host_count_semantics",
         "catalog_identification_candidates", "catalog_friendly_launched_weapons", "catalog_movement_plans",
         "operation_list_description", "operation_describe_description", "operation_candidates_description",
-        "operation_sonobuoy_drop", "operation_movement", "operation_formation_return", "operation_sensors", "operation_emcon", "operation_tool_description", "operation_execution_description", "operation_search", "operation_target_ref", "operation_request_id",
+        "operation_sonobuoy_drop", "operation_movement", "operation_formation_return", "operation_sensors", "operation_emcon", "operation_attack", "operation_cease_fire", "operation_tool_description", "operation_execution_description", "operation_search", "operation_target_ref", "operation_request_id",
     };
     private static readonly string[] CampaignFields =
     {

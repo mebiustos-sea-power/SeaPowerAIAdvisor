@@ -215,3 +215,31 @@ Keep the host and shipped API DLL together. Registration rejects a declared `Api
 ### Per-connection instructions
 
 The host stores an optional connection prompt alongside connection metadata, separately from adapter-specific settings. For consultations, it adds the active connection's nonempty prompt to `ConsultationInput.DataJson` as `connection_prompt`, alongside `common_prompt` and `advisor_preferences`. Standard and independent adapters receive the same field without an additional SDK property. The host switches this field when handing off to a sub connection. Existing system rules still apply; connection tests keep their dedicated test instructions.
+
+## Immediate attack and cease-fire support
+
+`IAdvisorCombatSupport` is an optional service on `context.Game`. It exposes detached player-controlled actors (`GetCombatUnits`), player-map contacts (`GetAttackTargets`), carried ammunition, compatibility and available quantities (`GetAttackUnits`), plus `IssueAttack` and `CeaseFire`. Native objects stay inside the game adapter; the normal thread/lifetime guards apply. Attack discovery requires own-unit, weapon and contact information; cease fire requires own-unit information only. Neutral/destroyed/weapon contacts follow the same information permissions as the situation snapshot. Compatibility follows the game's weapon/target matching, without promising current range, readiness, guidance or a successful shot.
+
+`pending_attacks` lists pending immediate instructions, not all weapon-system or guidance state. `remaining_count` is carried inventory; `available_count` subtracts known reserved/assigned rounds, including pending UI attack tasks. `available_after_switch_count` releases current attack commitments while still reserving attack-at-waypoint ammunition. Actual launch readiness and autonomous game decisions remain separate.
+
+`seapower.attack` is an approval-required immediate command. One order names its actor through the normal outer `target_ref`; arguments contain `mode: "append" | "replace"` and an `attacks` array (1–40 items), each with observed `target_ref`, carried `ammunition` ID and positive integer `rounds`. Several attacks in the array share one update of that actor's existing attack instructions. The goal is one proposal, with 1–2 alternatives accepted and single selection. Orders can be composed with other commands and actors in the existing phase-separated proposal.
+
+```json
+{
+  "operation_id": "seapower.attack",
+  "target_ref": "unit:1001",
+  "arguments": {
+    "mode": "replace",
+    "attacks": [
+      {"target_ref": "unit:7022", "ammunition": "carried_ammunition_id", "rounds": 2},
+      {"target_ref": "unit:7023", "ammunition": "carried_ammunition_id", "rounds": 2}
+    ]
+  }
+}
+```
+
+Append retains existing attacks; replace clears pending immediate AttackTasks, held explicit AI targets and native uncompleted engagements, using `ClearEngageTasksKeepGuiding` for launched-weapon guidance. Neither mode clears movement/sonobuoy reservations or implicitly expands to formation members. Existing attack-at-waypoint reservations still reserve ammunition after switching. Added attacks are handled by native priority/equipment logic, not FIFO completion. Native cleanup is not a guarantee that every weapon's guidance survives every game condition.
+
+The handler validates aggregate ammunition per actor in submitted order. An initial replacement releases old attack commitments; any later attack operations for that actor must append, so they cannot erase attacks submitted earlier in the same proposal. The game adapter rechecks every attack before any change. Native failures after mutation remain unexpected errors, so the shared host preserves receipts and reports an unknown outcome instead of pretending the order was rejected without effects. No rollback or firing-completion monitoring is added. `attack_orders_issued` reports accepted instructions, not launched weapons. Attack arguments opt in to existing unambiguous ammunition correction; observed consultation IDs can resolve to canonical map target references. Stored canonical IDs are validated again at adoption.
+
+`seapower.cease_fire` is a separate approval-required immediate command with empty arguments. It applies the native cease-fire action to the explicitly named actor, with both formation propagation flags false. It cancels pending/active attacks, clears native explicit target intent, ends alignment/laser guidance/jamming, and removes attack-at-waypoint reservations (including sonobuoys); movement waypoints remain. It can affect guidance of already launched weapons. It does not turn off autonomous engagement settings, so the native game may subsequently start another engagement. These effects appear in the command instructions and approval explanation. Combined proposals still register all reservations before immediate operations; consequently, cease fire may remove attack reservations registered earlier in that adoption.
