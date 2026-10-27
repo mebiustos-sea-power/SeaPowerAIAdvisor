@@ -23,6 +23,7 @@ internal static partial class BattleTests
         });
         RunWeapons(check);
         RunSensors(check);
+        RunAircraftCruise(check);
         RunMovement(check);
         RunMissionAreas(check);
         RunUnitMentions(check);
@@ -558,6 +559,7 @@ internal static partial class BattleTests
         internal bool Ready = true;
         internal string ContactKind = "Surface";
         internal string ContactPosture = "Unknown";
+        internal Func<float, float> SpeedOfSound = _ => 300f;
         internal object? ContactDisplay = new { ObjectName = new Reactive<string>("画面で識別した艦") };
         internal Fixture()
         {
@@ -576,7 +578,7 @@ internal static partial class BattleTests
                 Intelligence = new object[] { new { Time = now.AddMinutes(-1), IntelligenceText = "接触の報告" }, Future },
                 AllIntelligence = new Forbidden()
             }, now, "Test scenario", disclosure, new BattleCapabilityReader(
-                new BattleReferenceCatalog(PublicClasses, PublicWeapons, now.Year, Ready)), xmlBriefing, briefingUnavailable, briefingFromBase);
+                new BattleReferenceCatalog(PublicClasses, PublicWeapons, now.Year, Ready), SpeedOfSound), xmlBriefing, briefingUnavailable, briefingFromBase);
     }
     private sealed class Reactive<T>
     {
@@ -634,6 +636,8 @@ internal static partial class BattleTests
     {
         public object? _flightDeck { get; set; }
         public string _landUnitSubType { get; set; } = "Installation";
+        public float _cruiseAltitudeFeet = 25000f;
+        public float[] _speedValuesInMach = { 0.2f, 0.3f, 0.57f, 0.8f };
         public double _currentFuelMass = 600;
         public double _maxFuel = 1200;
         public double _defaultMaxFuel = 1000;

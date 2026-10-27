@@ -11,8 +11,10 @@ internal sealed class BattleCapabilityReader
 {
     internal BattleReferenceCatalog References { get; }
     private readonly BattleSensorReader sensors = new();
+    private readonly Func<float, float> speedOfSound;
     internal JArray SensorReferences() => sensors.References();
-    internal BattleCapabilityReader(BattleReferenceCatalog references) { References = references; }
+    internal BattleCapabilityReader(BattleReferenceCatalog references, Func<float, float> speedOfSound)
+    { References = references; this.speedOfSound = speedOfSound; }
 
     internal JObject CaptureOwn(object unit, string id, string name)
     {
@@ -50,7 +52,7 @@ internal sealed class BattleCapabilityReader
         };
     }
 
-    private static JObject Fuel(object unit, object parameters)
+    private JObject Fuel(object unit, object parameters)
     {
         var kind = Code(Required(unit, "_type"));
         if (kind != "aircraft" && kind != "helicopter")
@@ -58,7 +60,7 @@ internal sealed class BattleCapabilityReader
         var mass = Nonnegative(Required(parameters, "_currentFuelMass"));
         var capacity = Nonnegative(Required(parameters, "_maxFuel"));
         var internalCapacity = Nonnegative(Required(parameters, "_defaultMaxFuel"));
-        return new JObject
+        var fuel = new JObject
         {
             ["status"] = (bool)Required(unit, "_unlimitedFuel") ? "unlimited" : "measured",
             ["source"] = "player_unit_fuel_display",
@@ -67,6 +69,8 @@ internal sealed class BattleCapabilityReader
             ["percent_of_internal_capacity"] = internalCapacity > 0 ? new JValue(100 * mass / internalCapacity) : JValue.CreateNull(),
             ["estimated_flight_time_left_seconds"] = Math.Max(0, Number(Required(Required(unit, "FlightTimeLeftInSec"), "Value")))
         };
+        if (kind == "aircraft") fuel["economic_cruise"] = BattleAircraftCruise.Capture(parameters, speedOfSound);
+        return fuel;
     }
 
     private static JObject Damage(object unit, object parameters)

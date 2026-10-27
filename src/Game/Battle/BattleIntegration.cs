@@ -215,7 +215,7 @@ internal sealed class BattleIntegration
         return reader.Capture(map.MapKnownUnits.AllUnits, player!, MissionManager.Instance.Objectives, MissionManager.Instance.OnMapAreas, EventLog.Instance,
             now, SceneCreator.Instance.CurrentMissionName,
             (bool)BattleValue.Member(typeof(Globals).GetProperty("AllowControlOfEnemyUnits")!.GetValue(null)!, "Value")!,
-            new BattleCapabilityReader(references), xmlBriefing, briefingUnavailable, briefingFromBase);
+            new BattleCapabilityReader(references, Atmosphere.SpeedOfSound), xmlBriefing, briefingUnavailable, briefingFromBase);
     }
 
     private static BattleReferenceCatalog ReadReferenceCatalog(int year)
