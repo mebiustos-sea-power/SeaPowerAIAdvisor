@@ -9,6 +9,8 @@
     <FileVersion>0.18.0.0</FileVersion>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Operations\Sensors\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.Sensors.Localization.%(Filename).json" />
+    <EmbeddedResource Include="Operations\Emcon\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.Emcon.Localization.%(Filename).json" />
     <EmbeddedResource Include="Operations\Movement\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.Movement.Localization.%(Filename).json" />
     <EmbeddedResource Include="Operations\FormationReturn\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.FormationReturn.Localization.%(Filename).json" />
     <EmbeddedResource Include="Operations\SonobuoyDrop\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.SonobuoyDrop.Localization.%(Filename).json" />

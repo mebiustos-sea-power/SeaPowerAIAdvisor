@@ -1,6 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><TargetFramework>net10.0</TargetFramework><OutputType>Exe</OutputType><AssemblyName>SeaPowerAIAdvisor.Tests</AssemblyName></PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="..\src\Operations\Sensors\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.Sensors.Localization.%(Filename).json" />
+    <Compile Include="..\src\Operations\Sensors\SensorOperation.cs" Link="SensorOperation.cs" />
+    <EmbeddedResource Include="..\src\Operations\Emcon\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.Emcon.Localization.%(Filename).json" />
+    <Compile Include="..\src\Operations\Emcon\EmconOperation.cs" Link="EmconOperation.cs" />
     <EmbeddedResource Include="..\src\Operations\Movement\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.Movement.Localization.%(Filename).json" />
     <EmbeddedResource Include="..\src\Operations\FormationReturn\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.FormationReturn.Localization.%(Filename).json" />
     <Compile Include="..\src\Operations\Movement\MovementOperation.cs" Link="MovementOperation.cs" />

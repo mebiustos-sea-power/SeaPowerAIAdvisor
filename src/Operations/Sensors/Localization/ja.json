@@ -1,0 +1,13 @@
+{
+  "name": "センサー操作",
+  "summary": "ゲーム標準の操作で、機器のON/OFFやソナーの能動モード・捜索深度を切り替えます。",
+  "requirements": "自軍部隊・センサー情報が有効で、対象がプレイヤーの指示を受け付け、指定した切替項目が利用可能である必要があります。機器の展開や起動には時間がかかる場合があります。",
+  "proposal_summary": "{0}のセンサー設定を変更",
+  "setting_power": "電源 / 展開",
+  "setting_active": "能動放射",
+  "setting_depth": "捜索深度",
+  "value_on": "ON",
+  "value_off": "OFF",
+  "value_above_layer": "変温層より上",
+  "value_below_layer": "変温層より下"
+}

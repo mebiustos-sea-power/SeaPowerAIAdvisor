@@ -1,0 +1,6 @@
+{
+  "name": "EMCON",
+  "summary": "Apply the game's emission shutdown to a unit without selecting individual sensors.",
+  "requirements": "Requires own-unit and sensor information, and a target that accepts player orders. Uses the standard EMCON shutdown.",
+  "proposal_summary": "{0}: apply EMCON to stop emissions using the standard game action."
+}

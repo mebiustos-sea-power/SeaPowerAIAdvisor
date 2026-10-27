@@ -5,7 +5,7 @@ using SeaPowerAIAdvisor.Api;
 namespace SeaPowerAIAdvisor;
 
 // Revokes retained SDK services on battle retirement; never exports native objects or permits worker-thread game access.
-internal sealed class AdvisorOperationContext : IAdvisorOperationContext, IAdvisorGameSupport, IAdvisorReservationSupport, IAdvisorReservationSequenceSupport, IAdvisorMovementSupport, IAdvisorMap, IAdvisorOperationText, IDisposable
+internal sealed class AdvisorOperationContext : IAdvisorOperationContext, IAdvisorGameSupport, IAdvisorReservationSupport, IAdvisorReservationSequenceSupport, IAdvisorMovementSupport, IAdvisorSensorSupport, IAdvisorMap, IAdvisorOperationText, IDisposable
 {
     private readonly IAdvisorGameSupport game;
     private readonly IAdvisorMap map;
@@ -31,6 +31,11 @@ internal sealed class AdvisorOperationContext : IAdvisorOperationContext, IAdvis
         ?? throw new InvalidOperationException("The game adapter does not provide reservation sequences.");
     private IAdvisorMovementSupport Movement => game as IAdvisorMovementSupport
         ?? throw new InvalidOperationException("The game adapter does not provide movement support.");
+    private IAdvisorSensorSupport Sensors => game as IAdvisorSensorSupport
+        ?? throw new InvalidOperationException("The game adapter does not provide sensor support.");
+    public IReadOnlyList<SensorUnitInfo> GetSensorUnits() { Check(); return Sensors.GetSensorUnits(); }
+    public void SetSensorControls(string target, IReadOnlyList<SensorControlChange> changes) { Check(); Sensors.SetSensorControls(target, changes); }
+    public void ApplyEmcon(string target) { Check(); Sensors.ApplyEmcon(target); }
     public ReservationQueueState InspectReservations(string target, ReservationPlacement placement) { Check(); return Sequence.InspectReservations(target, placement); }
     public bool BeginReservations(string target, ReservationPlacement placement) { Check(); return Sequence.BeginReservations(target, placement); }
     public IReadOnlyList<MovementUnitInfo> GetMovementUnits() { Check(); return Movement.GetMovementUnits(); }

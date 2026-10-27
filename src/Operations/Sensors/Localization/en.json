@@ -1,0 +1,13 @@
+{
+  "name": "Sensor control",
+  "summary": "Change individual sensor power, sonar active mode or search depth using the standard game controls.",
+  "requirements": "Requires own-unit and sensor information. The target must accept player orders, and each selected control must be available. Equipment may take time to deploy or start.",
+  "proposal_summary": "{0}: change sensor settings.",
+  "setting_power": "Power / deployment",
+  "setting_active": "Active emission",
+  "setting_depth": "Search depth",
+  "value_on": "ON",
+  "value_off": "OFF",
+  "value_above_layer": "Above layer",
+  "value_below_layer": "Below layer"
+}
