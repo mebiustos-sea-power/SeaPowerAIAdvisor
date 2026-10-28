@@ -9,6 +9,9 @@
     <FileVersion>0.18.0.0</FileVersion>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Remove="MissionCreator\**\*.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <EmbeddedResource Include="Advisor\Operations\Attack\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.Attack.Localization.%(Filename).json" />
     <EmbeddedResource Include="Advisor\Operations\CancelAttack\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.CancelAttack.Localization.%(Filename).json" />
     <EmbeddedResource Include="Advisor\Operations\CancelReservations\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.CancelReservations.Localization.%(Filename).json" />

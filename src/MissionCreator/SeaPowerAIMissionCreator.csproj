@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>SeaPowerAIMissionCreator</AssemblyName>
+    <RootNamespace>SeaPowerAIMissionCreator</RootNamespace>
+    <Version>0.1.0</Version>
+    <FindDependenciesOfExternallyResolvedReferences>false</FindDependenciesOfExternallyResolvedReferences>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Share source ownership without requiring the Advisor MOD or a common runtime DLL. -->
+    <Compile Include="..\Shared\Game\*.cs" Link="Shared\Game\%(Filename)%(Extension)" />
+    <EmbeddedResource Include="UI\Localization\*.json" LogicalName="SeaPowerAIMissionCreator.Localization.%(Filename).json" />
+    <Reference Include="AnchorChain" HintPath="$(AnchorChainDir)\AnchorChain.dll" Private="false" ExternallyResolved="true" />
+    <Reference Include="BepInEx" HintPath="$(SeaPowerDir)\BepInEx\core\BepInEx.dll" Private="false" ExternallyResolved="true" />
+    <Reference Include="0Harmony" HintPath="$(SeaPowerDir)\BepInEx\core\0Harmony.dll" Private="false" ExternallyResolved="true" />
+    <Reference Include="Newtonsoft.Json" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\Newtonsoft.Json.dll" Private="false" ExternallyResolved="true" />
+    <Reference Include="Seapower-Scripts" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\Seapower-Scripts.dll" Private="false" ExternallyResolved="true" />
+    <Reference Include="Noesis.NoesisGUI" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\Noesis.NoesisGUI.dll" Private="false" ExternallyResolved="true" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\UnityEngine.CoreModule.dll" Private="false" ExternallyResolved="true" />
+  </ItemGroup>
+  <Target Name="CheckGameReferences" BeforeTargets="ResolveReferences">
+    <Error Condition="!Exists('$(SeaPowerDir)\Sea Power_Data\Managed\Seapower-Scripts.dll')" Text="Set SeaPowerDir in Directory.Build.local.props." />
+    <Error Condition="!Exists('$(AnchorChainDir)\AnchorChain.dll')" Text="Set AnchorChainDir in Directory.Build.local.props." />
+  </Target>
+</Project>

@@ -25,12 +25,15 @@ def local_path(value):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Build and test the campaign and tactical battle advisor. Tests use mock HTTP; live Gemini calls require a separate explicit smoke command.')
+    parser = argparse.ArgumentParser(description='Build the AI Advisor and independent Mission Creator MODs. Advisor tests use mock HTTP.')
+    parser.add_argument('--target', choices=['advisor', 'mission-creator', 'all'], default='advisor', help='Select MODs to build and package (default: advisor).')
     parser.add_argument('--install', action='store_true', help='Copy the package into its own StreamingAssets folder; does not enable it.')
     parser.add_argument('--sample-save', type=Path, help='Optional local campaign save for a read-only smoke test.')
     parser.add_argument('--campaign-definition', type=Path, help='Campaign definition for --sample-save.')
     parser.add_argument('--query-demo', action='store_true', help='Write a scripted, offline knowledge-query trace using --sample-save.')
     options = parser.parse_args()
+    if options.target == 'mission-creator' and (options.sample_save or options.campaign_definition or options.query_demo):
+        parser.error('Campaign smoke-test options apply to advisor or all targets.')
     if options.query_demo and not options.sample_save:
         parser.error('--query-demo requires --sample-save and --campaign-definition')
     if bool(options.sample_save) != bool(options.campaign_definition):
@@ -67,41 +70,59 @@ def main():
         if result.returncode:
             raise RuntimeError('dotnet failed; see artifacts/' + name)
 
-    for project, log in [('src/SeaPowerAIAdvisor.csproj', 'build.log'), ('tests/SeaPowerAIAdvisor.Tests.csproj', 'test-build.log')]:
+    projects = []
+    if options.target in ('advisor', 'all'):
+        projects.extend([('src/SeaPowerAIAdvisor.csproj', 'build.log'), ('tests/SeaPowerAIAdvisor.Tests.csproj', 'test-build.log')])
+    if options.target in ('mission-creator', 'all'):
+        projects.append(('src/MissionCreator/SeaPowerAIMissionCreator.csproj', 'mission-creator-build.log'))
+    for project, log in projects:
         run(['build', host_path(ROOT / project), '-c', 'Release', '--nologo', '--verbosity', 'minimal',
              '-p:UseSharedCompilation=false', '-nodeReuse:false'], log)
-    campaign = local_path(properties['AnchorChainDir']).parent / '3813157776' / 'DynamicCampaignMod.dll'
-    run([host_path(ROOT / 'tests/bin/Release/net10.0/SeaPowerAIAdvisor.Tests.dll'),
-         host_path(campaign), host_path(ROOT / 'src/bin/Release/netstandard2.1/SeaPowerAIAdvisor.dll'),
-         host_path(game / 'Sea Power_Data/Managed/Seapower-Scripts.dll'),
-         *[host_path(p.resolve()) for p in samples]], 'tests.log')
-    if options.query_demo:
-        run([host_path(ROOT / 'tests/bin/Release/net10.0/SeaPowerAIAdvisor.Tests.dll'), '--query-demo',
-             host_path(campaign), *[host_path(p.resolve()) for p in samples], host_path(artifact / 'query-demo.json')], 'query-demo.log')
-    package = ROOT / 'dist/SeaPowerAIAdvisor'
-    package.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(ROOT / 'src/bin/Release/netstandard2.1/SeaPowerAIAdvisor.Api.dll', package)
-    shutil.copy2(ROOT / 'src/bin/Release/netstandard2.1/SeaPowerAIAdvisor.dll', package)
-    shutil.copy2(ROOT / 'package/_info.ini', package)
-    shutil.copy2(ROOT / 'package/THIRD-PARTY-NOTICES.txt', package)
-    shutil.copytree(ROOT / 'package/Prompts', package / 'Prompts', dirs_exist_ok=True)
-    print('Package: ' + str(package))
+    if options.target in ('advisor', 'all'):
+        campaign = local_path(properties['AnchorChainDir']).parent / '3813157776' / 'DynamicCampaignMod.dll'
+        run([host_path(ROOT / 'tests/bin/Release/net10.0/SeaPowerAIAdvisor.Tests.dll'),
+             host_path(campaign), host_path(ROOT / 'src/bin/Release/netstandard2.1/SeaPowerAIAdvisor.dll'),
+             host_path(game / 'Sea Power_Data/Managed/Seapower-Scripts.dll'),
+             *[host_path(p.resolve()) for p in samples]], 'tests.log')
+        if options.query_demo:
+            run([host_path(ROOT / 'tests/bin/Release/net10.0/SeaPowerAIAdvisor.Tests.dll'), '--query-demo',
+                 host_path(campaign), *[host_path(p.resolve()) for p in samples], host_path(artifact / 'query-demo.json')], 'query-demo.log')
+    packages = []
+    if options.target in ('advisor', 'all'):
+        package = ROOT / 'dist/SeaPowerAIAdvisor'
+        package.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / 'src/bin/Release/netstandard2.1/SeaPowerAIAdvisor.Api.dll', package)
+        shutil.copy2(ROOT / 'src/bin/Release/netstandard2.1/SeaPowerAIAdvisor.dll', package)
+        shutil.copy2(ROOT / 'package/_info.ini', package)
+        shutil.copy2(ROOT / 'package/THIRD-PARTY-NOTICES.txt', package)
+        shutil.copytree(ROOT / 'package/Prompts', package / 'Prompts', dirs_exist_ok=True)
+        packages.append(package)
+    if options.target in ('mission-creator', 'all'):
+        package = ROOT / 'dist/SeaPowerAIMissionCreator'
+        package.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / 'src/MissionCreator/bin/Release/netstandard2.1/SeaPowerAIMissionCreator.dll', package)
+        shutil.copy2(ROOT / 'package/MissionCreator/_info.ini', package)
+        packages.append(package)
+    for package in packages:
+        print('Package: ' + str(package))
     if options.install:
-        destination = game / 'Sea Power_Data/StreamingAssets/SeaPowerAIAdvisor'
         if not (game / 'Sea Power.exe').is_file():
             raise FileNotFoundError('Sea Power.exe was not found.')
-        destination.mkdir(exist_ok=True)
-        for source in package.rglob('*'):
-            if source.is_file():
-                target = destination / source.relative_to(package)
-                target.parent.mkdir(parents=True, exist_ok=True)
-                if target.exists() and target.read_bytes() == source.read_bytes():
-                    continue
-                temporary = target.with_name(target.name + '.installing')
-                shutil.copy2(source, temporary)
-                os.replace(temporary, target)
-        print('Installed: ' + str(destination))
-        print('Enable Sea Power AI Advisor Prototype in the game mod manager, then restart the game.')
+        for package in packages:
+            destination = game / 'Sea Power_Data/StreamingAssets' / package.name
+            destination.mkdir(exist_ok=True)
+            for source in package.rglob('*'):
+                if source.is_file():
+                    target = destination / source.relative_to(package)
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    if target.exists() and target.read_bytes() == source.read_bytes():
+                        continue
+                    temporary = target.with_name(target.name + '.installing')
+                    shutil.copy2(source, temporary)
+                    os.replace(temporary, target)
+            print('Installed: ' + str(destination))
+        print('Enable the installed MODs in the game mod manager, then restart the game.')
+
 
 
 if __name__ == '__main__':

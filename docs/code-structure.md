@@ -1,6 +1,6 @@
 # Source layout and ownership
 
-`src/Shared` contains reusable implementation. `src/Advisor` owns the existing AI Advisor feature. `src/Plugin.cs` remains the composition root. These folders compile into the existing host DLL; there is no new production assembly or public SDK revision.
+`src/Shared` contains reusable implementation. `src/Advisor` owns the existing AI Advisor feature. `src/Plugin.cs` remains the composition root. Advisor and its Shared sources compile into the existing host DLL. MissionCreator has a separate project and MOD entry point; see [Mission Creator](mission-creator.md). No public Advisor SDK revision is introduced.
 
 ```text
 src/
@@ -23,6 +23,10 @@ src/
     Development/     adviser developer API
     Notifications/   adviser notices and read receipts
     UI/              adviser windows, settings, transcript and game-reference interactions
+  MissionCreator/
+    Plugin.cs        independent Anchor Chain entry point
+    Editor/          mission editor button and view lifecycle
+    UI/              creator window and its own translations
 ```
 
 ## Dependency and state rules
@@ -37,7 +41,7 @@ Advisor consumes Shared. Shared does not consume adviser settings, situation rea
 
 ## Configuration and resource locations
 
-Existing adviser settings, profile, templates, notices, logs, packaged prompts, embedded resource IDs, MOD ID and public API names keep their current locations/identities. A future MissionCreator module will own separate saved connections, supplemental prompts, settings, history and in-flight work, and can reuse these Shared implementations. No shared connection repository, settings migration, automatic copy or empty creator module is introduced by this refactor.
+Existing adviser settings, profile, templates, notices, logs, packaged prompts, embedded resource IDs, MOD ID and public API names keep their current locations/identities. MissionCreator is an independent MOD in the same repository. It compiles the required Shared sources into its own DLL and does not reference Advisor or its SDK. Its current scope is the editor launcher and an empty window. Future connections, supplemental prompts, settings, history and in-flight work belong to MissionCreator separately; there is no shared saved-connection repository or settings migration.
 
 ## Verification
 

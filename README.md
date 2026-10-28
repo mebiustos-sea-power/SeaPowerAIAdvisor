@@ -159,3 +159,5 @@ The opt-in [developer local API](docs/developer-local-api.md) supports consultat
 The [token measurement tools](tools/README.md) document separate `countTokens` experiments and their measurement limitations.
 
 Source ownership and the Shared/Advisor boundary: [code-structure.md](docs/code-structure.md).
+
+The independent [Mission Creator prototype](docs/mission-creator.md) has its own MOD package and build target. Its current scope is an empty window launched from the mission editor.
