@@ -11,7 +11,7 @@ namespace SeaPowerAIAdvisor;
 internal sealed class AdvisorSettings
 {
     internal const int MaxDocumentBytes = 65_536;
-    internal const string DefaultModel = "gemini-3.5-flash-lite";
+    internal const string DefaultModel = AiProviderDefinition.GeminiDefaultModel;
     internal string ApiKey { get; }
     internal string FallbackApiKey { get; }
     internal bool IsFallbackKey { get; }

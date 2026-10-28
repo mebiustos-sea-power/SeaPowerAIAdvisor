@@ -104,7 +104,7 @@ internal sealed class ExternalAdvisorService : AdvisorService
     internal override string Name => name;
     internal override string? Version { get; }
     internal override string Protocol => protocol;
-    internal override IReadOnlyList<AdvisorConnectionField> Fields { get; }
+    internal override IReadOnlyList<AiConnectionField> Fields { get; }
     internal override bool Independent => extension is Api.IIndependentAdvisorExtension;
     internal override string Summary(AdvisorText text) => extension is Api.IAdvisorExtensionSummary summary
         ? AdvisorExtensionBridge.Invoke(() => summary.GetSummary(text.Language))
@@ -119,7 +119,7 @@ internal sealed class ExternalAdvisorService : AdvisorService
         this.extension = extension; id = extension.Id; name = extension.Name; protocol = extension.Protocol;
         Version = AdvisorExtensionVersion.Read(extension);
         Fields = Array.AsReadOnly(extension.Fields.Select(field =>
-            new AdvisorConnectionField(field.Key, field.Label, field.DefaultValue, field.Secret, field.GetLabel, field.Numeric)).ToArray());
+            new AiConnectionField(field.Key, field.Label, field.DefaultValue, field.Secret, field.GetLabel, field.Numeric)).ToArray());
     }
     internal override void Validate(JObject settings) => AdvisorExtensionBridge.Invoke(() =>
     { extension.ValidateSettings(AdvisorExtensionBridge.Json(settings)); return true; });

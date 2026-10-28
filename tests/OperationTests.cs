@@ -236,7 +236,7 @@ internal static class OperationTests
         ["scope_id"] = operations.ScopeId, ["request_id"] = id, ["operation"] = SonobuoyDropExtension.OperationId, ["target_ref"] = "unit:42",
         ["arguments"] = SonobuoyFixture.Arguments("custom_mod_sonobuoy")
     };
-    private static AdvisorLocalResponse Send(AdvisorLocalApi api, string method, string path, JObject? body = null)
+    private static LocalApiResponse Send(AdvisorLocalApi api, string method, string path, JObject? body = null)
     { var task = api.Enqueue(method, path, body ?? new()); api.Pump(); return task.GetAwaiter().GetResult(); }
     private static void Expect(Action action, string code)
     {

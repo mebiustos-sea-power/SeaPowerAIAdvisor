@@ -193,7 +193,7 @@ internal static partial class ProviderTests
                 const string dummy = "Dummy error added externally.\n";
                 File.AppendAllText(file, dummy);
                 Require(history.ReadAll() == dummy, "An external error was hidden before the first provider failure");
-                var configuration = RouterConfiguration("router"); var service = new OpenRouterService();
+                var configuration = RouterConfiguration("router"); var service = new BuiltInAdvisorService("openrouter");
                 for (var i = 0; i < 3; i++)
                 {
                     using var transport = new AiHttpTransport(new BackendHttpHandler((_, _) => throw new Exception("No network expected")));

@@ -5,6 +5,8 @@ using Noesis.Interactivity;
 using SeapowerUI;
 using SeaPowerAIAdvisor.Shared;
 using SeaPowerAIMissionCreator.UI;
+using SeaPowerAIMissionCreator.Connections;
+using SeaPowerAIMissionCreator.Development;
 
 namespace SeaPowerAIMissionCreator.Editor;
 
@@ -18,11 +20,13 @@ internal sealed class MissionCreatorEditor
     private Button? button;
     private WindowHost? host;
     private MissionCreatorWindow? window;
-    private string windowTitle = "";
+    private MissionCreatorText? text;
+    private readonly MissionCreatorConnections connections;
+    private readonly MissionCreatorLocalApiDriver driver;
 
-    internal MissionCreatorEditor(MissionEditorView view, Action<Exception> report)
+    internal MissionCreatorEditor(MissionEditorView view, MissionCreatorConnections connections, MissionCreatorLocalApiDriver driver, Action<Exception> report)
     {
-        this.view = view; this.report = report;
+        this.view = view; this.report = report; this.connections = connections; this.driver = driver;
         view.Loaded += Loaded;
         view.Unloaded += Unloaded;
         if (view.IsLoaded) Loaded(view, null!);
@@ -32,7 +36,7 @@ internal sealed class MissionCreatorEditor
     private void Unloaded(object sender, RoutedEventArgs args) => Unmount();
     private void Open(object sender, RoutedEventArgs args) => Run(() =>
     {
-        window ??= new MissionCreatorWindow(view, host ?? throw new InvalidOperationException("The editor window host is unavailable."), windowTitle);
+        window ??= new MissionCreatorWindow(view, host ?? throw new InvalidOperationException("The editor window host is unavailable."), text ?? throw new InvalidOperationException("Creator text is unavailable."), connections, driver, report);
         window.Show();
     });
 
@@ -43,8 +47,7 @@ internal sealed class MissionCreatorEditor
         var left = root.Children.OfType<Grid>().Single(g => Grid.GetColumn(g) == 0);
         var caption = left.Children.OfType<TextBlock>().Single(t => Grid.GetRow(t) == 0);
         host = Interaction.GetBehaviors(view).OfType<WindowHost>().Single();
-        var text = MissionCreatorText.Load(GameLanguage.Read());
-        windowTitle = text.Title;
+        text = MissionCreatorText.Load(GameLanguage.Read());
         parent = left; title = caption;
         header = new Grid { Name = "MissionCreatorHeader" };
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -68,7 +71,7 @@ internal sealed class MissionCreatorEditor
 
     private void Unmount()
     {
-        Run(() => window?.Close()); window = null;
+        Run(() => window?.Dispose()); window = null;
         Run(() =>
         {
             if (button != null) button.Click -= Open;

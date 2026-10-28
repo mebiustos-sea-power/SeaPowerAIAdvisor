@@ -1,6 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><TargetFramework>net10.0</TargetFramework><OutputType>Exe</OutputType><AssemblyName>SeaPowerAIAdvisor.Tests</AssemblyName></PropertyGroup>
   <ItemGroup>
+    <Compile Include="..\src\MissionCreator\Configuration\MissionCreatorSettings.cs" />
+    <Compile Include="..\src\MissionCreator\Connections\MissionCreatorConnections.cs" />
+    <Compile Include="..\src\MissionCreator\Development\MissionCreatorLocalApi.cs" />
+    <Compile Include="..\src\Shared\Development\LocalApiResponse.cs" />
+    <Compile Include="..\src\Shared\AI\AiConnectionProfile.cs" />
+    <Compile Include="..\src\Shared\AI\AiProviderDefinition.cs" />
+    <Compile Include="..\src\Advisor\Providers\BuiltInAdvisorService.cs" />
     <Compile Include="..\src\Shared\AI\AiConnectionSettings.cs" Link="AiConnectionSettings.cs" />
     <Compile Include="..\src\Shared\AI\AiTransportObservers.cs" Link="AiTransportObservers.cs" />
     <Compile Include="..\src\Shared\AI\JsonPayload.cs" Link="JsonPayload.cs" />
@@ -31,7 +38,7 @@
     <Compile Include="..\src\Advisor\Configuration\AdvisorTextTemplates.cs" Link="AdvisorTextTemplates.cs" />
     <Compile Include="..\src\Advisor\Configuration\AdvisorTemplateOptions.cs" Link="AdvisorTemplateOptions.cs" />
     <Compile Include="..\src\Advisor\UI\AdvisorSystemTemplates.cs" Link="AdvisorSystemTemplates.cs" />
-    <Compile Include="..\src\Advisor\UI\AdvisorSettingsTabNavigation.cs" Link="AdvisorSettingsTabNavigation.cs" />
+    <Compile Include="..\src\Shared\UI\SettingsTabNavigation.cs" Link="SettingsTabNavigation.cs" />
     <Compile Include="..\src\Advisor\Consultation\AdvisorSnapshotExport.cs" Link="AdvisorSnapshotExport.cs" />
     <Compile Include="..\src\Advisor\Game\Battle\BattleSnapshotExport.cs" Link="BattleSnapshotExport.cs" />
     <Compile Include="..\src\Advisor\Game\Campaign\CampaignSnapshotExport.cs" Link="CampaignSnapshotExport.cs" />
@@ -64,7 +71,7 @@
     <Compile Include="..\src\Advisor\Operations\SonobuoyDrop\SonobuoyDropOperation.cs" Link="SonobuoyDropOperation.cs" />
     <Compile Include="..\src\Advisor\Operations\Extensions\*.cs" Link="Extensions\%(Filename)%(Extension)" />
     <Compile Include="..\src\Advisor\Development\AdvisorLocalRun.cs" Link="AdvisorLocalRun.cs" />
-    <Compile Include="..\src\Advisor\Development\AdvisorLocalServer.cs" Link="AdvisorLocalServer.cs" />
+    <Compile Include="..\src\Shared\Development\LocalApiServer.cs" Link="LocalApiServer.cs" />
     <Compile Include="..\src\Shared\UI\UiMarkup.cs" Link="UiMarkup.cs" />
     <Compile Include="..\src\Advisor\UI\AdvisorMarkdown.cs" Link="AdvisorMarkdown.cs" />
     <Compile Include="..\src\Advisor\Consultation\IAdvisorQuerySession.cs" Link="IAdvisorQuerySession.cs" />
@@ -137,15 +144,11 @@
     <Compile Include="..\src\Shared\AI\AiOutputTokens.cs" Link="AiOutputTokens.cs" />
     <Compile Include="..\src\Advisor\Providers\AdvisorServices.cs" Link="AdvisorServices.cs" />
     <Compile Include="..\src\Shared\AI\AiHttpTransport.cs" Link="AiHttpTransport.cs" />
-    <Compile Include="..\src\Advisor\Providers\Gemini\GeminiService.cs" Link="GeminiService.cs" />
-    <Compile Include="..\src\Advisor\Providers\Ollama\OllamaService.cs" Link="OllamaService.cs" />
     <Compile Include="..\src\Shared\AI\Ollama\OllamaProvider.cs" Link="OllamaProvider.cs" />
     <Compile Include="..\src\Shared\AI\ChatCompletions\ChatCompletionProvider.cs" Link="ChatCompletionProvider.cs" />
-    <Compile Include="..\src\Advisor\Providers\ChatCompletions\ChatCompletionConnectionTest.cs" Link="ChatCompletionConnectionTest.cs" />
+    <Compile Include="..\src\Shared\AI\AiConnectionTest.cs" Link="AiConnectionTest.cs" />
     <Compile Include="..\src\Shared\AI\NanoGPT\NanoGptProvider.cs" Link="NanoGptProvider.cs" />
-    <Compile Include="..\src\Advisor\Providers\NanoGPT\NanoGptService.cs" Link="NanoGptService.cs" />
     <Compile Include="..\src\Shared\AI\OpenRouter\OpenRouterProvider.cs" Link="OpenRouterProvider.cs" />
-    <Compile Include="..\src\Advisor\Providers\OpenRouter\OpenRouterService.cs" Link="OpenRouterService.cs" />
     <Compile Include="..\src\Advisor\Consultation\AdvisorBackend.cs" Link="AdvisorBackend.cs" />
     <Compile Include="..\src\Advisor\Consultation\AdvisorBackendRegistry.cs" Link="AdvisorBackendRegistry.cs" />
     <Compile Include="..\src\Advisor\Consultation\AdvisorContext.cs" Link="AdvisorContext.cs" />

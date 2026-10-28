@@ -160,4 +160,4 @@ The [token measurement tools](tools/README.md) document separate `countTokens` e
 
 Source ownership and the Shared/Advisor boundary: [code-structure.md](docs/code-structure.md).
 
-The independent [Mission Creator prototype](docs/mission-creator.md) has its own MOD package and build target. Its current scope is an empty window launched from the mission editor.
+The independent [Mission Creator prototype](docs/mission-creator.md) has its own MOD package and build target. It provides a mission-editor window with independent API connection settings, connection tests and a local developer API; mission generation is not implemented yet.

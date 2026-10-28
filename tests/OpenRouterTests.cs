@@ -224,7 +224,7 @@ internal static partial class ProviderTests
         }));
     }
     private static AdvisorApiConfiguration RouterConfiguration(string id, int timeout = 60) => new(id, "Router " + id, "openrouter",
-        new JObject { ["api_key"] = "mock_router_secret", ["model"] = OpenRouterService.DefaultModel }, timeout);
+        new JObject { ["api_key"] = "mock_router_secret", ["model"] = AiProviderDefinition.OpenRouterDefaultModel }, timeout);
     private static AdvisorSettingsDraft RouterDraft()
     { var draft = new AdvisorSettingsDraft(new JObject()); var configuration = RouterConfiguration("router"); draft.Put(new AdvisorApiConfigurationDraft(configuration)); draft.MainId = configuration.Id; return draft; }
     private static JObject RouterCall(string id, string query, string name = ToolName, JObject? arguments = null) => new()

@@ -6,12 +6,13 @@
 src/
   Plugin.cs
   Shared/
-    AI/              provider protocols, per-connection sessions, HTTP and neutral connection values
+    AI/              provider protocols/definitions, per-connection sessions, HTTP, neutral profiles and connection tests
     Configuration/   file read/write primitives without feature-owned paths
     Diagnostics/     secret redaction
     Game/            common game language and mod-activation lookup
     Infrastructure/  embedded dependency loading
-    UI/              control resources, XML construction and generic Markdown rendering
+    UI/              shared connection cards/editor, tab navigation, controls and Markdown
+    Development/     loopback HTTP listener and response/error types without feature ports
   Advisor/
     Configuration/   saved connections, own-unit disclosure, prompts and user preferences
     Consultation/    advice workflow, conversation, tool dispatch and situation delivery
@@ -26,7 +27,10 @@ src/
   MissionCreator/
     Plugin.cs        independent Anchor Chain entry point
     Editor/          mission editor button and view lifecycle
-    UI/              creator window and its own translations
+    Configuration/   Creator-only saved connections, selection and developer preferences
+    Connections/     detached connection tests and cancellation shared by UI/API
+    Development/     Creator routes, port, discovery and listener lifecycle
+    UI/              creator window/settings and its own translations
 ```
 
 ## Dependency and state rules
@@ -41,8 +45,16 @@ Advisor consumes Shared. Shared does not consume adviser settings, situation rea
 
 ## Configuration and resource locations
 
-Existing adviser settings, profile, templates, notices, logs, packaged prompts, embedded resource IDs, MOD ID and public API names keep their current locations/identities. MissionCreator is an independent MOD in the same repository. It compiles the required Shared sources into its own DLL and does not reference Advisor or its SDK. Its current scope is the editor launcher and an empty window. Future connections, supplemental prompts, settings, history and in-flight work belong to MissionCreator separately; there is no shared saved-connection repository or settings migration.
+Existing adviser settings, profile, templates, notices, logs, packaged prompts, embedded resource IDs, MOD ID and public API names keep their current locations/identities. MissionCreator is an independent MOD in the same repository. It compiles the required Shared sources into its own DLL and does not reference Advisor or its SDK. Its current scope is the editor launcher, connection settings and a local connection-test API. Connections, supplemental prompts, settings and in-flight tests belong to MissionCreator separately; there is no shared saved-connection repository or settings migration.
 
 ## Verification
 
 The normal build runs the existing functional regression suite. Its test-project dependency also compiles every Shared source in `tests/SharedCompilation` without any Advisor source or host reference. This compilation is not distributed and prevents feature dependencies from silently entering Shared. Shared-session tests exercise two independent callers with different connection values, instructions and tools. Existing protocol, fallback, logging, configuration, Markdown, input and command checks validate behavior through the moved implementation.
+
+## Connection management and developer HTTP boundary
+
+`AiConnectionProfile`/`AiConnectionDraft` hold neutral saved/editable values, including supplemental instruction text without deciding where it appears in AI input. `AiProviderDefinition` owns built-in field declarations, validation, factories and protocol-specific connection tests. Advisor's service bridge supplies Advisor test instructions/results and retains public external-adapter registration; Creator consumes the built-in definitions directly.
+
+`AiConnectionsView` and `Connections.xaml` own cards, generic field editing, provider drafts, dirty checks and save/copy/delete interactions. `IAiConnectionStore` delegates persistence to the feature. Advisor's optional delivery editor implements `IAiConnectionEditorOptions`; the shared form does not contain battle policy or an Advisor/Creator switch. Role labels and localization are supplied by the host. Game typing ownership, deferred automatic focus and settings-tab navigation are shared game/UI responsibilities.
+
+`LocalApiServer` requires an explicit endpoint and developer request header. Advisor owns `18765` and its existing routes/discovery; Creator owns configurable `18767` and separate routes/discovery; ControlAPI remains separate on `18766`. Mutable server instances, configuration files, credentials and tasks are never shared. Creator's current routes only access detached connection configuration and network tests; any future route that accesses native editor objects must establish its own game-thread boundary.

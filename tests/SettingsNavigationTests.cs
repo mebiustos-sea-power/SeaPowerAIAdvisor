@@ -8,7 +8,7 @@ internal static class SettingsNavigationTests
         check("Clean settings tabs switch freely and do not leave an unused editor hidden", () =>
         {
             var selected = 0; var entered = 0; var left = 0;
-            var navigation = new AdvisorSettingsTabNavigation(index => selected = index, () => entered++);
+            var navigation = new SettingsTabNavigation(index => selected = index, () => entered++);
             navigation.Request(1);
             Require(selected == 0 && entered == 0 && left == 0, "Selection was changed inside its notification");
             navigation.Pump(false, () => { left++; return true; }, _ => throw new InvalidOperationException("Clean tab asked for confirmation"));
@@ -21,7 +21,7 @@ internal static class SettingsNavigationTests
         check("Continuing an edit keeps its tab and input, while accepting discard restores saved values before navigation", () =>
         {
             var selected = 0; var message = "unsaved"; var saved = "original"; var entered = 0; Action? accept = null;
-            var navigation = new AdvisorSettingsTabNavigation(index => selected = index, () => entered++);
+            var navigation = new SettingsTabNavigation(index => selected = index, () => entered++);
             bool Leave() { message = saved; return true; }
             selected = 1; navigation.Request(selected);
             navigation.Pump(message != saved, Leave, action => accept = action);
@@ -40,8 +40,8 @@ internal static class SettingsNavigationTests
         check("Restoring a selected tab does not recursively confirm, and programmatic setup does not navigate through dirty forms", () =>
         {
             var selected = 0; var confirmations = 0; var leaves = 0; var entered = 0;
-            AdvisorSettingsTabNavigation? navigation = null;
-            navigation = new AdvisorSettingsTabNavigation(index =>
+            SettingsTabNavigation? navigation = null;
+            navigation = new SettingsTabNavigation(index =>
             {
                 selected = index; navigation!.Request(index);
             }, () => entered++);
@@ -56,7 +56,7 @@ internal static class SettingsNavigationTests
         check("A failed discard keeps the original tab and propagates unexpected errors", () =>
         {
             var selected = 0; var entered = 0;
-            var navigation = new AdvisorSettingsTabNavigation(index => selected = index, () => entered++);
+            var navigation = new SettingsTabNavigation(index => selected = index, () => entered++);
             navigation.Request(1); navigation.Pump(true, () => false, accept => accept());
             Require(selected == 0 && navigation.Current == 0 && entered == 0, "A failed reload left the original tab");
             try
@@ -70,14 +70,14 @@ internal static class SettingsNavigationTests
         check("Tab headers and content agree after content updates following the selection event, for both continue and discard", () =>
         {
             var selected = 0; var presented = 0; var entered = 0; var message = "unsaved"; var confirmations = 0; Action? accept = null;
-            AdvisorSettingsTabNavigation? navigation = null;
+            SettingsTabNavigation? navigation = null;
             void Select(int index)
             {
                 selected = index;
                 navigation!.Request(index);
                 presented = index; // The framework finishes displaying content after notifying selection listeners.
             }
-            navigation = new AdvisorSettingsTabNavigation(Select, () => entered++);
+            navigation = new SettingsTabNavigation(Select, () => entered++);
             navigation.Reset(); entered = 0;
             void Pump() => navigation.Pump(message == "unsaved", () => { message = "saved"; return true; }, action => { accept = action; confirmations++; });
             Select(1); Pump();

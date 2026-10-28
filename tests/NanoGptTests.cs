@@ -214,7 +214,7 @@ internal static partial class ProviderTests
         body["caching"] == null && (string?)body["tools"]?[0]?["function"]?["name"] is ToolName or "connection_check",
         "NanoGPT used the wrong authentication, endpoint, tools or a paid routing override");
     private static AdvisorApiConfiguration NanoConfiguration() => new("nano", "Nano subscription", "nanogpt",
-        new JObject { ["api_key"] = "mock_nano_secret", ["model"] = NanoGptService.DefaultModel }, 90);
+        new JObject { ["api_key"] = "mock_nano_secret", ["model"] = AiProviderDefinition.NanoGptDefaultModel }, 90);
     private static AdvisorSettingsDraft NanoDraft()
     { var draft = new AdvisorSettingsDraft(new JObject()); var configuration = NanoConfiguration(); draft.Put(new AdvisorApiConfigurationDraft(configuration)); draft.MainId = configuration.Id; return draft; }
     private static JObject NanoCall(string id, string query, string name = ToolName, JObject? arguments = null) => new()

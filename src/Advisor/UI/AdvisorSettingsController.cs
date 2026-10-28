@@ -34,7 +34,7 @@ internal sealed class AdvisorSettingsController
     private readonly CheckBox campaign, log, localApi, linkOwnUnits, linkContacts, showSystemTemplates;
     private readonly TextBlock status, title, testStatus, testError, confirmationText;
     private readonly Button test, accept, cancelConfirmation, throwException;
-    private readonly Dictionary<Category, AdvisorSettingsTabNavigation> tabs = new();
+    private readonly Dictionary<Category, SettingsTabNavigation> tabs = new();
     private Category? current;
     private int ActiveTab => current.HasValue && tabs.TryGetValue(current.Value, out var navigation) ? navigation.Current : 0;
     private string baseline = "", testingName = "";
@@ -65,13 +65,13 @@ internal sealed class AdvisorSettingsController
         localConnections = new AdvisorLocalConnectionsView(Named<StackPanel>("LocalApiConnections"), Named<ComboBox>("LocalApiDefaultConnection"), Named<CheckBox>("AllowLocalApiModelOverride"), text, guard);
         information = new AdvisorInformationView(Named<StackPanel>("InformationChoices"), text(), guard);
         throwException = Named<Button>("ThrowTestException");
-        test = Named<Button>("TestConnection"); testStatus = Named<TextBlock>("ConnectionTestStatus"); testError = Named<TextBlock>("ConnectionTestError");
         promptEditor = new AdvisorPromptSettingsView(content, text, guard, typing, changed, warn);
         errorHistory = new AdvisorErrorHistoryView(content, text, guard, typing);
         commands = new AdvisorCommandSettingsView(content, operations, text, typing, guard);
         adapters = new AdvisorAdapterSettingsView(Named<StackPanel>("AdapterEntries"), AdvisorServiceCatalog.BuiltIn, text);
         apiStore = new AdvisorApiSettingsStore(settingsPath, () => text()["connection.configuration_name_pattern"]);
         api = new AdvisorApiSettingsView(content, apiStore, text, guard, typing, ApiChanged, Saved, () => Notice(text()["profile.ime"], true), ApiError, ConfirmDelete, ConfirmDuplicate);
+        test = api.Find<Button>("TestConnection"); testStatus = api.Find<TextBlock>("ConnectionTestStatus"); testError = api.Find<TextBlock>("ConnectionTestError");
         profiles = new AdvisorProfileSettingsView(content, profileDirectory, text, defaultPortrait, guard, typing,
             profile => { profileSaved(profile); Saved(); }, () => Notice(""), ProfileError, ConfirmDelete, warn);
         templates = new AdvisorTemplateSettingsView(content, templateStore, text, guard, typing,
@@ -92,7 +92,7 @@ internal sealed class AdvisorSettingsController
         Bind("SaveWip", () => Save(() => options.SaveCampaign(campaign.IsChecked == true)));
         Bind("SaveDeveloper", () => Save(() => apiStore.SaveLogging(log.IsChecked == true)));
         Bind("SaveLocalApi", () => Save(() => options.SaveDeveloper(localApi.IsChecked == true, localConnections.Value)));
-        Bind("TestConnection", TestConnection);
+        test.Click += (_, _) => guard(TestConnection);
         Bind("ThrowTestException", () =>
         {
             if (testing == null && !consultationBusy()) AdvisorRuntime.ThrowTestException();
@@ -108,7 +108,7 @@ internal sealed class AdvisorSettingsController
     private void BindTabs(Category category)
     {
         var control = (TabControl)pages[(int)category];
-        var navigation = new AdvisorSettingsTabNavigation(index => control.SelectedIndex = index,
+        var navigation = new SettingsTabNavigation(index => control.SelectedIndex = index,
             () => { if (available) { baseline = Snapshot(); Notice(""); } });
         tabs.Add(category, navigation);
         control.SelectionChanged += (_, _) => guard(() =>
@@ -335,7 +335,7 @@ internal sealed class AdvisorSettingsController
         var category = current;
         if (available && category.HasValue && tabs.TryGetValue(category.Value, out var navigation) && navigation.HasPending)
             navigation.Pump(HasChanges, () => DiscardTab(category.Value), ConfirmDiscard);
-        profiles.Tick();
+        profiles.Tick(); api.Tick();
         Named<TextBlock>("LocalApiStatus").Text = AdvisorLocalApiDriver.Status;
         errorHistory.Tick(current == Category.Api && Named<TabControl>("ApiCategory").SelectedIndex == 2);
         if (savedNotice.IsRunning)

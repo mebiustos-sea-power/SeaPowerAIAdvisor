@@ -206,7 +206,7 @@ internal static partial class LocalApiTests
                 var discovery = new AdvisorLocalDiscovery(Path.Combine(directory, "developer-api.json"), 123);
                 var metadata = policy.Describe(LocalLibrary()); discovery.Write(metadata);
                 var file = JObject.Parse(File.ReadAllText(discovery.FilePath));
-                Require((bool?)file["allow_model_override"] == true && (int?)file["process_id"] == 123 && (string?)file["endpoint"] == AdvisorLocalServer.Endpoint &&
+                Require((bool?)file["allow_model_override"] == true && (int?)file["process_id"] == 123 && (string?)file["endpoint"] == AdvisorLocalDiscovery.Endpoint &&
                     JToken.DeepEquals(file["connections"], metadata["connections"]) && (string?)file["default_connection_id"] == "local" &&
                     !File.ReadAllText(discovery.FilePath).Contains("mock-key", StringComparison.Ordinal), "Temp discovery disagreed with allowed API metadata or exposed credentials");
                 discovery.Write(AdvisorLocalConnections.Empty.Describe(LocalLibrary()));

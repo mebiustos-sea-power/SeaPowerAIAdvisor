@@ -35,11 +35,8 @@ internal sealed class AdvisorSettingsDraft
 
     internal AdvisorApiConfigurationDraft Add(string namePattern = "API setting {0}")
     {
-        var number = 1;
-        string name;
-        do { name = string.Format(System.Globalization.CultureInfo.InvariantCulture, namePattern, number++); }
-        while (configurations.Any(c => string.Equals(c.Name.Trim(), name, StringComparison.OrdinalIgnoreCase)));
-        var added = new AdvisorApiConfigurationDraft(new AdvisorApiConfiguration("api-" + Guid.NewGuid().ToString("N"), name, "", AdvisorSettings.DefaultModel, Options.RequestTimeoutSeconds));
+        var name = AiConnectionProfile.NewName(configurations.Select(c => c.Name), namePattern);
+        var added = new AdvisorApiConfigurationDraft(new AdvisorApiConfiguration(AiConnectionProfile.NewId(), name, "", AdvisorSettings.DefaultModel, Options.RequestTimeoutSeconds));
         configurations.Add(added);
         return added;
     }
@@ -48,7 +45,7 @@ internal sealed class AdvisorSettingsDraft
     {
         var original = Find(id) ?? throw new AiConnectionException("api_selection_invalid");
         var copy = new AdvisorApiConfigurationDraft(new AdvisorApiConfiguration(
-            "api-" + Guid.NewGuid().ToString("N"), original.Name + nameSuffix,
+            original.Build().Duplicate(nameSuffix).Id, original.Name + nameSuffix,
             original.Provider, original.Settings, original.RequestTimeoutSeconds, original.SituationDelivery, original.MaxOutputTokens, original.Prompt));
         configurations.Add(copy);
         return copy;

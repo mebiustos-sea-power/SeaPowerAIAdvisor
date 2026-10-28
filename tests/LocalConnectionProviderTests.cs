@@ -89,7 +89,7 @@ internal static partial class ProviderTests
                         var body = JObject.Parse(await request.Content!.ReadAsStringAsync(token));
                         Require(request.RequestUri!.AbsolutePath == "/api/subscription/v1/chat/completions" &&
                             request.Headers.GetValues("Authorization").Single() == "Bearer mock_nano_secret" &&
-                            (string?)body["model"] == NanoGptService.DefaultModel, "Delivery changed credentials, endpoint or model");
+                            (string?)body["model"] == AiProviderDefinition.NanoGptDefaultModel, "Delivery changed credentials, endpoint or model");
                         var data = JObject.Parse((string)body["messages"]![1]!["content"]!);
                         Require((string?)data["interaction_mode"] == expected.Code() &&
                             (data["situation_data"] != null) == (expected == AdvisorSituationDelivery.Upfront) &&
@@ -160,7 +160,7 @@ internal static partial class ProviderTests
                 Require(result.Model == "vendor/test-model" && progress.Count > 0 && progress.All(p => p.Model == "vendor/test-model") &&
                     log.Where(e => (string?)e["event"] is "consultation_started" or "request" or "consultation_finished")
                         .All(e => (string?)e["model"] == "vendor/test-model"), "Progress, answer or trace misidentified the model");
-                Require(System.IO.File.ReadAllBytes(path).SequenceEqual(original) && AdvisorSettings.Edit(path).Main.Model == NanoGptService.DefaultModel &&
+                Require(System.IO.File.ReadAllBytes(path).SequenceEqual(original) && AdvisorSettings.Edit(path).Main.Model == AiProviderDefinition.NanoGptDefaultModel &&
                     !System.IO.File.ReadAllText(System.IO.Path.Combine(directory, "ai-communication.jsonl")).Contains("mock_nano_secret", StringComparison.Ordinal),
                     "The temporary model was saved or the existing credentials leaked into the trace");
             });

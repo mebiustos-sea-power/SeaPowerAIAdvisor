@@ -1,16 +1,16 @@
 using System;
 
-namespace SeaPowerAIAdvisor;
+namespace SeaPowerAIAdvisor.Shared;
 
 // Coordinates tab navigation only. Each form owns its dirty check, discard and persistence.
-internal sealed class AdvisorSettingsTabNavigation
+internal sealed class SettingsTabNavigation
 {
     private readonly Action<int> select;
     private readonly Action entered;
     private int? requested;
     internal int Current { get; private set; }
     internal bool HasPending => requested.HasValue;
-    internal AdvisorSettingsTabNavigation(Action<int> select, Action entered)
+    internal SettingsTabNavigation(Action<int> select, Action entered)
     { this.select = select; this.entered = entered; }
     internal void Reset(int index = 0)
     {

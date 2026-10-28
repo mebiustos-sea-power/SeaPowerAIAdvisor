@@ -9,6 +9,12 @@
   <ItemGroup>
     <!-- Share source ownership without requiring the Advisor MOD or a common runtime DLL. -->
     <Compile Include="..\Shared\Game\*.cs" Link="Shared\Game\%(Filename)%(Extension)" />
+    <Compile Include="..\Shared\AI\**\*.cs" Link="Shared\AI\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\Shared\Configuration\*.cs" Link="Shared\Configuration\%(Filename)%(Extension)" />
+    <Compile Include="..\Shared\Development\*.cs" Link="Shared\Development\%(Filename)%(Extension)" />
+    <Compile Include="..\Shared\UI\AiConnection*.cs" Link="Shared\UI\%(Filename)%(Extension)" />
+    <Compile Include="..\Shared\UI\SettingsTabNavigation.cs" Link="Shared\UI\SettingsTabNavigation.cs" />
+    <EmbeddedResource Include="..\Shared\UI\Connections.xaml" LogicalName="SeaPowerAIAdvisor.Shared.Connections.xaml" />
     <EmbeddedResource Include="UI\Localization\*.json" LogicalName="SeaPowerAIMissionCreator.Localization.%(Filename).json" />
     <Reference Include="AnchorChain" HintPath="$(AnchorChainDir)\AnchorChain.dll" Private="false" ExternallyResolved="true" />
     <Reference Include="BepInEx" HintPath="$(SeaPowerDir)\BepInEx\core\BepInEx.dll" Private="false" ExternallyResolved="true" />
@@ -16,6 +22,8 @@
     <Reference Include="Newtonsoft.Json" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\Newtonsoft.Json.dll" Private="false" ExternallyResolved="true" />
     <Reference Include="Seapower-Scripts" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\Seapower-Scripts.dll" Private="false" ExternallyResolved="true" />
     <Reference Include="Noesis.NoesisGUI" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\Noesis.NoesisGUI.dll" Private="false" ExternallyResolved="true" />
+    <Reference Include="UnityEngine.InputLegacyModule" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\UnityEngine.InputLegacyModule.dll" Private="false" ExternallyResolved="true" />
+    <Reference Include="UniRx" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\UniRx.dll" Private="false" ExternallyResolved="true" />
     <Reference Include="UnityEngine.CoreModule" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\UnityEngine.CoreModule.dll" Private="false" ExternallyResolved="true" />
   </ItemGroup>
   <Target Name="CheckGameReferences" BeforeTargets="ResolveReferences">

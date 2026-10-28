@@ -22,7 +22,7 @@ internal static partial class ProviderTests
                     ["request_timeout_seconds"] = 45, ["consultation_timeout_seconds"] = 90,
                     ["api_configurations"] = new JArray(
                         new JObject { ["id"] = "local", ["name"] = "Local", ["provider"] = "ollama", ["settings"] = new JObject
-                            { ["base_url"] = OllamaService.DefaultUrl, ["model"] = "qwen3:8b", ["num_ctx"] = "32768" } },
+                            { ["base_url"] = AiProviderDefinition.OllamaDefaultUrl, ["model"] = "qwen3:8b", ["num_ctx"] = "32768" } },
                         new JObject { ["id"] = "remote", ["name"] = "Remote", ["provider"] = "gemini", ["settings"] = new JObject
                             { ["api_key"] = "mock_timeout_key", ["model"] = "gemini-timeout" } }) };
                 File.WriteAllText(path, source.ToString()); var original = File.ReadAllBytes(path);
@@ -76,7 +76,7 @@ internal static partial class ProviderTests
         }));
         check("Connection checks honor the edited deadline independently for both providers", () => Async(async () =>
         {
-            foreach (var configuration in new[] { new AdvisorApiConfiguration("local", "Local", "ollama", new OllamaService().Defaults(), 1),
+            foreach (var configuration in new[] { new AdvisorApiConfiguration("local", "Local", "ollama", new BuiltInAdvisorService("ollama").Defaults(), 1),
                 new AdvisorApiConfiguration("remote", "Remote", "mock_test_deadline_key", "gemini-test", 1) })
             {
                 var sends = 0; var handler = new BackendHttpHandler(async (_, token) =>
@@ -94,7 +94,7 @@ internal static partial class ProviderTests
         check("A successful multi-request consultation can exceed the retired whole-consultation deadline", () => Async(async () =>
         {
             var draft = new AdvisorSettingsDraft(new JObject { ["request_timeout_seconds"] = 8, ["consultation_timeout_seconds"] = 10 });
-            var local = new AdvisorApiConfiguration("local", "Local", "ollama", new OllamaService().Defaults(), 8);
+            var local = new AdvisorApiConfiguration("local", "Local", "ollama", new BuiltInAdvisorService("ollama").Defaults(), 8);
             draft.Put(new AdvisorApiConfigurationDraft(local)); draft.MainId = local.Id;
             var requests = 0; var clock = System.Diagnostics.Stopwatch.StartNew();
             var handler = new BackendHttpHandler(async (_, token) =>

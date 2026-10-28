@@ -1,31 +1,32 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Noesis;
 
-namespace SeaPowerAIAdvisor;
+namespace SeaPowerAIAdvisor.Shared;
 
 // Cards preserve the supplied connection order and report identity; editing and persistence belong to the API page.
-internal sealed class AdvisorApiConnectionListView
+internal sealed class AiConnectionListView
 {
     private readonly StackPanel host;
-    private readonly AdvisorServiceCatalog services;
-    private readonly Func<AdvisorText> text;
+    private readonly Func<string, string> text;
+    private readonly Func<string> language;
     private readonly Action<string> open;
     private readonly Action<Action> guard;
 
-    internal AdvisorApiConnectionListView(StackPanel host, AdvisorServiceCatalog services, Func<AdvisorText> text,
+    internal AiConnectionListView(StackPanel host, Func<string, string> text, Func<string> language,
         Action<string> open, Action<Action> guard)
-    { this.host = host; this.services = services; this.text = text; this.open = open; this.guard = guard; }
+    { this.host = host; this.text = text; this.language = language; this.open = open; this.guard = guard; }
 
-    internal void Show(IReadOnlyList<AdvisorApiConfiguration> orderedEntries, string? mainId, string? subId)
+    internal void Show(IReadOnlyList<AiConnectionProfile> orderedEntries, IReadOnlyList<IAiConnectionProvider> choices, Func<string, string?> role)
     {
         host.Children.Clear();
         if (orderedEntries.Count == 0)
-            host.Children.Add(new TextBlock { Text = text()["connection.empty"], TextWrapping = TextWrapping.Wrap });
+            host.Children.Add(new TextBlock { Text = text("connection.empty"), TextWrapping = TextWrapping.Wrap });
         foreach (var entry in orderedEntries)
         {
-            var service = services.Find(entry.Provider);
-            var description = service == null ? entry.Provider + " / " + text()["connection.provider_unavailable"] : service.Caption(text());
+            var service = choices.SingleOrDefault(p => p.Id == entry.Provider);
+            var description = service == null ? entry.Provider + " / " + text("connection.provider_unavailable") : service.Caption(text, language());
             var model = service?.Model(entry) ?? "";
             if (model.Length > 0) description += " / " + model;
             var content = new Grid();
@@ -35,10 +36,10 @@ internal sealed class AdvisorApiConnectionListView
             content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             content.Children.Add(new TextBlock { Text = entry.Name, FontSize = 14, FontWeight = FontWeights.Bold,
                 TextWrapping = TextWrapping.Wrap });
-            var role = entry.Id == mainId ? "connection.card_main" : entry.Id == subId ? "connection.card_sub" : null;
-            if (role != null)
+            var roleText = role(entry.Id);
+            if (roleText != null)
             {
-                var label = new TextBlock { Text = text()[role], FontSize = 12, FontWeight = FontWeights.Bold,
+                var label = new TextBlock { Text = roleText, FontSize = 12, FontWeight = FontWeights.Bold,
                     VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
                 Grid.SetColumn(label, 1); content.Children.Add(label);
             }

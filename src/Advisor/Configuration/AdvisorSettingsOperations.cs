@@ -4,8 +4,14 @@ using System.Linq;
 namespace SeaPowerAIAdvisor;
 
 // Each operation reads current storage and changes one registration or one form, never another category.
-internal sealed class AdvisorApiSettingsStore
+internal sealed class AdvisorApiSettingsStore : IAiConnectionStore
 {
+    System.Collections.Generic.IReadOnlyList<AiConnectionProfile> IAiConnectionStore.ReadConnections() => Read().ConfigurationsByName.Select(c => c.Build()).ToArray();
+    AiConnectionDraft IAiConnectionStore.Create(string pattern) => Read().Add(pattern);
+    AiConnectionDraft IAiConnectionStore.Edit(string id) => new AdvisorApiConfigurationDraft((Read().Find(id) ?? throw new AiConnectionException("api_selection_invalid")).Build());
+    void IAiConnectionStore.Save(AiConnectionDraft entry, bool adding) => SaveEntry((AdvisorApiConfigurationDraft)entry, adding);
+    void IAiConnectionStore.Duplicate(string id, string suffix) => Duplicate(id, suffix);
+    void IAiConnectionStore.Remove(string id) => Remove(id);
     private readonly string path;
     private readonly Func<string> namePattern;
     internal AdvisorApiSettingsStore(string path, Func<string> namePattern)

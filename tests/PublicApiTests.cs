@@ -28,11 +28,11 @@ internal static partial class ProviderTests
             ThrowsPublic<InvalidOperationException>(() => Api.AdvisorApi.Register(external));
             using var host = new PublicHost(external);
             Require(Api.AdvisorApi.IsAvailable && AdvisorServiceCatalog.BuiltIn.Find(external.Id) != null &&
-                AdvisorServiceCatalog.BuiltIn.Require(external.Id).Fields[1].Caption(AdvisorText.Load("ja")) == "認証情報",
+                AdvisorServiceCatalog.BuiltIn.Require(external.Id).Fields[1].Caption(key => AdvisorText.Load("ja")[key], "ja") == "認証情報",
                 "Registered fields did not reach the same catalog used by settings");
             var fields = AdvisorServiceCatalog.BuiltIn.Require(external.Id).Fields;
             Require(!fields[0].Numeric && fields[2].Numeric && fields[2].DefaultValue == "8192" &&
-                new BuiltInAdvisorExtension(new OllamaService()).Fields.Single(f => f.Key == "num_ctx").Numeric,
+                new BuiltInAdvisorExtension(new BuiltInAdvisorService("ollama")).Fields.Single(f => f.Key == "num_ctx").Numeric,
                 "Provider field layout metadata was lost or legacy text fields changed their layout");
             Require(AdvisorServiceCatalog.BuiltIn.Require(external.Id).Description(AdvisorText.Load("ja")) == "" &&
                 AdvisorServiceCatalog.BuiltIn.Require(external.Id).Summary(AdvisorText.Load("ja")) == "",

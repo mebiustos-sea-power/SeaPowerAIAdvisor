@@ -8,23 +8,15 @@ using Api = SeaPowerAIAdvisor.Api;
 
 namespace SeaPowerAIAdvisor;
 
-internal sealed class AdvisorConnectionField
+// Advisor registration and execution bridge; reusable built-in definitions live in Shared.
+internal abstract class AdvisorService : IAiConnectionProvider
 {
-    internal string Key { get; }
-    internal string Label { get; }
-    internal string DefaultValue { get; }
-    internal bool Secret { get; }
-    internal bool Numeric { get; }
-    private readonly Func<string, string>? label;
-    internal string Caption(AdvisorText text) => label == null ? text[Label] : label(text.Language);
-    internal AdvisorConnectionField(string key, string label, string defaultValue = "", bool secret = false,
-        Func<string, string>? caption = null, bool numeric = false)
-    { Key = key; Label = label; DefaultValue = defaultValue; Secret = secret; Numeric = numeric; this.label = caption; }
-}
-
-// Provider definitions own fields, validation and wire adapters. The form only renders their declarations.
-internal abstract class AdvisorService
-{
+    string IAiConnectionProvider.Id => Id;
+    IReadOnlyList<AiConnectionField> IAiConnectionProvider.Fields => Fields;
+    string IAiConnectionProvider.Caption(Func<string, string> text, string language) => Caption(AdvisorText.Load(language));
+    string IAiConnectionProvider.Description(Func<string, string> text, string language) => Description(AdvisorText.Load(language));
+    string IAiConnectionProvider.Model(AiConnectionProfile profile) => Model((AdvisorApiConfiguration)profile);
+    JObject IAiConnectionProvider.Defaults() => Defaults();
     internal abstract string Id { get; }
     internal abstract string Name { get; }
     internal virtual string? Version => null;
@@ -37,7 +29,7 @@ internal abstract class AdvisorService
     internal virtual IAdvisorBackend OpenIndependent(AdvisorApiConfiguration configuration, AdvisorConnectionOptions options,
         bool fallback, AiHttpTransport transport, AiContinuation continuation) =>
         throw new InvalidOperationException("This provider uses the standard engine.");
-    internal abstract IReadOnlyList<AdvisorConnectionField> Fields { get; }
+    internal abstract IReadOnlyList<AiConnectionField> Fields { get; }
     internal JObject Defaults() => new(Fields.Select(f => new JProperty(f.Key, f.DefaultValue)));
     internal abstract void Validate(JObject settings);
     internal abstract IAiProvider Open(AdvisorApiConfiguration configuration, AdvisorConnectionOptions options,
@@ -46,17 +38,12 @@ internal abstract class AdvisorService
         AiHttpTransport transport, string request, CancellationToken cancellation);
     internal IEnumerable<string> Secrets(AdvisorApiConfiguration configuration) => Fields.Where(f => f.Secret)
         .Select(f => (string?)configuration.Settings[f.Key] ?? "");
-    protected void ValidateFields(JObject settings)
-    {
-        if (settings.Properties().Any(p => !Fields.Any(f => f.Key == p.Name)) ||
-            Fields.Any(f => settings[f.Key]?.Type != JTokenType.String))
-            throw new AiConnectionException("settings_invalid");
-    }
+
 }
 
 internal sealed class AdvisorServiceCatalog
 {
-    internal static AdvisorServiceCatalog BuiltIn { get; } = new(new AdvisorService[] { new GeminiService(), new OllamaService(), new OpenRouterService(), new NanoGptService() });
+    internal static AdvisorServiceCatalog BuiltIn { get; } = new(AiProviderDefinition.BuiltIn.Select(p => new BuiltInAdvisorService(p.Id)));
     private readonly object sync = new();
     private readonly List<AdvisorService> services = new();
     internal IReadOnlyList<AdvisorService> Services { get { lock (sync) return Array.AsReadOnly(services.ToArray()); } }

@@ -9,6 +9,7 @@ namespace SeaPowerAIAdvisor;
 // A discovery file is written on saved changes, never by polling the provider or exposing its settings.
 internal sealed class AdvisorLocalDiscovery
 {
+    internal const string Endpoint = "http://127.0.0.1:18765";
     internal static string DefaultPath => Path.Combine(Path.GetTempPath(), "SeaPowerAIAdvisor", "developer-api.json");
     internal string FilePath { get; }
     private readonly int processId;
@@ -17,7 +18,7 @@ internal sealed class AdvisorLocalDiscovery
     internal void Write(JObject connections)
     {
         var value = (JObject)connections.DeepClone();
-        value["endpoint"] = AdvisorLocalServer.Endpoint;
+        value["endpoint"] = AdvisorLocalDiscovery.Endpoint;
         value["process_id"] = processId;
         ConfigFile.Write(FilePath, Encoding.UTF8.GetBytes(value.ToString(Formatting.Indented) + "\n"));
     }

@@ -364,6 +364,9 @@ internal static class ProfileTests
             var view = assembly.MainModule.Resources.OfType<EmbeddedResource>().Single(r => r.Name == "SeaPowerAIAdvisor.Advisor.xaml");
             using var stream = view.GetResourceStream(); var root = XDocument.Load(stream).Root!;
             XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+            var registration = assembly.MainModule.Resources.OfType<EmbeddedResource>().Single(r => r.Name == "SeaPowerAIAdvisor.Shared.Connections.xaml");
+            using var registrationStream = registration.GetResourceStream();
+            root.Descendants().Single(e => (string?)e.Attribute(x + "Name") == "ApiRegistration").Add(XDocument.Load(registrationStream).Root!);
             XElement Named(string name) => root.Descendants().Single(e => (string?)e.Attribute(x + "Name") == name);
             var settings = Named("SettingsPane"); var home = Named("SettingsHome"); var conversation = Named("ConversationPane");
             Require(settings.Parent == root && conversation.Parent == root && (string?)settings.Attribute("Visibility") == "Collapsed", "Settings do not replace the whole conversation");

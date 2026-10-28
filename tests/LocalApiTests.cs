@@ -194,7 +194,7 @@ internal static partial class LocalApiTests
             var reservation = new TcpListener(IPAddress.Loopback, 0); reservation.Start();
             var port = ((IPEndPoint)reservation.LocalEndpoint).Port; reservation.Stop();
             var endpoint = "http://127.0.0.1:" + port; var calls = 0;
-            var server = new AdvisorLocalServer((method, path, body) => { calls++; return Task.FromResult(new AdvisorLocalResponse(200, new JObject { ["echo"] = body.DeepClone() })); }, message => throw new InvalidOperationException(message), endpoint);
+            var server = new LocalApiServer((method, path, body) => { calls++; return Task.FromResult(new LocalApiResponse(200, new JObject { ["echo"] = body.DeepClone() })); }, message => throw new InvalidOperationException(message), endpoint, "X-Advisor-Developer");
             try
             {
                 server.Start(); using var client = new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(5) };
@@ -208,14 +208,14 @@ internal static partial class LocalApiTests
                 Require(response.IsSuccessStatusCode && calls == 1 && (string?)JObject.Parse(response.Content.ReadAsStringAsync().GetAwaiter().GetResult())["echo"]!["question"] == "日本語", "HTTP changed the question");
             }
             finally { server.Dispose(); }
-            using var replacement = new AdvisorLocalServer((m, p, b) => Task.FromResult(new AdvisorLocalResponse(200, new())), _ => { }, endpoint); replacement.Start();
+            using var replacement = new LocalApiServer((m, p, b) => Task.FromResult(new LocalApiResponse(200, new())), _ => { }, endpoint, "X-Advisor-Developer"); replacement.Start();
         });
     }
     private static AdvisorLocalApi Api(AdvisorPromptOverrides? overrides = null) => new(
         () => overrides ?? new AdvisorPromptOverrides(AdvisorPrompts.Load(AdvisorPrompts.DefaultDirectory)), error => throw error,
         () => new JObject { ["default_connection_id"] = "test", ["connections"] = new JArray(new JObject { ["id"] = "test" }) },
         (_, fallback, _, delivery, _) => AdvisorServices.Prepare(new AdvisorSettingsDraft(new JObject { ["api_key"] = "mock-local-key" }), allowFallback: fallback, situationDelivery: delivery));
-    private static AdvisorLocalResponse Send(AdvisorLocalApi api, string method, string path, JObject? body = null)
+    private static LocalApiResponse Send(AdvisorLocalApi api, string method, string path, JObject? body = null)
     { var task = api.Enqueue(method, path, body ?? new()); api.Pump(); return task.GetAwaiter().GetResult(); }
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
 
@@ -241,9 +241,9 @@ internal static partial class LocalApiTests
         public JObject LocalStatus() => new() { ["busy"] = Busy, ["settings_open"] = Editing };
         public AdvisorLocalRun LocalConsult(string? question, string? shortcut, bool allowFallback, Func<AdvisorSituationDelivery?, AdvisorBackendSetup> prepare, bool plainAdvisor, bool? allowOperations, AdvisorSituationDelivery? situationDelivery)
         {
-            if (Busy) throw new AdvisorLocalApiException(409, "consultation_in_progress");
+            if (Busy) throw new LocalApiException(409, "consultation_in_progress");
             var request = shortcut == null ? new AdvisorQuestion(question!) :
-                (AdvisorShortcut.Find(shortcut) ?? throw new AdvisorLocalApiException(400, "unknown_shortcut")).Prepare(shortcut);
+                (AdvisorShortcut.Find(shortcut) ?? throw new LocalApiException(400, "unknown_shortcut")).Prepare(shortcut);
             if (allowOperations.HasValue) request = request.WithOperations(allowOperations.Value);
             if (situationDelivery.HasValue) request = request.WithSituationDelivery(situationDelivery);
             var execution = prepare(request.SituationDelivery);
@@ -256,7 +256,7 @@ internal static partial class LocalApiTests
             PreviewCalls++; Thread = Environment.CurrentManagedThreadId;
             return new JObject { ["shown"] = true, ["notice_id"] = "fixture-notice", ["preview"] = true };
         }
-        public void LocalClear() { if (Busy) throw new AdvisorLocalApiException(409, "consultation_in_progress"); Cleared = true; }
+        public void LocalClear() { if (Busy) throw new LocalApiException(409, "consultation_in_progress"); Cleared = true; }
         public void LocalCancel() { Turn!.Cancel(); Run!.Finish(); Busy = false; }
     }
     private sealed class Knowledge : IAdvisorQuerySession

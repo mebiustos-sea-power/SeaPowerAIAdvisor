@@ -6,24 +6,30 @@ using SeaPowerAIAdvisor.Shared;
 
 namespace SeaPowerAIMissionCreator.UI;
 
-internal static class MissionCreatorText
+internal sealed class MissionCreatorText
 {
-    internal static (string Launcher, string Title) Load(string language)
+    private readonly JObject english, selected;
+    internal string Language { get; }
+    internal string Launcher => this["launcher"];
+    internal string Title => this["title"];
+    private MissionCreatorText(string language, JObject english, JObject selected)
+    { Language = language; this.english = english; this.selected = selected; }
+    internal string this[string key]
+    {
+        get
+        {
+            var value = selected[key] ?? english[key];
+            if (value?.Type != JTokenType.String || string.IsNullOrWhiteSpace((string?)value)) throw new InvalidDataException("Missing Mission Creator text: " + key);
+            return (string)value!;
+        }
+    }
+    internal string Error(string code) => english["connection." + code] != null ? this["connection." + code] : string.Format(System.Globalization.CultureInfo.InvariantCulture, this["error"], code);
+    internal string Format(string key, params object[] values) => string.Format(System.Globalization.CultureInfo.InvariantCulture, this[key], values);
+    internal static MissionCreatorText Load(string language)
     {
         var code = LanguageCode.Validate(language).ToLowerInvariant();
         var english = Read("en") ?? throw new FileNotFoundException("The English Mission Creator translation is missing.");
-        var selected = Read(code) ?? Read(code.Split('-')[0]) ?? english;
-        string Value(string key)
-        {
-            var fallback = english[key];
-            if (fallback?.Type != JTokenType.String || string.IsNullOrWhiteSpace((string?)fallback))
-                throw new InvalidDataException("Missing English Mission Creator text: " + key);
-            var value = selected[key] ?? fallback;
-            if (value.Type != JTokenType.String || string.IsNullOrWhiteSpace((string?)value))
-                throw new InvalidDataException("Invalid Mission Creator text: " + key);
-            return (string)value!;
-        }
-        return (Value("launcher"), Value("title"));
+        return new MissionCreatorText(code, english, Read(code) ?? Read(code.Split('-')[0]) ?? english);
     }
 
     private static JObject? Read(string language)

@@ -64,7 +64,7 @@ internal static partial class ProviderTests
                 var stored = store.Read(); Require(stored.Main.Provider == "ollama" && stored.Sub!.ApiKey == "mock_preserved_key" &&
                     JToken.DeepEquals(stored.Find(unknown.Id)!.Settings, unknown.Settings), "Unrelated edits lost registered values or unknown-provider settings");
                 var pending = stored.Find(local.Id)!; pending.Model = "unsaved";
-                Require(store.Read().Main.Model == OllamaService.DefaultModel, "An unconfirmed edit was persisted");
+                Require(store.Read().Main.Model == AiProviderDefinition.OllamaDefaultModel, "An unconfirmed edit was persisted");
                 store.Assign(unknown.Id, null); var before = File.ReadAllBytes(path);
                 ExpectServiceError("provider_unavailable", () => AdvisorServices.Prepare(store.Read()));
                 Require(File.ReadAllBytes(path).SequenceEqual(before), "Missing provider silently changed stored settings");
@@ -79,7 +79,7 @@ internal static partial class ProviderTests
                 var entry = new AdvisorApiConfigurationDraft(LocalConfiguration("local")); store.SaveEntry(entry, true); var before = File.ReadAllBytes(path);
                 foreach (var value in new[] { "file:///C:/data", "http://user:secret@localhost:11434", "http://localhost:11434?token=secret", "http://localhost:11434/#fragment", "relative" })
                 { entry.Settings["base_url"] = value; ExpectServiceError("server_url_invalid", () => store.SaveEntry(entry, false)); }
-                entry.Settings["base_url"] = OllamaService.DefaultUrl;
+                entry.Settings["base_url"] = AiProviderDefinition.OllamaDefaultUrl;
                 foreach (var value in new[] { "", "not a model", "bad\nmodel" })
                 { entry.Model = value; ExpectServiceError("ollama_model_invalid", () => store.SaveEntry(entry, false)); }
                 entry.Model = "user/model:tag";
@@ -271,7 +271,7 @@ internal static partial class ProviderTests
             });
         }));
     }
-    private static AdvisorApiConfiguration LocalConfiguration(string id) => new(id, "Local " + id, "ollama", new OllamaService().Defaults());
+    private static AdvisorApiConfiguration LocalConfiguration(string id) => new(id, "Local " + id, "ollama", new BuiltInAdvisorService("ollama").Defaults());
     private static AdvisorSettingsDraft LocalDraft()
     { var draft = new AdvisorSettingsDraft(new JObject()); var entry = LocalConfiguration("local"); draft.Put(new AdvisorApiConfigurationDraft(entry)); draft.MainId = entry.Id; return draft; }
     private static JObject LocalCall(string query) => new() { ["function"] = new JObject { ["name"] = ToolName,

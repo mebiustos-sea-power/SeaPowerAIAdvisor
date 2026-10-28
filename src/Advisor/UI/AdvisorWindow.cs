@@ -418,18 +418,18 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     AdvisorLocalRun IAdvisorLocalTarget.LocalConsult(string? message, string? shortcut, bool allowFallback, Func<AdvisorSituationDelivery?, AdvisorBackendSetup> prepare, bool plainAdvisor, bool? allowOperations, AdvisorSituationDelivery? situationDelivery)
     {
         RequireLocalReady();
-        if (QuestionInputController.IsComposing) throw new AdvisorLocalApiException(409, "input_composing");
+        if (QuestionInputController.IsComposing) throw new LocalApiException(409, "input_composing");
         AdvisorQuestion request;
         if (shortcut != null)
         {
-            var preset = AdvisorShortcut.Find(shortcut) ?? throw new AdvisorLocalApiException(400, "unknown_shortcut");
+            var preset = AdvisorShortcut.Find(shortcut) ?? throw new LocalApiException(400, "unknown_shortcut");
             if (!preset.IsAvailable(false, conversation.Exchanges.Count, options.Current.HistoryExchanges))
-                throw new AdvisorLocalApiException(409, "shortcut_unavailable");
+                throw new LocalApiException(409, "shortcut_unavailable");
             request = preset.Prepare(text[preset.LabelKey]);
         }
         else
         {
-            if (!AdvisorConversation.Validate(message, out var error)) throw new AdvisorLocalApiException(400, error);
+            if (!AdvisorConversation.Validate(message, out var error)) throw new LocalApiException(400, error);
             request = new AdvisorQuestion(message!);
         }
         if (allowOperations.HasValue) request = request.WithOperations(allowOperations.Value);
@@ -437,15 +437,15 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         var execution = prepare(request.SituationDelivery);
         var run = new AdvisorLocalRun(allowFallback, plainAdvisor, request.AllowOperations, execution);
         AdvisorLocalApi.InvokeGuarded(guard, () => { if (!IsOpen) Toggle(); StartConsultation(request, recording: run, prepared: execution); });
-        if (!run.Attached) throw new AdvisorLocalApiException(409, "advisor_unavailable");
+        if (!run.Attached) throw new LocalApiException(409, "advisor_unavailable");
         return run;
     }
     JObject IAdvisorLocalTarget.LocalPreviewNotice()
     {
         RequireLocalReady();
-        if (QuestionInputController.IsComposing) throw new AdvisorLocalApiException(409, "input_composing");
-        var notice = AdvisorUpdateNotice.Current ?? throw new AdvisorLocalApiException(409, "notice_unavailable");
-        if (updateNotice.IsOpen && !updateNotice.IsPreview) throw new AdvisorLocalApiException(409, "notice_already_open");
+        if (QuestionInputController.IsComposing) throw new LocalApiException(409, "input_composing");
+        var notice = AdvisorUpdateNotice.Current ?? throw new LocalApiException(409, "notice_unavailable");
+        if (updateNotice.IsOpen && !updateNotice.IsPreview) throw new LocalApiException(409, "notice_already_open");
         AdvisorLocalApi.InvokeGuarded(guard, () =>
         {
             if (!IsOpen) Toggle(previewNotice: true);
@@ -457,9 +457,9 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     void IAdvisorLocalTarget.LocalCancel() { AdvisorLocalApi.InvokeGuarded(guard, CancelActive); }
     private void RequireLocalReady()
     {
-        if (operationReview.IsOpen) throw new AdvisorLocalApiException(409, "proposal_review_open");
-        if (active != null) throw new AdvisorLocalApiException(409, "consultation_in_progress");
-        if (conversationPane.Visibility != Visibility.Visible) throw new AdvisorLocalApiException(409, "settings_open");
+        if (operationReview.IsOpen) throw new LocalApiException(409, "proposal_review_open");
+        if (active != null) throw new LocalApiException(409, "consultation_in_progress");
+        if (conversationPane.Visibility != Visibility.Visible) throw new LocalApiException(409, "settings_open");
     }
 
     private void StartConsultation() => StartConsultation(draft.Prepare(question.Text ?? string.Empty));

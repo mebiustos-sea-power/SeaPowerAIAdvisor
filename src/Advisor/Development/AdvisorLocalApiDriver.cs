@@ -9,7 +9,7 @@ internal sealed class AdvisorLocalApiDriver : MonoBehaviour
 {
     private AdvisorOptionsStore? options;
     private AdvisorLocalApi? api;
-    private AdvisorLocalServer? server;
+    private LocalApiServer? server;
     private Action<string>? warn;
     private bool attempted;
     private AdvisorOptions? publishedOptions;
@@ -33,7 +33,7 @@ internal sealed class AdvisorLocalApiDriver : MonoBehaviour
         if (!attempted)
         {
             attempted = true;
-            try { server = new AdvisorLocalServer(api.Enqueue, message => warn?.Invoke(message)); server.Start(); api.Enable(); Status = AdvisorLocalServer.Endpoint; }
+            try { server = new LocalApiServer(api.Enqueue, message => warn?.Invoke(message), AdvisorLocalDiscovery.Endpoint, "X-Advisor-Developer"); server.Start(); api.Enable(); Status = AdvisorLocalDiscovery.Endpoint; }
             catch (Exception error) { server?.Dispose(); server = null; Status = error.Message; warn?.Invoke("Developer local API could not start: " + error); }
         }
         if (server?.Failure is string failure)
@@ -46,7 +46,7 @@ internal sealed class AdvisorLocalApiDriver : MonoBehaviour
             try
             {
                 discovery.Write(api.ConnectionInfo());
-                Status = AdvisorLocalServer.Endpoint + "\n" + discovery.FilePath;
+                Status = AdvisorLocalDiscovery.Endpoint + "\n" + discovery.FilePath;
             }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException or AdvisorOptionsException or AiConnectionException)
             {

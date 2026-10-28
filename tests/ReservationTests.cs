@@ -79,7 +79,7 @@ internal static class ReservationTests
     private static AdvisorLocalApi Api(Action<Exception> unexpected) => new(() => throw new InvalidOperationException("Prompt access"), unexpected,
         () => throw new InvalidOperationException("Connection access"), (_, _, _, _, _) => throw new InvalidOperationException("AI access"));
     private static JObject Scope(AdvisorOperations ops) => new() { ["scope_id"] = ops.ScopeId };
-    private static AdvisorLocalResponse Send(AdvisorLocalApi api, string method, string path, JObject? body = null)
+    private static LocalApiResponse Send(AdvisorLocalApi api, string method, string path, JObject? body = null)
     { var task = api.Enqueue(method, path, body ?? new()); api.Pump(); return task.GetAwaiter().GetResult(); }
     private static void Expect(Action action, string code)
     { try { action(); } catch (AdvisorOperationException e) when (e.Code == code) { return; } throw new InvalidOperationException("Expected " + code); }

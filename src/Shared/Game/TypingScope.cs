@@ -2,7 +2,7 @@ using Noesis;
 using SeaPower;
 using UnityEngine;
 
-namespace SeaPowerAIAdvisor;
+namespace SeaPowerAIAdvisor.Shared;
 
 internal sealed class TypingScope
 {

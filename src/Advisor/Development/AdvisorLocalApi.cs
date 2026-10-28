@@ -18,21 +18,6 @@ internal interface IAdvisorLocalTarget
     void LocalCancel();
 }
 
-internal sealed class AdvisorLocalApiException : Exception
-{
-    internal int Status { get; }
-    internal string Code { get; }
-    internal AdvisorLocalApiException(int status, string code) : base(code) { Status = status; Code = code; }
-}
-
-internal sealed class AdvisorLocalResponse
-{
-    internal int Status { get; }
-    internal JObject Data { get; }
-    internal AdvisorLocalResponse(int status, JObject data) { Status = status; Data = data; }
-    internal static AdvisorLocalResponse Error(int status, string code) => new(status, new JObject { ["error"] = code });
-}
-
 // HTTP workers enqueue detached commands; only Pump on the game thread may call targets, change prompts or change native reservations.
 internal sealed class AdvisorLocalApi
 {
@@ -41,7 +26,7 @@ internal sealed class AdvisorLocalApi
         internal readonly string Method, Path;
         internal readonly JObject Body;
         internal readonly DateTime Deadline = DateTime.UtcNow.AddSeconds(15);
-        internal readonly TaskCompletionSource<AdvisorLocalResponse> Completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal readonly TaskCompletionSource<LocalApiResponse> Completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal Command(string method, string path, JObject body) { Method = method; Path = path; Body = (JObject)body.DeepClone(); }
     }
     private readonly ConcurrentQueue<Command> commands = new();
@@ -73,7 +58,7 @@ internal sealed class AdvisorLocalApi
             catch (Exception error) { failure = ExceptionDispatchInfo.Capture(error); throw; }
         });
         failure?.Throw();
-        if (!invoked) throw new AdvisorLocalApiException(409, "advisor_unavailable");
+        if (!invoked) throw new LocalApiException(409, "advisor_unavailable");
     }
     internal JObject ConnectionInfo() => connections();
     internal void Attach(object owner, string mode, Func<IAdvisorLocalTarget> target, AdvisorOperations? operations = null, AdvisorUnitReservations? reservations = null)
@@ -87,52 +72,52 @@ internal sealed class AdvisorLocalApi
         {
             enabled = false;
             while (commands.TryDequeue(out var command))
-            { Interlocked.Decrement(ref queued); command.Completion.TrySetResult(AdvisorLocalResponse.Error(503, "local_api_disabled")); }
+            { Interlocked.Decrement(ref queued); command.Completion.TrySetResult(LocalApiResponse.Error(503, "local_api_disabled")); }
             last = null;
         }
     }
-    internal async Task<AdvisorLocalResponse> Enqueue(string method, string path, JObject body)
+    internal async Task<LocalApiResponse> Enqueue(string method, string path, JObject body)
     {
         Command command;
         lock (gate)
         {
-            if (!enabled) return AdvisorLocalResponse.Error(503, "local_api_disabled");
+            if (!enabled) return LocalApiResponse.Error(503, "local_api_disabled");
             if (Interlocked.Increment(ref queued) > 16)
-            { Interlocked.Decrement(ref queued); return AdvisorLocalResponse.Error(429, "local_queue_full"); }
+            { Interlocked.Decrement(ref queued); return LocalApiResponse.Error(429, "local_queue_full"); }
             command = new Command(method, path, body);
             commands.Enqueue(command);
         }
         var winner = await Task.WhenAny(command.Completion.Task, Task.Delay(TimeSpan.FromSeconds(15))).ConfigureAwait(false);
         return winner == command.Completion.Task ? await command.Completion.Task.ConfigureAwait(false)
-            : AdvisorLocalResponse.Error(503, "game_thread_unavailable");
+            : LocalApiResponse.Error(503, "game_thread_unavailable");
     }
     internal void Pump()
     {
         for (var i = 0; i < 16 && commands.TryDequeue(out var command); i++)
         {
             Interlocked.Decrement(ref queued);
-            AdvisorLocalResponse result;
+            LocalApiResponse result;
             try
             {
-                result = !enabled ? AdvisorLocalResponse.Error(503, "local_api_disabled")
-                    : DateTime.UtcNow >= command.Deadline ? AdvisorLocalResponse.Error(503, "game_thread_unavailable")
+                result = !enabled ? LocalApiResponse.Error(503, "local_api_disabled")
+                    : DateTime.UtcNow >= command.Deadline ? LocalApiResponse.Error(503, "game_thread_unavailable")
                     : Dispatch(command.Method, command.Path, command.Body);
             }
-            catch (AdvisorOperationException error) { result = AdvisorLocalResponse.Error(error.Status, error.Code); }
-            catch (AdvisorLocalApiException error) { result = AdvisorLocalResponse.Error(error.Status, error.Code); }
-            catch (AiConnectionException error) { result = AdvisorLocalResponse.Error(400, error.Code); }
-            catch (AdvisorOptionsException error) { result = AdvisorLocalResponse.Error(400, error.Code); }
-            catch (AdvisorPromptException error) { result = AdvisorLocalResponse.Error(400, error.Code); }
-            catch (Exception error) { result = AdvisorLocalResponse.Error(500, "unexpected_error"); unexpected(error); }
+            catch (AdvisorOperationException error) { result = LocalApiResponse.Error(error.Status, error.Code); }
+            catch (LocalApiException error) { result = LocalApiResponse.Error(error.Status, error.Code); }
+            catch (AiConnectionException error) { result = LocalApiResponse.Error(400, error.Code); }
+            catch (AdvisorOptionsException error) { result = LocalApiResponse.Error(400, error.Code); }
+            catch (AdvisorPromptException error) { result = LocalApiResponse.Error(400, error.Code); }
+            catch (Exception error) { result = LocalApiResponse.Error(500, "unexpected_error"); unexpected(error); }
             command.Completion.TrySetResult(result);
         }
     }
-    private IAdvisorLocalTarget Target() => target?.Invoke() ?? throw new AdvisorLocalApiException(409, "no_active_game");
-    private AdvisorLocalResponse Dispatch(string method, string path, JObject body)
+    private IAdvisorLocalTarget Target() => target?.Invoke() ?? throw new LocalApiException(409, "no_active_game");
+    private LocalApiResponse Dispatch(string method, string path, JObject body)
     {
         if ((method == "PATCH" && path == "/v1/prompts" || method == "POST" && path == "/v1/prompts/reset") &&
             (bool?)target?.Invoke().LocalStatus()["settings_open"] == true)
-            throw new AdvisorLocalApiException(409, "settings_open");
+            throw new LocalApiException(409, "settings_open");
         if (path.StartsWith("/v1/units/", StringComparison.Ordinal))
         {
             var parts = path.Substring("/v1/units/".Length).Split('/');
@@ -141,15 +126,15 @@ internal sealed class AdvisorLocalApi
             if (read || clear)
             {
                 if (!int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out var unitId) || unitId <= 0)
-                    throw new AdvisorLocalApiException(400, "invalid_unit_id");
-                var service = reservations ?? throw new AdvisorLocalApiException(409, "reservations_unavailable");
+                    throw new LocalApiException(400, "invalid_unit_id");
+                var service = reservations ?? throw new LocalApiException(409, "reservations_unavailable");
                 if (read) { Empty(body); return new(200, service.Read(unitId)); }
                 if (body.Count != 1 || body["scope_id"]?.Type != JTokenType.String || string.IsNullOrWhiteSpace((string?)body["scope_id"]))
-                    throw new AdvisorLocalApiException(400, "invalid_reservation_request");
+                    throw new LocalApiException(400, "invalid_reservation_request");
                 var status = Target().LocalStatus();
-                if ((bool?)status["proposal_review_open"] == true) throw new AdvisorLocalApiException(409, "proposal_review_open");
-                if ((bool?)status["busy"] == true) throw new AdvisorLocalApiException(409, "consultation_busy");
-                if ((bool?)status["settings_open"] == true) throw new AdvisorLocalApiException(409, "settings_open");
+                if ((bool?)status["proposal_review_open"] == true) throw new LocalApiException(409, "proposal_review_open");
+                if ((bool?)status["busy"] == true) throw new LocalApiException(409, "consultation_busy");
+                if ((bool?)status["settings_open"] == true) throw new LocalApiException(409, "settings_open");
                 return new(200, service.Clear(unitId, (string)body["scope_id"]!));
             }
         }
@@ -162,9 +147,9 @@ internal sealed class AdvisorLocalApi
         if (method == "POST" && path == "/v1/operation-plans")
         {
             var status = Target().LocalStatus();
-            if ((bool?)status["proposal_review_open"] == true) throw new AdvisorLocalApiException(409, "proposal_review_open");
-            if ((bool?)status["busy"] == true) throw new AdvisorLocalApiException(409, "consultation_busy");
-            if ((bool?)status["settings_open"] == true) throw new AdvisorLocalApiException(409, "settings_open");
+            if ((bool?)status["proposal_review_open"] == true) throw new LocalApiException(409, "proposal_review_open");
+            if ((bool?)status["busy"] == true) throw new LocalApiException(409, "consultation_busy");
+            if ((bool?)status["settings_open"] == true) throw new LocalApiException(409, "settings_open");
             var result = Operations().SubmitAndApprove(body);
             return new((bool?)result["registered"] == true ? 200 : 409, result);
         }
@@ -172,17 +157,17 @@ internal sealed class AdvisorLocalApi
         if (method == "GET" && path == "/v1/status")
             return new(200, new JObject { ["enabled"] = true, ["mode"] = mode, ["advisor"] = target?.Invoke().LocalStatus(), ["last_consultation_id"] = last?.Id });
         if (method == "GET" && path.StartsWith("/v1/consultations/", StringComparison.Ordinal))
-            return last != null && path == "/v1/consultations/" + last.Id ? new(200, last.Snapshot()) : AdvisorLocalResponse.Error(404, "consultation_not_retained");
+            return last != null && path == "/v1/consultations/" + last.Id ? new(200, last.Snapshot()) : LocalApiResponse.Error(404, "consultation_not_retained");
         if (method == "POST" && path == "/v1/notices/preview") { Empty(body); return new(200, Target().LocalPreviewNotice()); }
         if (method == "GET" && path == "/v1/prompts") return PromptState();
         if (method == "PATCH" && path == "/v1/prompts")
         {
             if (body.Count != 1 || body["values"] is not JObject changes || changes.Properties().Any(p => p.Value.Type != JTokenType.String))
-                throw new AdvisorLocalApiException(400, "invalid_prompt_changes");
+                throw new LocalApiException(400, "invalid_prompt_changes");
             var state = prompts(); var values = state.Current.Fields.ToDictionary(f => f.Id, f => f.Value);
             foreach (var change in changes.Properties())
             {
-                if (!values.ContainsKey(change.Name)) throw new AdvisorLocalApiException(400, "unknown_prompt_id");
+                if (!values.ContainsKey(change.Name)) throw new LocalApiException(400, "unknown_prompt_id");
                 values[change.Name] = (string)change.Value!;
             }
             state.Apply(values); return PromptState();
@@ -196,37 +181,37 @@ internal sealed class AdvisorLocalApi
             if (body.Properties().Any(p => p.Name != "question" && p.Name != "shortcut" && p.Name != "allow_fallback" && p.Name != "connection_id" && p.Name != "plain_advisor" && p.Name != "model" && p.Name != "situation_delivery" && p.Name != "allow_operations" && p.Name != "connection_prompt") ||
                 (question == null) == (shortcut == null) || (question != null && question.Type != JTokenType.String) ||
                 (shortcut != null && shortcut.Type != JTokenType.String))
-                throw new AdvisorLocalApiException(400, "specify_question_or_shortcut");
-            if (fallback != null && fallback.Type != JTokenType.Boolean) throw new AdvisorLocalApiException(400, "invalid_fallback_policy");
+                throw new LocalApiException(400, "specify_question_or_shortcut");
+            if (fallback != null && fallback.Type != JTokenType.Boolean) throw new LocalApiException(400, "invalid_fallback_policy");
             if (body["connection_id"] != null && body["connection_id"]!.Type != JTokenType.String)
-                throw new AdvisorLocalApiException(400, "invalid_connection_id");
+                throw new LocalApiException(400, "invalid_connection_id");
             var plain = body["plain_advisor"];
             if (plain != null && plain.Type != JTokenType.Boolean)
-                throw new AdvisorLocalApiException(400, "invalid_plain_advisor");
+                throw new LocalApiException(400, "invalid_plain_advisor");
             var operationPermission = body["allow_operations"];
             if (operationPermission != null && operationPermission.Type != JTokenType.Boolean)
-                throw new AdvisorLocalApiException(400, "invalid_operation_policy");
+                throw new LocalApiException(400, "invalid_operation_policy");
             var connectionPrompt = body["connection_prompt"];
             if (connectionPrompt != null && connectionPrompt.Type != JTokenType.String)
-                throw new AdvisorLocalApiException(400, "invalid_connection_prompt");
+                throw new LocalApiException(400, "invalid_connection_prompt");
             var model = body["model"];
             if (model != null && model.Type != JTokenType.String)
-                throw new AdvisorLocalApiException(400, "invalid_model");
+                throw new LocalApiException(400, "invalid_model");
             AdvisorSituationDelivery? delivery = null;
             if (body["situation_delivery"] is JToken suppliedDelivery)
             {
-                if (suppliedDelivery.Type != JTokenType.String) throw new AdvisorLocalApiException(400, "invalid_situation_delivery");
+                if (suppliedDelivery.Type != JTokenType.String) throw new LocalApiException(400, "invalid_situation_delivery");
                 delivery = (string?)suppliedDelivery switch
                 {
                     "on_demand" => AdvisorSituationDelivery.OnDemand, "upfront" => AdvisorSituationDelivery.Upfront, "on_request" => AdvisorSituationDelivery.OnRequest,
-                    _ => throw new AdvisorLocalApiException(400, "invalid_situation_delivery")
+                    _ => throw new LocalApiException(400, "invalid_situation_delivery")
                 };
             }
             var info = ConnectionInfo();
             var id = (string?)body["connection_id"] ?? (string?)info["default_connection_id"];
-            if (id == null) throw new AdvisorLocalApiException(409, "default_connection_missing");
+            if (id == null) throw new LocalApiException(409, "default_connection_missing");
             if (!((JArray)info["connections"]!).Any(c => (string?)c["id"] == id))
-                throw new AdvisorLocalApiException(403, "connection_not_allowed");
+                throw new LocalApiException(403, "connection_not_allowed");
             last = Target().LocalConsult((string?)question, (string?)shortcut, (bool?)fallback ?? false,
                 chosen => prepareConnection(id, (bool?)fallback ?? false, (string?)model, chosen, (string?)connectionPrompt),
                 (bool?)plain ?? false, (bool?)operationPermission, delivery);
@@ -234,13 +219,13 @@ internal sealed class AdvisorLocalApi
                 ["situation_delivery"] = last.SituationDelivery?.Code(),
                 ["allow_fallback"] = last.AllowFallback, ["plain_advisor"] = last.PlainAdvisor, ["allow_operations"] = last.AllowOperations, ["id"] = last.Id, ["status_url"] = "/v1/consultations/" + last.Id });
         }
-        return AdvisorLocalResponse.Error(404, "unknown_endpoint");
+        return LocalApiResponse.Error(404, "unknown_endpoint");
     }
-    private AdvisorOperations Operations() => operations ?? throw new AdvisorLocalApiException(409, "operations_unavailable");
-    private AdvisorLocalResponse PromptState()
+    private AdvisorOperations Operations() => operations ?? throw new LocalApiException(409, "operations_unavailable");
+    private LocalApiResponse PromptState()
     {
         var state = prompts();
         return new(200, new JObject { ["has_overrides"] = state.HasOverrides, ["fields"] = new JArray(state.Current.Fields.Select(f => new JObject { ["file"] = f.FileName, ["id"] = f.Id, ["value"] = f.Value })) });
     }
-    private static void Empty(JObject value) { if (value.Count != 0) throw new AdvisorLocalApiException(400, "body_must_be_empty"); }
+    private static void Empty(JObject value) { if (value.Count != 0) throw new LocalApiException(400, "body_must_be_empty"); }
 }

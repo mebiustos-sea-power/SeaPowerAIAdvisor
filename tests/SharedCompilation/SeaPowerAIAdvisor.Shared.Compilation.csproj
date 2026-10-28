@@ -12,6 +12,8 @@
     <Reference Include="Newtonsoft.Json" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\Newtonsoft.Json.dll" Private="false" ExternallyResolved="true" />
     <Reference Include="Noesis.NoesisGUI" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\Noesis.NoesisGUI.dll" Private="false" ExternallyResolved="true" />
     <Reference Include="Seapower-Scripts" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\Seapower-Scripts.dll" Private="false" ExternallyResolved="true" />
+    <Reference Include="UnityEngine.InputLegacyModule" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\UnityEngine.InputLegacyModule.dll" Private="false" ExternallyResolved="true" />
+    <Reference Include="UniRx" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\UniRx.dll" Private="false" ExternallyResolved="true" />
     <Reference Include="UnityEngine.CoreModule" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\UnityEngine.CoreModule.dll" Private="false" ExternallyResolved="true" />
   </ItemGroup>
 </Project>

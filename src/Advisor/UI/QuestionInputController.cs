@@ -1,5 +1,4 @@
 using System;
-using System.Reflection;
 using Noesis;
 using UnityEngine;
 
@@ -8,7 +7,6 @@ namespace SeaPowerAIAdvisor;
 // Adapts Noesis/Unity event order to the input and deferred focus policies.
 internal sealed class QuestionInputController
 {
-    private static readonly FieldInfo nativeComposition = CompositionField();
     private readonly QuestionInput input = new();
     private readonly QuestionFocus focus = new();
     private readonly TypingScope typing;
@@ -43,9 +41,7 @@ internal sealed class QuestionInputController
         question.LostKeyboardFocus += (_, _) => guard(() => { Reset(); typing.Release(question); });
     }
 
-    internal static bool IsComposing =>
-        !string.IsNullOrEmpty(Input.compositionString) ||
-        !string.IsNullOrEmpty((string?)nativeComposition.GetValue(null));
+    internal static bool IsComposing => GameTextInput.IsComposing;
 
     private static bool EnterDown => Input.GetKey(KeyCode.Return) || Input.GetKey(KeyCode.KeypadEnter);
 
@@ -94,16 +90,5 @@ internal sealed class QuestionInputController
         question.SelectionLength = 0;
     }
 
-    private static FieldInfo CompositionField()
-    {
-        // Unity's live composition can already be empty on confirmation while
-        // Noesis still holds its previous value until IME.Update. Read both;
-        // never alter the game's IME or silently discard a changed contract.
-        var ime = typeof(TextBox).Assembly.GetType("NoesisUnity+IME", true)!;
-        var field = ime.GetField("compositionString", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
-            ?? throw new MissingFieldException(ime.FullName, "compositionString");
-        if (field.FieldType != typeof(string))
-            throw new InvalidOperationException("The Noesis IME composition contract changed.");
-        return field;
-    }
+
 }

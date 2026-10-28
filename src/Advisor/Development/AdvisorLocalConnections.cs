@@ -47,15 +47,15 @@ internal sealed class AdvisorLocalConnections
     {
         var selected = settings.Find(id);
         if (!AllowedIds.Contains(id) || selected == null)
-            throw new AdvisorLocalApiException(403, "connection_not_allowed");
+            throw new LocalApiException(403, "connection_not_allowed");
         if (model != null)
         {
-            if (!AllowModelOverride) throw new AdvisorLocalApiException(403, "model_override_not_allowed");
+            if (!AllowModelOverride) throw new LocalApiException(403, "model_override_not_allowed");
             if (string.IsNullOrWhiteSpace(model) || model.Length > 200 || model.Any(char.IsControl))
-                throw new AdvisorLocalApiException(400, "invalid_model");
+                throw new LocalApiException(400, "invalid_model");
             var service = AdvisorServiceCatalog.BuiltIn.Require(selected.Provider);
             if (!service.Fields.Any(f => f.Key == "model" && !f.Secret))
-                throw new AdvisorLocalApiException(400, "model_override_unavailable");
+                throw new LocalApiException(400, "model_override_unavailable");
             // The caller supplies a detached consultation draft, never a saved settings editor.
             selected.Model = model;
         }
