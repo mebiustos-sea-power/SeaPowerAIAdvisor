@@ -445,6 +445,8 @@
   "progress.proposed": "提案を受け付けました。回答待ち…",
   "operation.review": "提案を確認…",
   "operation.immediate_heading": "採用時に実行",
+  "operation.loop_start": "ループ開始",
+  "operation.loop_summary": "{0}, {1}から最後までの{2}地点を反復します。それより前の区間は反復しません。",
   "operation.reservation_heading": "予約に登録",
   "operation.targets": "操作対象",
   "operation.no_targets": "なし",

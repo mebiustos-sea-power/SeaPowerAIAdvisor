@@ -11,6 +11,7 @@ internal sealed class SonobuoyDropExtension : IAdvisorOperationExtension, IAdvis
 {
     internal const string OperationId = "seapower.schedule_sonobuoy_drop";
     internal const int MaximumDrops = 40;
+    public bool SupportsLoop => false;
     public bool EndsReservationSequence => false;
     public int ApiVersion => AdvisorApi.ContractVersion;
     public string Version => "1.0.0";

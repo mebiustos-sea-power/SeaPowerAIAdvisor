@@ -445,6 +445,8 @@
   "progress.proposed": "Proposal received. Waiting for response…",
   "operation.review": "Review proposal…",
   "operation.immediate_heading": "Execute on acceptance",
+  "operation.loop_start": "Loop start",
+  "operation.loop_summary": "Loop from {0}, {1} through this unit's final reservation ({2} points). Earlier points are not repeated.",
   "operation.reservation_heading": "Register game reservations",
   "operation.targets": "Operation targets",
   "operation.no_targets": "None",

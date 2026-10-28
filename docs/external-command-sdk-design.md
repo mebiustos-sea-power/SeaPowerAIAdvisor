@@ -251,3 +251,9 @@ SDK境界は予約照会・準備を含む全呼び出しで公開 `OperationExc
 ## 15. 即時戦闘操作の共通支援（2026-10-28）
 
 `IAdvisorCombatSupport`で自軍操作対象・プレイヤー既知の接触・搭載弾薬/未割当数/対象適合をdetached値として取得し、攻撃追加/切り替えと指定ユニットのみの射撃中止を呼べる。コマンドのJSONや文章は支援に持ち込まず、支援がゲームの交戦リスト・武器システム・未実行AttackTask・誘導・AI保持標的の違いを吸収する。通常の移動命令用の追従/現在命令制約を戦闘へ流用しない。具体的な引数/影響範囲は`public-api.md`を参照。
+
+## 16. 反復可能な予約区間（2026-10-28）
+
+IAdvisorReservationExtensionにSupportsLoopを追加した。対応するハンドラは任意のIAdvisorLoopableReservationOperationを実装し、GetLoopPointsでそのコマンドが追加するnative予約と1対1の座標列を返す。未対応はSupportsLoop=falseとし、共通側が反復区間内での使用を拒否する。標準移動も同じSDKを使う。共通側が外部コマンドのwaypointsなどの独自JSON項目を読むことはない。
+
+対象別のloop_fromで開始セグメント/地点を指定し、前段の既存予約と今回の進出は一度だけ実行する。Game支援SetReservationLoopは登録済み末尾と座標を照合して標準テンプレートを設定し、native型・タスク参照を公開APIへ渡さない。契約の詳細と実機検証の範囲は[公開API](public-api.md#repeating-reservation-suffixes)を参照。旧SDKとの変換処理は追加しない。

@@ -45,6 +45,7 @@ internal sealed class AdvisorOperationContext : IAdvisorOperationContext, IAdvis
     public void ApplyEmcon(string target) { Check(); Sensors.ApplyEmcon(target); }
     public ReservationQueueState InspectReservations(string target, ReservationPlacement placement) { Check(); return Sequence.InspectReservations(target, placement); }
     public bool BeginReservations(string target, ReservationPlacement placement) { Check(); return Sequence.BeginReservations(target, placement); }
+    public void SetReservationLoop(string target, IReadOnlyList<AdvisorMapCoordinate> points) { Check(); Sequence.SetReservationLoop(target, points); }
     public IReadOnlyList<MovementUnitInfo> GetMovementUnits() { Check(); return Movement.GetMovementUnits(); }
     public void AppendMovement(string target, MovementWaypoint waypoint) { Check(); Movement.AppendMovement(target, waypoint); }
     public void AppendFormationReturn(string target) { Check(); Movement.AppendFormationReturn(target); }

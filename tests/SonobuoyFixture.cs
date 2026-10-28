@@ -66,6 +66,7 @@ internal static class SonobuoyFixture
                 position = new AdvisorMapCoordinate((double)unit.Position["latitude_deg"]!, (double)unit.Position["longitude_deg"]!);
             return new ReservationQueueState(position, route?.EndPosition, false, unit.UnavailableReason);
         }
+        public void SetReservationLoop(string target, IReadOnlyList<AdvisorMapCoordinate> points) => throw new NotSupportedException();
         public bool BeginReservations(string target, ReservationPlacement placement)
         { if (placement != ReservationPlacement.Replace) return false; Unit(target).ClearReservations(); return true; }
         public void AppendSonobuoyDrop(string target, string ammunition, AdvisorMapCoordinate position) => Unit(target).Append(ammunition, position.Latitude, position.Longitude);

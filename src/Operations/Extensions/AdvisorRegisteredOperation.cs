@@ -22,6 +22,12 @@ internal sealed class AdvisorRegisteredOperation : IAdvisorOperation, IAdvisorOp
     public string? Version => registration.Version;
     public bool ComposesReservations => registration.Extension is IAdvisorReservationExtension;
     public bool EndsReservationSequence => (registration.Extension as IAdvisorReservationExtension)?.EndsReservationSequence ?? false;
+    public bool SupportsLoop => (registration.Extension as IAdvisorReservationExtension)?.SupportsLoop ?? false;
+    public IReadOnlyList<AdvisorMapCoordinate> GetLoopPoints(ReservationOrder order) => Call(h =>
+        h is IAdvisorLoopableReservationOperation loop ? loop.GetLoopPoints(order)
+        : throw new InvalidOperationException("A loop-capable command must provide its reservation points."));
+    public void SetLoop(string target, IReadOnlyList<AdvisorMapCoordinate> points) => Translate(() =>
+    { context.SetReservationLoop(target, points); return true; });
     private static IAdvisorReservationOperation Reservation(Api.IAdvisorOperationHandler handler) => handler as IAdvisorReservationOperation
         ?? throw new InvalidOperationException("Reservation extension must implement the reservation handler contract.");
     public ReservationQueueState InspectQueue(string target, ReservationPlacement placement) => Translate(() => context.InspectReservations(target, placement));

@@ -161,6 +161,7 @@ internal static partial class ReservationCompositionTests
     private sealed class WrongPhaseExtension : IAdvisorOperationExtension, IAdvisorReservationExtension
     {
         public int ApiVersion => AdvisorApi.ContractVersion;
+        public bool SupportsLoop => false;
         public bool EndsReservationSequence => false;
         public OperationDefinition GetDefinition()
         {

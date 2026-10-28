@@ -12,6 +12,7 @@ internal static partial class ReservationCompositionTests
     {
         RunRevisions(check);
         RunPhases(check);
+        RunLoops(check);
         check("A mixed multi-unit plan replaces each queue once and connects movement/drop/return segments in execution order", () =>
         {
             var game = new Game(); var service = Service(game, "mixed");
@@ -206,12 +207,20 @@ internal static partial class ReservationCompositionTests
         { var id = Id(target); var used = Queues[id].Count(q => q == "drop"); return new[] { new AmmunitionInfo("buoy", "AN/SSQ", "Bomb", "Sonobuoy", Inventory, Inventory - ReservedOld - used, true, Inventory) }; }
         public ReservationRoute? GetReservationRoute(string target) => new(new AdvisorMapCoordinate(0, 127), new AdvisorMapCoordinate(10, 127));
         public string GetSonobuoyDepth(string target) => Depths[Id(target)];
-        public void ClearReservations(string target) { var id = Id(target); Queues[id].Clear(); ReservedOld = 0; Log.Add("clear:" + id); }
+        public void ClearReservations(string target) { var id = Id(target); Queues[id].Clear(); Loops.Remove(id); ReservedOld = 0; Log.Add("clear:" + id); }
         public ReservationQueueState InspectReservations(string target, ReservationPlacement placement)
         {
             if (InspectFailure != null) throw InspectFailure;
             return new ReservationQueueState(new AdvisorMapCoordinate(0, 127), new AdvisorMapCoordinate(10, 127),
-                Following && Id(target) == 42, UnavailableTarget == Id(target) ? "target_not_controllable" : null);
+                Following && Id(target) == 42, UnavailableTarget == Id(target) ? "target_not_controllable"
+                    : placement == ReservationPlacement.Append && Loops.ContainsKey(Id(target)) ? "reservation_loop_conflict" : null);
+        }
+        internal readonly Dictionary<int, AdvisorMapCoordinate[]> Loops = new();
+        internal bool RejectLoop;
+        public void SetReservationLoop(string target, IReadOnlyList<AdvisorMapCoordinate> points)
+        {
+            if (RejectLoop) throw new OperationException(409, "loop_rejected");
+            var id = Id(target); Loops.Add(id, points.ToArray()); Log.Add("loop:" + id);
         }
         public bool BeginReservations(string target, ReservationPlacement placement)
         {

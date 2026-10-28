@@ -32,7 +32,7 @@ internal static class BattleMovementReader
                 ["route_unit_id"] = Text(routeId)
             });
             // Formation stations generate short-term steering points, not the follower's own destination.
-            if (!follows) routes.Add(new JObject { ["id"] = id, ["waypoints"] = Waypoints(unit, Resolve) });
+            if (!follows) routes.Add(new JObject { ["id"] = id, ["waypoints"] = Waypoints(unit, Resolve), ["loop"] = Loop(unit, Resolve) });
         }
         return (plans, routes);
     }
@@ -87,45 +87,90 @@ internal static class BattleMovementReader
 
     private static void Settings(JObject row, object task, object unit, object? position, bool relative)
     {
-        var speed = "unchanged";
-        if ((bool)RequiredParameter(task, "_setSpeed"))
+        var speed = (bool)RequiredParameter(task, "_setSpeed") ? Code(RequiredParameter(task, "_speedState")) : null;
+        var height = relative ? (bool)RequiredParameter(task, "setHeight") ? "relative_to_parent" : "unchanged"
+            : Code(RequiredParameter(task, "_heightState"));
+        Settings(row, unit, position, speed, height);
+        row["return_to_formation"] = (bool)Required(task, "_returnToFormation");
+    }
+
+    private static void Settings(JObject row, object unit, object? position, string? speed, string height)
+    {
+        var plane = Code(Required(unit, "_type")) == "aircraft";
+        row["speed_setting"] = speed == null ? "unchanged" : plane ? speed switch
         {
-            var code = Code(RequiredParameter(task, "_speedState"));
-            var plane = Code(Required(unit, "_type")) == "aircraft";
-            speed = plane ? code switch
-            {
-                "ahead_2_3" => "loiter", "ahead_standard" => "cruise", "ahead_full" => "max", "ahead_flank" => "afterburner",
-                _ => code
-            } : code switch
-            {
-                "ahead_1_3" => "ahead_one_third", "ahead_2_3" => "ahead_two_thirds", "ahead_standard" => "ahead_standard",
-                "ahead_full" => "ahead_full", "ahead_flank" => "ahead_flank", "allstop" => "stop", "backfull" => "reverse_full",
-                _ => code
-            };
-        }
-        row["speed_setting"] = speed;
-        var vertical = new JObject();
-        if (relative) vertical["mode"] = (bool)RequiredParameter(task, "setHeight") ? "relative_to_parent" : "unchanged";
-        else
+            "ahead_2_3" => "loiter", "ahead_standard" => "cruise", "ahead_full" => "max", "ahead_flank" => "afterburner", _ => speed
+        } : speed switch
         {
-            var code = Code(RequiredParameter(task, "_heightState"));
-            vertical["mode"] = code switch
-            {
-                "nochange" => "unchanged", "current" => "actual_at_activation", "parent" => "parent_at_activation",
-                "number" => "specified", "verylow" => "very_low", "veryhigh" => "very_high", _ => code
-            };
-            var kind = Code(Required(unit, "_type"));
-            if (kind == "submarine" && code is "verylow" or "low" or "medium" or "high" or "veryhigh")
-                vertical["depth_preset"] = code switch { "verylow" => "shallow", "low" => "above_layer", "medium" => "below_layer", "high" => "deep", _ => "very_deep" };
-            if (code == "number" && position != null)
-            {
-                var feet = Number(Required(position, "_height")) * 220.4727;
-                if (kind == "submarine") vertical["depth_ft"] = -feet;
-                else if (kind is "aircraft" or "helicopter") vertical["altitude_ft"] = feet;
-            }
+            "ahead_1_3" => "ahead_one_third", "ahead_2_3" => "ahead_two_thirds", "ahead_standard" => "ahead_standard",
+            "ahead_full" => "ahead_full", "ahead_flank" => "ahead_flank", "allstop" => "stop", "backfull" => "reverse_full", _ => speed
+        };
+        var vertical = new JObject { ["mode"] = height switch
+        {
+            "nochange" => "unchanged", "current" => "actual_at_activation", "parent" => "parent_at_activation",
+            "number" => "specified", "verylow" => "very_low", "veryhigh" => "very_high", _ => height
+        } };
+        var kind = Code(Required(unit, "_type"));
+        if (kind == "submarine" && height is "verylow" or "low" or "medium" or "high" or "veryhigh")
+            vertical["depth_preset"] = height switch { "verylow" => "shallow", "low" => "above_layer", "medium" => "below_layer", "high" => "deep", _ => "very_deep" };
+        if (height == "number" && position != null)
+        {
+            var feet = Number(Required(position, "_height")) * 220.4727;
+            if (kind == "submarine") vertical["depth_ft"] = -feet;
+            else if (kind is "aircraft" or "helicopter") vertical["altitude_ft"] = feet;
         }
         row["vertical_setting"] = vertical;
-        row["return_to_formation"] = (bool)Required(task, "_returnToFormation");
+    }
+
+    private static JToken Loop(object unit, Func<object?, string?> resolve)
+    {
+        var root = Member(unit, "_userRoot");
+        if (root == null) return JValue.CreateNull();
+        var task = Rows(Required(root, "TaskViewModels")).Where(v => v != null).Select(v => Member(v!, "Task"))
+            .LastOrDefault(t => t != null && (Is(t, "GoToWaypointTask") || Is(t, "GoToRelativePoint")));
+        if (task == null) return JValue.CreateNull();
+        var saved = Rows(Required(task, "_waypointsData")).ToArray();
+        if (saved.Length == 0) return JValue.CreateNull();
+        var points = new JArray();
+        foreach (var data in saved)
+        {
+            if (data == null) throw new InvalidOperationException("A loop waypoint is missing.");
+            var relative = (bool)Required(data, "_isRelative");
+            var parent = Member(data, "_parentObject"); var parentId = resolve(parent);
+            object? position = Required(data, "_geoposition");
+            var row = new JObject { ["sequence"] = points.Count + 1, ["kind"] = "waypoint", ["position"] = JValue.CreateNull() };
+            if (relative)
+            {
+                row["kind"] = "relative_waypoint"; row["relative_to_unit_id"] = Text(parentId);
+                if (parentId == null && string.IsNullOrEmpty((string?)Member(data, "_patrolZoneID"))) position = null;
+            }
+            else if ((bool)Required(data, "_setCourse") || (bool)Required(data, "_setTurn"))
+            {
+                var turn = (bool)Required(data, "_setTurn"); row["kind"] = turn ? "turn" : "set_course";
+                row[turn ? "turn_deg" : "course_deg"] = Number(Required(data, "_course")); position = null;
+            }
+            else if ((bool)Required(data, "_toCurrentPosition"))
+            {
+                row["kind"] = "to_unit_position"; row["target_unit_id"] = Text(parentId);
+                position = parentId == null ? null : Required(Required(parent!, "Position"), "Value");
+            }
+            if (position != null) row["position"] = AdvisorInputBuilder.Position(new MapPosition(
+                Number(Required(position, "Latitude")), Number(Required(position, "Longitude"))));
+            var setting = Convert.ToInt32(Required(data, "_setTelegraph"), System.Globalization.CultureInfo.InvariantCulture);
+            string? speed = null;
+            if (setting != -100)
+            {
+                var type = RequiredParameter(task, "_speedState").GetType();
+                if (!type.IsEnum) throw new InvalidOperationException("The native loop speed setting type is unavailable.");
+                speed = Code(Enum.ToObject(type, setting));
+            }
+            var height = Code(Required(data, "_heightState"));
+            Settings(row, unit, position, speed, relative && height != "nochange" ? "relative_to_parent" : height);
+            row["return_to_formation"] = (bool)Required(data, "_returnToFormation");
+            points.Add(row);
+        }
+        // Saved loop data is copied once, without traversing nested native templates or hidden target objects.
+        return new JObject { ["waypoints"] = points };
     }
 
     private static bool Is(object value, string name)

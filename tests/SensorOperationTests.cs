@@ -149,6 +149,7 @@ internal static class SensorOperationTests
         public IReadOnlyList<MovementUnitInfo> GetMovementUnits() => GetUnits().Select(u => new MovementUnitInfo(u, "vessel", null, null, true, false,
             Array.Empty<MovementPreset>(), Array.Empty<MovementPreset>(), Array.Empty<MovementPreset>())).ToArray();
         public ReservationQueueState InspectReservations(string target, ReservationPlacement placement) => new(new AdvisorMapCoordinate(25, 127), null, false);
+        public void SetReservationLoop(string target, IReadOnlyList<AdvisorMapCoordinate> points) => throw new NotSupportedException();
         public bool BeginReservations(string target, ReservationPlacement placement) { Log.Add("begin:" + target); return false; }
         public void AppendMovement(string target, MovementWaypoint waypoint) => Log.Add("move:" + target);
         public void AppendFormationReturn(string target) => throw new InvalidOperationException("unused");

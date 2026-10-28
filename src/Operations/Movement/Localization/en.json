@@ -1,7 +1,7 @@
 {
   "proposal_independent": "The unit will act independently while following these reservations.",
   "name": "Movement reservation",
-  "summary": "Schedule an ordered route, optionally setting speed, altitude or depth for each leg.",
+  "summary": "Schedule an ordered route, optionally setting speed, altitude or depth for each leg. Repeating routes can start after a one-time approach.",
   "requirements": "Requires Data for AI access to own units and movement plans. The target must be controllable and mobile; aircraft must be airborne. Settings must be among the target's available options. The first reservation update may switch a follower to independent action.",
   "proposal_summary": "{0}: schedule {1} movement waypoints.",
   "proposal_followers": "Formation followers will follow the leader through the game's formation control.",

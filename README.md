@@ -30,6 +30,7 @@ See the [v0.18.0 release notes](https://github.com/mebiustos-sea-power/SeaPowerA
 - **Gemini, Ollama, OpenRouter and NanoGPT connections.** Register named connections and choose a main connection and an optional sub connection. Duplicate a connection to reuse its settings with another model.
 - **On-demand tactical advice.** Ask your own question or use **Next steps**, **Key risks**, **Radar operations**, **Own units** and **Contacts**.
 - **AI-assisted game commands.** Request movement, sonobuoy deployment and formation return, including combined plans for one or more units. Review and approve a proposal before its orders are added to the game.
+- **Repeating movement routes (development):** propose a one-time approach followed by a repeating patrol route, without repeating existing reservations. Review the loop start and map preview before adoption.
 - **Map location badges.** Ctrl+left-click empty map space while the conversation is open to attach destinations or drop locations to your question. Click draft badges to locate their units or points on the map.
 - **Consultations continue while hidden.** A yellow dot on the AI button means a consultation is running; green means a result is ready. Both dots are hidden while the adviser window is open.
 - **Alternative proposals with map previews.** Compare planned locations and travel routes, choose one proposal to adopt, and retain its number and title in conversation history.

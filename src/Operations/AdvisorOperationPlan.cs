@@ -70,10 +70,26 @@ internal static class AdvisorOperationPlanBatch
             ["immediate_operations"] = Orders(target, "Immediate-mode commands execute on acceptance after all reservations are registered, without waiting for reserved actions to finish. Preserve their intended order; use [] if unused."),
             ["reservation_updates"] = new JObject { ["type"] = "array", ["maxItems"] = MaximumOrders,
                 ["description"] = "One queue policy per target using reservation_sequence commands. Replacement happens once before that target's first reservation segment. Use [] when no command participates in shared reservation composition.",
-                ["items"] = Object(new JObject { ["target_ref"] = target.DeepClone(),
-                    ["placement"] = new JObject { ["type"] = "string", ["enum"] = new JArray("append", "replace") } }) }
+                ["items"] = ReservationPolicy(target) }
         }) }
     });
+    private static JObject ReservationPolicy(JObject target)
+    {
+        var schema = Object(new JObject
+        {
+            ["target_ref"] = target.DeepClone(),
+            ["placement"] = new JObject { ["type"] = "string", ["enum"] = new JArray("append", "replace") },
+            ["loop_from"] = Object(new JObject
+            {
+                ["segment"] = new JObject { ["type"] = "integer", ["minimum"] = 1, ["maximum"] = MaximumOrders,
+                    ["description"] = "1-based reservation_operations segment counting only THIS target's commands in this proposal, never existing game reservations." },
+                ["point"] = new JObject { ["type"] = "integer", ["minimum"] = 1, ["maximum"] = 40,
+                    ["description"] = "1-based point inside that segment. Repeat from here through this target's final segment; all repeated commands must support loops. Omit loop_from for no loop." }
+            })
+        });
+        schema["required"] = new JArray("target_ref", "placement");
+        return schema;
+    }
     private static JObject Orders(JObject target, string description) => new()
     {
         ["type"] = "array", ["maxItems"] = MaximumOrders, ["description"] = description,

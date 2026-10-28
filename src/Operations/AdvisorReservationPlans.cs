@@ -11,6 +11,9 @@ internal interface IAdvisorReservationCommand
 {
     bool ComposesReservations { get; }
     bool EndsReservationSequence { get; }
+    bool SupportsLoop { get; }
+    IReadOnlyList<AdvisorMapCoordinate> GetLoopPoints(ReservationOrder order);
+    void SetLoop(string target, IReadOnlyList<AdvisorMapCoordinate> points);
     ReservationQueueState InspectQueue(string target, ReservationPlacement placement);
     bool BeginQueue(string target, ReservationPlacement placement);
     void ValidateReservations(IReadOnlyList<ReservationOrder> orders);
@@ -24,20 +27,29 @@ internal sealed partial class AdvisorOperations
     private IAdvisorReservationCommand? ReservationCommand(AdvisorOperationOrder order) =>
         Operation(order.OperationId) is IAdvisorReservationCommand command && command.ComposesReservations ? command : null;
 
+    private sealed class ReservationLoop
+    {
+        internal readonly int Segment, Point;
+        internal readonly List<AdvisorMapCoordinate> Points = new();
+        internal string? FirstOrder, LastOrder;
+        internal ReservationLoop(int segment, int point) { Segment = segment; Point = point; }
+    }
     private sealed class ReservationPlan
     {
         internal readonly Dictionary<string, ReservationPlacement> Placements;
         internal readonly Dictionary<string, ReservationQueueState> Queues = new(StringComparer.Ordinal);
         internal readonly Dictionary<string, ReservationOrder> Steps = new(StringComparer.Ordinal);
-        internal ReservationPlan(Dictionary<string, ReservationPlacement> placements) => Placements = placements;
+        internal readonly Dictionary<string, ReservationLoop> Loops;
+        internal ReservationPlan(Dictionary<string, ReservationPlacement> placements, Dictionary<string, ReservationLoop> loops)
+        { Placements = placements; Loops = loops; }
     }
     private ReservationPlan ValidatePlan(AdvisorOperationPlan plan)
     {
         if (plan.ImmediateOrders.Any(o => Operation(o.OperationId).ExecutionMode != OperationExecutionMode.Immediate) ||
             plan.ReservationOrders.Any(o => Operation(o.OperationId).ExecutionMode != OperationExecutionMode.Reservation))
             throw new AdvisorOperationException(400, "operation_phase_mismatch");
-        var placements = ReadPlacements(plan.ReservationUpdates);
-        var result = new ReservationPlan(placements);
+        var placements = ReadPlacements(plan.ReservationUpdates, out var loops);
+        var result = new ReservationPlan(placements, loops);
         var targets = new HashSet<string>(plan.ReservationOrders.Where(o => ReservationCommand(o) != null).Select(o => o.Target), StringComparer.Ordinal);
         if (!targets.SetEquals(placements.Keys)) throw new AdvisorOperationException(400,
             targets.Count > 0 && placements.Count == 0 ? "missing_reservation_updates" : "reservation_policy_mismatch");
@@ -63,6 +75,15 @@ internal sealed partial class AdvisorOperations
                 ? queue.CurrentPosition : queue.EndPosition ?? queue.CurrentPosition;
             result.Steps.Add(order.Id, new ReservationOrder(new OperationOrder(order.Target, order.Arguments.ToString(Newtonsoft.Json.Formatting.None)),
                 placements[order.Target], queue, start, index));
+            if (loops.TryGetValue(order.Target, out var loop) && index + 1 >= loop.Segment)
+            {
+                if (!command.SupportsLoop) throw new AdvisorOperationException(400, "reservation_not_repeatable");
+                var points = command.GetLoopPoints(result.Steps[order.Id]);
+                var skip = index + 1 == loop.Segment ? loop.Point - 1 : 0;
+                if (points.Count == 0 || skip >= points.Count) throw new AdvisorOperationException(400, "invalid_reservation_loop");
+                loop.FirstOrder ??= order.Id; loop.LastOrder = order.Id;
+                loop.Points.AddRange(points.Skip(skip));
+            }
             if (command.EndsReservationSequence) ended.Add(order.Target);
         }
         foreach (var group in plan.Orders.GroupBy(o => o.OperationId))
@@ -71,19 +92,32 @@ internal sealed partial class AdvisorOperations
             if (command != null) command.ValidateReservations(group.Select(o => result.Steps[o.Id]).ToArray());
             else Operation(group.Key).Validate(group.ToArray());
         }
+        foreach (var loop in loops.Values)
+            if (loop.FirstOrder == null || loop.Points.Count < 2 || loop.Points.Select(p => (p.Latitude, p.Longitude)).Distinct().Count() < 2)
+                throw new AdvisorOperationException(400, "invalid_reservation_loop");
         return result;
     }
-    private static Dictionary<string, ReservationPlacement> ReadPlacements(JArray updates)
+    private static Dictionary<string, ReservationPlacement> ReadPlacements(JArray updates, out Dictionary<string, ReservationLoop> loops)
     {
         var result = new Dictionary<string, ReservationPlacement>(StringComparer.Ordinal);
+        loops = new Dictionary<string, ReservationLoop>(StringComparer.Ordinal);
         foreach (var value in updates)
         {
-            if (value is not JObject item || item.Count != 2 || item["target_ref"]?.Type != JTokenType.String ||
+            if (value is not JObject item || item.Count < 2 || item.Count > 3 || item.Properties().Any(p => p.Name is not ("target_ref" or "placement" or "loop_from")) ||
+                item["target_ref"]?.Type != JTokenType.String ||
                 string.IsNullOrWhiteSpace((string?)item["target_ref"]) || item["placement"]?.Type != JTokenType.String ||
                 (string?)item["placement"] is not ("append" or "replace"))
                 throw new AdvisorOperationException(400, "invalid_reservation_policy");
             if (!result.TryAdd((string)item["target_ref"]!, (string)item["placement"]! == "replace" ? ReservationPlacement.Replace : ReservationPlacement.Append))
                 throw new AdvisorOperationException(400, "duplicate_reservation_policy");
+            if (item["loop_from"] != null)
+            {
+                if (item["loop_from"] is not JObject loop || loop.Count != 2 || loop.Properties().Any(p => p.Name is not ("segment" or "point")))
+                    throw new AdvisorOperationException(400, "invalid_reservation_loop");
+                int Number(string name) => loop[name]?.Type == JTokenType.Integer && int.TryParse(loop[name]!.ToString(), out var number) && number >= 1 && number <= 40
+                    ? number : throw new AdvisorOperationException(400, "invalid_reservation_loop");
+                loops.Add((string)item["target_ref"]!, new ReservationLoop(Number("segment"), Number("point")));
+            }
         }
         return result;
     }
@@ -94,9 +128,17 @@ internal sealed partial class AdvisorOperations
         {
             var descriptions = prepared.Steps.Count == 0
                 ? plan.ReservationOrders.GroupBy(o => o.OperationId).Select(g => Operation(g.Key).DescribeProposal(g.ToArray(), language))
-                : plan.ReservationOrders.Select(order => ReservationCommand(order) is IAdvisorReservationCommand command
-                    ? command.DescribeReservation(prepared.Steps[order.Id], language)
-                    : Operation(order.OperationId).DescribeProposal(new[] { order }, language));
+                : plan.ReservationOrders.Select(order =>
+                {
+                    var description = ReservationCommand(order) is IAdvisorReservationCommand command
+                        ? command.DescribeReservation(prepared.Steps[order.Id], language)
+                        : Operation(order.OperationId).DescribeProposal(new[] { order }, language);
+                    if (prepared.Loops.TryGetValue(order.Target, out var loop) && loop.FirstOrder == order.Id)
+                        description += "\n" + text.Format("operation.loop_summary",
+                            loop.Points[0].Latitude.ToString("F5", System.Globalization.CultureInfo.InvariantCulture),
+                            loop.Points[0].Longitude.ToString("F5", System.Globalization.CultureInfo.InvariantCulture), loop.Points.Count);
+                    return description;
+                });
             sections.Add(text["operation.reservation_heading"] + "\n" + string.Join("\n\n", descriptions));
         }
         if (plan.ImmediateOrders.Count > 0)
@@ -129,6 +171,11 @@ internal sealed partial class AdvisorOperations
                     drawings.AddRange(preview.Preview(new[] { order }, language).Drawings);
             }
         }
+        foreach (var loop in prepared.Loops.Values)
+        {
+            drawings.Add(AdvisorMapDrawing.Line(new[] { loop.Points.Last(), loop.Points[0] }));
+            drawings.Add(AdvisorMapDrawing.Point(loop.Points[0], AdvisorText.Load(language)["operation.loop_start"]));
+        }
         foreach (var group in plan.ImmediateOrders.GroupBy(o => o.OperationId))
             if (Operation(group.Key) is IAdvisorOperationPreview preview) drawings.AddRange(preview.Preview(group.ToArray(), language).Drawings);
         return new AdvisorMapPreview(drawings);
@@ -141,7 +188,8 @@ internal sealed partial class AdvisorOperations
             var target = (string)value["target_ref"]!; var placement = (string)value["placement"]!;
             if (seen.TryGetValue(target, out var previous))
             {
-                if (placement == "replace" || previous == "replace") throw new AdvisorOperationException(400, "conflicting_selected_reservations");
+                if (placement == "replace" || previous == "replace" || value["loop_from"] != null ||
+                    updates.Cast<JObject>().Any(p => (string)p["target_ref"]! == target && p["loop_from"] != null)) throw new AdvisorOperationException(400, "conflicting_selected_reservations");
                 continue;
             }
             seen.Add(target, placement); updates.Add(value.DeepClone());

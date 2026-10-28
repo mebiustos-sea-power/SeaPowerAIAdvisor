@@ -36,6 +36,11 @@ internal static class AdvisorOperationTargets
                     new XAttribute("VerticalAlignment", "Center"), Element("TextBlock", Text("Text", label),
                         new XAttribute("FontSize", "12"), new XAttribute("FontWeight", "Bold"), new XAttribute("Foreground", "#FFFFFF"))));
             }
+            if (policies[target].Any(p => p["loop_from"] != null))
+                row.Add(Element("Border", new XAttribute("Background", "{DynamicResource AdvisorReservationAppendBrush}"),
+                    new XAttribute("CornerRadius", "3"), new XAttribute("Padding", "6,1"), new XAttribute("Margin", "0,0,6,2"),
+                    new XAttribute("VerticalAlignment", "Center"), Element("TextBlock", Text("Text", "Loop"),
+                        new XAttribute("FontSize", "12"), new XAttribute("FontWeight", "Bold"), new XAttribute("Foreground", "#FFFFFF"))));
             rows.Add(row);
         }
         if (!rows.HasElements) rows.Add(Element("TextBlock", Text("Text", text["operation.no_targets"]), new XAttribute("FontSize", "14")));

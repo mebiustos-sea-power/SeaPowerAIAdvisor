@@ -13,6 +13,7 @@ internal sealed class MovementExtension : IAdvisorOperationExtension, IAdvisorOp
     internal const string OperationId = "seapower.schedule_movement";
     public int ApiVersion => AdvisorApi.ContractVersion;
     public string Version => "1.0.0";
+    public bool SupportsLoop => true;
     public bool EndsReservationSequence => false;
     public string GetInstructions() => AdvisorPrompts.Current.Text("battle.json", "operation_movement");
     public OperationDefinition GetDefinition() => new(OperationId, OperationExecutionMode.Reservation, "Schedule an ordered movement route.", new JObject
@@ -64,7 +65,7 @@ internal abstract class MovementOperationBase : IAdvisorOperationHandler, IAdvis
     public abstract string ExecuteReservation(ReservationOrder order);
 }
 
-internal sealed class MovementOperation : MovementOperationBase
+internal sealed class MovementOperation : MovementOperationBase, IAdvisorLoopableReservationOperation
 {
     internal MovementOperation(IAdvisorOperationContext context) : base(context) { }
     public override string GetCandidates() => new JArray(Units().Select(unit => new JObject
@@ -110,6 +111,7 @@ internal sealed class MovementOperation : MovementOperationBase
                 point.Depth != null && !unit.Depths.Any(p => p.Id == point.Depth)) throw new OperationException(400, "movement_setting_not_supported");
         return (unit, points);
     }
+    public IReadOnlyList<AdvisorMapCoordinate> GetLoopPoints(ReservationOrder order) => Read(order).Points.Select(p => p.Position).ToArray();
     public override void ValidateReservations(IReadOnlyList<ReservationOrder> orders)
     {
         if (orders.Sum(o => Read(o).Points.Count) > 40) throw new OperationException(400, "too_many_movement_waypoints");

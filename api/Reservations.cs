@@ -6,7 +6,18 @@ namespace SeaPowerAIAdvisor.Api;
 public enum ReservationPlacement { Append, Replace }
 
 // Optional queue-composition contracts for commands declaring OperationExecutionMode.Reservation.
-public interface IAdvisorReservationExtension { bool EndsReservationSequence { get; } }
+public interface IAdvisorReservationExtension
+{
+    bool EndsReservationSequence { get; }
+    bool SupportsLoop { get; }
+}
+
+// A loop-capable segment reports one coordinate per native reservation it appends, in the same order.
+// The host selects the repeat suffix without reading command-specific argument JSON.
+public interface IAdvisorLoopableReservationOperation
+{
+    IReadOnlyList<AdvisorMapCoordinate> GetLoopPoints(ReservationOrder order);
+}
 public interface IAdvisorReservationOperation
 {
     void ValidateReservations(IReadOnlyList<ReservationOrder> orders);
@@ -52,6 +63,8 @@ public interface IAdvisorReservationSequenceSupport
     ReservationQueueState InspectReservations(string target, ReservationPlacement placement);
     // Called once, immediately before the target's first registration. Returns whether the queue/control changed.
     bool BeginReservations(string target, ReservationPlacement placement);
+    // Called after all of this target's reservations were registered. Only this exact new suffix repeats.
+    void SetReservationLoop(string target, IReadOnlyList<AdvisorMapCoordinate> points);
 }
 
 public interface IAdvisorMovementSupport

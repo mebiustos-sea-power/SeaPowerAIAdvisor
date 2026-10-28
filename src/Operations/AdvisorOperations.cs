@@ -128,7 +128,7 @@ internal sealed partial class AdvisorOperations
         definition["requires_approval"] = operation.RequiresApproval;
         definition["plan_policy"] = Policy(operation).Json();
         if (operation is IAdvisorReservationCommand reservation && reservation.ComposesReservations)
-            definition["reservation_sequence"] = new JObject { ["ends_sequence"] = reservation.EndsReservationSequence };
+            definition["reservation_sequence"] = new JObject { ["ends_sequence"] = reservation.EndsReservationSequence, ["supports_loop"] = reservation.SupportsLoop };
         return definition;
     }
     internal AdvisorOperationProposal? Proposal(string owner)
@@ -205,6 +205,11 @@ internal sealed partial class AdvisorOperations
                     {
                         if (begun.Add(order.Target)) changed = command.BeginQueue(order.Target, prepared.Placements[order.Target]);
                         data = command.ExecuteReservation(prepared.Steps[order.Id]);
+                        if (prepared.Loops.TryGetValue(order.Target, out var loop) && loop.LastOrder == order.Id)
+                        {
+                            try { command.SetLoop(order.Target, loop.Points); }
+                            catch (Exception error) { throw new InvalidOperationException("Loop setup failed after reservations were registered.", error); }
+                        }
                     }
                     catch (AdvisorOperationException error) when (changed)
                     { throw new InvalidOperationException("Reservation execution failed after queue/control changes.", error); }
