@@ -28,12 +28,23 @@ public sealed class SensorControlInfo
     public string? Function { get; }
     public string Setting { get; }
     public string Value { get; }
-    public IReadOnlyList<string> Options { get; }
+    public IReadOnlyList<SensorControlOption> Options { get; }
     public string? UnavailableReason { get; }
     public SensorControlInfo(string id, string name, string kind, string setting, string value,
-        IEnumerable<string> options, string? unavailableReason = null, string? role = null, string? function = null)
+        IEnumerable<SensorControlOption> options, string? unavailableReason = null, string? role = null, string? function = null)
     { Id = id; Name = name; Kind = kind; Setting = setting; Value = value;
-        Options = new List<string>(options).AsReadOnly(); UnavailableReason = unavailableReason; Role = role; Function = function; }
+        Options = new List<SensorControlOption>(options).AsReadOnly(); UnavailableReason = unavailableReason; Role = role; Function = function; }
+}
+
+// Availability is value-specific: a blocked ON must not remove a valid OFF.
+// Preparation describes native side effects performed only after adoption.
+public sealed class SensorControlOption
+{
+    public string Value { get; }
+    public string? UnavailableReason { get; }
+    public string? Preparation { get; }
+    public SensorControlOption(string value, string? unavailableReason = null, string? preparation = null)
+    { Value = value; UnavailableReason = unavailableReason; Preparation = preparation; }
 }
 
 public sealed class SensorControlChange

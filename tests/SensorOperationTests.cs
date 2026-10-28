@@ -10,6 +10,8 @@ internal static class SensorOperationTests
 {
     internal static void Run(Action<string, Action> check)
     {
+        SensorUiControlTests.Run(check);
+        SensorConditionTests.Run(check);
         check("Sensor candidates expose the target's live control options without executing, while EMCON does not require enumeration by the AI", () =>
         {
             var game = new Game(); var service = Service(game);
@@ -138,9 +140,9 @@ internal static class SensorOperationTests
             Reads++;
             return new[] { 42, 43 }.Select(id => new SensorUnitInfo(new GameUnitInfo(id, "Unit " + id, null, false, false, UnitReason), false,
                 Removed ? Array.Empty<SensorControlInfo>() : new[] {
-                    new SensorControlInfo("radar.power", "Radar", "radar", "power", "off", AllowOn ? new[] { "on", "off" } : new[] { "off" }, SensorReason),
-                    new SensorControlInfo("sonar.active", "Sonar", "sonar", "active", "on", new[] { "on", "off" }, SensorReason),
-                    new SensorControlInfo("guidance.power", "Radar", "radar", "power", "off", new[] { "on", "off" }, role: "air", function: "targeting") })).ToArray();
+                    new SensorControlInfo("radar.power", "Radar", "radar", "power", "off", new[] { new SensorControlOption("on", AllowOn ? null : "sensor_setting_unavailable"), new SensorControlOption("off") }, SensorReason),
+                    new SensorControlInfo("sonar.active", "Sonar", "sonar", "active", "on", new[] { new SensorControlOption("on"), new SensorControlOption("off") }, SensorReason),
+                    new SensorControlInfo("guidance.power", "Radar", "radar", "power", "off", new[] { new SensorControlOption("on"), new SensorControlOption("off") }, role: "air", function: "targeting") })).ToArray();
         }
         public void SetSensorControls(string target, IReadOnlyList<SensorControlChange> changes)
         { foreach (var change in changes) Log.Add(target + ":" + change.Control + ":" + change.Value); }

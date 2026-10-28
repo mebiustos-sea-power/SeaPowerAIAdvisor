@@ -64,6 +64,9 @@
     <Compile Include="..\src\Game\Battle\BattleValue.cs" Link="BattleValue.cs" />
     <Compile Include="..\src\Game\Battle\BattleWeaponReader.cs" Link="BattleWeaponReader.cs" />
     <Compile Include="..\src\Game\Battle\BattleSensorReader.cs" Link="BattleSensorReader.cs" />
+    <Compile Include="..\src\Game\Battle\BattleSensorUiControls.cs" Link="BattleSensorUiControls.cs" />
+    <Compile Include="..\src\Game\Battle\BattleSensorSupport.cs" Link="BattleSensorSupport.cs" />
+    <Compile Include="..\src\Game\Battle\BattleSensorActions.cs" Link="BattleSensorActions.cs" />
     <Compile Include="..\src\Game\Battle\BattleCapabilityReader.cs" Link="BattleCapabilityReader.cs" />
     <Compile Include="..\src\Game\Battle\BattleAircraftCruise.cs" Link="BattleAircraftCruise.cs" />
     <Compile Include="..\src\Game\Battle\BattleReferenceCatalog.cs" Link="BattleReferenceCatalog.cs" />

@@ -73,7 +73,10 @@ internal sealed class SensorOperation : SensorOperationBase
         row["controls"] = new JArray(unit.Controls.Select(c => new JObject
         {
             ["id"] = c.Id, ["display_name"] = c.Name, ["kind"] = c.Kind, ["setting"] = c.Setting,
-            ["role"] = c.Role, ["function"] = c.Function, ["value"] = c.Value, ["options"] = new JArray(c.Options), ["available"] = c.UnavailableReason == null,
+            ["role"] = c.Role, ["function"] = c.Function, ["value"] = c.Value, ["options"] = new JArray(c.Options.Where(o => o.UnavailableReason == null).Select(o => o.Value)),
+            ["option_conditions"] = new JArray(c.Options.Where(o => o.UnavailableReason != null || o.Preparation != null).Select(o => new JObject
+            { ["value"] = o.Value, ["unavailable_reason"] = o.UnavailableReason, ["preparation"] = o.Preparation })),
+            ["available"] = c.UnavailableReason == null && c.Options.Any(o => o.UnavailableReason == null),
             ["unavailable_reason"] = c.UnavailableReason
         }));
         return row;
@@ -101,7 +104,9 @@ internal sealed class SensorOperation : SensorOperationBase
         {
             var control = unit.Controls.SingleOrDefault(c => c.Id == change.Control) ?? throw new OperationException(409, "sensor_control_unavailable");
             if (control.UnavailableReason is string reason) throw new OperationException(409, reason);
-            if (!control.Options.Contains(change.Value)) throw new OperationException(409, "sensor_setting_unavailable");
+            var option = control.Options.SingleOrDefault(o => o.Value == change.Value)
+                ?? throw new OperationException(409, "sensor_setting_unavailable");
+            if (option.UnavailableReason is string unavailable) throw new OperationException(409, unavailable);
         }
         return (unit, changes);
     }
@@ -113,7 +118,11 @@ internal sealed class SensorOperation : SensorOperationBase
         return Context.Text.Format(language, "proposal_summary", data.Unit.Unit.Name) + "\n" + string.Join("\n", data.Changes.Select(change =>
         {
             var c = data.Unit.Controls.Single(v => v.Id == change.Control);
-            return "- " + c.Name + " / " + Context.Text.Get(language, "setting_" + c.Setting) + ": " + Context.Text.Get(language, "value_" + change.Value);
+            var setting = c.Setting == "power" ? c.Kind == "sonar" ? "deployment" : null : c.Setting;
+            var preparation = c.Options.Single(o => o.Value == change.Value).Preparation;
+            return "- " + c.Name + (setting == null ? "" : " / " + Context.Text.Get(language, "setting_" + setting)) +
+                ": " + Context.Text.Get(language, "value_" + change.Value) +
+                (preparation == null ? "" : "\n  " + Context.Text.Get(language, "preparation_" + preparation));
         }));
     }));
     public override string Execute(OperationOrder order)
