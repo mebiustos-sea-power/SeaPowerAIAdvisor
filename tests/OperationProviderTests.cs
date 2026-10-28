@@ -21,7 +21,7 @@ internal static partial class ProviderTests
                 using var gateway = new AdvisorOperationGateway(registry);
                 using var operations = gateway.CreateSession("ai", AdvisorPrompts.Current)!;
                 var knowledge = DeliveryKnowledge(); var progress = new List<AdvisorProgress>();
-                Task<AdvisorReply> Send(FakeSession session, int send, bool allowed, CancellationToken token)
+                Task<AiReply> Send(FakeSession session, int send, bool allowed, CancellationToken token)
                 {
                     Require(session.Input.Tools.Any(t => (string?)t["name"] == "propose_operation_plans") &&
                         !session.Input.Data.ToString().Contains(SonobuoyDropExtension.OperationId, StringComparison.Ordinal),
@@ -52,12 +52,12 @@ internal static partial class ProviderTests
                         order["arguments"]!["drops"]![0]!["longitude"] = candidate["position"]!["longitude_deg"]!.DeepClone();
                         var request = PlanRequest(order);
                         if (planCount == 1) ((JArray)request["plans"]!).RemoveAt(1);
-                        return Task.FromResult(Reply(new AdvisorToolCall("plans", "propose_operation_plans", request)));
+                        return Task.FromResult(Reply(new AiToolCall("plans", "propose_operation_plans", request)));
                     }
                     Require((string?)result["status"] == "proposed" && (bool?)result["registered"] == false &&
                         (bool?)result["requires_approval"] == true && result["plans"]!.Count() == planCount && unit.Calls == 0,
                         "AI submission below target was rejected, padded, bypassed approval or misreported registration");
-                    return Task.FromResult(new AdvisorReply("One buoy order proposed.", Array.Empty<AdvisorToolCall>(), 1));
+                    return Task.FromResult(new AiReply("One buoy order proposed.", Array.Empty<AiToolCall>(), 1));
                 }
                 var provider = new FakeProvider("operation-model", Send);
                 var context = AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations, progress: progress.Add);
@@ -95,11 +95,11 @@ internal static partial class ProviderTests
             using var gateway = new AdvisorOperationGateway(registry);
             using var operations = gateway.CreateSession("progress-errors", AdvisorPrompts.Current)!;
             var progress = new List<AdvisorProgress>();
-            AdvisorReply Submit(string id, JObject request)
+            AiReply Submit(string id, JObject request)
             {
-                return Reply(new AdvisorToolCall(id, "propose_operation_plans", request));
+                return Reply(new AiToolCall(id, "propose_operation_plans", request));
             }
-            Task<AdvisorReply> Send(FakeSession session, int send, bool _, CancellationToken token)
+            Task<AiReply> Send(FakeSession session, int send, bool _, CancellationToken token)
             {
                 if (send is 1 or 3) return Task.FromResult(OperationReply("missing-" + send, new JObject {
                     ["action"] = "candidates", ["operation_id"] = "PRIVATE_MISSING_OPERATION" }));
@@ -117,7 +117,7 @@ internal static partial class ProviderTests
                 }
                 if (send == 6) return Task.FromResult(Submit("invalid", new JObject { ["request_id"] = "invalid", ["plans"] = new JArray() }));
                 Require((string?)session.Results.Single().Data["status"] == "error", "An invalid later submission was accepted");
-                return Task.FromResult(new AdvisorReply("Ready for review", Array.Empty<AdvisorToolCall>(), 1));
+                return Task.FromResult(new AiReply("Ready for review", Array.Empty<AiToolCall>(), 1));
             }
             var provider = new FakeProvider("progress", Send);
             var result = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(provider).ConsultAsync(
@@ -155,11 +155,11 @@ internal static partial class ProviderTests
                     {
                         Require(RequestSchemaFixture.Accepts(session.Input.Tools.Single(t => (string?)t["name"] == "propose_operation_plans")["parameters"]!, request),
                             "Complete alternative plans did not match the published contract");
-                        return Task.FromResult(Reply(new AdvisorToolCall("plans", "propose_operation_plans", request)));
+                        return Task.FromResult(Reply(new AiToolCall("plans", "propose_operation_plans", request)));
                     }
                     Require(session.Results.Count == 1 && (string?)session.Results[0].Data["status"] == "proposed" && unit.Calls == 0,
                         "A complete submission was partially accepted or ran before approval");
-                    return Task.FromResult(new AdvisorReply("Plans ready", Array.Empty<AdvisorToolCall>(), 1));
+                    return Task.FromResult(new AiReply("Plans ready", Array.Empty<AiToolCall>(), 1));
                 });
                 var result = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(provider).ConsultAsync(
                     AdvisorContext.Create(new Knowledge(2), Array.Empty<ChatExchange>(), operations: operations), CancellationToken.None)));
@@ -188,7 +188,7 @@ internal static partial class ProviderTests
                     _ = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(provider).ConsultAsync(
                         AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations), CancellationToken.None)));
                 }
-                catch (AdvisorConnectionException error)
+                catch (AiConnectionException error)
                 {
                     Require(error.Code == "tool_call_limit" && unit.Calls == 0 && operations.History.Count == 1 && knowledge.Requests.Count == 0 &&
                         provider.Sessions.Single().Sends == 2 && provider.Sessions.Single().Disposed,
@@ -218,7 +218,7 @@ internal static partial class ProviderTests
                         (string?)r.Data["status"] == (count == 8 ? "ok" : "error")), "Retrieval batch validation changed");
                     if (count == 9) Require(session.Results.All(r => (string?)r.Data["error"]?["code"] == "invalid_arguments"),
                         "Oversized information retrieval bypassed the knowledge gateway");
-                    return Task.FromResult(new AdvisorReply("Read result handled", Array.Empty<AdvisorToolCall>(), 1));
+                    return Task.FromResult(new AiReply("Read result handled", Array.Empty<AiToolCall>(), 1));
                 });
                 var result = await new AdvisorEngine(provider).ConsultAsync(AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>()), CancellationToken.None);
                 Require(result.ApiRequests == 2 && knowledge.Requests.Count == (count == 8 ? 1 : 0) && knowledge.RoundsUsed == (count == 8 ? 1 : 0),
@@ -230,11 +230,11 @@ internal static partial class ProviderTests
             var unit = new OperationHelicopter(); var registry = SonobuoyRegistry(unit);
             using var gateway = new AdvisorOperationGateway(registry);
             using var operations = gateway.CreateSession("handoff", AdvisorPrompts.Current)!;
-            var main = new FakeProvider("first", (_, n, _, _) => n == 1 ? Task.FromResult(ProposalReply("first-order", BuoyRequest())) : throw new AdvisorConnectionException("rate_limited", 429));
+            var main = new FakeProvider("first", (_, n, _, _) => n == 1 ? Task.FromResult(ProposalReply("first-order", BuoyRequest())) : throw new AiConnectionException("rate_limited", 429));
             var sub = new FakeProvider("second", (s, n, _, _) =>
             {
                 Require(s.Continuation != null && (string?)s.Continuation.Operations[0]?["response"]?["status"] == "proposed", "Handoff lost the existing order receipt");
-                return Task.FromResult(n == 1 ? ProposalReply("replay", BuoyRequest()) : new AdvisorReply("Existing reservation retained.", Array.Empty<AdvisorToolCall>(), 1));
+                return Task.FromResult(n == 1 ? ProposalReply("replay", BuoyRequest()) : new AiReply("Existing reservation retained.", Array.Empty<AiToolCall>(), 1));
             });
             var context = AdvisorContext.Create(new Knowledge(4), Array.Empty<ChatExchange>(), operations: operations);
             var answer = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(main, sub).ConsultAsync(context, CancellationToken.None)));
@@ -258,13 +258,13 @@ internal static partial class ProviderTests
                         JToken.DeepEquals(definition["parameters"], input.Tools[i]["parameters"]), "Wire schema changed argument constraints");
                 }
             }
-            CheckWire((JArray)GeminiInteraction.Request(settings, new JArray(), allowTools: true, tools: input.Tools)["tools"]!, false);
-            CheckWire((JArray)OllamaProvider.Request(LocalConfiguration("local"), new AdvisorConnectionOptions(new JObject()), new JArray(), input.Tools)["tools"]!, true);
+            CheckWire((JArray)GeminiInteraction.Request(settings.ToConnectionSettings(), new JArray(), allowTools: true, tools: input.Tools)["tools"]!, false);
+            CheckWire((JArray)OllamaProvider.Request(LocalConfiguration("local").ToConnectionSettings(), new JArray(), input.Tools)["tools"]!, true);
             foreach (var nano in new[] { false, true })
             {
-                using var transport = new AdvisorHttpTransport(new BackendHttpHandler((_, _) => throw new InvalidOperationException("Unexpected real send")));
-                ChatCompletionProvider provider = nano ? new NanoGptProvider(transport, NanoConfiguration(), new AdvisorConnectionOptions(new JObject()), false)
-                    : new OpenRouterProvider(transport, RouterConfiguration("router"), new AdvisorConnectionOptions(new JObject()), false);
+                using var transport = new AiHttpTransport(new BackendHttpHandler((_, _) => throw new InvalidOperationException("Unexpected real send")));
+                ChatCompletionProvider provider = nano ? new NanoGptProvider(transport, NanoConfiguration().ToConnectionSettings())
+                    : new OpenRouterProvider(transport, RouterConfiguration("router").ToConnectionSettings());
                 var body = provider.Request(new JArray(), input.Tools, new JValue("auto"));
                 CheckWire((JArray)body["tools"]!, true);
                 Require(!body.ToString().Contains(SonobuoyDropExtension.OperationId, StringComparison.Ordinal), "Commands were eagerly embedded");
@@ -307,20 +307,20 @@ internal static partial class ProviderTests
                 (string?)snapshot["operations"]?[0]?["response"]?["status"] == "proposed", "Operation evidence was lost or aliased");
         });
     }
-    private static AdvisorToolCall BuoyCall(int index)
+    private static AiToolCall BuoyCall(int index)
     {
         var request = BuoyRequest(); request["request_id"] = "buoy-" + index;
         request["arguments"]!["drops"]![0]!["latitude"] = 26.5 + index * 0.001;
-        return new AdvisorToolCall("schedule-" + index, "propose_operation_plans", PlanRequest(request));
+        return new AiToolCall("schedule-" + index, "propose_operation_plans", PlanRequest(request));
     }
-    private static AdvisorReply ProposalReply(string id, JObject order) => Reply(new AdvisorToolCall(id, "propose_operation_plans", PlanRequest(order)));
-    private static AdvisorReply OperationReply(string id, JObject args)
+    private static AiReply ProposalReply(string id, JObject order) => Reply(new AiToolCall(id, "propose_operation_plans", PlanRequest(order)));
+    private static AiReply OperationReply(string id, JObject args)
     {
         var name = (string?)args["action"] switch {
             "list" => "list_operations", "describe" => "describe_operation", "candidates" => "get_operation_candidates",
             _ => throw new InvalidOperationException("Unknown fixture operation") };
         var arguments = (JObject)args.DeepClone(); arguments.Remove("action");
-        return Reply(new AdvisorToolCall(id, name, arguments));
+        return Reply(new AiToolCall(id, name, arguments));
     }
     private static JObject PlanRequest(JObject request)
     {

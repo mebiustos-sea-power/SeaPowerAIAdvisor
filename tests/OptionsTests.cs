@@ -207,7 +207,7 @@ internal static class OptionsTests
         private readonly int limit;
         internal int Calls;
         internal RoundTransport(int limit) { this.limit = limit; }
-        public Task<JObject> GenerateAsync(AdvisorSettings settings, JObject body, CancellationToken cancellation)
+        public Task<JObject> GenerateAsync(AiConnectionSettings settings, JObject body, CancellationToken cancellation)
         {
             Calls++;
             if (Calls == 1)

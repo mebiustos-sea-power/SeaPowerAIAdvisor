@@ -21,7 +21,7 @@ internal static partial class ProviderTests
                 var request = shortcut.Prepare("Advice"); var knowledge = DeliveryKnowledge();
                 using var operations = AdvisorConsultation.CreateOperations(request, source, "advisory", knowledge.Prompts, AdvisorOperationReferences.Empty);
                 Require(operations == null && opened == 0, "An advisory shortcut opened a command gateway");
-                Task<AdvisorReply> Send(FakeSession session, int n, bool _, CancellationToken __)
+                Task<AiReply> Send(FakeSession session, int n, bool _, CancellationToken __)
                 {
                     Require(!session.Input.Tools.Any(t => (string?)t["name"] is "list_operations" or "describe_operation" or "get_operation_candidates" or "propose_operation_plans" or "game_operations"),
                         "An operation tool was advertised in an advisory consultation");
@@ -30,7 +30,7 @@ internal static partial class ProviderTests
                             Call("briefing", "get_briefing")));
                     Require(delivery == AdvisorSituationDelivery.Upfront ? session.Input.Data["situation_data"] != null :
                         session.Results.Single().Data["results"]?[0]?["data"] != null, "Disabling commands also disabled situation evidence");
-                    return Task.FromResult(new AdvisorReply("Situation advice", Array.Empty<AdvisorToolCall>(), 1));
+                    return Task.FromResult(new AiReply("Situation advice", Array.Empty<AiToolCall>(), 1));
                 }
                 var provider = new FakeProvider("standard", Send);
                 var answer = await new AdvisorEngine(provider, delivery: delivery).ConsultAsync(AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations), CancellationToken.None);
@@ -40,10 +40,10 @@ internal static partial class ProviderTests
             denied.PrepareStandardInput();
             try
             {
-                await denied.Tools.ExecuteAsync(new[] { new AdvisorToolCall("forged", "list_operations", new JObject()) }, CancellationToken.None, (_, _) => { }, (_, _) => { });
+                await denied.Tools.ExecuteAsync(new[] { new AiToolCall("forged", "list_operations", new JObject()) }, CancellationToken.None, (_, _) => { }, (_, _) => { });
                 throw new InvalidOperationException("An unadvertised operation was accepted");
             }
-            catch (AdvisorConnectionException error) when (error.Code == "invalid_function_call") { }
+            catch (AiConnectionException error) when (error.Code == "invalid_function_call") { }
             Require(opened == 0 && operation.Writes == 0, "A forged command opened operation access");
         }));
         check("Permitted custom shortcuts retain approval, manual requests remain permitted and neither can override WIP or force execution", () =>
@@ -65,7 +65,7 @@ internal static partial class ProviderTests
                 var provider = new FakeProvider("optional", (session, _, _, _) =>
                 {
                     Require(session.Input.Tools.Any(t => (string?)t["name"] == "propose_operation_plans"), "Permitted tools are missing");
-                    return Task.FromResult(new AdvisorReply("A normal answer without commands", Array.Empty<AdvisorToolCall>(), 1));
+                    return Task.FromResult(new AiReply("A normal answer without commands", Array.Empty<AiToolCall>(), 1));
                 });
                 var answer = OperationGatewayTests.Finish(gateway, new AdvisorEngine(provider).ConsultAsync(
                     AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: idle), CancellationToken.None));
@@ -79,7 +79,7 @@ internal static partial class ProviderTests
             var executor = new FakeProvider("custom", (session, n, _, _) => Task.FromResult(n switch {
                 1 => OperationReply("definition", new JObject { ["action"] = "describe", ["operation_id"] = SonobuoyDropExtension.OperationId }),
                 2 => ProposalReply("drop", BuoyRequest()),
-                _ => new AdvisorReply("Awaiting approval", Array.Empty<AdvisorToolCall>(), 1) }));
+                _ => new AiReply("Awaiting approval", Array.Empty<AiToolCall>(), 1) }));
             var result = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(executor).ConsultAsync(
                 AdvisorContext.Create(DeliveryKnowledge(), Array.Empty<ChatExchange>(), operations: operations), CancellationToken.None)));
             Require(result.Completed && unit.Calls == 0, "Permitted shortcut bypassed approval");
@@ -93,17 +93,17 @@ internal static partial class ProviderTests
             var request = original.WithOperations(false);
             Require(original.AllowOperations && !request.AllowOperations && request.Text == original.Text && request.DisplayBody == original.DisplayBody &&
                 request.Units.SequenceEqual(original.Units) && JToken.DeepEquals(request.Context, original.Context), "Changing permission lost question or badge context");
-            var chat = new AdvisorConversation(); var turn = chat.Begin(request); turn.Fail(AdvisorNotice.Connection(new AdvisorConnectionException("request_timeout"))); chat.Retry(turn);
+            var chat = new AdvisorConversation(); var turn = chat.Begin(request); turn.Fail(AdvisorNotice.Connection(new AiConnectionException("request_timeout"))); chat.Retry(turn);
             Require(ReferenceEquals(turn.Request, request) && !turn.Request.AllowOperations, "Retry changed the accepted operation policy");
             var opened = 0;
             var source = new BattleAdvisorSource(() => throw new Exception("Unexpected capture"), () => { opened++; throw new InvalidOperationException("Disabled operations were opened"); });
             using var operations = AdvisorConsultation.CreateOperations(turn.Request, source, turn.OperationId, AdvisorPrompts.Current, AdvisorOperationReferences.Empty);
-            var main = new FakeProvider("main", (_, _, _, _) => throw new AdvisorConnectionException("rate_limited", 429));
+            var main = new FakeProvider("main", (_, _, _, _) => throw new AiConnectionException("rate_limited", 429));
             var sub = new FakeProvider("sub", (s, _, _, _) =>
             {
                 Require(s.Input.Tools.All(t => (string?)t["name"] != "game_operations") &&
                     !s.Input.Tools.Any(t => t.ToString().Contains("\"operation_id\"", StringComparison.Ordinal)), "A provider switch restored operation access");
-                return Task.FromResult(new AdvisorReply("Fallback advice", Array.Empty<AdvisorToolCall>(), 1));
+                return Task.FromResult(new AiReply("Fallback advice", Array.Empty<AiToolCall>(), 1));
             });
             var answer = await new AdvisorEngine(main, sub).ConsultAsync(AdvisorContext.Create(DeliveryKnowledge(), Array.Empty<ChatExchange>(), operations: operations), CancellationToken.None);
             Require(answer.Completed && opened == 0, "Fallback opened a disabled operation service");
@@ -118,7 +118,7 @@ internal static partial class ProviderTests
             var settings = NanoDraft(); var ext = ExternalConfiguration(external, "sub"); settings.Put(new AdvisorApiConfigurationDraft(ext)); settings.SubId = ext.Id;
             var handler = new BackendHttpHandler((_, _) => Task.FromResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.ServiceUnavailable) {
                 Content = new System.Net.Http.StringContent("busy") }));
-            answer = await AdvisorConsultation.RunAsync(AdvisorServices.Prepare(settings, transportFactory: trace => new AdvisorHttpTransport(handler, trace)),
+            answer = await AdvisorConsultation.RunAsync(AdvisorServices.Prepare(settings, transportFactory: trace => new AiHttpTransport(handler, trace)),
                 AdvisorContext.Create(DeliveryKnowledge(), Array.Empty<ChatExchange>(), operations: operations), "unused", request, CancellationToken.None);
             Require(answer.Completed && answer.Text == "Independent advice" && opened == 0, "Independent fallback changed command policy");
         }));

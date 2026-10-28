@@ -99,12 +99,12 @@ internal static partial class ProviderTests
             external.Open = (_, _, _, _) => new Client.Session(_ => new Api.ProviderRequest(AdvisorEngine.MaxTotalRequestBytes + 1, _ =>
             { sent = true; return Task.FromResult(new Api.ProviderReply("Should not send")); }), _ => { }, () => disposed = true);
             try { await RunPrepared(AdvisorServices.Prepare(ExtensionDraft(external))); throw new Exception("Oversized external request sent"); }
-            catch (AdvisorConnectionException error) { Require(error.Code == "request_budget" && !sent && disposed, "Public request bypassed the standard byte budget or leaked its session"); }
+            catch (AiConnectionException error) { Require(error.Code == "request_budget" && !sent && disposed, "Public request bypassed the standard byte budget or leaked its session"); }
             disposed = false;
             external.Open = (_, _, _, _) => new Client.Session(_ => new Api.ProviderRequest(1, _ => Task.FromResult(new Api.ProviderReply("   "))),
                 _ => { }, () => disposed = true);
             try { await RunPrepared(AdvisorServices.Prepare(ExtensionDraft(external))); throw new Exception("Empty public answer succeeded"); }
-            catch (AdvisorConnectionException error) { Require(error.Code == "empty_response" && disposed, "Empty answer became a successful conversation"); }
+            catch (AiConnectionException error) { Require(error.Code == "empty_response" && disposed, "Empty answer became a successful conversation"); }
         }));
         check("An independent external workflow makes more requests than standard rounds while host disclosure and retrieval limits remain enforced", () => Async(async () =>
         {
@@ -130,7 +130,7 @@ internal static partial class ProviderTests
             };
             var requests = 0; var handler = new BackendHttpHandler((_, _) => { requests++; return Task.FromResult(JsonResponse(new JObject { ["ok"] = true })); });
             var knowledge = new Knowledge(2, AdvisorInformation.Default.With(InformationKind.BattleBriefing, false));
-            var answer = await AdvisorConsultation.RunAsync(AdvisorServices.Prepare(ExtensionDraft(external), transportFactory: trace => new AdvisorHttpTransport(handler, trace)),
+            var answer = await AdvisorConsultation.RunAsync(AdvisorServices.Prepare(ExtensionDraft(external), transportFactory: trace => new AiHttpTransport(handler, trace)),
                 AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), progress: progress.Add), "unused-public-log", new AdvisorQuestion("Question"), CancellationToken.None);
             Require(answer.Text == "Independent answer" && answer.Model == "external-engine" && answer.ApiRequests == 7 &&
                 answer.QueryRounds == 2 && requests == 7 && disposed && handler.Disposed &&
@@ -153,7 +153,7 @@ internal static partial class ProviderTests
                 Require(++sends == 1, "An exhausted fallback budget sent an additional model request");
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) { Content = new StringContent("busy") });
             });
-            var answer = await AdvisorConsultation.RunAsync(AdvisorServices.Prepare(draft, transportFactory: trace => new AdvisorHttpTransport(handler, trace)),
+            var answer = await AdvisorConsultation.RunAsync(AdvisorServices.Prepare(draft, transportFactory: trace => new AiHttpTransport(handler, trace)),
                 AdvisorContext.Create(new Knowledge(1), Array.Empty<ChatExchange>()), "unused-public-log", new AdvisorQuestion("Question"), CancellationToken.None);
             Require(!answer.Completed && answer.CompletionReason == AdvisorCompletionReason.RoundLimit && answer.Model == "gemini-sub" &&
                 answer.ApiRequests == 1 && sends == 1 && answer.QueryRounds == 1 && answer.TotalTokens == null && disposed,
@@ -188,7 +188,7 @@ internal static partial class ProviderTests
                 _ = await request.Content!.ReadAsStringAsync(token); return JsonResponse(new JObject { ["ok"] = true });
             });
             var knowledge = new Knowledge(2); var updates = new List<AdvisorProgress>();
-            var answer = await AdvisorConsultation.RunAsync(AdvisorServices.Prepare(draft, transportFactory: trace => new AdvisorHttpTransport(handler, trace)),
+            var answer = await AdvisorConsultation.RunAsync(AdvisorServices.Prepare(draft, transportFactory: trace => new AiHttpTransport(handler, trace)),
                 AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), progress: updates.Add), "unused-public-log", new AdvisorQuestion("Question"), CancellationToken.None);
             Require(answer.Text == "Independent recovered" && answer.ApiRequests == 3 && knowledge.Requests.Count == 1 && answer.TotalTokens == null && updates.Last().ApiRequest == 3 && updates.Last().UsingFallback,
                 "Mixed workflow fallback repeated retrievals or reset usage accounting");
@@ -201,7 +201,7 @@ internal static partial class ProviderTests
             sub.Consult = (_, _, _, _) => { subCalls++; throw new Api.AdvisorException("network_error"); };
             var draft = ExtensionDraft(main); var entry = ExternalConfiguration(sub, "sub"); draft.Put(new AdvisorApiConfigurationDraft(entry)); draft.SubId = entry.Id;
             try { await RunPrepared(AdvisorServices.Prepare(draft)); throw new InvalidOperationException("A failed sub succeeded"); }
-            catch (AdvisorConnectionException error) { Require(error.UsingFallback && error.Code == "network_error", "Sub error lost connection identity"); }
+            catch (AiConnectionException error) { Require(error.UsingFallback && error.Code == "network_error", "Sub error lost connection identity"); }
             Require(mainCalls == 1 && subCalls == 1, "Independent connections looped between main and sub");
             main.Consult = (_, _, _, _) => throw new InvalidOperationException("Broken extension invariant");
             try { await RunPrepared(AdvisorServices.Prepare(draft)); throw new Exception("Programming error was hidden"); }

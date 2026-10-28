@@ -29,7 +29,7 @@ internal static class GeminiTests
                 "{\"api_key\":\"" + MockKey + "\",\"max_output_tokens\":999999999999999999999999999}"
             })
             {
-                try { AdvisorSettings.Parse(json); } catch (AdvisorConnectionException error)
+                try { AdvisorSettings.Parse(json); } catch (AiConnectionException error)
                 { Require(!error.ToString().Contains(MockKey, StringComparison.Ordinal), "Config error leaked a key"); continue; }
                 throw new InvalidOperationException("Malformed settings accepted");
             }
@@ -116,7 +116,7 @@ internal static class GeminiTests
                 return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"status\":\"failed\"}") };
             });
             using var transport = new GeminiTransport(handler);
-            await transport.GenerateAsync(Settings(), new JObject { ["model"] = Settings().RequestModel, ["input"] = "Test" }, CancellationToken.None);
+            await transport.GenerateAsync(Settings().ToConnectionSettings(), new JObject { ["model"] = Settings().RequestModel, ["input"] = "Test" }, CancellationToken.None);
             Require(handler.Calls == 1, "Unexpected HTTP retry");
         }));
         check("HTTP failures and malformed responses expose bounded error codes without response-body secrets", () => Async(async () =>
@@ -125,14 +125,14 @@ internal static class GeminiTests
             {
                 using var transport = new GeminiTransport(new Handler((r, c) => Task.FromResult(new HttpResponseMessage((HttpStatusCode)status)
                     { Content = new StringContent(MockKey) })));
-                await ThrowsCodeAsync(expected, () => transport.GenerateAsync(Settings(), new JObject(), CancellationToken.None));
+                await ThrowsCodeAsync(expected, () => transport.GenerateAsync(Settings().ToConnectionSettings(), new JObject(), CancellationToken.None));
             }
             using var invalid = new GeminiTransport(new Handler((r, c) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
                 { Content = new StringContent("bad JSON " + MockKey) })));
-            await ThrowsCodeAsync("invalid_response", () => invalid.GenerateAsync(Settings(), new JObject(), CancellationToken.None));
+            await ThrowsCodeAsync("invalid_response", () => invalid.GenerateAsync(Settings().ToConnectionSettings(), new JObject(), CancellationToken.None));
             using var large = new GeminiTransport(new Handler((r, c) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
                 { Content = new StringContent(new string('x', GeminiTransport.MaxResponseBytes + 1)) })));
-            await ThrowsCodeAsync("response_too_large", () => large.GenerateAsync(Settings(), new JObject(), CancellationToken.None));
+            await ThrowsCodeAsync("response_too_large", () => large.GenerateAsync(Settings().ToConnectionSettings(), new JObject(), CancellationToken.None));
         }));
         check("Each consultation chains interactions and sends only the latest function results, preserving call IDs and usage", () => Async(async () =>
         {
@@ -269,10 +269,10 @@ internal static class GeminiTests
                 var session = Session(assembly);
                 if (count.HasValue)
                     await GeminiFixture.RunAsync("unused-history-test", session, Settings(), new AdvisorQuestion("Current question"), history,
-                        CancellationToken.None, _ => new AdvisorHttpTransport(handler), historyExchanges: options.HistoryExchanges);
+                        CancellationToken.None, _ => new AiHttpTransport(handler), historyExchanges: options.HistoryExchanges);
                 else
                     await GeminiFixture.RunAsync("unused-history-test", session, Settings(), new AdvisorQuestion("Current question"), history,
-                        CancellationToken.None, _ => new AdvisorHttpTransport(handler));
+                        CancellationToken.None, _ => new AiHttpTransport(handler));
                 Require(handler.Calls == 1 && chat.Turns.Count == 20 && chat.Exchanges.SequenceEqual(history),
                     "Selecting history caused extra API calls or removed visible dialogue");
             }
@@ -359,7 +359,7 @@ internal static class GeminiTests
             try { job.TakeCompleted(); } catch (InvalidOperationException) { goto rejected; }
             throw new InvalidOperationException("Retired job could still update UI");
             rejected:
-            using var failed = new AdvisorJob(c => throw new AdvisorConnectionException("rate_limited", 429), _ => { });
+            using var failed = new AdvisorJob(c => throw new AiConnectionException("rate_limited", 429), _ => { });
             Require((await failed.Completion).Error?.Code == "rate_limited", "Recoverable provider error became fatal");
         }));
         check("Unexpected background source errors remain visible as unexpected failures", () => Async(async () =>
@@ -382,12 +382,12 @@ internal static class GeminiTests
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
     private static void ThrowsCode(string code, Action run)
     {
-        try { run(); } catch (AdvisorConnectionException e) { Require(e.Code == code && !e.ToString().Contains(MockKey, StringComparison.Ordinal), "Wrong or unsafe error"); return; }
+        try { run(); } catch (AiConnectionException e) { Require(e.Code == code && !e.ToString().Contains(MockKey, StringComparison.Ordinal), "Wrong or unsafe error"); return; }
         throw new InvalidOperationException("Expected " + code);
     }
     private static async Task ThrowsCodeAsync(string code, Func<Task> run)
     {
-        try { await run(); } catch (AdvisorConnectionException e) { Require(e.Code == code && !e.ToString().Contains(MockKey, StringComparison.Ordinal), "Wrong or unsafe error: " + e.Code); return; }
+        try { await run(); } catch (AiConnectionException e) { Require(e.Code == code && !e.ToString().Contains(MockKey, StringComparison.Ordinal), "Wrong or unsafe error: " + e.Code); return; }
         throw new InvalidOperationException("Expected " + code);
     }
     private sealed class Fake : IGeminiTransport
@@ -395,7 +395,7 @@ internal static class GeminiTests
         private readonly Func<int, JObject, CancellationToken, JObject> generate;
         internal int Calls;
         internal Fake(Func<int, JObject, CancellationToken, JObject> generate) { this.generate = generate; }
-        public Task<JObject> GenerateAsync(AdvisorSettings s, JObject b, CancellationToken c) => Task.FromResult(generate(++Calls, b, c));
+        public Task<JObject> GenerateAsync(AiConnectionSettings s, JObject b, CancellationToken c) => Task.FromResult(generate(++Calls, b, c));
     }
     private sealed class Handler : HttpMessageHandler
     {

@@ -111,7 +111,7 @@ internal static partial class ProviderTests
             var provider = new FakeProvider("mock", (_, _, _, _) => throw new Exception("An oversized snapshot was sent"));
             try { _ = await new AdvisorEngine(provider, delivery: AdvisorSituationDelivery.Upfront).ConsultAsync(
                 AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>()), CancellationToken.None); }
-            catch (AdvisorConnectionException error) when (error.Code == "situation_payload_limit")
+            catch (AiConnectionException error) when (error.Code == "situation_payload_limit")
             {
                 Require(provider.Sessions.Count == 0 && knowledge.RoundsUsed == 0 && knowledge.InitialInput()["knowledge_catalog"] != null,
                     "Oversize handling partially sent or mutated the source"); return;
@@ -129,14 +129,14 @@ internal static partial class ProviderTests
                 {
                     Require((s.Input.Data["situation_data"] != null) == upfrontFirst, "Main ignored its delivery setting");
                     if (n == 1 && !upfrontFirst) return Task.FromResult(Reply(Call("briefing", "get_briefing")));
-                    throw new AdvisorConnectionException("rate_limited", 429);
+                    throw new AiConnectionException("rate_limited", 429);
                 });
                 var sub = new FakeProvider("sub", (s, _, _, _) =>
                 {
                     Require((s.Input.Data["situation_data"] != null) == !upfrontFirst &&
                         (string?)s.Input.Data["consultation_id"] == knowledge.Id && s.Continuation != null &&
                         s.Continuation.RoundsUsed == (upfrontFirst ? 0 : 1), "Fallback lost mode, snapshot or budget");
-                    return Task.FromResult(new AdvisorReply("Retained situation", Array.Empty<AdvisorToolCall>(), 1));
+                    return Task.FromResult(new AiReply("Retained situation", Array.Empty<AiToolCall>(), 1));
                 });
                 var answer = await new AdvisorEngine(main, sub, delivery: mainMode, fallbackDelivery: subMode).ConsultAsync(
                     AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>()), CancellationToken.None);
@@ -174,7 +174,7 @@ internal static partial class ProviderTests
                 return JsonResponse(NanoReply("Full fallback answer"));
             });
             var knowledge = DeliveryKnowledge();
-            var answer = await AdvisorConsultation.RunAsync(AdvisorServices.Prepare(settings, transportFactory: trace => new AdvisorHttpTransport(handler, trace)),
+            var answer = await AdvisorConsultation.RunAsync(AdvisorServices.Prepare(settings, transportFactory: trace => new AiHttpTransport(handler, trace)),
                 AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>()), "unused", new AdvisorQuestion("Question"), CancellationToken.None);
             Require(answer.Completed && answer.ApiRequests == 2 && answer.QueryRounds == 1 && answer.TotalTokens == null,
                 "Mixed workflow switching reset counters or asserted known usage");
@@ -206,7 +206,7 @@ internal static partial class ProviderTests
                         (data["situation"] == null) == (mode == AdvisorSituationDelivery.OnRequest), "Saved mode did not reach the actual chat request");
                     return JsonResponse(NanoReply("Full answer"));
                 });
-                var setup = AdvisorServices.Prepare(settings, transportFactory: trace => new AdvisorHttpTransport(handler, trace));
+                var setup = AdvisorServices.Prepare(settings, transportFactory: trace => new AiHttpTransport(handler, trace));
                 var knowledge = DeliveryKnowledge();
                 var answer = await AdvisorConsultation.RunAsync(setup, AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>()),
                     "unused", new AdvisorQuestion("Question"), CancellationToken.None);

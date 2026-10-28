@@ -1,0 +1,20 @@
+using System;
+using System.IO;
+using System.Text;
+using Noesis;
+
+namespace SeaPowerAIAdvisor.Shared;
+
+// Shared control visuals stay scoped to each view; game brushes use Noesis resource lookup.
+internal static class UiResources
+{
+    internal static void Apply(FrameworkElement view)
+    {
+        using var source = typeof(UiResources).Assembly.GetManifestResourceStream("SeaPowerAIAdvisor.AdvisorControls.xaml")
+            ?? throw new FileNotFoundException("The embedded shared control resources are missing.");
+        using var reader = new StreamReader(source, Encoding.UTF8);
+        var resources = GUI.ParseXaml(reader.ReadToEnd()) as ResourceDictionary
+            ?? throw new InvalidOperationException("The shared control resources are not a ResourceDictionary.");
+        view.Resources.MergedDictionaries.Add(resources);
+    }
+}

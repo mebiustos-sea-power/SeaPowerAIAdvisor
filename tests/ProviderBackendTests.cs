@@ -132,7 +132,7 @@ internal static partial class ProviderTests
                         models.Add((string)JObject.Parse(await request.Content!.ReadAsStringAsync(token))["model"]!);
                         return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(InteractionFixture.Reply(new JObject { ["text"] = "Gemini answer" }).ToString()) };
                     });
-                    handlers.Add(handler); return new AdvisorHttpTransport(handler, trace);
+                    handlers.Add(handler); return new AiHttpTransport(handler, trace);
                 });
                 var first = registry.Prepare();
                 Settings("gemini-second-model");

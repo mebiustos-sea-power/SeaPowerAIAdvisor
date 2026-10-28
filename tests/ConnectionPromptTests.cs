@@ -40,7 +40,7 @@ internal static partial class ProviderTests
                         ["message"] = new JObject { ["role"] = "assistant", ["content"] = "Answer" } });
                     return JsonResponse(NanoReply("Answer"));
                 });
-                var setup = AdvisorServices.Prepare(draft, situationDelivery: mode, transportFactory: trace => new AdvisorHttpTransport(handler, trace));
+                var setup = AdvisorServices.Prepare(draft, situationDelivery: mode, transportFactory: trace => new AiHttpTransport(handler, trace));
                 draft.Main.Prompt = "LATER_EDIT";
                 var answer = await AdvisorConsultation.RunAsync(setup, context, "unused", new AdvisorQuestion("Question"), CancellationToken.None);
                 Require(answer.Completed && answer.ApiRequests == 1 && JToken.DeepEquals(before, context.Input.Data),
@@ -73,7 +73,7 @@ internal static partial class ProviderTests
                         "Fallback retained main instructions, lost common preferences/evidence or reported stale diagnostic input");
                     return JsonResponse(NanoReply("Recovered"));
                 });
-                var answer = await AdvisorConsultation.RunAsync(AdvisorServices.Prepare(settings, transportFactory: trace => new AdvisorHttpTransport(handler, trace)),
+                var answer = await AdvisorConsultation.RunAsync(AdvisorServices.Prepare(settings, transportFactory: trace => new AiHttpTransport(handler, trace)),
                     AdvisorContext.Create(new Knowledge(4), Array.Empty<ChatExchange>(), commonPrompt: "COMMON_ONLY", preparedInput: recording.CaptureInput),
                     "unused", new AdvisorQuestion("Question"), CancellationToken.None);
                 Require(answer.Completed && answer.ApiRequests == 3 && answer.QueryRounds == 1, "Prompt switching changed continuation accounting");
@@ -114,7 +114,7 @@ internal static partial class ProviderTests
                     return JsonResponse(NanoReply("Standard answer"));
                 });
                 var context = AdvisorContext.Create(new Knowledge(4), Array.Empty<ChatExchange>(), commonPrompt: "COMMON_ONLY", preparedInput: recording.CaptureInput);
-                var answer = await AdvisorConsultation.RunAsync(AdvisorServices.Prepare(settings, transportFactory: trace => new AdvisorHttpTransport(handler, trace)),
+                var answer = await AdvisorConsultation.RunAsync(AdvisorServices.Prepare(settings, transportFactory: trace => new AiHttpTransport(handler, trace)),
                     context, "unused", new AdvisorQuestion("Question"), CancellationToken.None);
                 Require(answer.Completed && (string?)recording.Snapshot()["input"]?["data"]?["connection_prompt"] ==
                     (independentMain ? "STANDARD_ONLY" : "EXTERNAL_ONLY") && context.Input.Data["connection_prompt"] == null,

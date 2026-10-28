@@ -9,21 +9,21 @@ using SeaPowerAIAdvisor;
 internal sealed class GeminiFixture
 {
     private readonly IGeminiTransport transport;
-    private readonly Action<AdvisorConnectionException>? switched;
-    internal GeminiFixture(IGeminiTransport transport, Action<AdvisorConnectionException>? switched = null)
+    private readonly Action<AiConnectionException>? switched;
+    internal GeminiFixture(IGeminiTransport transport, Action<AiConnectionException>? switched = null)
     { this.transport = transport; this.switched = switched; }
 
     internal Task<AdviceResult> ConsultAsync(IAdvisorQuerySession session, AdvisorSettings settings,
         IReadOnlyList<ChatExchange> history, CancellationToken cancellation, AdvisorProfile? profile = null,
         string commonPrompt = "", Action<AdvisorProgress>? progress = null,
         int historyExchanges = AdvisorOptions.DefaultHistoryExchanges, string userName = "") =>
-        AdvisorConsultation.RunAsync(new AdvisorEngine(new GeminiProvider(transport, settings),
-            settings.FallbackApiKey.Length == 0 ? null : new GeminiProvider(transport, settings.ForFallback()), switched),
+        AdvisorConsultation.RunAsync(new AdvisorEngine(new GeminiProvider(transport, settings.ToConnectionSettings()),
+            settings.FallbackApiKey.Length == 0 ? null : new GeminiProvider(transport, settings.ForFallback().ToConnectionSettings()), switched),
             AdvisorContext.Create(session, history, profile, commonPrompt, progress, historyExchanges, userName), cancellation);
 
     internal static Task<AdviceResult> RunAsync(string directory, IAdvisorQuerySession session, AdvisorSettings settings,
         AdvisorQuestion question, IReadOnlyList<ChatExchange> history, CancellationToken cancellation,
-        Func<AdvisorTrace?, AdvisorHttpTransport> transportFactory, AdvisorProfile? profile = null,
+        Func<AdvisorTrace?, AiHttpTransport> transportFactory, AdvisorProfile? profile = null,
         string commonPrompt = "", Action<AdvisorProgress>? progress = null,
         int historyExchanges = AdvisorOptions.DefaultHistoryExchanges, string userName = "") =>
         AdvisorConsultation.RunAsync(AdvisorServices.Prepare(Draft(settings), transportFactory: transportFactory),
@@ -31,7 +31,7 @@ internal sealed class GeminiFixture
             directory, question, cancellation);
 
     internal static Task<AdviceResult> TestAsync(string directory, AdvisorSettings settings, CancellationToken cancellation,
-        Func<AdvisorTrace?, AdvisorHttpTransport> transportFactory, string? requestText = null)
+        Func<AdvisorTrace?, AiHttpTransport> transportFactory, string? requestText = null)
     {
         var draft = Draft(settings);
         return AdvisorServices.TestAsync(directory, draft.Main.Build(), draft.Options,

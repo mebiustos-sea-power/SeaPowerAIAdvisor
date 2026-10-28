@@ -33,7 +33,7 @@ internal static partial class ProviderTests
                     return JsonResponse(NanoReply("Advice"));
                 });
                 var setup = AdvisorServices.Prepare(settings, allowFallback: false, situationDelivery: request.SituationDelivery,
-                    transportFactory: trace => new AdvisorHttpTransport(handler, trace));
+                    transportFactory: trace => new AiHttpTransport(handler, trace));
                 var answer = await AdvisorConsultation.RunAsync(setup, AdvisorContext.Create(DeliveryKnowledge(), Array.Empty<ChatExchange>()), "unused", request, CancellationToken.None);
                 Require(answer.Completed && sends == 1 && settings.Data().SequenceEqual(original) &&
                     (shortcut == null || !request.AllowOperations), "A shortcut changed storage, added a read or enabled operations");
@@ -54,7 +54,7 @@ internal static partial class ProviderTests
                     var definition = new AdvisorShortcut("custom", "key_risks", situationDelivery: choice);
                     var request = definition.Prepare("Risks");
                     var sends = 0;
-                    var registry = AdvisorServices.CreateRegistry(path, transportFactory: trace => new AdvisorHttpTransport(new BackendHttpHandler(async (http, token) =>
+                    var registry = AdvisorServices.CreateRegistry(path, transportFactory: trace => new AiHttpTransport(new BackendHttpHandler(async (http, token) =>
                     {
                         var body = JObject.Parse(await http.Content!.ReadAsStringAsync(token)); var fallback = ++sends > 1;
                         var expected = choice ?? (fallback ? AdvisorSituationDelivery.OnRequest : AdvisorSituationDelivery.OnDemand);
@@ -97,7 +97,7 @@ internal static partial class ProviderTests
                     return JsonResponse(NanoReply("Risk advice"));
                 });
                 var setup = AdvisorServices.Prepare(settings, allowFallback: false, situationDelivery: request.SituationDelivery,
-                    transportFactory: trace => new AdvisorHttpTransport(handler, trace));
+                    transportFactory: trace => new AiHttpTransport(handler, trace));
                 var answer = await AdvisorConsultation.RunAsync(setup, AdvisorContext.Create(recording.Observe(knowledge), Array.Empty<ChatExchange>()), "unused", request, CancellationToken.None);
                 Require(answer.Completed && sends == (mode == AdvisorSituationDelivery.Upfront ? 1 : 2) &&
                     recording.Snapshot()["retrievals"]!.Count() == (mode == AdvisorSituationDelivery.Upfront ? 0 : 1) && settings.Data().SequenceEqual(original),
@@ -107,7 +107,7 @@ internal static partial class ProviderTests
         check("Accepted delivery overrides survive retries and permission changes without leaking into another request", () =>
         {
             var request = AdvisorShortcut.KeyRisks.Prepare("Risks").WithSituationDelivery(AdvisorSituationDelivery.OnRequest).WithOperations(true);
-            var chat = new AdvisorConversation(); var turn = chat.Begin(request); turn.Fail(AdvisorNotice.Connection(new AdvisorConnectionException("request_timeout")));
+            var chat = new AdvisorConversation(); var turn = chat.Begin(request); turn.Fail(AdvisorNotice.Connection(new AiConnectionException("request_timeout")));
             chat.Retry(turn);
             Require(ReferenceEquals(turn.Request, request) && turn.Request.SituationDelivery == AdvisorSituationDelivery.OnRequest && turn.Request.AllowOperations &&
                 AdvisorShortcut.KeyRisks.Prepare("Risks").SituationDelivery == AdvisorSituationDelivery.Upfront &&

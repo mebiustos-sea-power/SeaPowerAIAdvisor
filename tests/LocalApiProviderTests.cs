@@ -29,7 +29,7 @@ internal static partial class ProviderTests
                 foreach (var policy in new bool?[] { false, true, null })
                 {
                     var keys = new List<string>();
-                    var registry = AdvisorServices.CreateRegistry(path, transportFactory: trace => new AdvisorHttpTransport(new BackendHttpHandler((request, _) =>
+                    var registry = AdvisorServices.CreateRegistry(path, transportFactory: trace => new AiHttpTransport(new BackendHttpHandler((request, _) =>
                     {
                         var key = request.Headers.GetValues("x-goog-api-key").Single(); keys.Add(key);
                         return Task.FromResult(key == "mock_free_key"
@@ -40,7 +40,7 @@ internal static partial class ProviderTests
                     if (policy == false)
                     {
                         try { await RunPrepared(setup); throw new Exception("The main failure was hidden"); }
-                        catch (AdvisorConnectionException error)
+                        catch (AiConnectionException error)
                         { Require(error.HttpStatus == 429 && !error.UsingFallback && keys.SequenceEqual(new[] { "mock_free_key" }), "A forbidden metered sub was used"); }
                     }
                     else
@@ -53,7 +53,7 @@ internal static partial class ProviderTests
                 var unsupported = new AdvisorBackendRegistry(); var opened = false;
                 unsupported.Register("custom", () => { opened = true; return Setup(new CustomBackend((_, _) => Task.FromResult(Answer("wrong")))); }); unsupported.Select("custom");
                 try { unsupported.Prepare(false); throw new Exception("An unverified workflow was permitted"); }
-                catch (AdvisorConnectionException error) { Require(error.Code == "fallback_policy_unavailable" && !opened, "A backend without policy support was executed"); }
+                catch (AiConnectionException error) { Require(error.Code == "fallback_policy_unavailable" && !opened, "A backend without policy support was executed"); }
             }
             finally { Directory.Delete(directory, true); }
         }));
@@ -66,7 +66,7 @@ internal static partial class ProviderTests
             var draft = ExtensionDraft(main); var subConfiguration = ExternalConfiguration(sub, "sub");
             draft.Put(new AdvisorApiConfigurationDraft(subConfiguration)); draft.SubId = subConfiguration.Id;
             try { await RunPrepared(AdvisorServices.Prepare(draft, allowFallback: false)); throw new Exception("Main error was hidden"); }
-            catch (AdvisorConnectionException error) { Require(error.HttpStatus == 429 && !error.UsingFallback && subCalls == 0, "The independent sub ran without permission"); }
+            catch (AiConnectionException error) { Require(error.HttpStatus == 429 && !error.UsingFallback && subCalls == 0, "The independent sub ran without permission"); }
             var result = await RunPrepared(AdvisorServices.Prepare(draft, allowFallback: true));
             Require(result.Text == "independent sub allowed" && subCalls == 1, "An explicitly allowed independent sub was rejected");
         }));

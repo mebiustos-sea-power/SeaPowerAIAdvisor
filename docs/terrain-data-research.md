@@ -208,7 +208,7 @@ WSLのPythonから`liblz4`を使った調査用スクリプトでは、1タイ�
 | 抽出したタイル | `original/terrain/data/y4x16.lz4` |
 | タイル SHA-256 | `7c4edce98adc9b11d77854d94d71f82f7ea0f976e365c060d5437db6c37e8525` |
 | 元の抽出範囲 | 緯度26〜27度、経度127〜128度 |
-| 既存の応答予算 | `src/Advisor/IAdvisorQuerySession.cs`の`AdvisorQueryLimits` |
+| 既存の応答予算 | `src/Advisor/Consultation/IAdvisorQuerySession.cs`の`AdvisorQueryLimits` |
 
 ローカル専用の証跡は`artifacts/terrain-research-20261026/`に保存した。このディレクトリはGit管理・通常配布の対象外である。
 

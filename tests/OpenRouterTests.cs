@@ -75,7 +75,7 @@ internal static partial class ProviderTests
                         !body.ToString().Contains("Public briefing", StringComparison.Ordinal), "OpenRouter received excluded data or discarded an independent successful query");
                     return JsonResponse(RouterReply("Known evidence only"));
                 });
-                var setup = AdvisorServices.Prepare(RouterDraft(), transportFactory: trace => new AdvisorHttpTransport(handler, trace));
+                var setup = AdvisorServices.Prepare(RouterDraft(), transportFactory: trace => new AiHttpTransport(handler, trace));
                 var answer = await AdvisorConsultation.RunAsync(setup, AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), userName: "Commander"),
                     "unused-router-log", new AdvisorQuestion("Question"), CancellationToken.None);
                 Require(answer.Text == "Known evidence only" && answer.ApiRequests == 2 && answer.QueryRounds == 1 &&
@@ -118,7 +118,7 @@ internal static partial class ProviderTests
                         (string?)body["tool_choice"] == "auto", "Gemini state leaked to OpenRouter or the query allowance reset");
                     return routerFirst ? JsonResponse(InteractionFixture.Reply(new JObject { ["text"] = "Recovered" })) : JsonResponse(RouterReply("Recovered"));
                 });
-                var answer = await RunPrepared(AdvisorServices.Prepare(draft, transportFactory: trace => new AdvisorHttpTransport(handler, trace)));
+                var answer = await RunPrepared(AdvisorServices.Prepare(draft, transportFactory: trace => new AiHttpTransport(handler, trace)));
                 Require(answer.Text == "Recovered" && answer.ApiRequests == 3 && answer.QueryRounds == 1 && answer.TotalTokens == null && handler.Disposed,
                     "Cross-provider fallback reported incomplete usage as known or restarted the consultation");
             }
@@ -147,7 +147,7 @@ internal static partial class ProviderTests
                     return JsonResponse(RouterReply((string)JObject.Parse((string)messages.Last!["content"]!)["confirmation"]!));
                 });
                 var result = await AdvisorServices.TestAsync(directory, draft.Main.Build(), AdvisorSettings.Edit(path).Options, "Pending test only", CancellationToken.None,
-                    transportFactory: trace => new AdvisorHttpTransport(handler, trace));
+                    transportFactory: trace => new AiHttpTransport(handler, trace));
                 var log = File.ReadAllText(Path.Combine(directory, "ai-communication.jsonl"));
                 Require(sends == 2 && result.ApiRequests == 2 && result.QueryRounds == 0 && result.TotalTokens == 220 && handler.Disposed &&
                     File.ReadAllBytes(path).SequenceEqual(original) && !log.Contains("mock_router_secret", StringComparison.Ordinal),
@@ -168,10 +168,10 @@ internal static partial class ProviderTests
                 try
                 {
                     await AdvisorServices.TestAsync("unused-router-test", RouterConfiguration("router"), new AdvisorConnectionOptions(new JObject()), "Test", CancellationToken.None,
-                        transportFactory: trace => new AdvisorHttpTransport(handler, trace));
+                        transportFactory: trace => new AiHttpTransport(handler, trace));
                     throw new Exception("A failed tool probe succeeded");
                 }
-                catch (AdvisorConnectionException error) { Require(error.Code == "tool_call_test_failed" && sends == (mode is "no-call" or "wrong-arguments" ? 1 : 2) && handler.Disposed,
+                catch (AiConnectionException error) { Require(error.Code == "tool_call_test_failed" && sends == (mode is "no-call" or "wrong-arguments" ? 1 : 2) && handler.Disposed,
                     "The probe reported partial success, hid a tool failure or made extra requests"); }
             }
         }));
@@ -194,10 +194,10 @@ internal static partial class ProviderTests
             var handler = new BackendHttpHandler((_, _) => Task.FromResult(new HttpResponseMessage((HttpStatusCode)402) { Content = new StringContent("PRIVATE_SERVICE_TEXT") }));
             try
             {
-                await RunPrepared(AdvisorServices.Prepare(RouterDraft(), transportFactory: trace => new AdvisorHttpTransport(handler, trace)));
+                await RunPrepared(AdvisorServices.Prepare(RouterDraft(), transportFactory: trace => new AiHttpTransport(handler, trace)));
                 throw new Exception("Credit exhaustion became a successful reply");
             }
-            catch (AdvisorConnectionException error) { Require(error.Code == "insufficient_credits" && error.HttpStatus == 402 && !error.Message.Contains("PRIVATE_SERVICE_TEXT", StringComparison.Ordinal),
+            catch (AiConnectionException error) { Require(error.Code == "insufficient_credits" && error.HttpStatus == 402 && !error.Message.Contains("PRIVATE_SERVICE_TEXT", StringComparison.Ordinal),
                 "HTTP credit failure was misclassified or exposed raw provider text"); }
         }));
         check("OpenRouter cancellation and per-request timeout apply during the second probe request", () => Async(async () =>
@@ -215,11 +215,11 @@ internal static partial class ProviderTests
                 try
                 {
                     await AdvisorServices.TestAsync("unused-router-timeout", configuration, new AdvisorConnectionOptions(new JObject()), "Test", stop.Token,
-                        transportFactory: trace => new AdvisorHttpTransport(handler, trace));
+                        transportFactory: trace => new AiHttpTransport(handler, trace));
                     throw new Exception("The second request ignored cancellation or its deadline");
                 }
                 catch (OperationCanceledException) when (cancel) { Require(sends == 2 && handler.Disposed, "Cancellation was retried or leaked the transport"); }
-                catch (AdvisorConnectionException error) when (!cancel) { Require(error.Code == "request_timeout" && sends == 2 && handler.Disposed, "Timeout was hidden, retried or mislabeled"); }
+                catch (AiConnectionException error) when (!cancel) { Require(error.Code == "request_timeout" && sends == 2 && handler.Disposed, "Timeout was hidden, retried or mislabeled"); }
             }
         }));
     }

@@ -51,7 +51,7 @@ internal static partial class ProviderTests
                 var draft = new AdvisorSettingsDraft(JObject.Parse(System.Text.Encoding.UTF8.GetString(document)));
                 policy.Select(draft, "chosen", allowFallback, "gemini-overridden");
                 var keys = new List<string>();
-                var setup = AdvisorServices.Prepare(draft, allowFallback: allowFallback, transportFactory: trace => new AdvisorHttpTransport(new BackendHttpHandler(async (request, token) =>
+                var setup = AdvisorServices.Prepare(draft, allowFallback: allowFallback, transportFactory: trace => new AiHttpTransport(new BackendHttpHandler(async (request, token) =>
                 {
                     var key = request.Headers.GetValues("x-goog-api-key").Single(); keys.Add(key);
                     var body = JObject.Parse(await request.Content!.ReadAsStringAsync(token));
@@ -66,7 +66,7 @@ internal static partial class ProviderTests
                 else
                 {
                     try { await RunPrepared(setup); throw new InvalidOperationException("An unapproved sub concealed the failure"); }
-                    catch (AdvisorConnectionException error)
+                    catch (AiConnectionException error)
                     { Require(error.HttpStatus == 429 && keys.SequenceEqual(new[] { "mock-key-chosen" }), "A normal main or forbidden sub was contacted"); }
                 }
                 Require(source.MainId == "normal" && source.SubId == "sub" && source.Data().SequenceEqual(document),
@@ -97,7 +97,7 @@ internal static partial class ProviderTests
                             "The consultation used the saved delivery instead of its override");
                         return JsonResponse(NanoReply("Per-request delivery"));
                     });
-                    var setup = AdvisorServices.Prepare(draft, allowFallback: false, situationDelivery: choice, transportFactory: trace => new AdvisorHttpTransport(handler, trace));
+                    var setup = AdvisorServices.Prepare(draft, allowFallback: false, situationDelivery: choice, transportFactory: trace => new AiHttpTransport(handler, trace));
                     var result = await AdvisorConsultation.RunAsync(setup, AdvisorContext.Create(DeliveryKnowledge(), Array.Empty<ChatExchange>()),
                         directory, new AdvisorQuestion("Question"), default);
                     Require(result.Completed && result.ApiRequests == 1 && setup.SituationDelivery == expected &&
@@ -120,7 +120,7 @@ internal static partial class ProviderTests
                 {
                     var draft = AdvisorSettings.Edit(path); policy.Select(draft, "nano", useSub, prompt: prompt);
                     var expected = prompt ?? "SAVED_MAIN"; var sends = 0;
-                    var setup = AdvisorServices.Prepare(draft, allowFallback: useSub, transportFactory: trace => new AdvisorHttpTransport(new BackendHttpHandler(async (request, token) =>
+                    var setup = AdvisorServices.Prepare(draft, allowFallback: useSub, transportFactory: trace => new AiHttpTransport(new BackendHttpHandler(async (request, token) =>
                     {
                         var body = JObject.Parse(await request.Content!.ReadAsStringAsync(token));
                         var data = JObject.Parse((string)body["messages"]![1]!["content"]!); var first = ++sends == 1;
@@ -149,7 +149,7 @@ internal static partial class ProviderTests
                 var progress = new List<AdvisorProgress>();
                 var context = AdvisorContext.Create(new Knowledge(2), Array.Empty<ChatExchange>(), progress: progress.Add);
                 var setup = AdvisorServices.Prepare(draft, allowFallback: false, transportFactory: trace =>
-                    new AdvisorHttpTransport(new BackendHttpHandler(async (request, token) =>
+                    new AiHttpTransport(new BackendHttpHandler(async (request, token) =>
                     {
                         var body = JObject.Parse(await request.Content!.ReadAsStringAsync(token)); CheckNanoRequest(request, body);
                         Require((string?)body["model"] == "vendor/test-model", "The wire request used the registered model instead of the override");

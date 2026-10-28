@@ -97,15 +97,15 @@ internal static class ApiLibraryTests
             var sent = new List<string>();
             var transport = new Fake((s, _, _) =>
             {
-                sent.Add(s.RequestApiKey);
-                Require(s.RequestModel == "gemini-same-model", "An assignment used the wrong model");
-                if (sent.Count == 1) throw new AdvisorConnectionException("rate_limited", 429);
+                sent.Add(s.ApiKey);
+                Require(s.Model == "gemini-same-model", "An assignment used the wrong model");
+                if (sent.Count == 1) throw new AiConnectionException("rate_limited", 429);
                 return Task.FromResult(InteractionFixture.Reply(new JObject { ["text"] = "Selected" }));
             });
-            var input = new AdvisorProviderInput(new JObject(), "Test", new JObject
+            var input = new AiProviderInput(new JObject(), "Test", new JObject
             { ["name"] = "query_situation", ["description"] = "Test", ["parameters"] = new JObject() });
-            using var fallback = new AdvisorConnection(new GeminiProvider(transport, settings), new GeminiProvider(transport, settings.ForFallback()), input, _ => { });
-            _ = fallback.GenerateAsync(false, new AdvisorContinuation(new JArray(), 0, 1), CancellationToken.None, (_, _, _, _) => { }).GetAwaiter().GetResult();
+            using var fallback = new AiConnection(new GeminiProvider(transport, settings.ToConnectionSettings()), new GeminiProvider(transport, settings.ForFallback().ToConnectionSettings()), input, _ => { });
+            _ = fallback.GenerateAsync(false, new AiContinuation(new JArray(), 0, 1), CancellationToken.None, (_, _, _, _) => { }).GetAwaiter().GetResult();
             Require(sent.SequenceEqual(new[] { SubKey, MainKey }), "Fallback used the old positional credentials");
         });
         check("Unassigned API entries can be tested independently while edits do not enable unsaved logging", () =>
@@ -164,7 +164,7 @@ internal static class ApiLibraryTests
     private static void Throws(string code, Action action)
     {
         try { action(); }
-        catch (AdvisorConnectionException error)
+        catch (AiConnectionException error)
         {
             Require(error.Code == code && !error.ToString().Contains(MainKey, StringComparison.Ordinal) &&
                 !error.ToString().Contains(SubKey, StringComparison.Ordinal), "Wrong or unsafe API library error: " + error.Code);
@@ -180,8 +180,8 @@ internal static class ApiLibraryTests
     private static void Require(bool value, string message) { if (!value) throw new InvalidOperationException(message); }
     private sealed class Fake : IGeminiTransport
     {
-        private readonly Func<AdvisorSettings, JObject, CancellationToken, Task<JObject>> send;
-        internal Fake(Func<AdvisorSettings, JObject, CancellationToken, Task<JObject>> send) { this.send = send; }
-        public Task<JObject> GenerateAsync(AdvisorSettings settings, JObject body, CancellationToken cancellation) => send(settings, body, cancellation);
+        private readonly Func<AiConnectionSettings, JObject, CancellationToken, Task<JObject>> send;
+        internal Fake(Func<AiConnectionSettings, JObject, CancellationToken, Task<JObject>> send) { this.send = send; }
+        public Task<JObject> GenerateAsync(AiConnectionSettings settings, JObject body, CancellationToken cancellation) => send(settings, body, cancellation);
     }
 }

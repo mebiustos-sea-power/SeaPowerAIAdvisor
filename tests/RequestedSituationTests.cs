@@ -8,7 +8,7 @@ using Api = SeaPowerAIAdvisor.Api;
 
 internal static partial class ProviderTests
 {
-    private static AdvisorToolCall FullSituationCall(string id) => new(id, "get_situation", new JObject());
+    private static AiToolCall FullSituationCall(string id) => new(id, "get_situation", new JObject());
 
     private static void RunRequestedSituation(Action<string, Action> check)
     {
@@ -16,7 +16,7 @@ internal static partial class ProviderTests
         {
             var knowledge = new SnapshotSpy { AutomaticText = new string('x', AdvisorQueryLimits.MaxTotalBytes) };
             var run = new AdvisorLocalRun();
-            Task<AdvisorReply> Send(FakeSession session, int _, bool __, CancellationToken ___)
+            Task<AiReply> Send(FakeSession session, int _, bool __, CancellationToken ___)
             {
                 var data = session.Input.Data;
                 Require(data["situation"] == null && data["situation_data"] == null && data["knowledge_catalog"] == null &&
@@ -26,7 +26,7 @@ internal static partial class ProviderTests
                     "Automatic game evidence leaked or user-supplied context was removed");
                 Require(session.Input.Tools.Count == 1 && RequestSchemaFixture.Accepts(session.Input.Tools[0]["parameters"]!, FullSituationCall("check").Arguments),
                     "A compatible full-situation request was not available");
-                return Task.FromResult(new AdvisorReply("Hello", Array.Empty<AdvisorToolCall>(), 1));
+                return Task.FromResult(new AiReply("Hello", Array.Empty<AiToolCall>(), 1));
             }
             var provider = new FakeProvider("greeting", Send);
             var context = AdvisorContext.Create(run.Observe(knowledge), new[] { new ChatExchange("Earlier", "Answer") },
@@ -49,7 +49,7 @@ internal static partial class ProviderTests
                 if (send == 2)
                 {
                     full = (JObject)session.Results[0].Data["results"]![0]!["data"]!;
-                    Require(AdvisorQueryLimits.Bytes(full) > AdvisorQueryLimits.MaxResponseBytes && full["situation"]?["overview"] != null &&
+                    Require(JsonPayload.Bytes(full) > AdvisorQueryLimits.MaxResponseBytes && full["situation"]?["overview"] != null &&
                         full["referenced_units"] != null && full["contact_assessment"] != null && full["aviation_semantics"] != null,
                         "Full data was truncated, missing its header or missing deferred game context");
                     var rows = (JArray)full["situation_data"]!;
@@ -61,7 +61,7 @@ internal static partial class ProviderTests
                     return Task.FromResult(Reply(FullSituationCall("later-response")));
                 }
                 Require((string?)session.Results.Single().Data["results"]?[0]?["data"]?["status"] == "already_supplied", "A later call duplicated full data");
-                return Task.FromResult(new AdvisorReply("Answer", Array.Empty<AdvisorToolCall>(), 1));
+                return Task.FromResult(new AiReply("Answer", Array.Empty<AiToolCall>(), 1));
             });
             var result = await new AdvisorEngine(provider, delivery: AdvisorSituationDelivery.OnRequest).ConsultAsync(context, CancellationToken.None);
             var reads = (JArray)recording.Snapshot()["retrievals"]!;
@@ -78,12 +78,12 @@ internal static partial class ProviderTests
             using var operations = gateway.CreateSession("requested-mixed", AdvisorPrompts.Current)!;
             var knowledge = new SnapshotSpy(); var context = AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations);
             context.PrepareStandardInput(AdvisorSituationDelivery.OnRequest);
-            AdvisorToolDispatch Dispatch(params AdvisorToolCall[] calls) => OperationGatewayTests.Finish(gateway,
+            AdvisorToolDispatch Dispatch(params AiToolCall[] calls) => OperationGatewayTests.Finish(gateway,
                 context.Tools.ExecuteAsync(calls, CancellationToken.None, (_, _) => { }, (_, _) => { }));
-            var list = Dispatch(new AdvisorToolCall("list", "list_operations", new JObject()));
+            var list = Dispatch(new AiToolCall("list", "list_operations", new JObject()));
             Require(knowledge.Exports == 0 && list.Results.Single().Data["results"]?[0]?["data"] != null, "Catalog inspection exported unrelated situation data");
-            var mixed = Dispatch(new AdvisorToolCall("definition", "describe_operation", new JObject { ["operation_id"] = operation.Id }),
-                FullSituationCall("situation"), new AdvisorToolCall("candidates", "get_operation_candidates", new JObject { ["operation_id"] = operation.Id }));
+            var mixed = Dispatch(new AiToolCall("definition", "describe_operation", new JObject { ["operation_id"] = operation.Id }),
+                FullSituationCall("situation"), new AiToolCall("candidates", "get_operation_candidates", new JObject { ["operation_id"] = operation.Id }));
             Require(mixed.Results.Select(r => r.Id).SequenceEqual(new[] { "definition", "situation", "candidates" }) &&
                 mixed.Results.All(r => (string?)r.Data["status"] == "ok") && mixed.Results[1].Data["results"]?[0]?["data"]?["situation_data"] != null &&
                 mixed.Results[2].Data["results"]?[0]?["data"]?["candidates"]?.Count() == 2 && knowledge.Exports == 1 && operation.Writes == 0,
@@ -98,13 +98,13 @@ internal static partial class ProviderTests
             var context = AdvisorContext.Create(recording.Observe(knowledge), Array.Empty<ChatExchange>(), operations: operations);
             context.PrepareStandardInput(AdvisorSituationDelivery.OnRequest);
             var malformed = OperationGatewayTests.Finish(gateway, context.Tools.ExecuteAsync(new[] {
-                new AdvisorToolCall("bad", "get_situation", new JObject { ["ids"] = new JArray("own_unit_1") }) }, CancellationToken.None, (_, _) => { }, (_, _) => { }));
+                new AiToolCall("bad", "get_situation", new JObject { ["ids"] = new JArray("own_unit_1") }) }, CancellationToken.None, (_, _) => { }, (_, _) => { }));
             Require((string?)malformed.Results.Single().Data["error"]?["code"] == "invalid_arguments" && knowledge.Exports == 0, "Malformed full read broadened into an export");
             using var cancel = new CancellationTokenSource(); operation.OnCandidates = cancel.Cancel;
             try
             {
                 OperationGatewayTests.Finish(gateway, context.Tools.ExecuteAsync(new[] { FullSituationCall("full"),
-                    new AdvisorToolCall("cancel", "get_operation_candidates", new JObject { ["operation_id"] = operation.Id }) }, cancel.Token, (_, _) => { }, (_, _) => { }));
+                    new AiToolCall("cancel", "get_operation_candidates", new JObject { ["operation_id"] = operation.Id }) }, cancel.Token, (_, _) => { }, (_, _) => { }));
                 throw new InvalidOperationException("Cancellation was ignored");
             }
             catch (OperationCanceledException) { }
@@ -126,20 +126,20 @@ internal static partial class ProviderTests
         check("Requested snapshots survive standard provider handoffs without replaying full data or leaking private state", () => Async(async () =>
         {
             var knowledge = new SnapshotSpy(); var recording = new AdvisorLocalRun();
-            Task<AdvisorReply> Main(FakeSession session, int n, bool _, CancellationToken __)
+            Task<AiReply> Main(FakeSession session, int n, bool _, CancellationToken __)
             {
                 if (n == 1) return Task.FromResult(Reply(FullSituationCall("main")));
                 session.Input.Data["private_provider_state"] = "opaque";
-                throw new AdvisorConnectionException("rate_limited", 429);
+                throw new AiConnectionException("rate_limited", 429);
             }
-            Task<AdvisorReply> Sub(FakeSession session, int n, bool _, CancellationToken __)
+            Task<AiReply> Sub(FakeSession session, int n, bool _, CancellationToken __)
             {
                 Require(session.Continuation?.Retrievals.Count == 1 &&
                     session.Continuation.Retrievals[0]?["response"]?["results"]?[0]?["data"]?["situation_data"] != null &&
                     session.Input.Data["situation"] == null && session.Input.Data["private_provider_state"] == null, "Fallback lost executed evidence or copied provider-private state");
                 if (n == 1) return Task.FromResult(Reply(FullSituationCall("sub")));
                 Require((string?)session.Results.Single().Data["results"]?[0]?["data"]?["status"] == "already_supplied", "Fallback resent the same full data");
-                return Task.FromResult(new AdvisorReply("Continued", Array.Empty<AdvisorToolCall>(), 1));
+                return Task.FromResult(new AiReply("Continued", Array.Empty<AiToolCall>(), 1));
             }
             var main = new FakeProvider("main", Main);
             var sub = new FakeProvider("sub", Sub);
@@ -165,7 +165,7 @@ internal static partial class ProviderTests
                 ? JsonResponse(NanoReply("", NanoCall("full", "", "get_situation", new JObject())))
                 : new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.ServiceUnavailable) { Content = new System.Net.Http.StringContent("busy") }));
             var knowledge = new SnapshotSpy(); var recording = new AdvisorLocalRun();
-            var answer = await AdvisorConsultation.RunAsync(AdvisorServices.Prepare(settings, transportFactory: trace => new AdvisorHttpTransport(handler, trace)),
+            var answer = await AdvisorConsultation.RunAsync(AdvisorServices.Prepare(settings, transportFactory: trace => new AiHttpTransport(handler, trace)),
                 AdvisorContext.Create(recording.Observe(knowledge), Array.Empty<ChatExchange>()), "unused", new AdvisorQuestion("Question"), CancellationToken.None);
             Require(answer.Completed && answer.Text == "Independent answer" && knowledge.Exports == 1 && recording.Snapshot()["retrievals"]?.Count() == 1,
                 "Standard-to-independent fallback duplicated or omitted successfully read evidence");

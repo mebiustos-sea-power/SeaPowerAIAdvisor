@@ -24,11 +24,11 @@ internal static partial class ProviderTests
                 if (send == 1)
                 {
                     var calls = new[] {
-                        new AdvisorToolCall("definition", "describe_operation", new JObject { ["operation_id"] = operation.Id }),
-                        new AdvisorToolCall("routes", "query_situation", ReadArguments(new JObject { ["query"] = "get_movement_plans", ["ids"] = new JArray("own_unit_1", "own_unit_2") })),
-                        new AdvisorToolCall("missing", "query_situation", ReadArguments(new JObject { ["query"] = "get_units", ["ids"] = new JArray("missing") })),
-                        new AdvisorToolCall("contacts", "query_situation", ReadArguments(new JObject { ["query"] = "list_contacts", ["kind"] = "surface" })),
-                        new AdvisorToolCall("candidates", "get_operation_candidates", new JObject { ["operation_id"] = operation.Id }) };
+                        new AiToolCall("definition", "describe_operation", new JObject { ["operation_id"] = operation.Id }),
+                        new AiToolCall("routes", "query_situation", ReadArguments(new JObject { ["query"] = "get_movement_plans", ["ids"] = new JArray("own_unit_1", "own_unit_2") })),
+                        new AiToolCall("missing", "query_situation", ReadArguments(new JObject { ["query"] = "get_units", ["ids"] = new JArray("missing") })),
+                        new AiToolCall("contacts", "query_situation", ReadArguments(new JObject { ["query"] = "list_contacts", ["kind"] = "surface" })),
+                        new AiToolCall("candidates", "get_operation_candidates", new JObject { ["operation_id"] = operation.Id }) };
                     foreach (var call in calls)
                         Require(RequestSchemaFixture.Accepts(session.Input.Tools.Single(t => (string?)t["name"] == call.Name)["parameters"]!, call.Arguments), "A valid split request was not advertised");
                     return Task.FromResult(Reply(calls));
@@ -41,7 +41,7 @@ internal static partial class ProviderTests
                     (string?)results[2].Data["results"]?[0]?["error"]?["code"] == "unknown_id" &&
                     results[3].Data["results"]?[0]?["data"]?["items"]?.Count() == 1 &&
                     results[4].Data["results"]?[0]?["data"]?["candidates"]?.Count() == 2, "Split results lost identity, filtering or a partial error");
-                return Task.FromResult(new AdvisorReply("Both routes considered", Array.Empty<AdvisorToolCall>(), 1));
+                return Task.FromResult(new AiReply("Both routes considered", Array.Empty<AiToolCall>(), 1));
             });
             var answer = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(provider).ConsultAsync(context, CancellationToken.None)));
             Require(answer.Completed && answer.ApiRequests == 2 && knowledge.RoundsUsed == 1 && operations.History.Count == 2 && operation.Writes == 0 &&
@@ -67,12 +67,12 @@ internal static partial class ProviderTests
             var context = AdvisorContext.Create(ReadKnowledge(), Array.Empty<ChatExchange>(), operations: operations);
             var tools = context.PrepareStandardInput().Tools;
             var invalid = new[] {
-                new AdvisorToolCall("mixed-list", "list_operations", new JObject { ["query"] = "catalog" }),
-                new AdvisorToolCall("missing-id", "describe_operation", new JObject()),
-                new AdvisorToolCall("bad-target", "describe_operation", new JObject { ["operation_id"] = operation.Id, ["target_ref"] = "unit:42" }),
-                new AdvisorToolCall("forged-proposal", "query_situation", new JObject { ["requests"] = new JArray(new JObject
+                new AiToolCall("mixed-list", "list_operations", new JObject { ["query"] = "catalog" }),
+                new AiToolCall("missing-id", "describe_operation", new JObject()),
+                new AiToolCall("bad-target", "describe_operation", new JObject { ["operation_id"] = operation.Id, ["target_ref"] = "unit:42" }),
+                new AiToolCall("forged-proposal", "query_situation", new JObject { ["requests"] = new JArray(new JObject
                     { ["source"] = "operation", ["action"] = "execute", ["operation_id"] = operation.Id, ["target_ref"] = "unit:42", ["request_id"] = "forged", ["arguments"] = new JObject() }) }),
-                new AdvisorToolCall("forged-lookup", "list_operations", new JObject { ["action"] = "candidates", ["operation_id"] = operation.Id }) };
+                new AiToolCall("forged-lookup", "list_operations", new JObject { ["action"] = "candidates", ["operation_id"] = operation.Id }) };
             foreach (var call in invalid)
                 Require(!RequestSchemaFixture.Accepts(tools.Single(t => (string?)t["name"] == call.Name)["parameters"]!, call.Arguments), "A mixed-purpose request remained schema-valid");
             foreach (var call in invalid)
@@ -83,7 +83,7 @@ internal static partial class ProviderTests
             }
             Require(operation.Writes == 0 && registry.Proposal("forged")!.Orders.Count == 0 &&
                 operations.History.All(r => (string?)r["response"]?["status"] == "error"), "A forged read proposed or executed an order");
-            var malformed = new AdvisorToolCall("bad-source", "query_situation", new JObject { ["requests"] = new JArray(
+            var malformed = new AiToolCall("bad-source", "query_situation", new JObject { ["requests"] = new JArray(
                 new JObject { ["source"] = new JObject(), ["query"] = "catalog" }, new JObject { ["query"] = "get_briefing" }) });
             var partial = OperationGatewayTests.Finish(gateway, context.Tools.ExecuteAsync(new[] { malformed }, CancellationToken.None, (_, _) => { }, (_, _) => { }));
             Require((string?)partial.Results[0].Data["results"]?[0]?["status"] == "error" &&
@@ -95,8 +95,8 @@ internal static partial class ProviderTests
             using var gateway = new AdvisorOperationGateway(registry);
             using var operations = gateway.CreateSession("split-budget", AdvisorPrompts.Current)!;
             var knowledge = ReadKnowledge(); var context = AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations);
-            var calls = Enumerable.Range(0, 8).Select(i => new AdvisorToolCall("read-" + i, "query_situation", ReadArguments(QueryTests.Q("catalog"))))
-                .Append(new AdvisorToolCall("lookup", "get_operation_candidates", new JObject { ["operation_id"] = operation.Id })).ToArray();
+            var calls = Enumerable.Range(0, 8).Select(i => new AiToolCall("read-" + i, "query_situation", ReadArguments(QueryTests.Q("catalog"))))
+                .Append(new AiToolCall("lookup", "get_operation_candidates", new JObject { ["operation_id"] = operation.Id })).ToArray();
             var result = OperationGatewayTests.Finish(gateway, context.Tools.ExecuteAsync(calls, CancellationToken.None, (_, _) => { }, (_, _) => { }));
             Require(result.Results.Count == 9 && result.Results.All(r => (string?)r.Data["error"]?["code"] == "invalid_arguments") &&
                 knowledge.RoundsUsed == 0 && operations.History.Count == 0 && operation.Writes == 0,
@@ -109,8 +109,8 @@ internal static partial class ProviderTests
             using var gateway = new AdvisorOperationGateway(registry);
             using var operations = gateway.CreateSession("split-reference", AdvisorPrompts.Current)!;
             var context = AdvisorContext.Create(ReadKnowledge(referenceText: new string('y', 18_000)), Array.Empty<ChatExchange>(), operations: operations);
-            var capability = new AdvisorToolCall("capability", "query_situation", ReadArguments(new JObject { ["query"] = "get_unit_capabilities", ["ids"] = new JArray("own_unit_1"), ["sections"] = new JArray("weapons") }));
-            var lookup = new AdvisorToolCall("lookup", "get_operation_candidates", new JObject { ["operation_id"] = operation.Id });
+            var capability = new AiToolCall("capability", "query_situation", ReadArguments(new JObject { ["query"] = "get_unit_capabilities", ["ids"] = new JArray("own_unit_1"), ["sections"] = new JArray("weapons") }));
+            var lookup = new AiToolCall("lookup", "get_operation_candidates", new JObject { ["operation_id"] = operation.Id });
             var rejected = OperationGatewayTests.Finish(gateway, context.Tools.ExecuteAsync(new[] { capability, lookup }, CancellationToken.None, (_, _) => { }, (_, _) => { }));
             var retry = OperationGatewayTests.Finish(gateway, context.Tools.ExecuteAsync(new[] { capability }, CancellationToken.None, (_, _) => { }, (_, _) => { }));
             Require(rejected.Results.All(r => (string?)r.Data["error"]?["code"] == "response_too_large") &&
@@ -129,7 +129,7 @@ internal static partial class ProviderTests
             var knowledge = ReadKnowledge();
             var main = new FakeProvider("main", (session, send, _, _) =>
             {
-                if (send > 1) throw new AdvisorConnectionException("rate_limited", 429);
+                if (send > 1) throw new AiConnectionException("rate_limited", 429);
                 return Task.FromResult(Reply(Call("fact", "get_briefing"), ProposalReply("order", BuoyRequest()).Calls.Single()));
             });
             var sub = new FakeProvider("sub", (session, send, _, _) =>
@@ -137,7 +137,7 @@ internal static partial class ProviderTests
                 Require(session.Continuation?.Retrievals.Count == 1 && session.Continuation.Operations.Count == 1 &&
                     session.Continuation.RoundsUsed == 1, "Fallback duplicated or lost evidence");
                 return Task.FromResult(send == 1 ? ProposalReply("replay", BuoyRequest())
-                    : new AdvisorReply("Retained proposal", Array.Empty<AdvisorToolCall>(), 1));
+                    : new AiReply("Retained proposal", Array.Empty<AiToolCall>(), 1));
             });
             var result = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(main, sub).ConsultAsync(
                 AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations), CancellationToken.None)));

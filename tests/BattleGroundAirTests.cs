@@ -179,7 +179,7 @@ internal static partial class BattleTests
     private sealed class GroundAirTransport : IGeminiTransport
     {
         internal int Calls;
-        public Task<JObject> GenerateAsync(AdvisorSettings settings, JObject body, CancellationToken cancellation)
+        public Task<JObject> GenerateAsync(AiConnectionSettings settings, JObject body, CancellationToken cancellation)
         {
             Calls++;
             JObject part;

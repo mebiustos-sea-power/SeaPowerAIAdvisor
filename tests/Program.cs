@@ -28,6 +28,7 @@ internal static class Program
             ReservationCompositionTests.Run(Check);
         SensorOperationTests.Run(Check);
         CombatOperationTests.Run(Check);
+        SharedFoundationTests.Run(Check);
             OperationDocumentationTests.Run(Check);
             CommandSdkTests.Run(Check);
             BattleTests.Run(Check);
@@ -45,13 +46,13 @@ internal static class Program
         if (args.Length == 4 && args[0] == "--gemini-air-smoke")
         {
             try { GeminiAirSmoke.Run(args[1], args[2], args[3]); }
-            catch (AdvisorConnectionException e) { Console.Error.WriteLine("Aviation evaluation failed: " + e.Message); Environment.ExitCode = 1; }
+            catch (AiConnectionException e) { Console.Error.WriteLine("Aviation evaluation failed: " + e.Message); Environment.ExitCode = 1; }
             return;
         }
         if (args.Length == 6 && args[0] == "--gemini-smoke")
         {
             try { GeminiSmoke.Run(args[1], args[2], args[3], args[4], args[5]); }
-            catch (AdvisorConnectionException e) { Console.Error.WriteLine("Gemini smoke failed: " + e.Message); Environment.ExitCode = 1; }
+            catch (AiConnectionException e) { Console.Error.WriteLine("Gemini smoke failed: " + e.Message); Environment.ExitCode = 1; }
             return;
         }
         Check("Japanese multiline questions and XML punctuation survive unchanged", () =>
@@ -160,6 +161,7 @@ internal static class Program
         ReservationCompositionTests.Run(Check);
         SensorOperationTests.Run(Check);
         CombatOperationTests.Run(Check);
+        SharedFoundationTests.Run(Check);
         OperationDocumentationTests.Run(Check);
         CommandSdkTests.Run(Check);
         OptionsTests.Run(args[0], Check);

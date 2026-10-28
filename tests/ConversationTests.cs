@@ -54,7 +54,7 @@ internal static class ConversationTests
                     "Elapsed time left the adviser header, changed after completion, or disrupted answer copying and text sizing");
             }
             var next = chat.Begin(new AdvisorQuestion("Retry question"), "Bob", "bob");
-            next.Fail(AdvisorNotice.Connection(new AdvisorConnectionException("request_timeout")));
+            next.Fail(AdvisorNotice.Connection(new AiConnectionException("request_timeout")));
             chat.Retry(next);
             Require(next.Elapsed == null && turn.Elapsed == elapsed, "Retry reused a completed duration or changed earlier history");
             next.Complete("Retried answer");
@@ -68,7 +68,7 @@ internal static class ConversationTests
             var chat = new AdvisorConversation(); var text = AdvisorText.Load("ja");
             chat.TryAdd("前の質問", "前の回答", out _);
             var turn = chat.Begin(new AdvisorQuestion("再試行する質問"));
-            turn.Fail(AdvisorNotice.Connection(new AdvisorConnectionException("request_timeout")));
+            turn.Fail(AdvisorNotice.Connection(new AiConnectionException("request_timeout")));
             var failed = XDocument.Parse(AdvisorTranscript.Render(chat, text, "Advisor", "empty"));
             Require(chat.Exchanges.Count == 1 && chat.CanRetry(turn) &&
                 failed.Descendants().Any(e => (string?)e.Attribute("Foreground") == "{DynamicResource AdvisorErrorBrush}" &&
@@ -107,7 +107,7 @@ internal static class ConversationTests
                     "An information limit misleadingly advised raising the request limit");
                 var retry = new AdvisorConversation(); var retried = retry.Begin(new AdvisorQuestion("Retry"));
                 retried.UpdateProgress(new AdvisorProgress(AdvisorStage.Waiting, 0, 0, 5));
-                retried.Fail(AdvisorNotice.Connection(new AdvisorConnectionException("request_timeout")));
+                retried.Fail(AdvisorNotice.Connection(new AiConnectionException("request_timeout")));
                 retry.Retry(retried);
                 Require(retried.Progress == null, "Retry retained progress from the previous attempt");
                 retried.UpdateProgress(new AdvisorProgress(AdvisorStage.Waiting, 0, 0, AdvisorQueryLimits.DefaultMaxRounds));
@@ -128,7 +128,7 @@ internal static class ConversationTests
         {
             var chat = new AdvisorConversation(); var text = AdvisorText.Load("en");
             var cancelled = chat.Begin(new AdvisorQuestion("Cancelled message")); cancelled.Cancel();
-            var notice = AdvisorNotice.Connection(new AdvisorConnectionException("api_key_missing"));
+            var notice = AdvisorNotice.Connection(new AiConnectionException("api_key_missing"));
             var view = AdvisorTranscript.Render(chat, text, "Advisor", "empty", notice);
             Require(view.Contains("api_key_missing", StringComparison.Ordinal) && chat.Exchanges.Count == 0 && chat.CanRetry(cancelled),
                 "Cancellation or a setup notice became AI dialogue or disappeared from the display");

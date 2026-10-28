@@ -157,3 +157,5 @@ The script builds the mod, runs offline tests with mocked AI communication, and 
 The opt-in [developer local API](docs/developer-local-api.md) supports consultation and temporary prompt experiments against a loaded game situation, using the same UI workflow.
 
 The [token measurement tools](tools/README.md) document separate `countTokens` experiments and their measurement limitations.
+
+Source ownership and the Shared/Advisor boundary: [code-structure.md](docs/code-structure.md).

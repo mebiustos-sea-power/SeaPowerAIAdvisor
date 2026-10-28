@@ -154,9 +154,9 @@ internal static partial class ProviderTests
             var knowledge = ReadKnowledge();
             var main = new FakeProvider("main", (_, send, _, _) => send == 1 ? Task.FromResult(Reply(
                 Call("briefing", "get_briefing"),
-                new AdvisorToolCall("definition", "describe_operation", new JObject { ["operation_id"] = operation.Id }),
-                new AdvisorToolCall("candidates", "get_operation_candidates", new JObject { ["operation_id"] = operation.Id })))
-                : throw new AdvisorConnectionException("rate_limited", 429));
+                new AiToolCall("definition", "describe_operation", new JObject { ["operation_id"] = operation.Id }),
+                new AiToolCall("candidates", "get_operation_candidates", new JObject { ["operation_id"] = operation.Id })))
+                : throw new AiConnectionException("rate_limited", 429));
             var sub = new FakeProvider("sub", (session, _, _, _) =>
             {
                 var history = session.Continuation ?? throw new InvalidOperationException("Missing handoff");
@@ -164,7 +164,7 @@ internal static partial class ProviderTests
                     history.Operations.Count == 2 && history.RoundsUsed == 1 &&
                     (string?)history.Retrievals[0]?["response"]?["results"]?[0]?["data"]?["text"] == "Frozen briefing",
                     "Mixed-read facts were duplicated or lost at a provider boundary");
-                return Task.FromResult(new AdvisorReply("Retained facts", Array.Empty<AdvisorToolCall>(), 1));
+                return Task.FromResult(new AiReply("Retained facts", Array.Empty<AiToolCall>(), 1));
             });
             var result = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(main, sub).ConsultAsync(
                 AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations), CancellationToken.None)));

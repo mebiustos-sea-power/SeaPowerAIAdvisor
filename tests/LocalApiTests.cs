@@ -50,7 +50,7 @@ internal static partial class LocalApiTests
             var session = run.Observe(new Knowledge());
             var request = new JObject { ["query"] = "get_unit_capabilities" };
             session.Execute(request); request["query"] = "modified after return";
-            run.CaptureInput(new AdvisorProviderInput(new JObject { ["own_units"] = 1 }, "effective instructions", new JObject()));
+            run.CaptureInput(new AiProviderInput(new JObject { ["own_units"] = 1 }, "effective instructions", new JObject()));
             target.Turn!.UpdateProgress(new AdvisorProgress(AdvisorStage.FinalAnswer, 2, 1, 5, new[] { "get_unit_capabilities" }, true, "test-model", "Sub"));
             run.Complete(new AdviceResult("**Act now**", 2, 1, 123, model: "test-model"), "Sub");
             target.Turn.Complete("**Act now**"); run.Finish(); target.Busy = false;
@@ -64,7 +64,7 @@ internal static partial class LocalApiTests
             Require(run.Attached, "An immediately completed or failed request lost its accepted identity");
             var failedTurn = new AdvisorTurn(new AdvisorQuestion("failure"), 0, "Michael", "default");
             var failed = new AdvisorLocalRun(); failed.Attach(failedTurn);
-            failedTurn.Fail(AdvisorNotice.Connection(new AdvisorConnectionException("api_key_missing"))); failed.Finish();
+            failedTurn.Fail(AdvisorNotice.Connection(new AiConnectionException("api_key_missing"))); failed.Finish();
             failedTurn.Retry(0, null, null);
             Require(failed.Attached && (string?)failed.Snapshot()["state"] == "failed" && (string?)failed.Snapshot()["error"]!["code"] == "api_key_missing", "A UI retry reopened the earlier failed API result");
             Require(Send(api, "POST", "/v1/conversation/clear").Status == 200 && target.Cleared, "Clear did not reach the same target");

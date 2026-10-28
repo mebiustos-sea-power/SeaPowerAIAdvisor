@@ -163,8 +163,8 @@ internal static class FallbackTests
                     "The connection test used the other key's model");
                 return Key(request) == Main ? Response(503,"{}") : Response(200, Reply(new JObject { ["text"] = "OK" }));
             });
-            await Fails("api_error", () => GeminiFixture.TestAsync("unused-fallback-tests", draft.TestSettings(), CancellationToken.None, trace => new AdvisorHttpTransport(handler, trace)));
-            var result = await GeminiFixture.TestAsync("unused-fallback-tests", draft.TestSettings(true), CancellationToken.None, trace => new AdvisorHttpTransport(handler, trace));
+            await Fails("api_error", () => GeminiFixture.TestAsync("unused-fallback-tests", draft.TestSettings(), CancellationToken.None, trace => new AiHttpTransport(handler, trace)));
+            var result = await GeminiFixture.TestAsync("unused-fallback-tests", draft.TestSettings(true), CancellationToken.None, trace => new AiHttpTransport(handler, trace));
             Require(keys.SequenceEqual(new[] { Main, Backup }) && result.ApiRequests == 1, "A key test switched credentials or tested both keys");
             draft.SubId = null;
             Throws("fallback_key_missing", () => draft.TestSettings(true));
@@ -180,7 +180,7 @@ internal static class FallbackTests
                 return Response(200, Reply(new JObject { ["text"] = "Answer " + Main + " " + nested }));
             });
             var result = await GeminiFixture.RunAsync(directory, Session(), Settings(log: true), new AdvisorQuestion("Question"),
-                Array.Empty<ChatExchange>(), CancellationToken.None, trace => new AdvisorHttpTransport(handler, trace));
+                Array.Empty<ChatExchange>(), CancellationToken.None, trace => new AiHttpTransport(handler, trace));
             var file = Directory.GetFiles(directory, "*.jsonl").Single(); var raw = File.ReadAllText(file);
             var records = File.ReadAllLines(file).Select(JObject.Parse).ToArray();
             Require(!raw.Contains(Main, StringComparison.Ordinal) && !raw.Contains(Backup, StringComparison.Ordinal) &&
@@ -215,10 +215,10 @@ internal static class FallbackTests
         internal Handler(Func<HttpRequestMessage,CancellationToken,Task<HttpResponseMessage>> send) { this.send = send; }
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token) { Calls++; return send(request,token); }
     }
-    private static async Task<AdvisorConnectionException> Fails(string code, Func<Task<AdviceResult>> action)
-    { try { await action(); } catch (AdvisorConnectionException error) { Require(error.Code == code, "Wrong error: " + error.Code); return error; } throw new InvalidOperationException("Expected " + code); }
+    private static async Task<AiConnectionException> Fails(string code, Func<Task<AdviceResult>> action)
+    { try { await action(); } catch (AiConnectionException error) { Require(error.Code == code, "Wrong error: " + error.Code); return error; } throw new InvalidOperationException("Expected " + code); }
     private static void Throws(string code, Action action)
-    { try { action(); } catch (AdvisorConnectionException error) { Require(error.Code == code, "Wrong validation error"); return; } throw new InvalidOperationException("Expected " + code); }
+    { try { action(); } catch (AiConnectionException error) { Require(error.Code == code, "Wrong validation error"); return; } throw new InvalidOperationException("Expected " + code); }
     private static void InTemp(Action<string> action)
     {
         var path = Path.Combine(Path.GetTempPath(), "SeaPowerAIAdvisor-fallback-" + Guid.NewGuid().ToString("N"));

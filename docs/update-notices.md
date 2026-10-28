@@ -4,7 +4,7 @@ An optional developer-authored notice appears in a separate game-standard window
 
 ## Preparing a release
 
-`src/UI/Updates/current.json` is embedded in the mod. It contains one current notice with `id`, `title_key`, and `body_key`. Use a new stable ID for a new notice and add the referenced strings to the existing UI translation files. English is required; missing translations use English. Keep an ID unchanged when carrying the same notice into another build or correcting its translation.
+`src/Advisor/UI/Updates/current.json` is embedded in the mod. It contains one current notice with `id`, `title_key`, and `body_key`. Use a new stable ID for a new notice and add the referenced strings to the existing UI translation files. English is required; missing translations use English. Keep an ID unchanged when carrying the same notice into another build or correcting its translation.
 
 For a release without a notice, replace the entire JSON document with `null`. An absent or invalid embedded definition is a build/content error, not a way to disable notices. No version-specific C# branches or history of old notice bodies are needed. Users who skip releases see only the notice in their installed build. Include any still-relevant guidance from skipped releases in that current notice if necessary.
 

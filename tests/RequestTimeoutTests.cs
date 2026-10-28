@@ -40,7 +40,7 @@ internal static partial class ProviderTests
                 ExpectServiceError("request_timeout_invalid", () => store.SaveEntry(invalid, false));
                 Require(File.ReadAllBytes(path).SequenceEqual(beforeInvalid), "Invalid deadline changed stored settings");
                 foreach (var value in new[] { "", "0", "-1", "86401", "9999999999999999999", "1.5" })
-                    ExpectServiceError("request_timeout_invalid", () => AdvisorRequestTimeout.Parse(value));
+                    ExpectServiceError("request_timeout_invalid", () => AiRequestTimeout.Parse(value));
                 var legacy = new AdvisorSettingsDraft(new JObject { ["api_key"] = "mock_legacy_key", ["fallback_api_key"] = "mock_legacy_sub", ["request_timeout_seconds"] = 45 });
                 Require(legacy.Main.RequestTimeoutSeconds == 45 && legacy.Sub!.RequestTimeoutSeconds == 45, "Legacy key pairs did not inherit their old deadline");
                 legacy.Main.RequestTimeoutSeconds = 15; legacy.Sub!.RequestTimeoutSeconds = 240;
@@ -70,7 +70,7 @@ internal static partial class ProviderTests
                 await Task.Delay(1500, token); // Longer than main's deadline, shorter than sub's.
                 return JsonResponse(InteractionFixture.Reply(new JObject { ["text"] = "Sub completed" }));
             });
-            var result = await RunPrepared(AdvisorServices.Prepare(draft, transportFactory: trace => new AdvisorHttpTransport(handler, trace)));
+            var result = await RunPrepared(AdvisorServices.Prepare(draft, transportFactory: trace => new AiHttpTransport(handler, trace)));
             Require(result.Text == "Sub completed" && result.Model == "gemini-sub" && result.ApiRequests == 2 && requests == 2 && handler.Disposed,
                 "The sub inherited the main deadline, skipped fallback, or leaked the transport");
         }));
@@ -84,9 +84,9 @@ internal static partial class ProviderTests
                 try
                 {
                     await AdvisorServices.TestAsync("unused-test-deadline-log", configuration, new AdvisorConnectionOptions(new JObject()),
-                        "Test", CancellationToken.None, transportFactory: trace => new AdvisorHttpTransport(handler, trace));
+                        "Test", CancellationToken.None, transportFactory: trace => new AiHttpTransport(handler, trace));
                 }
-                catch (AdvisorConnectionException error)
+                catch (AiConnectionException error)
                 { Require(error.Code == "request_timeout" && sends == 1 && handler.Disposed, "A connection check ignored its edited deadline or retried"); continue; }
                 throw new InvalidOperationException("An expired connection check reported success");
             }
@@ -102,7 +102,7 @@ internal static partial class ProviderTests
                 await Task.Delay(6000, token);
                 return JsonResponse(++requests == 1 ? LocalReply("", null, LocalCall("get_briefing")) : LocalReply("Long consultation completed"));
             });
-            var result = await RunPrepared(AdvisorServices.Prepare(draft, transportFactory: trace => new AdvisorHttpTransport(handler, trace)));
+            var result = await RunPrepared(AdvisorServices.Prepare(draft, transportFactory: trace => new AiHttpTransport(handler, trace)));
             Require(clock.Elapsed.TotalSeconds >= 10 && result.Text == "Long consultation completed" && result.ApiRequests == 2 && result.QueryRounds == 1 && handler.Disposed,
                 "The obsolete total deadline interrupted valid individual requests");
         }));

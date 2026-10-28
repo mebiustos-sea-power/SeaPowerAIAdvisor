@@ -318,14 +318,14 @@ internal static class PromptTests
         private readonly Func<JObject, int, JObject> reply;
         private int calls;
         internal RoundTransport(Func<JObject, int, JObject> reply) { this.reply = reply; }
-        public Task<JObject> GenerateAsync(AdvisorSettings settings, JObject body, CancellationToken cancellation) => Task.FromResult(reply(body, ++calls));
+        public Task<JObject> GenerateAsync(AiConnectionSettings settings, JObject body, CancellationToken cancellation) => Task.FromResult(reply(body, ++calls));
     }
     private sealed class CaptureTransport : IGeminiTransport
     {
         private readonly Action<JObject> inspect;
         internal int Calls;
         internal CaptureTransport(Action<JObject> inspect) { this.inspect = inspect; }
-        public Task<JObject> GenerateAsync(AdvisorSettings settings, JObject body, CancellationToken cancellation)
+        public Task<JObject> GenerateAsync(AiConnectionSettings settings, JObject body, CancellationToken cancellation)
         {
             Calls++; inspect(body);
             return Task.FromResult(InteractionFixture.Reply(new JObject { ["text"] = "Answer" }));

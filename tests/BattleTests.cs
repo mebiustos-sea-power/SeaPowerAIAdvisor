@@ -459,7 +459,7 @@ internal static partial class BattleTests
     private sealed class RestrictedTransport : IGeminiTransport
     {
         internal int Calls;
-        public Task<JObject> GenerateAsync(AdvisorSettings settings, JObject body, CancellationToken cancellation)
+        public Task<JObject> GenerateAsync(AiConnectionSettings settings, JObject body, CancellationToken cancellation)
         {
             Calls++;
             JObject part;
@@ -484,7 +484,7 @@ internal static partial class BattleTests
     private sealed class MockBattleTransport : IGeminiTransport
     {
         private int calls;
-        public Task<JObject> GenerateAsync(AdvisorSettings settings, JObject body, CancellationToken cancellation)
+        public Task<JObject> GenerateAsync(AiConnectionSettings settings, JObject body, CancellationToken cancellation)
         {
             calls++;
             if (calls == 1)
@@ -513,7 +513,7 @@ internal static partial class BattleTests
     private sealed class CapabilityTransport : IGeminiTransport
     {
         private int calls;
-        public Task<JObject> GenerateAsync(AdvisorSettings settings, JObject body, CancellationToken cancellation)
+        public Task<JObject> GenerateAsync(AiConnectionSettings settings, JObject body, CancellationToken cancellation)
         {
             calls++;
             JObject part;

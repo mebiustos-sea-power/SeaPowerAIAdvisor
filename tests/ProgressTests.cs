@@ -134,7 +134,7 @@ internal static class ProgressTests
     {
         private readonly Func<int, JObject, CancellationToken, JObject> generate; private int count;
         internal Fake(Func<int, JObject, CancellationToken, JObject> generate) { this.generate = generate; }
-        public Task<JObject> GenerateAsync(AdvisorSettings settings, JObject body, CancellationToken token) => Task.FromResult(generate(++count, body, token));
+        public Task<JObject> GenerateAsync(AiConnectionSettings settings, JObject body, CancellationToken token) => Task.FromResult(generate(++count, body, token));
     }
     private static void Async(Func<Task> action) => action().GetAwaiter().GetResult();
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }

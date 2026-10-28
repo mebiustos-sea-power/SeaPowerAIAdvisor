@@ -9,14 +9,14 @@
     <FileVersion>0.18.0.0</FileVersion>
   </PropertyGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Operations\Attack\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.Attack.Localization.%(Filename).json" />
-    <EmbeddedResource Include="Operations\CancelAttack\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.CancelAttack.Localization.%(Filename).json" />
-    <EmbeddedResource Include="Operations\CancelReservations\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.CancelReservations.Localization.%(Filename).json" />
-    <EmbeddedResource Include="Operations\Sensors\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.Sensors.Localization.%(Filename).json" />
-    <EmbeddedResource Include="Operations\Emcon\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.Emcon.Localization.%(Filename).json" />
-    <EmbeddedResource Include="Operations\Movement\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.Movement.Localization.%(Filename).json" />
-    <EmbeddedResource Include="Operations\FormationReturn\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.FormationReturn.Localization.%(Filename).json" />
-    <EmbeddedResource Include="Operations\SonobuoyDrop\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.SonobuoyDrop.Localization.%(Filename).json" />
+    <EmbeddedResource Include="Advisor\Operations\Attack\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.Attack.Localization.%(Filename).json" />
+    <EmbeddedResource Include="Advisor\Operations\CancelAttack\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.CancelAttack.Localization.%(Filename).json" />
+    <EmbeddedResource Include="Advisor\Operations\CancelReservations\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.CancelReservations.Localization.%(Filename).json" />
+    <EmbeddedResource Include="Advisor\Operations\Sensors\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.Sensors.Localization.%(Filename).json" />
+    <EmbeddedResource Include="Advisor\Operations\Emcon\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.Emcon.Localization.%(Filename).json" />
+    <EmbeddedResource Include="Advisor\Operations\Movement\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.Movement.Localization.%(Filename).json" />
+    <EmbeddedResource Include="Advisor\Operations\FormationReturn\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.FormationReturn.Localization.%(Filename).json" />
+    <EmbeddedResource Include="Advisor\Operations\SonobuoyDrop\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.SonobuoyDrop.Localization.%(Filename).json" />
 
     <Reference Include="AnchorChain" HintPath="$(AnchorChainDir)\AnchorChain.dll" Private="false" ExternallyResolved="true" />
     <Reference Include="BepInEx" HintPath="$(SeaPowerDir)\BepInEx\core\BepInEx.dll" Private="false" ExternallyResolved="true" />
@@ -40,14 +40,14 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="$(PkgMarkdig)\lib\netstandard2.1\Markdig.dll" LogicalName="SeaPowerAIAdvisor.Markdig.dll" />
-    <EmbeddedResource Include="UI\Views\Advisor.xaml" LogicalName="SeaPowerAIAdvisor.Advisor.xaml" />
-    <EmbeddedResource Include="UI\Views\AdvisorControls.xaml" LogicalName="SeaPowerAIAdvisor.AdvisorControls.xaml" />
-    <EmbeddedResource Include="UI\Views\AdvisorHudButton.xaml" LogicalName="SeaPowerAIAdvisor.AdvisorHudButton.xaml" />
-    <EmbeddedResource Include="UI\Views\AdvisorError.xaml" LogicalName="SeaPowerAIAdvisor.AdvisorError.xaml" />
-    <EmbeddedResource Include="UI\Views\AdvisorUpdateNotice.xaml" LogicalName="SeaPowerAIAdvisor.AdvisorUpdateNotice.xaml" />
-    <EmbeddedResource Include="UI\Assets\advisor-default.png" LogicalName="SeaPowerAIAdvisor.DefaultPortrait.png" />
-    <EmbeddedResource Include="UI\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Localization.%(Filename).json" />
-    <EmbeddedResource Include="UI\Updates\current.json" LogicalName="SeaPowerAIAdvisor.UpdateNotice.json" />
+    <EmbeddedResource Include="Advisor\UI\Views\Advisor.xaml" LogicalName="SeaPowerAIAdvisor.Advisor.xaml" />
+    <EmbeddedResource Include="Shared\UI\Controls.xaml" LogicalName="SeaPowerAIAdvisor.AdvisorControls.xaml" />
+    <EmbeddedResource Include="Advisor\UI\Views\AdvisorHudButton.xaml" LogicalName="SeaPowerAIAdvisor.AdvisorHudButton.xaml" />
+    <EmbeddedResource Include="Advisor\UI\Views\AdvisorError.xaml" LogicalName="SeaPowerAIAdvisor.AdvisorError.xaml" />
+    <EmbeddedResource Include="Advisor\UI\Views\AdvisorUpdateNotice.xaml" LogicalName="SeaPowerAIAdvisor.AdvisorUpdateNotice.xaml" />
+    <EmbeddedResource Include="Advisor\UI\Assets\advisor-default.png" LogicalName="SeaPowerAIAdvisor.DefaultPortrait.png" />
+    <EmbeddedResource Include="Advisor\UI\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Localization.%(Filename).json" />
+    <EmbeddedResource Include="Advisor\UI\Updates\current.json" LogicalName="SeaPowerAIAdvisor.UpdateNotice.json" />
   </ItemGroup>
   <Target Name="CheckGameReferences" BeforeTargets="ResolveReferences">
     <Error Condition="!Exists('$(SeaPowerDir)\Sea Power_Data\Managed\Seapower-Scripts.dll')" Text="Set SeaPowerDir in Directory.Build.local.props." />

@@ -42,14 +42,14 @@
 
 確認箇所：
 
-- [会話の保持](../src/Advisor/AdvisorConversation.cs)
-- [次の相談へ渡す履歴](../src/Advisor/AdvisorContext.cs)
-- [相談開始時の情報取得](../src/Game/AdvisorSource.cs)
-- [標準エンジンの取得往復](../src/Advisor/AdvisorEngine.cs)
-- [自軍IDとユニット参照の生成](../src/Game/Battle/BattleSituationReader.cs)
+- [会話の保持](../src/Advisor/Consultation/AdvisorConversation.cs)
+- [次の相談へ渡す履歴](../src/Advisor/Consultation/AdvisorContext.cs)
+- [相談開始時の情報取得](../src/Advisor/Game/AdvisorSource.cs)
+- [標準エンジンの取得往復](../src/Advisor/Consultation/AdvisorEngine.cs)
+- [自軍IDとユニット参照の生成](../src/Advisor/Game/Battle/BattleSituationReader.cs)
 - [現行の公開契約](../api/Consultations.cs)
-- [操作の提案管理](../src/Operations/AdvisorOperations.cs)と[承認画面](../src/UI/AdvisorOperationReview.cs)
-- [共通マップ契約](../api/Map.cs)、[プレビューの寿命管理](../src/Operations/AdvisorOperationPreview.cs)、[ゲーム側のマップ操作](../src/Game/Battle/BattleMapNavigation.cs)
+- [操作の提案管理](../src/Advisor/Operations/AdvisorOperations.cs)と[承認画面](../src/Advisor/UI/AdvisorOperationReview.cs)
+- [共通マップ契約](../api/Map.cs)、[プレビューの寿命管理](../src/Advisor/Operations/AdvisorOperationPreview.cs)、[ゲーム側のマップ操作](../src/Advisor/Game/Battle/BattleMapNavigation.cs)
 
 ユーザーからは、今回の目標を予約操作だけで実現できるとの前提が提示されている。発艦済みヘリの1地点・1発については、ゲーム標準の予約を構築・登録・取得・削除する経路を静的調査で確認した。変更用のメソッドも存在するが、実ゲームでの登録・移動・投下・現在の深度設定維持は確認済み。個別取消しは未検証。開発用の予約一覧・全消去は第12節を参照する。調査結果と残る確認点は第10節を参照する。
 

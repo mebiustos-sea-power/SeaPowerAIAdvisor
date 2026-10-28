@@ -37,7 +37,7 @@
 
 既存の実装型は多くが`internal`であり、第三者向けのプロバイダー登録口はまだない。
 
-参照するソースは[情報取得の契約](../src/Advisor/IAdvisorQuerySession.cs)、[Geminiの相談処理](../src/Providers/Gemini/GeminiAdvisor.cs)、[Interactions形式](../src/Providers/Gemini/GeminiInteraction.cs)、[接続設定](../src/Configuration/AdvisorApiLibrary.cs)、[MODの入口](../src/Plugin.cs)。
+参照するソースは[情報取得の契約](../src/Advisor/Consultation/IAdvisorQuerySession.cs)、[Geminiの接続構成](../src/Advisor/Providers/Gemini/GeminiService.cs)、[Interactions形式](../src/Shared/AI/Gemini/GeminiInteraction.cs)、[接続設定](../src/Advisor/Configuration/AdvisorApiLibrary.cs)、[MODの入口](../src/Plugin.cs)。
 
 ## 第1段階の実装
 
@@ -48,14 +48,14 @@
 | `AdvisorContext` | 質問、人物設定、共通希望、履歴、システム指示、ツール定義を準備し、情報取得窓口と相談期限を保持する |
 | `IAdvisorBackend` | 標準エンジンの使用を必須にしない、相談実行部の内部契約 |
 | `AdvisorEngine` | 標準の取得往復、結果の対応付け、進捗、中止、期限、取得・送信量制限、利用量の集計 |
-| `IAdvisorProvider`と`IAdvisorProviderSession` | 分離された入力から接続セッションを作り、回答・ツール要求・結果を受け渡す内部契約 |
-| `AdvisorProviderRequest` | APIのJSONを共通側へ公開せず、送信前にバイト数を検査してから実送信するための境界 |
-| `AdvisorConnection` | メイン／サブの移行と実送信回数、接続セッションの破棄、共通の接続エラー |
+| `IAiProvider`と`IAiProviderSession` | 分離された入力から接続セッションを作り、回答・ツール要求・結果を受け渡す内部契約 |
+| `AiProviderRequest` | APIのJSONを共通側へ公開せず、送信前にバイト数を検査してから実送信するための境界 |
+| `AiConnection` | メイン／サブの移行と実送信回数、接続セッションの破棄、共通の接続エラー |
 | `AdvisorConsultation` | プロバイダーや相談方式に依存しない、完了・中止・失敗のログ記録 |
 | `GeminiProvider` | Interactionsの継続ID、初期入力・取得結果のAPI表現、サブ移行時のGemini向け文脈構成 |
 | `GeminiAdvisor` | 既存Gemini設定からプロバイダー、共通エンジン、HTTPとログの所有関係を組み立てる入口 |
 
-`GeminiFallback`は`AdvisorConnection`へ置き換えた。初期情報・指示・ツール定義は別々に渡し、共通エンジンと接続切り替えはInteractionsのリクエスト形式・継続ID・APIキーを扱わない。サブへ渡すのは本体が実行した取得要求と結果、および使用済みの取得回数であり、元プロバイダーの会話状態ではない。
+`GeminiFallback`は`AiConnection`へ置き換えた。初期情報・指示・ツール定義は別々に渡し、共通エンジンと接続切り替えはInteractionsのリクエスト形式・継続ID・APIキーを扱わない。サブへ渡すのは本体が実行した取得要求と結果、および使用済みの取得回数であり、元プロバイダーの会話状態ではない。
 
 既存のGemini形式とHTTP境界のテストを維持し、Gemini形式を使わない模擬プロバイダーで、並列結果の対応、別プロバイダーへの引き継ぎ、取得回数・送信量の制限を追加検証した。実API接続とゲーム内での動作は、ゲームへ配置した段階で確認する。
 
@@ -78,7 +78,7 @@
 
 登録は設定準備の関数を保持し、準備時は接続やログ書込みを開始しない。相談を開始した時点の準備結果を保持するため、選択や設定の変更は次の相談から反映する。選択されていない実装の設定は読み込まず、選択した実装の設定不備や例外を別の実装で隠さない。実行スコープの生成は同期のリソース準備に留め、実際の通信はキャンセル可能な`ConsultAsync`内で行う。
 
-独自実装は`IAdvisorBackend`を実装すればよく、`AdvisorEngine`や`IAdvisorProvider`を使う必要はない。本体内部では次の形で登録・選択する（公開APIの利用例ではない）。
+独自実装は`IAdvisorBackend`を実装すればよく、`AdvisorEngine`や`IAiProvider`を使う必要はない。本体内部では次の形で登録・選択する（公開APIの利用例ではない）。
 
 ```csharp
 Plugin.Backends.Register("custom", PrepareCustomBackend); // Func<AdvisorBackendSetup>
@@ -148,7 +148,7 @@ Geminiの全既存テストに加え、標準エンジンを使わない模擬�
 | `AdvisorApiLibrary` | 登録ID・名前・提供元ID・固有設定とメイン／サブ割り当ての保存 |
 | `AdvisorApiSettingsView` | 提供元が宣言した入力欄の生成、伏せ字入力、編集中の提供元切り替えと破棄 |
 | `AdvisorServices` | 相談開始時の設定固定、標準エンジンと提供元の組み立て、接続テストの共通操作 |
-| `AdvisorHttpTransport` | 中止・要求期限・受信量制限・JSON読込・HTTPエラー・通信ログ。URLと認証ヘッダーは呼出元が指定 |
+| `AiHttpTransport` | 中止・要求期限・受信量制限・JSON読込・HTTPエラー・通信ログ。URLと認証ヘッダーは呼出元が指定 |
 | `GeminiService`／`GeminiProvider`／`GeminiTransport` | Geminiの設定検証、公式URLと認証、Interactionsの継続・ツール形式 |
 | `OllamaService`／`OllamaProvider` | OllamaのURL／モデル／文脈長の検証、ネイティブChat API、メッセージ履歴・ツール要求・結果・利用量 |
 
@@ -306,7 +306,7 @@ API仕様の参照先：https://docs.nano-gpt.com/api-reference/endpoint/chat-co
 - `BattleSnapshotExport`／`CampaignSnapshotExport` は各情報取得セッションの一部として、既存の非公開 `Dispatch` と同じ許可・整形を用いて固定スナップショットを全件取得する。`AdvisorSnapshotExport` は内部のID分割・ページ送りと共通資料の重複排除だけを担当し、公開問い合わせの回数・返却予算を消費しない。生の診断JSONは送らない。
 - `AdvisorSituationInput` が標準エンジンの一括入力を組み立てる。初期カタログと取得向け指示を置換し、許可済み全データを `situation_data` に載せる。戦況用スキーマを除き、WIP有効時の操作照会・実行提案は維持する。操作候補は必要時点のライブ照会のままで、戦況一括データに混ぜない。
 - `AdvisorReadSession` が相談全体の情報量と読取の受付を所有する。一括送信中の戦況取得はデータなしの `situation_already_supplied` とし、操作照会は通常処理する。一括入力が既存160,000バイトの情報量上限を超える場合は送信前に明示エラーとし、部分送信や自動の方式変更はしない。
-- `AdvisorEngine` は同じ相談ループを使用し、`AdvisorConnection` の切替時入力ファクトリーを通じてメイン／サブそれぞれの方式を適用する。元のスナップショットと相談上限は維持する。各プロバイダーはJSON・会話ID・履歴などの通信形式だけを担当する。
+- `AdvisorEngine` は同じ相談ループを使用し、`AiConnection` の切替時入力ファクトリーを通じてメイン／サブそれぞれの方式を適用する。元のスナップショットと相談上限は維持する。各プロバイダーはJSON・会話ID・履歴などの通信形式だけを担当する。
 - 独自相談処理には標準供給方式を強制せず、知識・操作の窓口を渡す。標準・独立型とも入力の定義一覧は`ToolsJson`を使い、ツールがない場合は空の一覧を渡す。
 
 一括送信で消えるのは戦況の追加取得であり、操作照会・提案の往復や履歴再送は残る。入力トークン・応答品質の優劣は実測前に断定しない。接続テストは通信互換性の小さな試験のままとし、ゲームの全量データを送らない。
@@ -323,7 +323,7 @@ AdvisorSituationInputが最小初期入力と既存一括生成処理を使う�
 
 標準エンジンのツールをquery_situation／list_operations／describe_operation／get_operation_candidates／propose_operation_plansに分割した。AdvisorToolBindingが定義と処理担当を組にし、AdvisorToolSessionが登録・呼び出しIDの対応・集約・順序を管理する。AdvisorReadSessionは正規化済み読み取りの実行と共通データ予算に限定し、操作スキーマと変換はAdvisorOperationToolsが所有する。AdvisorEngineは個別のツール名やsource／actionを判断しない。
 
-AdvisorProviderInputとGemini／Ollama／Chat Completionsの通信処理は任意長の定義一覧を扱う。公開契約2ではIStandardAdvisorExtensionがToolsJsonを受け取り、旧2ツール形式・移行用インターフェース・互換分岐を廃止した。標準・独立型とも同じ入力コンテナーを使い、独自相談の実行方式とKnowledge／Operationsサービスは維持する。接続切替でも実行済み情報と提案receipt、取得・送信予算を共有する。
+AiProviderInputとGemini／Ollama／Chat Completionsの通信処理は任意長の定義一覧を扱う。公開契約2ではIStandardAdvisorExtensionがToolsJsonを受け取り、旧2ツール形式・移行用インターフェース・互換分岐を廃止した。標準・独立型とも同じ入力コンテナーを使い、独自相談の実行方式とKnowledge／Operationsサービスは維持する。接続切替でも実行済み情報と提案receipt、取得・送信予算を共有する。
 
 操作ごとの登録・引数正規化・承認時検証・ゲームスレッド実行は既存担当へ残す。データ供給方式、情報選択、初回資料送信、上限時の未完了終了も維持する。目的は責務整理であり、実モデルでの精度向上や通信回数削減はこの構造変更だけでは断定しない。
 

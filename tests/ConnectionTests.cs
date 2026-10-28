@@ -35,7 +35,7 @@ internal static class ConnectionTests
             });
             var settings = draft.TestSettings();
             Require(!settings.LogAiJson, "The test applied an unsaved logging preference");
-            var result = await GeminiFixture.TestAsync(path, settings, CancellationToken.None, trace => new AdvisorHttpTransport(handler, trace), requestText: requestText);
+            var result = await GeminiFixture.TestAsync(path, settings, CancellationToken.None, trace => new AiHttpTransport(handler, trace), requestText: requestText);
             Require(result.ApiRequests == 1 && result.QueryRounds == 0 && handler.Calls == 1 && result.Text == "OK" && !Directory.Exists(path),
                 "The check made extra requests, created files while logging is disabled, or failed to verify generation");
         }));
@@ -85,19 +85,19 @@ internal static class ConnectionTests
     }
     private static Task<AdviceResult> Run(Handler handler, CancellationToken cancellation = default) => GeminiFixture.TestAsync(
         "unused-connection-test-directory", new AdvisorSettingsDraft(new JObject { ["api_key"] = Key }).TestSettings(), cancellation,
-        trace => new AdvisorHttpTransport(handler, trace));
+        trace => new AiHttpTransport(handler, trace));
     private static JObject Reply() => InteractionFixture.Reply(new JObject { ["text"] = "OK" });
     private static HttpResponseMessage Response(JObject body) => new(HttpStatusCode.OK) { Content = new StringContent(body.ToString()) };
     private static async Task Fails(string code, Func<Task<AdviceResult>> action)
     {
         try { await action(); }
-        catch (AdvisorConnectionException error) { Require(error.Code == code && !error.ToString().Contains(Key, StringComparison.Ordinal), "Wrong or unsafe error"); return; }
+        catch (AiConnectionException error) { Require(error.Code == code && !error.ToString().Contains(Key, StringComparison.Ordinal), "Wrong or unsafe error"); return; }
         throw new InvalidOperationException("Expected " + code);
     }
     private static void Throws(string code, Action action)
     {
         try { action(); }
-        catch (AdvisorConnectionException error) { Require(error.Code == code, "Wrong validation error"); return; }
+        catch (AiConnectionException error) { Require(error.Code == code, "Wrong validation error"); return; }
         throw new InvalidOperationException("Expected " + code);
     }
     private static void Async(Func<Task> action) => action().GetAwaiter().GetResult();

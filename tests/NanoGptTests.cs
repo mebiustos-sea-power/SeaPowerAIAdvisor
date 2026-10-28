@@ -67,7 +67,7 @@ internal static partial class ProviderTests
                     saved.Main.RequestTimeoutSeconds == existing.RequestTimeoutSeconds, "Per-connection editing changed another limit, credentials, model or timeout");
                 var accepted = File.ReadAllBytes(path);
                 foreach (var bad in new[] { "", "0", "-1", "1.5", "1e4", "2147483648" })
-                    ExpectServiceError("output_tokens_invalid", () => AdvisorOutputTokens.Parse(bad));
+                    ExpectServiceError("output_tokens_invalid", () => AiOutputTokens.Parse(bad));
                 foreach (var bad in new[] { 0, -1 })
                 {
                     var invalid = store.Read().Main; invalid.MaxOutputTokens = bad;
@@ -109,7 +109,7 @@ internal static partial class ProviderTests
                         "NanoGPT ignored the player's data exclusions or lost a successful result");
                     return JsonResponse(NanoReply("Known evidence only"));
                 });
-                var setup = AdvisorServices.Prepare(draft, transportFactory: trace => new AdvisorHttpTransport(handler, trace));
+                var setup = AdvisorServices.Prepare(draft, transportFactory: trace => new AiHttpTransport(handler, trace));
                 var answer = await AdvisorConsultation.RunAsync(setup, AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), userName: "Commander"),
                     "unused-nano-log", new AdvisorQuestion("Question"), CancellationToken.None);
                 Require(answer.Text == "Known evidence only" && answer.ApiRequests == 2 && answer.QueryRounds == 1 &&
@@ -145,11 +145,11 @@ internal static partial class ProviderTests
                     try
                     {
                         var answer = await AdvisorServices.TestAsync(directory, draft.Main.Build(), AdvisorSettings.Edit(path).Options, "Test", CancellationToken.None,
-                            transportFactory: trace => new AdvisorHttpTransport(handler, trace));
+                            transportFactory: trace => new AiHttpTransport(handler, trace));
                         Require(compatible && sends == 2 && answer.ApiRequests == 2 && answer.TotalTokens == 220,
                             "An incompatible NanoGPT model passed its test");
                     }
-                    catch (AdvisorConnectionException error)
+                    catch (AiConnectionException error)
                     { Require(!compatible && error.Code == "tool_call_test_failed" && sends == 1, "NanoGPT hid a tool-test failure or sent extra requests"); }
                     Require(handler.Disposed && File.ReadAllBytes(path).SequenceEqual(original), "NanoGPT testing saved settings or leaked its transport");
                 }
@@ -172,10 +172,10 @@ internal static partial class ProviderTests
                 });
                 try
                 {
-                    await RunPrepared(AdvisorServices.Prepare(draft, transportFactory: trace => new AdvisorHttpTransport(handler, trace), allowFallback: false));
+                    await RunPrepared(AdvisorServices.Prepare(draft, transportFactory: trace => new AiHttpTransport(handler, trace), allowFallback: false));
                     throw new Exception("A failed subscription request succeeded");
                 }
-                catch (AdvisorConnectionException error)
+                catch (AiConnectionException error)
                 { Require(error.Code == failure.Item3 && error.HttpStatus == failure.Item1 && sends == 1 && handler.Disposed &&
                     !error.Message.Contains("PRIVATE_SERVICE_TEXT", StringComparison.Ordinal), "A subscription error was hidden, misclassified, retried or exposed raw text"); }
             }
@@ -201,7 +201,7 @@ internal static partial class ProviderTests
                     "Fallback lost evidence, reset the query budget or copied private provider history");
                 return JsonResponse(NanoReply("Recovered"));
             });
-            var answer = await RunPrepared(AdvisorServices.Prepare(draft, transportFactory: trace => new AdvisorHttpTransport(handler, trace)));
+            var answer = await RunPrepared(AdvisorServices.Prepare(draft, transportFactory: trace => new AiHttpTransport(handler, trace)));
             Require(answer.Text == "Recovered" && answer.ApiRequests == 3 && answer.QueryRounds == 1 && answer.TotalTokens == null && handler.Disposed,
                 "NanoGPT fallback repeated queries, lost usage uncertainty or leaked transport resources");
         }));

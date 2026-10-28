@@ -65,7 +65,7 @@ internal static partial class BattleTests
                 }
                 Require(input.Data["situation"] == null && !input.Data.ToString().Contains("上陸を阻止せよ！", StringComparison.Ordinal),
                     "Requested delivery disclosed mission areas before a situation request");
-                var call = new AdvisorToolCall("areas", "get_situation", new JObject());
+                var call = new AiToolCall("areas", "get_situation", new JObject());
                 var result = context.Tools.ExecuteAsync(new[] { call }, CancellationToken.None, (_, _) => { }, (_, _) => { }).GetAwaiter().GetResult();
                 var full = result.Results.Single().Data["results"]?[0]?["data"];
                 Require(JToken.DeepEquals(full?["situation"]?["mission_map_areas"], expected), "The requested full snapshot lost mission areas");

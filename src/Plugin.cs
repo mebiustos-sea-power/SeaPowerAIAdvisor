@@ -48,7 +48,7 @@ public sealed class Plugin : IAnchorChainMod
             try { _ = AdvisorPrompts.Current; }
             catch (AdvisorPromptException error) { Log.LogError("System prompts unavailable until restart: " + error.Message); }
             campaignFiles = files;
-            AdvisorDependencies.LoadMarkdown(typeof(Plugin).Assembly);
+            EmbeddedDependencies.LoadMarkdown(typeof(Plugin).Assembly);
             harmony = new Harmony(ModId);
             battle = new BattleIntegration(BattleRuntime, message => Log.LogWarning(message), options, Backends);
             harmony.Patch(Required(typeof(MainGameViewModel), "OnLateUpdate"), postfix: new HarmonyMethod(typeof(Plugin), nameof(BattleFrame)));

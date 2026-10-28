@@ -40,7 +40,7 @@ internal static class GeminiAirSmoke
     {
         private readonly GeminiTransport inner = new();
         internal JArray Trace { get; } = new();
-        public async System.Threading.Tasks.Task<JObject> GenerateAsync(AdvisorSettings settings, JObject body, CancellationToken token)
+        public async System.Threading.Tasks.Task<JObject> GenerateAsync(AiConnectionSettings settings, JObject body, CancellationToken token)
         {
             var response = await inner.GenerateAsync(settings, body, token);
             var calls = new JArray();

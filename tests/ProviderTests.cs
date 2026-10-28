@@ -46,7 +46,7 @@ internal static partial class ProviderTests
                 Require(s.Results.Count == 2 && s.Results[0].Id == "briefing" && s.Results[1].Id == "catalog" &&
                     (string?)s.Results[0].Data["results"]![0]!["query"] == "get_briefing" &&
                     (string?)s.Results[1].Data["results"]![0]!["query"] == "catalog", "Parallel tool results lost their identity or were mixed");
-                return Task.FromResult(new AdvisorReply("Shared answer", Array.Empty<AdvisorToolCall>(), 7));
+                return Task.FromResult(new AiReply("Shared answer", Array.Empty<AiToolCall>(), 7));
             });
             IAdvisorBackend backend = new AdvisorEngine(provider);
             var answer = await AdvisorConsultation.RunAsync(backend, context, CancellationToken.None);
@@ -68,7 +68,7 @@ internal static partial class ProviderTests
                     s.Input.Data["question"] = "PRIVATE_PROVIDER_STATE";
                     return Task.FromResult(Reply(Call("first", "catalog")));
                 }
-                throw new AdvisorConnectionException("rate_limited", 429);
+                throw new AiConnectionException("rate_limited", 429);
             });
             var sub = new FakeProvider("other-provider-model", (s, n, allowed, token) =>
             {
@@ -109,7 +109,7 @@ internal static partial class ProviderTests
             var provider = new FakeProvider("independent", (s, n, allowed, token) => throw new InvalidOperationException("Oversized request was sent"),
                 AdvisorEngine.MaxTotalRequestBytes + 1);
             try { await new AdvisorEngine(provider).ConsultAsync(AdvisorContext.Create(new Knowledge(1), Array.Empty<ChatExchange>()), CancellationToken.None); }
-            catch (AdvisorConnectionException error)
+            catch (AiConnectionException error)
             {
                 Require(error.Code == "request_budget" && provider.Sessions.Single().Sends == 0 && provider.Sessions.Single().Disposed,
                     "The provider sent an oversized request or its session was not cleaned up");
@@ -119,39 +119,39 @@ internal static partial class ProviderTests
         }));
     }
 
-    private static AdvisorToolCall Call(string id, string query) => new(id, ToolName,
+    private static AiToolCall Call(string id, string query) => new(id, ToolName,
         new JObject { ["requests"] = new JArray(new JObject { ["query"] = query }) });
-    private static AdvisorReply Reply(params AdvisorToolCall[] calls) => new("", calls, 7);
+    private static AiReply Reply(params AiToolCall[] calls) => new("", calls, 7);
 
-    private sealed class FakeProvider : IAdvisorProvider
+    private sealed class FakeProvider : IAiProvider
     {
         public string Model { get; }
-        private readonly Func<FakeSession, int, bool, CancellationToken, Task<AdvisorReply>> send;
+        private readonly Func<FakeSession, int, bool, CancellationToken, Task<AiReply>> send;
         private readonly int bytes;
         internal List<FakeSession> Sessions { get; } = new();
-        internal FakeProvider(string model, Func<FakeSession, int, bool, CancellationToken, Task<AdvisorReply>> send, int bytes = 100)
+        internal FakeProvider(string model, Func<FakeSession, int, bool, CancellationToken, Task<AiReply>> send, int bytes = 100)
         { Model = model; this.send = send; this.bytes = bytes; }
-        public IAdvisorProviderSession Start(AdvisorProviderInput input, AdvisorContinuation? continuation)
+        public IAiProviderSession Start(AiProviderInput input, AiContinuation? continuation)
         {
             var session = new FakeSession(input, continuation, send, bytes);
             Sessions.Add(session); return session;
         }
     }
 
-    private sealed class FakeSession : IAdvisorProviderSession
+    private sealed class FakeSession : IAiProviderSession
     {
-        internal AdvisorProviderInput Input { get; }
-        internal AdvisorContinuation? Continuation { get; }
-        internal IReadOnlyList<AdvisorToolResult> Results { get; private set; } = Array.Empty<AdvisorToolResult>();
+        internal AiProviderInput Input { get; }
+        internal AiContinuation? Continuation { get; }
+        internal IReadOnlyList<AiToolResult> Results { get; private set; } = Array.Empty<AiToolResult>();
         internal int Sends { get; private set; }
         internal bool Disposed { get; private set; }
-        private readonly Func<FakeSession, int, bool, CancellationToken, Task<AdvisorReply>> send;
+        private readonly Func<FakeSession, int, bool, CancellationToken, Task<AiReply>> send;
         private readonly int bytes;
-        internal FakeSession(AdvisorProviderInput input, AdvisorContinuation? continuation,
-            Func<FakeSession, int, bool, CancellationToken, Task<AdvisorReply>> send, int bytes)
+        internal FakeSession(AiProviderInput input, AiContinuation? continuation,
+            Func<FakeSession, int, bool, CancellationToken, Task<AiReply>> send, int bytes)
         { Input = input; Continuation = continuation; this.send = send; this.bytes = bytes; }
-        public AdvisorProviderRequest Prepare(bool allowTools) => new(bytes, cancellation => send(this, ++Sends, allowTools, cancellation));
-        public void AcceptResults(IReadOnlyList<AdvisorToolResult> results) => Results = results;
+        public AiProviderRequest Prepare(bool allowTools) => new(bytes, cancellation => send(this, ++Sends, allowTools, cancellation));
+        public void AcceptResults(IReadOnlyList<AiToolResult> results) => Results = results;
         public void Dispose() => Disposed = true;
     }
 

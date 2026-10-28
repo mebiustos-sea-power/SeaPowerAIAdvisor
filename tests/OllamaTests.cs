@@ -41,7 +41,7 @@ internal static partial class ProviderTests
                             (int?)body["generation_config"]?["max_output_tokens"] == 8192, "Existing Gemini connection changed after migration");
                         return JsonResponse(InteractionFixture.Reply(new JObject { ["text"] = "Original connection" }));
                     });
-                    var registry = AdvisorServices.CreateRegistry(path, transportFactory: trace => new AdvisorHttpTransport(handler, trace));
+                    var registry = AdvisorServices.CreateRegistry(path, transportFactory: trace => new AiHttpTransport(handler, trace));
                     Require((await RunPrepared(registry.Prepare())).Text == "Original connection" && handler.Disposed && File.ReadAllBytes(path).SequenceEqual(original),
                         "Merely loading or using a legacy registration rewrote the user's file");
                     File.WriteAllBytes(path, draft.Data()); var after = AdvisorSettings.Edit(path);
@@ -114,7 +114,7 @@ internal static partial class ProviderTests
                     "Ollama tool results, thinking history or remaining tool availability were lost");
                 return JsonResponse(LocalReply("Local advice"));
             });
-            var setup = AdvisorServices.Prepare(LocalDraft(), transportFactory: trace => new AdvisorHttpTransport(handler, trace));
+            var setup = AdvisorServices.Prepare(LocalDraft(), transportFactory: trace => new AiHttpTransport(handler, trace));
             var result = await AdvisorConsultation.RunAsync(setup, AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(),
                 userName: "Commander", progress: events.Add), "unused-ollama-log", new AdvisorQuestion("Question"), CancellationToken.None);
             Require(result.Text == "Local advice" && result.ApiRequests == 2 && result.QueryRounds == 1 && result.TotalTokens == 220 && handler.Disposed &&
@@ -134,7 +134,7 @@ internal static partial class ProviderTests
                     "Ollama received excluded data through the knowledge gateway");
                 return JsonResponse(LocalReply("Category excluded"));
             });
-            var setup = AdvisorServices.Prepare(LocalDraft(), transportFactory: trace => new AdvisorHttpTransport(handler, trace));
+            var setup = AdvisorServices.Prepare(LocalDraft(), transportFactory: trace => new AiHttpTransport(handler, trace));
             var result = await AdvisorConsultation.RunAsync(setup, AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>()),
                 "unused-ollama-log", new AdvisorQuestion("Question"), CancellationToken.None);
             Require(result.Text == "Category excluded" && knowledge.RoundsUsed == 1, "Disabled retrieval was not bounded");
@@ -162,7 +162,7 @@ internal static partial class ProviderTests
                     "Cross-provider recovery re-fetched data, reset limits or lost evidence");
                 return JsonResponse(LocalReply("Recovered locally"));
             });
-            var result = await RunPrepared(AdvisorServices.Prepare(draft, transportFactory: trace => new AdvisorHttpTransport(handler, trace)));
+            var result = await RunPrepared(AdvisorServices.Prepare(draft, transportFactory: trace => new AiHttpTransport(handler, trace)));
             Require(result.Text == "Recovered locally" && result.ApiRequests == 3 && result.QueryRounds == 1 && result.TotalTokens == null && handler.Disposed,
                 "Handoff failed or reported incomplete usage as a known total");
         }));
@@ -183,7 +183,7 @@ internal static partial class ProviderTests
                     (string?)body["generation_config"]?["tool_choice"] == "auto", "Gemini did not inherit evidence and the remaining limit");
                 return JsonResponse(InteractionFixture.Reply(new JObject { ["text"] = "Recovered remotely" }));
             });
-            var result = await RunPrepared(AdvisorServices.Prepare(draft, transportFactory: trace => new AdvisorHttpTransport(handler, trace)));
+            var result = await RunPrepared(AdvisorServices.Prepare(draft, transportFactory: trace => new AiHttpTransport(handler, trace)));
             Require(result.Model == "gemini-sub" && result.ApiRequests == 3 && result.QueryRounds == 1 && result.TotalTokens == null,
                 "Reverse handoff changed retrieval or usage accounting");
         }));
@@ -193,8 +193,8 @@ internal static partial class ProviderTests
             draft.Put(new AdvisorApiConfigurationDraft(remote)); draft.SubId = remote.Id;
             var sends = 0; var handler = new BackendHttpHandler((_, _) =>
             { sends++; return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) { Content = new StringContent("busy") }); });
-            try { await RunPrepared(AdvisorServices.Prepare(draft, transportFactory: trace => new AdvisorHttpTransport(handler, trace))); }
-            catch (AdvisorConnectionException e)
+            try { await RunPrepared(AdvisorServices.Prepare(draft, transportFactory: trace => new AiHttpTransport(handler, trace))); }
+            catch (AiConnectionException e)
             { Require(e.HttpStatus == 503 && e.UsingFallback && sends == 2 && handler.Disposed, "Sub failure looped or leaked resources"); return; }
             throw new InvalidOperationException("Both providers failed but consultation succeeded");
         }));
@@ -219,7 +219,7 @@ internal static partial class ProviderTests
                         var response = InteractionFixture.Reply(new JObject { ["text"] = "OK" }); response.Remove("id"); return JsonResponse(response);
                     });
                     var result = await AdvisorServices.TestAsync(directory, configuration, store.TestOptions(), "Only this test", CancellationToken.None,
-                        transportFactory: trace => new AdvisorHttpTransport(handler, trace));
+                        transportFactory: trace => new AiHttpTransport(handler, trace));
                     Require(result.Text == "OK" && result.ApiRequests == 1 && result.QueryRounds == 0 && calls == 1 && handler.Disposed &&
                         File.ReadAllBytes(path).SequenceEqual(before) && !File.Exists(Path.Combine(directory, "ai-communication.jsonl")),
                         "Test activated unsaved logging, saved changes or leaked resources");
@@ -232,8 +232,8 @@ internal static partial class ProviderTests
             {
                 using var cancellation = new CancellationTokenSource(); var calls = 0;
                 var handler = new BackendHttpHandler((_, token) => { calls++; if (cancelled) cancellation.Cancel(); throw new OperationCanceledException(token); });
-                try { await RunPrepared(AdvisorServices.Prepare(LocalDraft(), transportFactory: trace => new AdvisorHttpTransport(handler, trace)), cancellation.Token); }
-                catch (AdvisorConnectionException e) when (!cancelled) { Require(e.Code == "request_timeout" && calls == 1 && handler.Disposed, "Timeout was mislabeled or retried"); continue; }
+                try { await RunPrepared(AdvisorServices.Prepare(LocalDraft(), transportFactory: trace => new AiHttpTransport(handler, trace)), cancellation.Token); }
+                catch (AiConnectionException e) when (!cancelled) { Require(e.Code == "request_timeout" && calls == 1 && handler.Disposed, "Timeout was mislabeled or retried"); continue; }
                 catch (OperationCanceledException) when (cancelled) { Require(calls == 1 && handler.Disposed, "Cancelled request continued or leaked resources"); continue; }
                 throw new InvalidOperationException("Timeout or cancellation was hidden");
             }
@@ -259,7 +259,7 @@ internal static partial class ProviderTests
                     if (++count == 1) return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) { Content = new StringContent("mock_cross_log_secret") });
                     return Task.FromResult(JsonResponse(InteractionFixture.Reply(new JObject { ["text"] = "Answer" })));
                 });
-                var setup = AdvisorServices.Prepare(draft, transportFactory: trace => new AdvisorHttpTransport(handler, trace));
+                var setup = AdvisorServices.Prepare(draft, transportFactory: trace => new AiHttpTransport(handler, trace));
                 await AdvisorConsultation.RunAsync(setup, AdvisorContext.Create(new Knowledge(1), Array.Empty<ChatExchange>()), directory,
                     new AdvisorQuestion("Question"), CancellationToken.None);
                 var raw = File.ReadAllText(Path.Combine(directory, "ai-communication.jsonl")); var rows = raw.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(JObject.Parse).ToArray();
@@ -287,7 +287,7 @@ internal static partial class ProviderTests
     private static void ExpectServiceError(string code, Action action)
     {
         try { action(); }
-        catch (AdvisorConnectionException e) { Require(e.Code == code, "Expected " + code + ", received " + e.Code); return; }
+        catch (AiConnectionException e) { Require(e.Code == code, "Expected " + code + ", received " + e.Code); return; }
         throw new InvalidOperationException("Expected " + code);
     }
     private static async Task InServiceDirectory(Func<string, Task> run)

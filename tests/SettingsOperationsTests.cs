@@ -195,7 +195,7 @@ internal static class SettingsOperationsTests
     }
     private static void ThrowsApi(string code, Action action)
     {
-        try { action(); } catch (AdvisorConnectionException failure) { Require(failure.Code == code, "Wrong error: " + failure.Code); return; }
+        try { action(); } catch (AiConnectionException failure) { Require(failure.Code == code, "Wrong error: " + failure.Code); return; }
         throw new InvalidOperationException("Expected " + code);
     }
     private static void InTemp(Action<string> action)

@@ -31,10 +31,10 @@ internal static partial class ProviderTests
                     try
                     {
                         await AdvisorServices.TestAsync(directory, configuration, new AdvisorConnectionOptions(new JObject()), "Check", CancellationToken.None,
-                            transportFactory: trace => new AdvisorHttpTransport(handler, trace), errorHistory: history);
+                            transportFactory: trace => new AiHttpTransport(handler, trace), errorHistory: history);
                         throw new Exception("Invalid authentication succeeded");
                     }
-                    catch (AdvisorConnectionException error)
+                    catch (AiConnectionException error)
                     {
                         Require(error.Code == "api_access_denied" && error.HttpStatus == 401 && error.HasDetails, "The original error or its history hint was lost");
                         foreach (var language in new[] { "en", "ja" })
@@ -72,9 +72,9 @@ internal static partial class ProviderTests
                     if (sends == 1) return Task.FromResult(new HttpResponseMessage(HttpStatusCode.TooManyRequests) { Content = new StringContent("primary limited mock_router_secret") });
                     return Task.FromResult(subFails ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) { Content = new StringContent("sub busy mock_sub_router_secret") } : JsonResponse(RouterReply("Recovered")));
                 });
-                var setup = AdvisorServices.Prepare(draft, transportFactory: trace => new AdvisorHttpTransport(handler, trace), errorHistory: history);
+                var setup = AdvisorServices.Prepare(draft, transportFactory: trace => new AiHttpTransport(handler, trace), errorHistory: history);
                 try { Require((await RunPrepared(setup)).Text == "Recovered" && !subFails, "Unexpected fallback outcome"); }
-                catch (AdvisorConnectionException error) { Require(subFails && error.UsingFallback && error.HasDetails && error.HttpStatus == 503, "Sub failure identity/details were lost"); }
+                catch (AiConnectionException error) { Require(subFails && error.UsingFallback && error.HasDetails && error.HttpStatus == 503, "Sub failure identity/details were lost"); }
                 var raw = history.ReadAll();
                 Require(sends == 2 && ErrorCount(raw) == (subFails ? 2 : 1) && raw.Contains("key_slot: main", StringComparison.Ordinal) &&
                     raw.Contains("http_status: 429", StringComparison.Ordinal), "The primary failure disappeared or was recorded twice");
@@ -96,10 +96,10 @@ internal static partial class ProviderTests
                 { sends++; return Task.FromResult(new HttpResponseMessage(HttpStatusCode.TooManyRequests) { Content = new StringContent("primary limited") }); });
                 try
                 {
-                    await RunPrepared(AdvisorServices.Prepare(draft, transportFactory: trace => new AdvisorHttpTransport(handler, trace), errorHistory: history));
+                    await RunPrepared(AdvisorServices.Prepare(draft, transportFactory: trace => new AiHttpTransport(handler, trace), errorHistory: history));
                     throw new Exception("Broken sub adapter succeeded");
                 }
-                catch (AdvisorConnectionException error) { Require(error.Code == "model_unavailable" && error.UsingFallback && error.HasDetails, "Sub startup failure lost its identity"); }
+                catch (AiConnectionException error) { Require(error.Code == "model_unavailable" && error.UsingFallback && error.HasDetails, "Sub startup failure lost its identity"); }
                 var raw = history.ReadAll();
                 var subDetails = raw.Substring(raw.IndexOf("===== Provider error #2", StringComparison.Ordinal));
                 Require(sends == 1 && ErrorCount(raw) == 2 && subDetails.Contains("connection_id: " + sub.Id, StringComparison.Ordinal) &&
@@ -115,10 +115,10 @@ internal static partial class ProviderTests
                 try
                 {
                     await AdvisorServices.TestAsync(directory, RouterConfiguration("router"), new AdvisorConnectionOptions(new JObject()), "Check", CancellationToken.None,
-                        transportFactory: trace => new AdvisorHttpTransport(handler, trace), errorHistory: history);
+                        transportFactory: trace => new AiHttpTransport(handler, trace), errorHistory: history);
                     throw new Exception("Missing tool call succeeded");
                 }
-                catch (AdvisorConnectionException error) { Require(error.Code == "tool_call_test_failed" && error.HasDetails, "Semantic failure did not expose details"); }
+                catch (AiConnectionException error) { Require(error.Code == "tool_call_test_failed" && error.HasDetails, "Semantic failure did not expose details"); }
                 var raw = history.ReadAll();
                 Require(ErrorCount(raw) == 1 && raw.Contains("http_status: 200", StringComparison.Ordinal) &&
                     raw.Contains("wrong probe reply", StringComparison.Ordinal), "A successful HTTP status hid the provider failure response");
@@ -134,7 +134,7 @@ internal static partial class ProviderTests
                     return JsonResponse(RouterReply((string)result["confirmation"]!));
                 });
                 await AdvisorServices.TestAsync(directory, RouterConfiguration("router"), new AdvisorConnectionOptions(new JObject()), "Check", CancellationToken.None,
-                    transportFactory: trace => new AdvisorHttpTransport(handler, trace), errorHistory: history);
+                    transportFactory: trace => new AiHttpTransport(handler, trace), errorHistory: history);
                 Require(File.Exists(history.FilePath) && history.ReadAll() == "", "A successful probe was saved as an error");
             });
         }));
@@ -152,11 +152,11 @@ internal static partial class ProviderTests
                 try
                 {
                     await AdvisorServices.TestAsync(directory, RouterConfiguration("router", 1), new AdvisorConnectionOptions(new JObject()), "Check", cancellation.Token,
-                        transportFactory: trace => new AdvisorHttpTransport(handler, trace), errorHistory: history);
+                        transportFactory: trace => new AiHttpTransport(handler, trace), errorHistory: history);
                     throw new Exception("Failed transport succeeded");
                 }
                 catch (OperationCanceledException) { Require(mode == "cancel", "Timeout became cancellation"); }
-                catch (AdvisorConnectionException error) { Require(mode != "cancel" && error.Code == (mode == "timeout" ? "request_timeout" : "network_error"), "Transport failure was reclassified"); }
+                catch (AiConnectionException error) { Require(mode != "cancel" && error.Code == (mode == "timeout" ? "request_timeout" : "network_error"), "Transport failure was reclassified"); }
                 Require(ErrorCount(history.ReadAll()) == (mode == "cancel" ? 0 : 1), "Cancellation created an error or transport failure was lost");
                 if (mode != "cancel")
                 {
@@ -176,10 +176,10 @@ internal static partial class ProviderTests
                 try
                 {
                     await AdvisorServices.TestAsync(directory, RouterConfiguration("router"), new AdvisorConnectionOptions(new JObject()), "Check", CancellationToken.None,
-                        transportFactory: trace => new AdvisorHttpTransport(handler, trace), errorHistory: history);
+                        transportFactory: trace => new AiHttpTransport(handler, trace), errorHistory: history);
                     throw new Exception("Provider failure disappeared");
                 }
-                catch (AdvisorConnectionException error) { Require(error.Code == "api_access_denied" && error.HttpStatus == 401 && error.HasDetails, "Storage failure replaced the provider exception"); }
+                catch (AiConnectionException error) { Require(error.Code == "api_access_denied" && error.HttpStatus == 401 && error.HasDetails, "Storage failure replaced the provider exception"); }
                 Require(history.StorageError.Length > 0 && warnings.Count == 1 && !File.Exists(history.FilePath), "Storage failure was silently ignored or retried repeatedly");
             });
         }));
@@ -196,7 +196,7 @@ internal static partial class ProviderTests
                 var configuration = RouterConfiguration("router"); var service = new OpenRouterService();
                 for (var i = 0; i < 3; i++)
                 {
-                    using var transport = new AdvisorHttpTransport(new BackendHttpHandler((_, _) => throw new Exception("No network expected")));
+                    using var transport = new AiHttpTransport(new BackendHttpHandler((_, _) => throw new Exception("No network expected")));
                     transport.ObserveErrors(new AdvisorErrorCapture(history, new AdvisorErrorConnection(service, configuration), null, "consultation", service.Secrets(configuration)));
                     var settings = new Api.ConnectionSettings(configuration.Id, configuration.Name, service.Id, "{}", configuration.Model, 60, 4096, false);
                     var services = new AdvisorExtensionServices(transport, settings);

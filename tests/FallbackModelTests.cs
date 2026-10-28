@@ -94,7 +94,7 @@ internal static class FallbackModelTests
                 }
             });
             var result = await GeminiFixture.RunAsync(directory,session,settings,new AdvisorQuestion("Question"),new[] { new ChatExchange("Earlier","Earlier answer") },
-                CancellationToken.None,trace => new AdvisorHttpTransport(handler,trace),profile:new AdvisorProfile("Officer","portrait.png",customPersonality:"Style"),
+                CancellationToken.None,trace => new AiHttpTransport(handler,trace),profile:new AdvisorProfile("Officer","portrait.png",customPersonality:"Style"),
                 commonPrompt:"Shared preference",progress:progress.Add,userName:"Commander");
             Require(models.SequenceEqual(new[] { Primary,Primary,Secondary,Secondary }) &&
                 keys.SequenceEqual(new[] { MainKey,MainKey,BackupKey,BackupKey }) && result.Model == Secondary && result.QueryRounds == 2 && result.ApiRequests == 4 &&
@@ -128,7 +128,7 @@ internal static class FallbackModelTests
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken token) => send(request,token);
     }
     private static void Throws(string code,Action action)
-    { try { action(); } catch (AdvisorConnectionException error) { Require(error.Code==code,"Wrong model error: "+error.Code);return; } throw new InvalidOperationException("Expected "+code); }
+    { try { action(); } catch (AiConnectionException error) { Require(error.Code==code,"Wrong model error: "+error.Code);return; } throw new InvalidOperationException("Expected "+code); }
     private static void InTemp(Action<string> action)
     {
         var directory=Path.Combine(Path.GetTempPath(),"SeaPowerAIAdvisor-fallback-model-"+Guid.NewGuid().ToString("N"));

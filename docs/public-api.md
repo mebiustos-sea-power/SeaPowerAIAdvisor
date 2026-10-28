@@ -18,7 +18,7 @@ The extension lists use the registered command and provider catalogs, including 
 
 ## Projects and dependencies
 
-`api/SeaPowerAIAdvisor.Api.csproj` builds `SeaPowerAIAdvisor.Api.dll` for .NET Standard 2.1. Its only reference is the standard library: no Unity, Noesis, Anchor Chain, JSON library or provider SDK dependency. Inputs, schemas and results cross the boundary as JSON strings. The host bridge is in `src/Providers/Extensions/`.
+`api/SeaPowerAIAdvisor.Api.csproj` builds `SeaPowerAIAdvisor.Api.dll` for .NET Standard 2.1. Its only reference is the standard library: no Unity, Noesis, Anchor Chain, JSON library or provider SDK dependency. Inputs, schemas and results cross the boundary as JSON strings. The host bridge is in `src/Advisor/Providers/Extensions/`.
 
 Keep `SeaPowerAIAdvisor.Api.dll` next to `SeaPowerAIAdvisor.dll` in the host distribution. Extensions reference the host API DLL with `Private=false` and must not ship duplicate copies. The normal host build packages both DLLs but does not install or enable example extensions.
 

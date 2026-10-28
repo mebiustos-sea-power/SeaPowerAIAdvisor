@@ -42,7 +42,7 @@ internal static partial class ProviderTests
                     var provider = new FakeProvider("limited", (_, n, allowed, _) =>
                     {
                         Require(allowed, "The model was forced to answer without tools");
-                        return Task.FromResult(n == 2 && completes ? new AdvisorReply("Final answer", Array.Empty<AdvisorToolCall>(), 7)
+                        return Task.FromResult(n == 2 && completes ? new AiReply("Final answer", Array.Empty<AiToolCall>(), 7)
                             : Reply(Call("query-" + n, "catalog")));
                     });
                     var setup = new AdvisorBackendSetup(new AdvisorTraceOptions(true, "mock", "limited"),

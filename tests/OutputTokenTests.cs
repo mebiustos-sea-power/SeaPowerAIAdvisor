@@ -69,10 +69,10 @@ internal static partial class ProviderTests
                         return JsonResponse(NanoReply("Output limit applied"));
                     };
                     await AdvisorServices.TestAsync("unused-output-limit-probe", pending.Build(), store.TestOptions(), "Test", CancellationToken.None,
-                        transportFactory: trace => new AdvisorHttpTransport(new BackendHttpHandler(send), trace));
+                        transportFactory: trace => new AiHttpTransport(new BackendHttpHandler(send), trace));
                     Require(File.ReadAllBytes(path).SequenceEqual(before), "Testing an edited output limit changed saved settings");
                     store.SaveEntry(pending, false);
-                    var result = await RunPrepared(AdvisorServices.Prepare(store.Read(), transportFactory: trace => new AdvisorHttpTransport(new BackendHttpHandler(send), trace)));
+                    var result = await RunPrepared(AdvisorServices.Prepare(store.Read(), transportFactory: trace => new AiHttpTransport(new BackendHttpHandler(send), trace)));
                     Require(result.Text == "Output limit applied" && store.Read().Main.MaxOutputTokens == 32768,
                         "A saved output limit was not applied to the consultation");
                 });
@@ -97,7 +97,7 @@ internal static partial class ProviderTests
                 CheckOutputBudget("gemini", body, 16384);
                 return JsonResponse(InteractionFixture.Reply(new JObject { ["text"] = "Sub limit applied" }));
             });
-            var result = await RunPrepared(AdvisorServices.Prepare(draft, transportFactory: trace => new AdvisorHttpTransport(handler, trace)));
+            var result = await RunPrepared(AdvisorServices.Prepare(draft, transportFactory: trace => new AiHttpTransport(handler, trace)));
             Require(result.Text == "Sub limit applied" && sends == 2, "Fallback inherited the main output budget or retried unexpectedly");
         }));
     }
