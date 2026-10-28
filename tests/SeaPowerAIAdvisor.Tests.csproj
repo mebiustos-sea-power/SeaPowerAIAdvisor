@@ -4,8 +4,10 @@
     <Compile Include="..\src\Operations\Combat\CombatOperationBase.cs" Link="CombatOperationBase.cs" />
     <Compile Include="..\src\Operations\Attack\AttackOperation.cs" Link="AttackOperation.cs" />
     <EmbeddedResource Include="..\src\Operations\Attack\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.Attack.Localization.%(Filename).json" />
-    <Compile Include="..\src\Operations\CeaseFire\CeaseFireOperation.cs" Link="CeaseFireOperation.cs" />
-    <EmbeddedResource Include="..\src\Operations\CeaseFire\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.CeaseFire.Localization.%(Filename).json" />
+    <Compile Include="..\src\Operations\CancelAttack\CancelAttackOperation.cs" Link="CancelAttackOperation.cs" />
+    <Compile Include="..\src\Operations\CancelReservations\CancelReservationsOperation.cs" Link="CancelReservationsOperation.cs" />
+    <EmbeddedResource Include="..\src\Operations\CancelAttack\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.CancelAttack.Localization.%(Filename).json" />
+    <EmbeddedResource Include="..\src\Operations\CancelReservations\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.CancelReservations.Localization.%(Filename).json" />
     <EmbeddedResource Include="..\src\Operations\Sensors\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.Sensors.Localization.%(Filename).json" />
     <Compile Include="..\src\Operations\Sensors\SensorOperation.cs" Link="SensorOperation.cs" />
     <EmbeddedResource Include="..\src\Operations\Emcon\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.Emcon.Localization.%(Filename).json" />

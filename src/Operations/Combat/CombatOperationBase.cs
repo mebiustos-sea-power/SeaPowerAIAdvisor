@@ -5,7 +5,7 @@ using SeaPowerAIAdvisor.Api;
 
 namespace SeaPowerAIAdvisor;
 
-// Shared only by attack and cease-fire: the host still owns approval, phases, lifetime and execution receipts.
+// Shared by attack and attack cancellation: the host still owns approval, phases, lifetime and execution receipts.
 internal abstract class CombatOperationBase : IAdvisorOperationHandler, IAdvisorOperationActions
 {
     protected readonly IAdvisorOperationContext Context;

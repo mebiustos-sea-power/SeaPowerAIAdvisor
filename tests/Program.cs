@@ -176,6 +176,7 @@ internal static class Program
         FallbackModelTests.Run(Check);
         QuestionInputTests.Run(args[2], Check);
         PresentationTests.Run(args[1], args[0], Check);
+        CancellationBoundaryTests.Run(args[1], Check);
         MarkdownTests.Run(args[1], Check);
         CoordinateLinkTests.Run(Check);
         LocationDraftTests.Run(Check);

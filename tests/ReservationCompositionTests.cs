@@ -207,6 +207,7 @@ internal static partial class ReservationCompositionTests
         { var id = Id(target); var used = Queues[id].Count(q => q == "drop"); return new[] { new AmmunitionInfo("buoy", "AN/SSQ", "Bomb", "Sonobuoy", Inventory, Inventory - ReservedOld - used, true, Inventory) }; }
         public ReservationRoute? GetReservationRoute(string target) => new(new AdvisorMapCoordinate(0, 127), new AdvisorMapCoordinate(10, 127));
         public string GetSonobuoyDepth(string target) => Depths[Id(target)];
+        public IReadOnlyList<GameUnitInfo> GetReservationUnits() => GetUnits();
         public void ClearReservations(string target) { var id = Id(target); Queues[id].Clear(); Loops.Remove(id); ReservedOld = 0; Log.Add("clear:" + id); }
         public ReservationQueueState InspectReservations(string target, ReservationPlacement placement)
         {

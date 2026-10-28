@@ -1,0 +1,7 @@
+{
+  "name": "Cancel attack",
+  "summary": "Cancel current attacks, guidance and jamming for the specified unit while retaining reservations.",
+  "requirements": "Requires own-unit information and a unit accepting player orders. Does not propagate to formation members.",
+  "proposal_summary": "{0}: cancel attack",
+  "execution_note": "Ends current attacks, attack alignment, laser guidance and offensive jamming; launched weapons may lose guidance. All waypoint reservations remain, including sonobuoy drops. Autonomous engagement settings remain unchanged, so the game may initiate another attack."
+}

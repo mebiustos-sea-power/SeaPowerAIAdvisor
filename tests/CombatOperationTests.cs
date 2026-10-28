@@ -18,7 +18,7 @@ internal static class CombatOperationTests
                 (int?)row["ammunition"]![0]!["available_count"] == 6 && game.Log.Count == 0, "Discovery changed state or mixed target and actor identities");
             game.Information = false;
             Expect("information_disabled", () => s.Candidates(AttackExtension.OperationId));
-            Expect("information_disabled", () => s.Candidates(CeaseFireExtension.OperationId));
+            Expect("information_disabled", () => s.Candidates(CancelAttackExtension.OperationId));
         });
         check("An approved multi-target attack applies one switch for its actor, preserves other actors and cannot replay", () =>
         {
@@ -52,7 +52,7 @@ internal static class CombatOperationTests
             foreach (var fault in new[] { "target", "ammo", "compatibility", "quantity", "control", "permission" })
             {
                 var game = new Game(); var s = Service(game);
-                OperationSubmissionFixture.Submit(s, "test", Cease(43), Attack(42, "append", ("unit:7022", "missile", 2)));
+                OperationSubmissionFixture.Submit(s, "test", CancelAttack(43), Attack(42, "append", ("unit:7022", "missile", 2)));
                 var p = s.FinishProposal("test", true)!;
                 game.Fault = fault; s.Approve(p);
                 Require(p.State == AdvisorProposalState.Pending && p.ErrorCode != null && game.Log.Count == 0,
@@ -72,16 +72,16 @@ internal static class CombatOperationTests
                 Require(JToken.DeepEquals(original, p.Submission) && game.Log.Count == 0, "Rejected input changed accepted work");
             }
         });
-        check("Cease fire needs no weapon/contact disclosure, affects only the specified actor and rejects invented arguments", () =>
+        check("Attack cancellation needs no weapon/contact disclosure, affects only the specified actor and rejects invented arguments", () =>
         {
             var game = new Game { Weapons = false, Contacts = false }; var s = Service(game);
-            OperationSubmissionFixture.Submit(s, "test", Cease(43)); var p = s.FinishProposal("test", true)!;
+            OperationSubmissionFixture.Submit(s, "test", CancelAttack(43)); var p = s.FinishProposal("test", true)!;
             s.Approve(p); s.Approve(p);
-            Require(p.State == AdvisorProposalState.Registered && game.Log.SequenceEqual(new[] { "cease:unit:43" }), "Cease fire required unrelated data or propagated");
-            var context = new AdvisorOperationContext(game, new Map(), new AdvisorOperationText(new CeaseFireExtension().GetDefinition().Localizations));
-            var handler = new CeaseFireOperation(context);
-            try { handler.Validate(new[] { new OperationOrder("unit:43", "{\"formation\":true}") }); throw new InvalidOperationException("Unexpected cease-fire scope accepted"); }
-            catch (OperationException e) when (e.Code == "invalid_cease_fire_arguments") { }
+            Require(p.State == AdvisorProposalState.Registered && game.Log.SequenceEqual(new[] { "cancel-attack:unit:43" }), "Attack cancellation required unrelated data or propagated");
+            var context = new AdvisorOperationContext(game, new Map(), new AdvisorOperationText(new CancelAttackExtension().GetDefinition().Localizations));
+            var handler = new CancelAttackOperation(context);
+            try { handler.Validate(new[] { new OperationOrder("unit:43", "{\"formation\":true}") }); throw new InvalidOperationException("Unexpected attack-cancellation scope accepted"); }
+            catch (OperationException e) when (e.Code == "invalid_cancel_attack_arguments") { }
         });
         check("Attack target and ammunition aliases normalize only through consultation and carried identities", () =>
         {
@@ -108,13 +108,52 @@ internal static class CombatOperationTests
             Require(p.State == AdvisorProposalState.Registered && game.Log.SequenceEqual(new[] { "begin:unit:42", "move:unit:42", "attack:unit:42:Replace:7022/missile/2" }),
                 "Attack executed before movement registration or broke command composition");
         });
+        check("Cancellation commands have independent approval, support multiple actors and do not replay", () =>
+        {
+            var game = new Game { Weapons = false, Contacts = false }; var s = Service(game);
+            var candidate = s.Candidates(CancelReservationsExtension.OperationId)["candidates"]![0]!;
+            Require((string?)candidate["target_ref"] == "unit:42" && game.Log.Count == 0, "Cancellation discovery executed or required weapon data");
+            OperationSubmissionFixture.Submit(s, "test", CancelAttack(42), CancelReservations(43), CancelReservations(42));
+            var p = s.FinishProposal("test", true)!;
+            foreach (var lang in new[] { "en", "ja" })
+                Require(s.DescribeProposal(p, lang).Contains("Unit 43", StringComparison.Ordinal) && game.Log.Count == 0,
+                    "Review omitted an actor or cancelled before approval");
+            s.Approve(p); s.Approve(p);
+            Require(p.State == AdvisorProposalState.Registered && game.Log.SequenceEqual(new[] {
+                "cancel-attack:unit:42", "cancel-reservations:unit:43", "cancel-reservations:unit:42" }),
+                "Cancellation crossed service/actor boundaries, changed order or replayed");
+        });
+        check("Reservation cancellation rejects invented scope and revalidates all actors before any mutation", () =>
+        {
+            var game = new Game(); var s = Service(game);
+            OperationSubmissionFixture.Submit(s, "test", CancelAttack(43), CancelReservations(42));
+            var p = s.FinishProposal("test", true)!; game.Fault = "control"; s.Approve(p);
+            Require(p.State == AdvisorProposalState.Pending && game.Log.Count == 0, "Stale cancellation changed an earlier actor");
+            var context = new AdvisorOperationContext(game, new Map(), new AdvisorOperationText(new CancelReservationsExtension().GetDefinition().Localizations));
+            using var handler = new CancelReservationsOperation(context);
+            try { handler.Validate(new[] { new OperationOrder("unit:43", "{\"attacks\":true}") }); throw new InvalidOperationException("Invented cancellation accepted"); }
+            catch (OperationException e) when (e.Code == "invalid_cancel_reservations_arguments") { }
+        });
+        check("Reservation cancellation during plan adoption runs after reservation registration", () =>
+        {
+            var game = new Game(); var s = Service(game, true);
+            var move = new JObject { ["operation"] = MovementExtension.OperationId, ["target_ref"] = "unit:42",
+                ["arguments"] = new JObject { ["waypoints"] = new JArray(new JObject { ["latitude"] = 26, ["longitude"] = 127 }) } };
+            OperationSubmissionFixture.Submit(s, "test", CancelReservations(42), move);
+            var p = s.FinishProposal("test", true)!; s.Approve(p);
+            Require(p.State == AdvisorProposalState.Registered && game.Log.SequenceEqual(new[] {
+                "begin:unit:42", "move:unit:42", "cancel-reservations:unit:42" }), "Cancellation bypassed shared phase order");
+        });
         check("Combat support retains host thread and lifetime guards", () =>
         {
             var game = new Game(); var context = new AdvisorOperationContext(game, new Map(), new AdvisorOperationText(new AttackExtension().GetDefinition().Localizations));
             var support = (IAdvisorCombatSupport)context.Game;
             Require(Task.Run(() => { try { support.GetAttackUnits(); return false; } catch (InvalidOperationException) { return true; } }).GetAwaiter().GetResult(), "Combat accessed on a worker thread");
+            var reservations = (IAdvisorReservationSupport)context.Game;
+            Require(Task.Run(() => { try { reservations.GetReservationUnits(); return false; } catch (InvalidOperationException) { return true; } }).GetAwaiter().GetResult(), "Cancellation accessed on a worker thread");
             context.Dispose();
-            try { support.CeaseFire("unit:42"); throw new InvalidOperationException("Retired combat support reached the game"); } catch (ObjectDisposedException) { }
+            try { reservations.ClearReservations("unit:42"); throw new InvalidOperationException("Retired reservations reached the game"); } catch (ObjectDisposedException) { }
+            try { support.CancelAttack("unit:42"); throw new InvalidOperationException("Retired combat support reached the game"); } catch (ObjectDisposedException) { }
             Require(game.Log.Count == 0, "Retired support changed combat");
         });
         check("Combat partial and unknown outcomes retain receipts and never replay earlier immediate operations", () =>
@@ -122,7 +161,7 @@ internal static class CombatOperationTests
             foreach (var unknown in new[] { false, true })
             {
                 var game = new Game(); var s = Service(game);
-                OperationSubmissionFixture.Submit(s, "test", Attack(42, "append", ("unit:7022", "missile", 1)), Cease(43));
+                OperationSubmissionFixture.Submit(s, "test", Attack(42, "append", ("unit:7022", "missile", 1)), CancelAttack(43));
                 var p = s.FinishProposal("test", true)!; game.ExecutionFailure = unknown ? "unknown" : "rejected";
                 try { s.Approve(p); } catch (InvalidOperationException) when (unknown) { }
                 var count = game.Log.Count; s.Approve(p);
@@ -133,7 +172,7 @@ internal static class CombatOperationTests
     }
     private static AdvisorOperations Service(Game game, bool movement = false)
     {
-        var catalog = new AdvisorOperationCatalog(); catalog.Register(new AttackExtension()); catalog.Register(new CeaseFireExtension());
+        var catalog = new AdvisorOperationCatalog(); catalog.Register(new AttackExtension()); catalog.Register(new CancelAttackExtension()); catalog.Register(new CancelReservationsExtension());
         if (movement) catalog.Register(new MovementExtension());
         var s = new AdvisorOperations(_ => true); foreach (var op in catalog.CreateOperations(game, new Map())) s.Register(op);
         s.BeginProposal("test"); return s;
@@ -141,11 +180,12 @@ internal static class CombatOperationTests
     private static JObject Attack(int unit, string mode, params (string Target, string Ammo, int Rounds)[] attacks) => new()
     { ["operation"] = AttackExtension.OperationId, ["target_ref"] = "unit:" + unit, ["arguments"] = new JObject
         { ["mode"] = mode, ["attacks"] = new JArray(attacks.Select(a => new JObject { ["target_ref"] = a.Target, ["ammunition"] = a.Ammo, ["rounds"] = a.Rounds })) } };
-    private static JObject Cease(int unit) => new() { ["operation"] = CeaseFireExtension.OperationId, ["target_ref"] = "unit:" + unit, ["arguments"] = new JObject() };
+    private static JObject CancelReservations(int unit) => new() { ["operation"] = CancelReservationsExtension.OperationId, ["target_ref"] = "unit:" + unit, ["arguments"] = new JObject() };
+    private static JObject CancelAttack(int unit) => new() { ["operation"] = CancelAttackExtension.OperationId, ["target_ref"] = "unit:" + unit, ["arguments"] = new JObject() };
     private static void Require(bool value, string message) { if (!value) throw new InvalidOperationException(message); }
     private static void Expect(string code, Action action)
     { try { action(); } catch (AdvisorOperationException e) when (e.Code == code) { return; } throw new InvalidOperationException("Expected " + code); }
-    private sealed class Game : IAdvisorGameSupport, IAdvisorCombatSupport, IAdvisorMovementSupport, IAdvisorReservationSequenceSupport
+    private sealed class Game : IAdvisorGameSupport, IAdvisorCombatSupport, IAdvisorMovementSupport, IAdvisorReservationSequenceSupport, IAdvisorReservationSupport
     {
         internal bool Information = true, Weapons = true, Contacts = true;
         internal string Fault = "", ExecutionFailure = "";
@@ -168,11 +208,13 @@ internal static class CombatOperationTests
             Used.TryGetValue(target, out var n); Used[target] = n + attacks.Sum(a => a.Rounds);
             Log.Add("attack:" + target + ":" + mode + ":" + string.Join(",", attacks.Select(a => a.Target.Replace("unit:", "") + "/" + a.Ammunition + "/" + a.Rounds)));
         }
-        public void CeaseFire(string target)
+        public IReadOnlyList<GameUnitInfo> GetReservationUnits() => GetCombatUnits();
+        public void ClearReservations(string target) => Log.Add("cancel-reservations:" + target);
+        public void CancelAttack(string target)
         {
-            if (ExecutionFailure == "rejected") throw new OperationException(409, "cease_fire_rejected");
+            if (ExecutionFailure == "rejected") throw new OperationException(409, "cancel_attack_rejected");
             if (ExecutionFailure == "unknown") throw new InvalidOperationException("Native failure");
-            Log.Add("cease:" + target);
+            Log.Add("cancel-attack:" + target);
         }
         public IReadOnlyList<GameUnitInfo> GetUnits() => GetCombatUnits();
         public IReadOnlyList<MovementUnitInfo> GetMovementUnits() => GetUnits().Select(u => new MovementUnitInfo(u, "vessel", null, null, true, false,

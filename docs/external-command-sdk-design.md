@@ -220,7 +220,7 @@ SDK境界は予約照会・準備を含む全呼び出しで公開 `OperationExc
 
 `ReservationOrder` は方式、現在キュー、対象内の区間番号を持つ。プレビュー時の `StartPosition` は直前コマンドの予定終点へ更新され、返す `ReservationPreview.EndPosition` が次の開始点になる。検証・実行時は元キューからの開始位置であり、将来位置のシミュレーション結果ではない。コマンドは登録先を座標の推測で読み替えない。
 
-本体の `context.Game` は任意の `IAdvisorReservationSequenceSupport` と `IAdvisorMovementSupport` を提供する。スレッド・失効確認は既存コンテキストに集約する。明示的な予約消去には `IAdvisorReservationSupport` も利用できる。詳細と要求例は [予約合成の実装仕様](ai-unit-control-design.md#18-コマンドをまたぐ予約合成と移動編隊復帰2026-10-25) を参照。
+本体の `context.Game` は任意の `IAdvisorReservationSequenceSupport` と `IAdvisorMovementSupport` を提供する。スレッド・失効確認は既存コンテキストに集約する。明示的な予約消去には `IAdvisorReservationSupport` の `GetReservationUnits` / `ClearReservations` を利用できる。取消は追加とは異なり、現在の攻撃命令や編隊随伴を理由に対象外にしない。詳細と要求例は [予約合成の実装仕様](ai-unit-control-design.md#18-コマンドをまたぐ予約合成と移動編隊復帰2026-10-25) を参照。
 
 事前検証は副作用を持たず、採用時にも全体を再検証する。変更後の失敗は結果不明または部分実行として残し、後続と二重実行を止める。新しいロールバック・詳細結果画面は追加しない。
 
@@ -252,7 +252,7 @@ SDK境界は予約照会・準備を含む全呼び出しで公開 `OperationExc
 
 ## 15. 即時戦闘操作の共通支援（2026-10-28）
 
-`IAdvisorCombatSupport`で自軍操作対象・プレイヤー既知の接触・搭載弾薬/未割当数/対象適合をdetached値として取得し、攻撃追加/切り替えと指定ユニットのみの射撃中止を呼べる。コマンドのJSONや文章は支援に持ち込まず、支援がゲームの交戦リスト・武器システム・未実行AttackTask・誘導・AI保持標的の違いを吸収する。通常の移動命令用の追従/現在命令制約を戦闘へ流用しない。具体的な引数/影響範囲は`public-api.md`を参照。
+`IAdvisorCombatSupport`で自軍操作対象・プレイヤー既知の接触・搭載弾薬/未割当数/対象適合をdetached値として取得し、攻撃追加/切り替えと指定ユニットのみの攻撃中止を呼べる。コマンドのJSONや文章は支援に持ち込まず、支援がゲームの交戦リスト・武器システム・未実行AttackTask・誘導・AI保持標的の違いを吸収する。通常の移動命令用の追従/現在命令制約を戦闘へ流用しない。具体的な引数/影響範囲は`public-api.md`を参照。
 
 
 ## 16. 反復可能な予約区間（2026-10-28）

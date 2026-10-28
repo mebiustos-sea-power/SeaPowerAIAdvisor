@@ -1,0 +1,7 @@
+{
+  "name": "Cancel reservations",
+  "summary": "Cancel all waypoint reservations for the specified unit while retaining active attacks, guidance and jamming.",
+  "requirements": "Requires own-unit information and a unit accepting player orders. Available during an attack or formation following; does not change other units.",
+  "proposal_summary": "{0}: cancel all reservations",
+  "execution_note": "Removes all waypoint reservations, including movement, sonobuoy drops, formation return and loops. Active attacks, guidance and jamming remain. Already launched weapons and deployed sonobuoys are not undone."
+}

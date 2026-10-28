@@ -10,7 +10,7 @@ public interface IAdvisorCombatSupport
     IReadOnlyList<CombatTargetInfo> GetAttackTargets();
     IReadOnlyList<AttackUnitInfo> GetAttackUnits();
     void IssueAttack(string target, AttackUpdateMode mode, IReadOnlyList<AttackInstruction> attacks);
-    void CeaseFire(string target);
+    void CancelAttack(string target);
 }
 
 public enum AttackUpdateMode { Append, Replace }

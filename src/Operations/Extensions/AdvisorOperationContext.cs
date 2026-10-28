@@ -39,7 +39,7 @@ internal sealed class AdvisorOperationContext : IAdvisorOperationContext, IAdvis
     public IReadOnlyList<CombatTargetInfo> GetAttackTargets() { Check(); return Combat.GetAttackTargets(); }
     public IReadOnlyList<AttackUnitInfo> GetAttackUnits() { Check(); return Combat.GetAttackUnits(); }
     public void IssueAttack(string target, AttackUpdateMode mode, IReadOnlyList<AttackInstruction> attacks) { Check(); Combat.IssueAttack(target, mode, attacks); }
-    public void CeaseFire(string target) { Check(); Combat.CeaseFire(target); }
+    public void CancelAttack(string target) { Check(); Combat.CancelAttack(target); }
     public IReadOnlyList<SensorUnitInfo> GetSensorUnits() { Check(); return Sensors.GetSensorUnits(); }
     public void SetSensorControls(string target, IReadOnlyList<SensorControlChange> changes) { Check(); Sensors.SetSensorControls(target, changes); }
     public void ApplyEmcon(string target) { Check(); Sensors.ApplyEmcon(target); }
@@ -49,13 +49,10 @@ internal sealed class AdvisorOperationContext : IAdvisorOperationContext, IAdvis
     public IReadOnlyList<MovementUnitInfo> GetMovementUnits() { Check(); return Movement.GetMovementUnits(); }
     public void AppendMovement(string target, MovementWaypoint waypoint) { Check(); Movement.AppendMovement(target, waypoint); }
     public void AppendFormationReturn(string target) { Check(); Movement.AppendFormationReturn(target); }
-    public void ClearReservations(string target)
-    {
-        Check();
-        var reservations = game as IAdvisorReservationSupport
-            ?? throw new InvalidOperationException("The game adapter does not provide reservation control.");
-        reservations.ClearReservations(target);
-    }
+    private IAdvisorReservationSupport Reservations => game as IAdvisorReservationSupport
+        ?? throw new InvalidOperationException("The game adapter does not provide reservation control.");
+    public IReadOnlyList<GameUnitInfo> GetReservationUnits() { Check(); return Reservations.GetReservationUnits(); }
+    public void ClearReservations(string target) { Check(); Reservations.ClearReservations(target); }
     public void AppendSonobuoyDrop(string target, string ammunition, AdvisorMapCoordinate position)
     { Check(); game.AppendSonobuoyDrop(target, ammunition, position); }
     public string Get(string language, string key) { Check(); return text.For(language)[key]; }

@@ -7,7 +7,7 @@ using SeaPowerAIAdvisor.Api;
 namespace SeaPowerAIAdvisor;
 
 // Player-owned units only. Selection and command-specific eligibility remain with each command.
-internal sealed partial class BattleOperationSupport : IAdvisorGameSupport, IAdvisorReservationSupport
+internal sealed partial class BattleOperationSupport : IAdvisorGameSupport
 {
     private readonly Func<IReadOnlyList<ObjectBase>> units;
     private readonly Func<AdvisorInformation> information;
@@ -89,14 +89,6 @@ internal sealed partial class BattleOperationSupport : IAdvisorGameSupport, IAdv
             return new AmmunitionInfo(pair.Key, ammo._displayedName, ammo._type.ToString(), ammo._subType.ToString(),
                 remaining, Math.Max(0, remaining - reserved - active), single, Math.Max(0, remaining - active));
         }).ToArray();
-    }
-    public void ClearReservations(string target)
-    {
-        var unit = Unit(target);
-        if (OrderUnavailableReason(unit) is string reason) throw new OperationException(409, reason);
-        unit.RemoveWaypoints();
-        if (unit._userRoot.TaskViewModels.Count != 0)
-            throw new InvalidOperationException("The native reservation queue was not cleared.");
     }
     public void AppendSonobuoyDrop(string target, string ammunition, AdvisorMapCoordinate position)
     {

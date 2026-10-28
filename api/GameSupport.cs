@@ -18,6 +18,7 @@ public interface IAdvisorGameSupport
 // Optional reservation control; existing game-support implementations need not provide it.
 public interface IAdvisorReservationSupport
 {
+    IReadOnlyList<GameUnitInfo> GetReservationUnits();
     void ClearReservations(string target);
 }
 

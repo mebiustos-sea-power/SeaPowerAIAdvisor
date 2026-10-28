@@ -57,6 +57,7 @@ internal static class SonobuoyFixture
         public ReservationRoute? GetReservationRoute(string target)
             => Unit(target).ReservationRoute;
         public string GetSonobuoyDepth(string target) => Unit(target).Depth;
+        public IReadOnlyList<GameUnitInfo> GetReservationUnits() => GetUnits();
         public void ClearReservations(string target) => Unit(target).ClearReservations();
         public ReservationQueueState InspectReservations(string target, ReservationPlacement placement)
         {

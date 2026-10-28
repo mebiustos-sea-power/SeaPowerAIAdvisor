@@ -21,7 +21,8 @@ internal sealed class AdvisorOperationCatalog
         catalog.Register(new SensorExtension());
         catalog.Register(new EmconExtension());
         catalog.Register(new AttackExtension());
-        catalog.Register(new CeaseFireExtension());
+        catalog.Register(new CancelAttackExtension());
+        catalog.Register(new CancelReservationsExtension());
         return catalog;
     }
     internal string Register(IAdvisorOperationExtension extension)

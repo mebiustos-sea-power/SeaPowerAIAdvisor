@@ -145,10 +145,12 @@ internal sealed partial class BattleOperationSupport : IAdvisorCombatSupport
                 throw new InvalidOperationException("The native attack instruction was not retained.");
         }
     }
-    public void CeaseFire(string target)
+    public void CancelAttack(string target)
     {
         var unit = CombatUnit(target);
         ClearPendingAttackTasks(unit);
-        unit.CeaseFire(report: true, clearOrder: true, formationCheck: false, stopJamming: true, airFormationCheck: false, clearAttackTasks: true);
+        // Clear only combat orders; unrelated orders and all waypoint reservations remain.
+        var clearOrder = unit.CurrentOrder.Value.OrderType is Order.Type.Attack or Order.Type.Jam or Order.Type.HighlightWithLaser;
+        unit.CeaseFire(report: true, clearOrder: clearOrder, formationCheck: false, stopJamming: true, airFormationCheck: false, clearAttackTasks: false);
     }
 }
