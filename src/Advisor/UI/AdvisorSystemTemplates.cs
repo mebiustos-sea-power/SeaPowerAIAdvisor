@@ -7,6 +7,6 @@ internal static class AdvisorSystemTemplates
 {
     internal static IReadOnlyList<AdvisorTextTemplate> Read(AdvisorText text) => new[]
     {
-        new AdvisorTextTemplate("system-weapon-employment", text["templates.weapon_employment.name"], text["templates.weapon_employment.message"])
+        new AdvisorTextTemplate("system-mission-background", text["templates.mission_background.name"], text["templates.mission_background.message"])
     };
 }
