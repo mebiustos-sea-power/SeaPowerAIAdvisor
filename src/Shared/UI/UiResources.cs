@@ -8,6 +8,14 @@ namespace SeaPowerAIAdvisor.Shared;
 // Shared control visuals stay scoped to each view; game brushes use Noesis resource lookup.
 internal static class UiResources
 {
+    // Resolve on a loaded view; overrides stay local and retain the native checkbox template.
+    internal static void ApplyDisabledCheckBoxBrushes(FrameworkElement scope)
+    {
+        scope.Resources["Brush.Background.Checked"] = (Brush)scope.FindResource("Brush.Background.Normal");
+        scope.Resources["Brush.Border.DisabledChecked"] = (Brush)scope.FindResource("Brush.Border.Disabled");
+        scope.Resources["Brush.Glyph.DisabledChecked"] = (Brush)scope.FindResource("Brush.Glyph.Disabled");
+    }
+
     internal static void Apply(FrameworkElement view)
     {
         using var source = typeof(UiResources).Assembly.GetManifestResourceStream("SeaPowerAIAdvisor.AdvisorControls.xaml")

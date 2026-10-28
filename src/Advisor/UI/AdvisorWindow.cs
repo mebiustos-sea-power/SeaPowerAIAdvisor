@@ -146,16 +146,21 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         if (width < 360 || height < 360) throw new InvalidOperationException("The game view is too small for the advisor prototype.");
         window = new Window
         {
-            Header = WindowTitle, Content = content,
+            Content = content,
             Width = width, Height = height, MinWidth = Math.Min(560, width), MinHeight = Math.Min(540, height),
-            MaxWidth = view.ActualWidth - 20, MaxHeight = view.ActualHeight - 40,
             X = (float)Math.Max(10, view.ActualWidth - width - 30), Y = 90,
             Draggable = true, CanResize = true,
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top
         };
         window.DataContext = window;
+        // Native maximization retains the normal bounds; size limits follow the current game view.
+        window.SetBinding(FrameworkElement.MaxWidthProperty, new Binding("ActualWidth") { Source = view });
+        window.SetBinding(FrameworkElement.MaxHeightProperty, new Binding("ActualHeight") { Source = view });
         window.Template = view.TryFindResource("WindowLayoutNoScroll") as ControlTemplate
             ?? throw new InvalidOperationException("The game's WindowLayoutNoScroll template is unavailable.");
+        window.ButtonsTemplate = content.Resources["AdvisorWindowButtonsTemplate"] as DataTemplate
+            ?? throw new InvalidOperationException("The advisor window buttons template is missing.");
+        ApplyWindowText();
         window.OnClosed += (_, _) => guard(OnWindowClosed);
         settings = new AdvisorSettingsController(content, () => text, options, profileDirectory, settingsPath, templates, DefaultPortrait,
             guard, typing, ReleaseInput, () => active != null, ApplyProfile, () =>
@@ -858,6 +863,13 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         foreach (var entry in text.Entries) content.Resources["Advisor." + entry.Key] = entry.Value;
     }
 
+    private void ApplyWindowText()
+    {
+        window.Header = WindowTitle;
+        foreach (var key in new[] { "window.maximize", "window.restore" })
+            window.Resources["Advisor." + key] = text[key];
+    }
+
     private void RefreshLanguage()
     {
         var language = replyLanguage();
@@ -865,7 +877,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         text = AdvisorText.Load(language);
         uiLanguage = language;
         ApplyTextResources();
-        window.Header = WindowTitle;
+        ApplyWindowText();
         if (!profileLoaded) speakerName = text["speaker.advisor"];
         SetBusy(active != null);
         ShowConversation();

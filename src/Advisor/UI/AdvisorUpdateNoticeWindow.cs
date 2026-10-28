@@ -74,8 +74,11 @@ internal sealed class AdvisorUpdateNoticeWindow
         window.Width = width; window.Height = height;
         window.MinWidth = Math.Min(360, width); window.MinHeight = Math.Min(220, height);
         window.MaxWidth = view.ActualWidth - 20; window.MaxHeight = view.ActualHeight - 40;
-        window.X = (float)Math.Max(10, Math.Min(view.ActualWidth - width - 10, owner.X + (owner.Width - width) / 2));
-        window.Y = (float)Math.Max(10, Math.Min(view.ActualHeight - height - 10, owner.Y + (owner.Height - height) / 2));
+        // Native maximization uses automatic (NaN) dimensions and preserves the normal X/Y.
+        var centerX = owner.Maximized ? view.ActualWidth / 2 : owner.X + owner.Width / 2;
+        var centerY = owner.Maximized ? view.ActualHeight / 2 : owner.Y + owner.Height / 2;
+        window.X = (float)Math.Max(10, Math.Min(view.ActualWidth - width - 10, centerX - width / 2));
+        window.Y = (float)Math.Max(10, Math.Min(view.ActualHeight - height - 10, centerY - height / 2));
         releaseInput(); current = notice; this.preview = preview; owner.IsEnabled = false;
         try
         {

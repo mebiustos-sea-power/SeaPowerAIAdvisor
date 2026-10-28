@@ -6,7 +6,7 @@ using static SeaPowerAIAdvisor.Shared.UiMarkup;
 
 namespace SeaPowerAIAdvisor;
 
-// Owns only the unsaved selection UI. The saved immutable policy belongs to AdvisorOptions.
+// Information selection and read-only coverage UI. The saved immutable policy belongs to AdvisorOptions.
 internal sealed class AdvisorInformationView
 {
     private readonly StackPanel host;
@@ -32,6 +32,19 @@ internal sealed class AdvisorInformationView
                     new XAttribute("Text", "{DynamicResource Advisor.information." + (group.Battle ? "mission_description" : "campaign_description") + "}"),
                     new XAttribute("FontSize", "12"), new XAttribute("TextWrapping", "Wrap"),
                     new XAttribute("Opacity", "0.7"), new XAttribute("Margin", "0,6,0,0")));
+                if (group.Battle)
+                {
+                    var fixedGroup = Element("StackPanel", new XAttribute(ns + "Name", "InformationFixed"));
+                    fixedGroup.Add(FixedBox("InformationFixedGroup", "information.mission_basic", "0,12,0,6", true));
+                    foreach (var key in new[] { "mission_context", "public_objectives", "mission_map_areas" })
+                        fixedGroup.Add(FixedBox("InformationFixed_" + key, "information." + key, "20,4,0,4", false));
+                    root.Add(fixedGroup);
+                }
+                else
+                    root.Add(Element("TextBlock",
+                        new XAttribute("Text", "{DynamicResource Advisor.information.mandatory}"),
+                        new XAttribute("FontSize", "12"), new XAttribute("TextWrapping", "Wrap"),
+                        new XAttribute("Opacity", "0.7"), new XAttribute("Margin", "0,6,0,0")));
                 section = group.Battle;
             }
             root.Add(Box("InformationGroup" + index++, group.TextKey, "0,12,0,6", true));
@@ -50,6 +63,9 @@ internal sealed class AdvisorInformationView
         var view = GUI.ParseXaml(root.ToString(SaveOptions.DisableFormatting)) as FrameworkElement
             ?? throw new InvalidOperationException("The information selection view is invalid.");
         host.Children.Add(view);
+        var fixedView = view.FindName("InformationFixed") as FrameworkElement
+            ?? throw new InvalidOperationException("The fixed information group is missing.");
+        fixedView.Loaded += (_, _) => guard(() => UiResources.ApplyDisabledCheckBoxBrushes(fixedView));
         index = 0;
         foreach (var group in AdvisorInformation.Groups)
         {
@@ -80,6 +96,16 @@ internal sealed class AdvisorInformationView
             entry.Box.IsChecked = Value.Allows(entry.Kind);
             entry.Box.IsEnabled = Value.CanEdit(entry.Kind);
         }
+    }
+    // Fixed coverage is explanatory UI, not an editable permission or saved setting.
+    private static XElement FixedBox(string name, string key, string margin, bool group)
+    {
+        var box = Box(name, key, margin, group);
+        box.SetAttributeValue("IsChecked", "True");
+        box.SetAttributeValue("IsEnabled", "False");
+        box.Element(XName.Get("TextBlock", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"))!
+            .SetAttributeValue("Foreground", "{DynamicResource Brush.Foreground.Highlight}");
+        return box;
     }
     private static XElement Box(string name, string key, string margin, bool group) => Element("CheckBox",
         new XAttribute(XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml") + "Name", name),
