@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Xml.Linq;
@@ -14,11 +15,11 @@ internal sealed class AdvisorUpdateNoticeWindow
     private readonly WindowHost host;
     private readonly Window owner, window;
     private readonly TextBlock failure;
-    private readonly Run changelogLabel;
     private readonly ScrollViewer scroll;
     private readonly Button close;
     private readonly AdvisorUpdateNoticeStore store;
     private readonly Func<AdvisorText> text;
+    private readonly Action<Action> guard;
     private readonly Action releaseInput, closed;
     private readonly Action<AdvisorUpdateNoticeException> report;
     private AdvisorUpdateNotice? current;
@@ -27,16 +28,13 @@ internal sealed class AdvisorUpdateNoticeWindow
         Func<AdvisorText> text, Action<Action> guard, Action releaseInput, Action closed, Action<AdvisorUpdateNoticeException> report)
     {
         this.view = view; this.host = host; this.owner = owner; this.store = store; this.text = text;
-        this.releaseInput = releaseInput; this.closed = closed; this.report = report;
+        this.guard = guard; this.releaseInput = releaseInput; this.closed = closed; this.report = report;
         using var source = typeof(AdvisorUpdateNoticeWindow).Assembly.GetManifestResourceStream("SeaPowerAIAdvisor.AdvisorUpdateNotice.xaml")
             ?? throw new FileNotFoundException("The update notice window resource is missing.");
         using var reader = new StreamReader(source, Encoding.UTF8);
         var content = GUI.ParseXaml(reader.ReadToEnd()) as FrameworkElement
             ?? throw new InvalidOperationException("The update notice view is not a FrameworkElement.");
         failure = Find<TextBlock>(content, "UpdateNoticeFailure");
-        changelogLabel = Find<Run>(content, "UpdateNoticeChangelogLabel");
-        Find<Hyperlink>(content, "UpdateNoticeChangelog").Click += (_, _) => guard(() =>
-            UnityEngine.Application.OpenURL("https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/releases"));
         scroll = Find<ScrollViewer>(content, "UpdateNoticeScroll"); close = Find<Button>(content, "CloseUpdateNotice");
         var ownerContent = owner.Content as FrameworkElement
             ?? throw new InvalidOperationException("The advisor window content is unavailable.");
@@ -67,9 +65,7 @@ internal sealed class AdvisorUpdateNoticeWindow
         var version = typeof(AdvisorUpdateNoticeWindow).Assembly.GetName().Version
             ?? throw new InvalidOperationException("The advisor assembly version is missing.");
         window.Header = text().Format(notice.TitleKey, version.ToString(3)); close.Content = text()["action.close"];
-        changelogLabel.Text = text()["update_notice.changelog"];
-        scroll.Content = GUI.ParseXaml(AdvisorMarkdown.Render(text()[notice.BodyKey]).ToString(SaveOptions.DisableFormatting)) as FrameworkElement
-            ?? throw new InvalidOperationException("The Markdown notice view is not a FrameworkElement.");
+        scroll.Content = RenderBody(text()[notice.BodyKey]);
         var width = Math.Min(520, view.ActualWidth - 40); var height = Math.Min(620, view.ActualHeight - 80);
         window.Width = width; window.Height = height;
         window.MinWidth = Math.Min(360, width); window.MinHeight = Math.Min(220, height);
@@ -88,6 +84,25 @@ internal sealed class AdvisorUpdateNoticeWindow
         }
         catch { Hide(); throw; }
         return true;
+    }
+    // Only developer-authored notices attach browser actions; conversation links retain their own policy.
+    private FrameworkElement RenderBody(string markdown)
+    {
+        var links = new List<(string Name, string Url)>();
+        var markup = Shared.MarkdownRenderer.Render(markdown, (destination, label) =>
+        {
+            if (!Uri.TryCreate(destination, UriKind.Absolute, out var uri) ||
+                (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp)) return null;
+            var name = "UpdateNoticeLink" + links.Count;
+            links.Add((name, uri.AbsoluteUri));
+            return Shared.UiMarkup.Element("Hyperlink", new XAttribute(XName.Get("Name", "http://schemas.microsoft.com/winfx/2006/xaml"), name),
+                new XAttribute("TextDecorations", "Underline"), new XAttribute("Focusable", "False"), label);
+        });
+        var body = GUI.ParseXaml(markup.ToString(SaveOptions.DisableFormatting)) as FrameworkElement
+            ?? throw new InvalidOperationException("The Markdown notice view is not a FrameworkElement.");
+        foreach (var link in links)
+            Find<Hyperlink>(body, link.Name).Click += (_, e) => { e.Handled = true; guard(() => UnityEngine.Application.OpenURL(link.Url)); };
+        return body;
     }
     internal void Dismiss() { if (IsOpen) window.CloseWindowNow(); }
     private void OnClosed()

@@ -5,14 +5,8 @@
     <RowDefinition Height="*" />
     <RowDefinition Height="Auto" />
     <RowDefinition Height="Auto" />
-    <RowDefinition Height="Auto" />
   </Grid.RowDefinitions>
   <ScrollViewer x:Name="UpdateNoticeScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" />
-  <TextBlock Grid.Row="1" TextWrapping="Wrap" Margin="0,10,0,0">
-    <Hyperlink x:Name="UpdateNoticeChangelog" TextDecorations="Underline" Focusable="False">
-      <Run x:Name="UpdateNoticeChangelogLabel" />
-    </Hyperlink>
-  </TextBlock>
-  <TextBlock x:Name="UpdateNoticeFailure" Grid.Row="2" TextWrapping="Wrap" FontSize="12" Margin="0,8,0,0" />
-  <Button x:Name="CloseUpdateNotice" Grid.Row="3" Height="30" Padding="12,0" HorizontalAlignment="Right" Margin="0,16,0,0" />
+  <TextBlock x:Name="UpdateNoticeFailure" Grid.Row="1" TextWrapping="Wrap" FontSize="12" Margin="0,8,0,0" />
+  <Button x:Name="CloseUpdateNotice" Grid.Row="2" Height="30" Padding="12,0" HorizontalAlignment="Right" Margin="0,16,0,0" />
 </Grid>
