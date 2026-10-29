@@ -101,7 +101,8 @@ public sealed class Plugin : IAnchorChainMod
                     : error is AiConnectionException connection ? AdvisorNotice.Connection(connection).Message(AdvisorText.Load(GameLanguage.Read()))
                     : AdvisorNotice.Unexpected().Message(AdvisorText.Load(GameLanguage.Read())),
                 (batch, token) => AdvisorTranslationService.RunAsync(settingsPath, AdvisorTrace.DirectoryIn(UnityEngine.Application.persistentDataPath), batch, token),
-                error => Log.LogError("Screen translation failed: " + error)); }
+                error => Log.LogError("Screen translation failed: " + error),
+                new Translation.TranslationPositionStore(Path.Combine(UnityEngine.Application.persistentDataPath, "SeaPowerAIAdvisor", "translation-position.json"))); }
             catch (Exception error)
             {
                 if (screenTranslation != null) UnityEngine.Object.Destroy(screenTranslation);

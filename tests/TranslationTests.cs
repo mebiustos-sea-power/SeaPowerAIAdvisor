@@ -15,6 +15,47 @@ internal static class TranslationTests
 {
     internal static void Run(Action<string, Action> check)
     {
+        check("Translation button position survives fresh store instances and updates without depending on number formatting", () =>
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "translation-position-" + Guid.NewGuid().ToString("N"));
+            var culture = System.Globalization.CultureInfo.CurrentCulture;
+            try
+            {
+                var path = Path.Combine(directory, "position.json"); var store = new TranslationPositionStore(path);
+                Require(store.Read() == null && !Directory.Exists(directory), "Reading an unset position wrote UI state");
+                System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("fr-FR");
+                store.Save(3500.25f, 1950.5f);
+                Require(new TranslationPositionStore(path).Read() == (3500.25f, 1950.5f), "A restart lost or reformatted the saved position");
+                new TranslationPositionStore(path).Save(0, 0);
+                Require(store.Read() == (0f, 0f), "Moving to the top-left corner did not replace the prior position");
+            }
+            finally { System.Globalization.CultureInfo.CurrentCulture = culture; if (Directory.Exists(directory)) Directory.Delete(directory, true); }
+        });
+        check("Invalid translation positions and storage failures remain visible and cannot overwrite a valid saved position", () =>
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "translation-position-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(directory);
+            try
+            {
+                var path = Path.Combine(directory, "position.json"); var store = new TranslationPositionStore(path);
+                store.Save(1200, 600); var before = File.ReadAllBytes(path);
+                foreach (var invalid in new[] { float.NaN, float.PositiveInfinity, float.NegativeInfinity, -1f })
+                {
+                    Throws<InvalidDataException>(() => store.Save(invalid, 50), _ => true);
+                    Throws<InvalidDataException>(() => store.Save(50, invalid), _ => true);
+                    Require(File.ReadAllBytes(path).SequenceEqual(before), "Invalid coordinates destroyed the saved position");
+                }
+                foreach (var invalid in new[] { "{}", "{\"x\":NaN,\"y\":0}", "{\"x\":1e100,\"y\":0}", "{\"x\":0,\"y\":-1}",
+                    "{\"x\":\"10\",\"y\":0}", "{\"x\":1,\"x\":2,\"y\":0}", "{\"x\":1,\"y\":2} {}" })
+                {
+                    File.WriteAllText(path, invalid);
+                    Throws<Exception>(() => store.Read(), e => e is InvalidDataException or Newtonsoft.Json.JsonException);
+                }
+                File.Delete(path); Directory.CreateDirectory(path);
+                Throws<IOException>(() => store.Read(), _ => true);
+                Throws<IOException>(() => store.Save(10, 20), _ => true);
+            }
+            finally { Directory.Delete(directory, true); }
+        });
         check("Batch translation maps reordered replies by identity and preserves duplicate source blocks and line breaks in one request", () => Run(async () =>
         {
             var batch = new TranslationBatch(new[] { "Heading", "Same", "Same" }, "ja");

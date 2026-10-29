@@ -25,7 +25,7 @@ internal sealed class TranslationOverlay : IDisposable
     private readonly Func<Exception, string> message;
     private readonly Func<TranslationBatch, CancellationToken, Task<TranslationResult>> translate;
     private readonly Action<Exception> report;
-    private readonly Action<Point> moved;
+    private readonly Action<Point> moved, savePosition;
     private readonly List<FrameworkElement> candidates = new();
     private FrameworkElement? leaf;
     private int index, releaseFrame;
@@ -38,9 +38,9 @@ internal sealed class TranslationOverlay : IDisposable
     private Task<TranslationResult>? task;
     internal Visual Layer => layer;
     internal TranslationOverlay(FrameworkElement view, Func<string, string> text, Func<Exception, string> message,
-        Func<TranslationBatch, CancellationToken, Task<TranslationResult>> translate, Action<Exception> report, Point? position, Action<Point> moved)
+        Func<TranslationBatch, CancellationToken, Task<TranslationResult>> translate, Action<Exception> report, Point? position, Action<Point> moved, Action<Point> savePosition)
     {
-        this.view = view; this.text = text; this.message = message; this.translate = translate; this.report = report; this.moved = moved;
+        this.view = view; this.text = text; this.message = message; this.translate = translate; this.report = report; this.moved = moved; this.savePosition = savePosition;
         using var source = typeof(TranslationOverlay).Assembly.GetManifestResourceStream("SeaPowerAIAdvisor.TranslationOverlay.xaml")
             ?? throw new FileNotFoundException("The translation overlay layout is missing.");
         using var reader = new StreamReader(source);
@@ -55,7 +55,13 @@ internal sealed class TranslationOverlay : IDisposable
             dragDistance += Math.Abs(args.HorizontalChange) + Math.Abs(args.VerticalChange);
             Position(new Point(Canvas.GetLeft(launcher) + args.HorizontalChange, Canvas.GetTop(launcher) + args.VerticalChange));
         };
-        launcher.DragCompleted += (_, args) => { dragging = false; if (!args.Canceled && dragDistance < 5) { toggle = true; releaseFrame = Time.frameCount; } };
+        launcher.DragCompleted += (_, args) =>
+        {
+            dragging = false;
+            if (args.Canceled) return;
+            if (dragDistance < 5) { toggle = true; releaseFrame = Time.frameCount; }
+            else Guard(() => savePosition(new Point(Canvas.GetLeft(launcher), Canvas.GetTop(launcher))));
+        };
         shield.PreviewMouseMove += (_, args) => { args.Handled = true; Guard(() => Pick(args.GetPosition(view))); };
         shield.PreviewMouseWheel += (_, args) => { args.Handled = true; Guard(() => { if (candidates.Count == 0) return; index = Math.Max(0, Math.Min(candidates.Count - 1, index + (args.Delta > 0 ? 1 : -1))); Highlight(); }); };
         shield.PreviewMouseDown += (_, args) =>

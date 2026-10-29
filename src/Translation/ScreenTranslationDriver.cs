@@ -25,11 +25,15 @@ internal sealed class ScreenTranslationDriver : MonoBehaviour
     private TranslationOverlay? overlay;
     private FrameworkElement? root;
     private Point? position;
+    private TranslationPositionStore positionStore = null!;
     private bool scanned, failed;
     internal void Initialize(string patchId, Func<bool> enabled, Func<string, string> text, Func<Exception, string> message,
-        Func<TranslationBatch, CancellationToken, Task<TranslationResult>> translate, Action<Exception> report)
+        Func<TranslationBatch, CancellationToken, Task<TranslationResult>> translate, Action<Exception> report, TranslationPositionStore positionStore)
     {
-        isEnabled = enabled; this.text = text; this.message = message; this.translate = translate; this.report = report; current = this;
+        isEnabled = enabled; this.text = text; this.message = message; this.translate = translate; this.report = report; this.positionStore = positionStore;
+        var saved = positionStore.Read();
+        position = saved.HasValue ? new Point(saved.Value.X, saved.Value.Y) : null;
+        current = this;
         patches = new Harmony(patchId);
         foreach (var method in new[] { "LoadXaml", "OnEnable", "OnDisable", "OnDestroy" })
             patches.Patch(AccessTools.Method(typeof(NoesisView), method) ?? throw new MissingMethodException(typeof(NoesisView).FullName, method),
@@ -54,7 +58,8 @@ internal sealed class ScreenTranslationDriver : MonoBehaviour
             if (!ReferenceEquals(root, next))
             {
                 overlay?.Dispose(); overlay = null; root = next;
-                if (root != null) overlay = new TranslationOverlay(root, text, message, translate, report, position, p => position = p);
+                if (root != null) overlay = new TranslationOverlay(root, text, message, translate, report, position, p => position = p,
+                    p => positionStore.Save(p.X, p.Y));
             }
             overlay?.Tick();
         }
