@@ -36,6 +36,7 @@ internal sealed class TranslationOverlay : IDisposable
     private float clearStatusAt;
     private CancellationTokenSource? cancellation;
     private Task<TranslationResult>? task;
+    internal Visual Layer => layer;
     internal TranslationOverlay(FrameworkElement view, Func<string, string> text, Func<Exception, string> message,
         Func<TranslationBatch, CancellationToken, Task<TranslationResult>> translate, Action<Exception> report, Point? position, Action<Point> moved)
     {

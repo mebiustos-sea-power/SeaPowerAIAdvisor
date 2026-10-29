@@ -47,8 +47,9 @@ internal sealed class ScreenTranslationDriver : MonoBehaviour
             views.RemoveAll(v => v == null);
             var active = isEnabled() ? views.Where(v => v.isActiveAndEnabled && v.gameObject.activeInHierarchy && !v.WorldSpace &&
                 !v.IsRenderToTexture() && v.EnableMouse && v.Content != null && v.Content.ActualWidth > 0 && v.Content.ActualHeight > 0)
-                .Where(v => v.GetComponent<Camera>() is not { } c || c.targetDisplay == 0)
-                .OrderByDescending(v => v.GetComponent<Camera>() is { } c ? c.depth : float.MaxValue).FirstOrDefault() : null;
+                .Where(v => v.GetComponent<Camera>() is not { } c || c.isActiveAndEnabled && c.targetDisplay == 0)
+                .OrderByDescending(v => v.GetComponent<Camera>() is { } c ? c.depth : float.MaxValue)
+                .FirstOrDefault(v => HasVisibleContent(v.Content)) : null;
             var next = active?.Content;
             if (!ReferenceEquals(root, next))
             {
@@ -59,6 +60,20 @@ internal sealed class ScreenTranslationDriver : MonoBehaviour
         }
         catch (Exception error) { failed = true; report(error); overlay?.Dispose(); overlay = null; root = null; views.Clear(); }
     }
+    private bool HasVisibleContent(FrameworkElement content)
+    {
+        if (content.View == null || !content.IsVisible || content.Opacity <= 0) return false;
+        if (HasArea(VisualTreeHelper.GetContentBounds(content))) return true;
+        // Empty views can remain enabled above the HUD. Our own layer must not keep such a view selected.
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(content); i++)
+        {
+            var child = VisualTreeHelper.GetChild(content, i);
+            if (ReferenceEquals(child, overlay?.Layer) || child is UIElement element && (!element.IsVisible || element.Opacity <= 0)) continue;
+            if (child is Visual visual && HasArea(VisualTreeHelper.GetDescendantBounds(visual))) return true;
+        }
+        return false;
+    }
+    private static bool HasArea(Noesis.Rect bounds) => bounds.Width > 0 && bounds.Height > 0;
     private void OnDestroy()
     {
         overlay?.Dispose(); overlay = null; patches?.UnpatchSelf(); if (ReferenceEquals(current, this)) current = null;
