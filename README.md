@@ -120,9 +120,13 @@ Hiding the adviser does not cancel an active consultation. While the window is h
 
 ## Screen translation
 
-In **Settings → API connections → Selection**, change **Translation connection** from **Disabled** (the default) to **Same as Advisor** or a registered connection. The **Translate** button appears over supported NoesisGUI screens, including menus, and can be dragged. Click it, point at the region to highlight it, and click the region to translate its text. While selecting, the mouse wheel expands or reduces the region through its UI parents; click **Cancel** to leave selection without sending a request.
+In **Settings → API connections → Selection**, change **Translation connection** from **Disabled** (the default) to **Same as Advisor** or a registered connection. The **Translate** button appears over supported NoesisGUI screens, including menus. Click it, point at the region to highlight it, and click the region to translate its text. While selecting, the mouse wheel expands or reduces the region through its UI parents; click **Cancel** to leave selection without sending a request.
 
-Texts in the region are submitted together and matched by ID before the translated text is applied directly to the original controls. Button actions, text formatting and bindings are retained. Editable inputs, passwords and text embedded in images are excluded. This initial version has no dedicated restore action; the game's normal text updates or rebuilding a screen may restore original wording. UI references and original text are held only for the outstanding request and are released on completion, cancellation or unloading the selected region.
+Drag the button to move it. Its position is remembered across game restarts and kept within the screen when the resolution changes. The compact button and status messages follow the game's UI scale; the right-click menu and tooltip use the standard UI size.
+
+Texts in the region are submitted together and matched by ID before the translated text is applied directly to the original controls. Button actions, text formatting and bindings are retained. Editable inputs, passwords and text embedded in images are excluded.
+
+Right-click the **Translate** button and choose **Restore original text** to restore the translated text currently displayed on the screen, without another AI request. Repeated translations retain the initial original text. Text subsequently updated by the game is left untouched, and restoration records are released when their controls are unloaded.
 
 Choosing **Disabled** hides the button and disables screen translation. The **Same as Advisor** choice follows changes to the Advisor connection; an explicit choice uses that connection. Its connection prompt is used unchanged, with the shared optional Fallback connection. Translation uses its own result-submission tool and does not send advisor history, personality, situation data or operation tools. Built-in providers and standard connection adapters can run this workflow; adapters that own an independent advisor workflow cannot.
 
