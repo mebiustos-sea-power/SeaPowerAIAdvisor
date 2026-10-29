@@ -189,14 +189,15 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     internal bool IsOpen => host.Windows.Contains(window);
     internal bool IsConsulting => active != null;
     private bool DraftMapVisible => IsOpen && question.IsVisible && question.IsEnabled && !consultationMenu.IsOpen;
-    internal bool CanInsertLocation => DraftMapVisible && CanConsult && !question.IsReadOnly && !QuestionInputController.IsComposing;
+    internal bool CanInsertLocation => CanConsult && !question.IsReadOnly && !QuestionInputController.IsComposing && (!IsOpen || DraftMapVisible);
     internal void InsertLocation(AdvisorMapCoordinate coordinate)
     {
         if (!CanInsertLocation) return;
+        if (!IsOpen) Toggle();
         questionInput.Reset();
         draft.AddLocation(coordinate, text["input.location_label"]);
         RefreshDraftBadges();
-        questionInput.RequestFocus();
+        if (!updateNotice.IsOpen) questionInput.RequestFocus();
     }
     internal bool HasUnreadResult { get; private set; }
     internal string DisplayName => appliedProfile?.DisplayName ?? speakerName;

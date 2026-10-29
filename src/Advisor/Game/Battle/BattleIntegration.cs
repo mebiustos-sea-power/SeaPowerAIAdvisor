@@ -102,6 +102,9 @@ internal sealed class BattleIntegration
         if (!runtime.Failed)
         {
             var host = FindHost(current.RootControl) ?? throw new InvalidOperationException("The battle window host is unavailable.");
+            mapInput ??= new BattleMapPointInput(root, () => model?.Map?.DisplayMap,
+                () => model?.StateManager.CurrentState.Value, () => advisor?.CanInsertLocation ?? !QuestionInputController.IsComposing,
+                coordinate => GetAdvisor().InsertLocation(coordinate), guard);
             contactAssessments ??= new BattleContactAssessments(GetAdvisor, () => options.Current.Information, guard);
             contactAssessments.Tick(current.RootControl, host);
             mapNavigation?.Tick();
@@ -129,9 +132,6 @@ internal sealed class BattleIntegration
         {
             advisor = new AdvisorWindow(view, host, guard, new BattleAdvisorSource(Capture, () => operationGateway), GameLanguage.Read, warn, options, backends,
                 new BattleUnitNavigation(() => model?.Map, () => this.view), new BattleWeaponNavigation(() => this.view, guard), mapNavigation);
-            mapInput = new BattleMapPointInput(view, () => model?.Map?.DisplayMap,
-                () => model?.StateManager.CurrentState.Value, () => advisor?.CanInsertLocation == true,
-                advisor.InsertLocation, guard);
         }
         return advisor;
     }

@@ -76,7 +76,7 @@
   "status.tokens_unknown": "token usage unavailable",
   "status.new_question": "Enter a message or choose a quick action.",
   "transcript.empty": "Enter a message or choose a quick action.\nYour conversation will appear here.",
-  "transcript.track_navigation": "**Specify a location from the map**\n\nWhile this conversation is open, **Ctrl+left-click** empty map space to add a location badge to your message.\n\n**Use unit links in the conversation**\n\n- **Left-click**: Select the unit and center it on the map\n- **Right-click**: Open the game's standard menu\n- **Ctrl+left-click**: Add a unit badge to your message",
+  "transcript.track_navigation": "**Specify a location from the map**\n\n**Ctrl+left-click** empty map space to add a location badge to your message. AI Advisor opens automatically if it is closed.\n\n**Use unit links in the conversation**\n\n- **Left-click**: Select the unit and center it on the map\n- **Right-click**: Open the game's standard menu\n- **Ctrl+left-click**: Add a unit badge to your message",
   "input.location_label": "Point {0}",
   "transcript.cleared": "Chat cleared.",
   "preset.next_steps": "Next steps",
