@@ -2,35 +2,31 @@
 
 **This is a prototype with limited real-play testing. Advice may be inaccurate, incomplete or unhelpful.**
 
-An in-game operations adviser for **Sea Power: Naval Combat in the Missile Age**. Ask what to do next, discuss tactical risks, or request a more detailed assessment while playing. The adviser uses player-known game information and can propose supported game commands for you to review and approve. It does not offer unsolicited advice.
+An in-game operations adviser and screen-translation tool for **Sea Power: Naval Combat in the Missile Age**. Ask what to do next, discuss tactical risks, or request a more detailed assessment while playing. The adviser uses player-known game information and can propose supported game commands for you to review and approve. It does not offer unsolicited advice.
 
 [Download releases](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/releases) · [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3821064016) · [Report an issue](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/issues)
 
-## What's new in v0.18.0
+## What's new in v0.19.0
 
-Specify destinations directly from the map and request plans that combine movement, sonobuoy deployment and formation return. Review and adopt a proposal before its orders are added to the game.
+Translate text directly in menus and briefings, and request plans combining repeating movement routes with sensor control, EMCON and attack orders. Review and approve game-operation proposals before adoption.
 
-- **Location badges:** Ctrl+left-click empty map space while AI Advisor is open to attach a point to your message.
-- **Movement and formation return:** plan routes using unit-specific speed, altitude and depth presets, combine different operations and units, and review `Append` / `Replace` choices before adoption.
-- **Consult while hidden:** consultations continue when the window is hidden; the AI button shows a yellow dot while consulting and a green dot when a result is ready.
-- **Connection-specific prompts:** configure supplementary instructions for individual connections or models.
-- **System text templates:** ask about mission objectives and background, or use your own saved messages, with replacement or append insertion.
-- **External command SDK:** add commands without changing the host; built-in commands use the same public contract.
+- **Screen translation:** select a UI region, translate its text into the game's selected language, and restore the original text from the translation button's right-click menu. This feature works independently of consultations and is disabled by default. See [Screen translation](#screen-translation) for setup and the screenshot guide.
+- **Sensor control and EMCON:** request changes to sensor controls available through the standard game UI or apply EMCON to specified units.
+- **Attack and cancellation commands:** specify targets, weapons, shot counts and add/switch behavior, or separately cancel attacks and reservations.
+- **Repeating movement routes:** use a one-time approach followed by a repeating patrol section, without repeating existing reservations.
+- **Other improvements:** maximize and restore the adviser window, view the basic information always provided to the AI, and use aircraft-specific cruise altitude/speed references in assessments.
 
-**When updating:**
+**External extension developers:** v0.19.0 uses public API **contract version 3**. Extensions built for contract 2 need rebuilding against the bundled API DLL; commands and plan-producing integrations also need the documented source changes. See the [public API guide](docs/public-api.md).
 
-- **NanoGPT:** we strongly recommend **DeepSeek V4.1 Flash 1017 (non-thinking)**, model ID `deepseek/deepseek-v4.1-flash-1017`. Existing saved connection models are unchanged.
-- **Command settings:** commands default to enabled, including newly added ones; the former global OFF setting is not carried over.
-- **External extensions:** extensions using the previous public API contract require updates and rebuilding for contract version 2.
-
-See the [v0.18.0 release notes](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/releases/tag/v0.18.0) for all changes.
+See the [v0.19.0 release notes](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/releases/tag/v0.19.0) for all changes.
 
 ## Features
 
 - **Gemini, Ollama, OpenRouter and NanoGPT connections.** Register named connections and assign Advisor, Translation and an optional shared Fallback connection. Duplicate a connection to reuse its settings with another model.
 - **On-demand tactical advice.** Ask your own question or use **Next steps**, **Key risks**, **Radar operations**, **Own units** and **Contacts**.
-- **AI-assisted game commands.** Request movement, sonobuoy deployment and formation return, including combined plans for one or more units. Review and approve a proposal before its orders are added to the game.
-- **Repeating movement routes (development):** propose a one-time approach followed by a repeating patrol route, without repeating existing reservations. Review the loop start and map preview before adoption.
+- **Independent screen translation.** Translate text in menus, briefings and other supported UI regions without keeping the adviser window open. Restore original text from the translation button's right-click menu. Enable it by selecting a Translation connection in settings; it is disabled by default.
+- **AI-assisted game commands.** Request movement, sonobuoy deployment, formation return, sensor control, EMCON, attacks or cancellation, including combined plans for one or more units. Review and approve a proposal before it changes the game.
+- **Repeating movement routes.** Propose a one-time approach followed by a repeating patrol route, without repeating existing reservations. Review the loop start and map preview before adoption.
 - **Map location badges.** Ctrl+left-click empty map space while the conversation is open to attach destinations or drop locations to your question. Click draft badges to locate their units or points on the map.
 - **Consultations continue while hidden.** A yellow dot on the AI button means a consultation is running; green means a result is ready. Both dots are hidden while the adviser window is open.
 - **Alternative proposals with map previews.** Compare planned locations and travel routes, choose one proposal to adopt, and retain its number and title in conversation history.
@@ -38,7 +34,7 @@ See the [v0.18.0 release notes](https://github.com/mebiustos-sea-power/SeaPowerA
 - **Unidentified-contact assessments.** Open an unidentified contact’s information window and click the **[adviser name]’s assessment** button. The adviser evaluates its displayed candidates, confirmed features and relevant known contacts. Buttons below the reply let you reassess assuming a friendly or enemy affiliation.
 - **Player-known information only.** Friendly capabilities (including fixed-wing economic cruise altitude and speed), sensor operating states and specifications, launched missiles and torpedoes with player-visible target information, aircraft and bases, applicable altitude/depth, movement plans, observed contacts and detection methods, mission briefing, objectives and published reports are available as needed. Currently displayed mission circles are included with basic mission information, using their labels, center coordinates and radii. Hidden enemy state is not supplied.
 - **Custom advisers.** Register portraits, names and personality/tone preferences. The displayed title is cosmetic. Shared preferences and your name can also be configured.
-- **Readable conversations.** Markdown replies, configurable conversation text size, approximate response times in seconds, progress updates that reflect operation lookups and proposal receipt, and copying of messages. Mouse-wheel scrolling also works over tables in conversation history.
+- **Readable conversations.** A maximizable adviser window that restores its previous position and size, Markdown replies, configurable conversation text size, approximate response times in seconds, progress updates that reflect operation lookups and proposal receipt, and copying of messages. Mouse-wheel scrolling also works over tables in conversation history.
 - **Unit-specific questions.** Use **Insert selected unit** or **Ctrl+left-click** a unit link in conversation history to add a removable target badge to your message. Copied questions include the unit references.
 - **Unit navigation.** Left-click a linked unit name or contact number to select and center it on the map; right-click to open the game's standard menu for that unit. Friendly-unit and contact links can be enabled separately in settings.
 - **Weapon references.** Right-click a weapon link in an answer and choose **Weapon Reference** from the menu to open the game's reference window.
@@ -102,13 +98,18 @@ The request timeout is configurable per connection and also applies to connectio
 
 Open **Settings → Extensions → Commands** to enable or disable commands and browse those registered for the current screen. Details show their identifiers, requirements, approval policy, current AI instructions and definition JSON. Shared tool definitions are also available. Each command has its own checkbox. Commands, including newly added ones, default to enabled; only individually disabled command IDs are saved. The former global command switch is ignored and removed the next time options are saved. Browsing does not send an AI request or inspect live candidates. The **Connection adapters** tab lists registered built-in and external connection types; edit saved connections under **API connections**. Each extension can optionally supply its own display version. Unspecified versions are not shown.
 
-The development build also supports immediate **Attack** (observed target, carried ammunition, shot count, and add/switch), **Cancel attack**, and **Cancel reservations** for explicitly named units. Cancel attack stops current attacks, guidance and offensive jamming while retaining reservations. Cancel reservations clears waypoint reservations, including sonobuoy drops and loops, while retaining active combat. On adoption, reservations are registered first, followed by immediate operations. To replace a route, use the reservation replacement option; cancelling reservations also clears any registered earlier in the same adoption. The game controls actual attack approach and firing. The approval screen explains the effects of each command.
-
 The built-in commands support:
 
-- **Movement reservations:** set ordered waypoints with the unit's available speed, altitude and depth presets. Settings take effect when travel toward the corresponding waypoint begins; omitted settings remain unchanged. A following unit switches to independent action, while moving a formation leader preserves the game's normal follower behavior.
+- **Movement reservations:** set ordered waypoints with the unit's available speed, altitude and depth presets. Settings take effect when travel toward the corresponding waypoint begins; omitted settings remain unchanged. A following unit switches to independent action, while moving a formation leader preserves the game's normal follower behavior. A route can include a one-time approach followed by a repeating patrol section; existing reservations remain outside that loop. Use replacement to change an existing loop.
 - **Sonobuoy drop reservations:** schedule drops at multiple points using airborne friendly aircraft carrying supported sonobuoys. The aircraft's current sonobuoy depth setting is preserved.
 - **Formation return:** return an eligible unit to its existing formation after earlier reservations finish.
+- **Sensor control:** change supported radar, sonar and other controls exposed by the game's standard sensor UI. Available settings depend on the unit, equipment and current conditions. Equipment startup or deployment may require game time after adoption.
+- **EMCON:** apply the game's one-off EMCON action to specified units. It does not restore earlier sensor settings or toggle EMCON off.
+- **Attack:** specify observed targets, carried ammunition, shot counts and whether to add to existing attack orders or switch them. The game handles any approach movement and actual firing.
+- **Cancel attack:** stop attack orders while retaining reservations. This can also affect guidance for launched weapons and offensive jamming.
+- **Cancel reservations:** remove queued waypoint reservations, including movement, sonobuoy drops and loops, while retaining current attack orders. Clearing reservations does not issue a stop order.
+
+On adoption, all selected reservations are registered first, followed by immediate operations. Each phase retains the submitted operation order. Immediate operations do not wait for the reserved actions to finish. To replace a route, use the reservation replacement option; Cancel reservations also clears any reservations registered earlier in the same adoption. The approval screen explains the effects of each command.
 
 For example, ask “Build an effective antisubmarine screen along California's route.” Attach unit and location badges to specify the units and points to use, or let the adviser find suitable candidates. One proposal can combine different commands and units; the same unit can move, deploy sonobuoys and then return to formation. Built-in quick consultations request advice; use a typed message or text template to request operations.
 
@@ -120,6 +121,8 @@ Hiding the adviser does not cancel an active consultation. While the window is h
 
 ## Screen translation
 
+Screen translation works independently of consultations. You can translate text in menus and briefings without keeping the adviser window open.
+
 In **Settings → API connections → Selection**, change **Translation connection** from **Disabled** (the default) to **Same as Advisor** or a registered connection. The **Translate** button appears over supported NoesisGUI screens, including menus. Click it, point at the region to highlight it, and click the region to translate its text. While selecting, the mouse wheel expands or reduces the region through its UI parents; click **Cancel** to leave selection without sending a request.
 
 Drag the button to move it. Its position is remembered across game restarts and kept within the screen when the resolution changes. The compact button and status messages follow the game's UI scale; the right-click menu and tooltip use the standard UI size.
@@ -129,6 +132,8 @@ Texts in the region are submitted together and matched by ID before the translat
 Right-click the **Translate** button and choose **Restore original text** to restore the translated text currently displayed on the screen, without another AI request. Repeated translations retain the initial original text. Text subsequently updated by the game is left untouched, and restoration records are released when their controls are unloaded.
 
 Choosing **Disabled** hides the button and disables screen translation. The **Same as Advisor** choice follows changes to the Advisor connection; an explicit choice uses that connection. Its connection prompt is used unchanged, with the shared optional Fallback connection. Translation uses its own result-submission tool and does not send advisor history, personality, situation data or operation tools. Built-in providers and standard connection adapters can run this workflow; adapters that own an independent advisor workflow cannot.
+
+[Screen translation guide — 5 screenshots covering setup, translation and restoring original text](https://imgur.com/a/8j2AfaL)
 
 ## Information, token usage and response time
 
@@ -156,7 +161,7 @@ Bug reports are welcome through [GitHub issues](https://github.com/mebiustos-sea
 
 ## For developers
 
-The host ships `SeaPowerAIAdvisor.Api.dll` for external Anchor Chain mods. The development tree now uses SDK contract version 3 (unreleased); the v0.18.0 release ships contract 2. Contract 3 requires explicit command execution modes and separate `immediate_operations` / `reservation_operations` plan arrays. Extensions need rebuilding against the matching API DLL, and commands or plan-producing integrations need the documented source changes. The old plan format is not accepted. Adapter inputs continue to use the `ToolsJson` list exclusively. Extensions can use the standard retrieval engine or implement an independent consultation workflow. Register custom commands without rebuilding the host; built-in commands use the same public command contract. See the [public API guide](docs/public-api.md), [external command example and build guide](examples/ExternalCommand/README.md), and [offline connection adapter example](examples/ExternalAdapter/Examples.cs). The SDK and public API are experimental and may undergo breaking changes without prior notice; external extensions may require updates or rebuilding. See the [SDK stability notice](docs/public-api.md). Developer-authored update announcements are configured as described in the [update notice guide](docs/update-notices.md).
+The host ships `SeaPowerAIAdvisor.Api.dll` for external Anchor Chain mods. AI Advisor v0.19.0 uses SDK contract version 3. Updating an extension from contract 2 requires rebuilding against the bundled API DLL. Contract 3 requires explicit command execution modes and separate `immediate_operations` / `reservation_operations` plan arrays; commands and plan-producing integrations need the documented source changes. The old plan format is not accepted. Adapter inputs continue to use the `ToolsJson` list exclusively. Extensions can use the standard retrieval engine or implement an independent consultation workflow. Register custom commands without rebuilding the host; built-in commands use the same public command contract. See the [public API guide](docs/public-api.md), [external command example and build guide](examples/ExternalCommand/README.md), and [offline connection adapter example](examples/ExternalAdapter/Examples.cs). The SDK and public API are experimental and may undergo breaking changes without prior notice; external extensions may require updates or rebuilding. See the [SDK stability notice](docs/public-api.md). Developer-authored update announcements are configured as described in the [update notice guide](docs/update-notices.md).
 
 To build on Windows, install Python 3 and the .NET SDK specified by `global.json`. Copy `Directory.Build.local.props.example` to `Directory.Build.local.props` and set your Sea Power and Anchor Chain directories. The full test script also expects Bungalow's Dynamic Campaign Mod's Workshop files for campaign tests; it remains optional at runtime.
 

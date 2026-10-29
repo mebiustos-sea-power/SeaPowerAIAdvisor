@@ -2,7 +2,7 @@
 
 This is an independent Anchor Chain MOD that registers `example.seapower.sonobuoy_drop` with AI Advisor. It adds **Example: sonobuoy drop reservation** alongside the built-in command. Adopting its proposal appends real movement/drop reservations; loading the MOD does not issue orders.
 
-The example uses only `SeaPowerAIAdvisor.Api.dll`, Anchor Chain and the game's Newtonsoft.Json library. It references neither the host implementation DLL nor host sources and has no project references. Use the contract-version-3 SDK DLL from the matching development build. This sample no longer builds against the contract-2 DLL shipped in v0.18.0.
+The example uses only `SeaPowerAIAdvisor.Api.dll`, Anchor Chain and the game's Newtonsoft.Json library. It references neither the host implementation DLL nor host sources and has no project references. Use the contract-version-3 SDK DLL bundled with AI Advisor v0.19.0. This sample no longer builds against the contract-2 DLL shipped in v0.18.0.
 
 ## Build without rebuilding AI Advisor
 
