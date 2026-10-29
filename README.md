@@ -27,7 +27,7 @@ See the [v0.18.0 release notes](https://github.com/mebiustos-sea-power/SeaPowerA
 
 ## Features
 
-- **Gemini, Ollama, OpenRouter and NanoGPT connections.** Register named connections and choose a main connection and an optional sub connection. Duplicate a connection to reuse its settings with another model.
+- **Gemini, Ollama, OpenRouter and NanoGPT connections.** Register named connections and assign Advisor, Translation and an optional shared Fallback connection. Duplicate a connection to reuse its settings with another model.
 - **On-demand tactical advice.** Ask your own question or use **Next steps**, **Key risks**, **Radar operations**, **Own units** and **Contacts**.
 - **AI-assisted game commands.** Request movement, sonobuoy deployment and formation return, including combined plans for one or more units. Review and approve a proposal before its orders are added to the game.
 - **Repeating movement routes (development):** propose a one-time approach followed by a repeating patrol route, without repeating existing reservations. Review the loop start and map preview before adoption.
@@ -64,7 +64,7 @@ Bungalow's Dynamic Campaign Mod is **not required** for battle-screen use. Its c
 1. In a mission, open the adviser with **AI** in the bottom-right button row.
 2. Open **Settings → API connections → Registrations**, add a named connection and fill in its provider-specific fields. Saved connections appear as cards with their provider, model and main/sub assignment; select a card to edit it.
 3. Use **Test connection**, then save the registration. A connection test does not save or select it.
-4. In **Selection**, choose the main connection and optionally a different sub connection, then save.
+4. In **Selection**, choose the Advisor connection, a Translation connection (default: **Disabled**, or choose **Same as Advisor** or a registered connection) and optionally a shared Fallback connection, then save.
 5. Return to chat and send a message or select a quick action. **Enter** sends; **Shift+Enter** inserts a new line.
 
 For an unidentified contact, open its information window and use **[adviser name]'s assessment**. This button is unavailable when the contact is already identified or another applicable restriction prevents assessment. An assessment is an inference and does not change the game's classification.
@@ -82,7 +82,7 @@ Choose a model that supports **tool calling**. These are examples, not a guarant
 
 For NanoGPT, we strongly recommend **DeepSeek V4.1 Flash 1017 (non-thinking)**, the primary model used for prompt tuning and evaluation of adviser responses. Other supported services and models remain available, but response quality and information retrieval behavior may vary by model.
 
-Each connection can also have an optional **Connection prompt** (up to 2000 characters), added to consultations using that connection. It supplements the common prompt and takes precedence when the two conflict; a switch to the sub connection uses that connection’s instructions. Connection tests use their dedicated test instructions.
+Each connection can also have an optional **Connection prompt** (up to 2000 characters), passed unchanged to consultations and screen translations using that connection. It supplements the common prompt and takes precedence when the two conflict; a switch to the sub connection uses that connection’s instructions. Connection tests use their dedicated test instructions.
 
 Duplicating a connection immediately saves a separate copy of its saved settings and returns to the card list. Pending edits require confirmation before being discarded. The original connection keeps its main/sub assignments; copies are unassigned. Duplicate names are allowed.
 
@@ -117,6 +117,14 @@ Before any orders are added, open the proposal review window. Compare planned lo
 For each unit, the adviser chooses whether to append its plan to existing reservations or replace that unit's entire existing reservation queue, following any explicit constraints in your request. The approval window shows `Append` / `Replace` badges, and the map preview starts at the corresponding route origin. The game handles queued movement and deployment; these features do not continuously monitor or replan execution.
 
 Hiding the adviser does not cancel an active consultation. While the window is hidden, a yellow dot on the AI button indicates an ongoing consultation and green indicates a result is ready. Reopen the adviser to read it, or use the consultation's stop button to cancel an active request.
+
+## Screen translation
+
+In **Settings → API connections → Selection**, change **Translation connection** from **Disabled** (the default) to **Same as Advisor** or a registered connection. The **Translate** button appears over supported NoesisGUI screens, including menus, and can be dragged. Click it, point at the region to highlight it, and click the region to translate its text. While selecting, the mouse wheel expands or reduces the region through its UI parents; click **Cancel** to leave selection without sending a request.
+
+Texts in the region are submitted together and matched by ID before the translated text is applied directly to the original controls. Button actions, text formatting and bindings are retained. Editable inputs, passwords and text embedded in images are excluded. This initial version has no dedicated restore action; the game's normal text updates or rebuilding a screen may restore original wording. UI references and original text are held only for the outstanding request and are released on completion, cancellation or unloading the selected region.
+
+Choosing **Disabled** hides the button and disables screen translation. The **Same as Advisor** choice follows changes to the Advisor connection; an explicit choice uses that connection. Its connection prompt is used unchanged, with the shared optional Fallback connection. Translation uses its own result-submission tool and does not send advisor history, personality, situation data or operation tools. Built-in providers and standard connection adapters can run this workflow; adapters that own an independent advisor workflow cannot.
 
 ## Information, token usage and response time
 

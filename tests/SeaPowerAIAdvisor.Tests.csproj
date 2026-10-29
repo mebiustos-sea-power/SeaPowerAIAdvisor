@@ -5,6 +5,9 @@
     <Compile Include="..\src\MissionCreator\Connections\MissionCreatorConnections.cs" />
     <Compile Include="..\src\MissionCreator\Development\MissionCreatorLocalApi.cs" />
     <Compile Include="..\src\Shared\Development\LocalApiResponse.cs" />
+    <Compile Include="..\src\Translation\TranslationBatch.cs" />
+    <Compile Include="..\src\Translation\TranslationEngine.cs" />
+    <Compile Include="..\src\Advisor\Providers\AdvisorTranslationService.cs" />
     <Compile Include="..\src\Shared\AI\AiConnectionProfile.cs" />
     <Compile Include="..\src\Shared\AI\AiProviderDefinition.cs" />
     <Compile Include="..\src\Advisor\Providers\BuiltInAdvisorService.cs" />

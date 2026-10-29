@@ -27,10 +27,10 @@ internal sealed class AdvisorApiSettingsStore : IAiConnectionStore
     { var current = Read(); current.Duplicate(id, nameSuffix); Save(current); return Read(); }
     internal AdvisorSettingsDraft Remove(string id)
     { var current = Read(); current.Remove(id); Save(current); return Read(); }
-    internal AdvisorSettingsDraft Assign(string? main, string? sub)
+    internal AdvisorSettingsDraft Assign(string? main, string? sub, string? translation = null)
     {
         if (main == null) throw new AiConnectionException("api_main_missing");
-        var current = Read(); current.MainId = main; current.SubId = sub; Save(current); return Read();
+        var current = Read(); current.MainId = main; current.SubId = sub; current.TranslationId = translation; Save(current); return Read();
     }
     internal AdvisorSettings Test(AdvisorApiConfigurationDraft entry)
     { var current = Read(); current.Put(entry); return current.TestConfiguration(entry.Id); }

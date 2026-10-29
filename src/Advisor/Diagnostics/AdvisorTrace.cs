@@ -21,27 +21,31 @@ internal sealed class AdvisorTrace : IDisposable, IAiTraceObserver
     private readonly string id;
     private readonly Stopwatch clock = Stopwatch.StartNew();
     private int sequence;
+    private readonly string operation;
     internal string FilePath { get; }
     internal static string DirectoryIn(string gameDataPath) => Path.Combine(gameDataPath, "SeaPowerAIAdvisor", "logs");
 
-    private AdvisorTrace(string directory, string id, AdvisorTraceOptions settings, AdvisorQuestion question)
+    private AdvisorTrace(string directory, string id, AdvisorTraceOptions settings, JObject started, string operation)
     {
-        this.id = id;
+        this.id = id; this.operation = operation;
         redactor = new SecretRedactor(settings.Secrets);
         FilePath = Path.GetFullPath(Path.Combine(directory, "ai-communication.jsonl"));
-        Write("consultation_started", new JObject
-        {
-            ["mod_version"] = typeof(AdvisorTrace).Assembly.GetName().Version!.ToString(), ["api"] = settings.Api,
-            ["model"] = settings.Model, ["fallback_model"] = settings.FallbackModel, ["display_question"] = question.DisplayText,
-            ["situation_delivery_override"] = question.SituationDelivery?.Code(),
-            ["question_source"] = question.IsShortcut ? "shortcut" : "typed", ["allow_operations"] = question.AllowOperations
-        });
+        started["mod_version"] = typeof(AdvisorTrace).Assembly.GetName().Version!.ToString();
+        started["api"] = settings.Api; started["model"] = settings.Model; started["fallback_model"] = settings.FallbackModel;
+        Write(operation + "_started", started);
     }
 
     internal static AdvisorTrace? Start(string directory, string id, AdvisorTraceOptions settings, AdvisorQuestion question)
+        => StartOperation(directory, id, settings, "consultation", new JObject
+        {
+            ["display_question"] = question.DisplayText, ["situation_delivery_override"] = question.SituationDelivery?.Code(),
+            ["question_source"] = question.IsShortcut ? "shortcut" : "typed", ["allow_operations"] = question.AllowOperations
+        });
+
+    internal static AdvisorTrace? StartOperation(string directory, string id, AdvisorTraceOptions settings, string operation, JObject started)
     {
         if (!settings.Enabled) return null;
-        try { return new AdvisorTrace(directory, id, settings, question); }
+        try { return new AdvisorTrace(directory, id, settings, started, operation); }
         catch (IOException) { throw new AiConnectionException("diagnostic_log_error"); }
         catch (UnauthorizedAccessException) { throw new AiConnectionException("diagnostic_log_error"); }
     }
@@ -66,11 +70,13 @@ internal sealed class AdvisorTrace : IDisposable, IAiTraceObserver
     { ["api_request"] = request, ["error_code"] = code, ["http_status"] = status });
 
     internal void Finish(string outcome, AdviceResult? result = null, string? errorCode = null, int? status = null, string? errorType = null) =>
-        Write("consultation_finished", new JObject
+        Write(operation + "_finished", new JObject
         {
             ["outcome"] = outcome, ["completion_reason"] = result?.CompletionCode, ["error_code"] = errorCode, ["http_status"] = status, ["error_type"] = errorType,
             ["model"] = result?.Model, ["api_requests"] = result?.ApiRequests, ["query_rounds"] = result?.QueryRounds, ["total_tokens"] = result?.TotalTokens
         });
+
+    internal void FinishOperation(JObject result) => Write(operation + "_finished", result);
 
     private void Write(string kind, JObject record)
     {

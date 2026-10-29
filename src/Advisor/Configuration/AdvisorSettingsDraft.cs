@@ -19,6 +19,9 @@ internal sealed class AdvisorSettingsDraft
         .OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase).ThenBy(c => c.Id, StringComparer.Ordinal);
     internal string? MainId { get; set; }
     internal string? SubId { get; set; }
+    internal string? TranslationId { get; set; }
+    internal string? TranslationConnectionId => TranslationId == AdvisorApiLibrary.FollowAdvisor ? MainId : TranslationId;
+    internal AdvisorApiConfigurationDraft? Translation => TranslationId == null ? null : Find(TranslationConnectionId) ?? throw new AiConnectionException("api_main_missing");
     internal bool LogAiJson { get; set; }
     internal AdvisorApiConfigurationDraft Main => Find(MainId) ?? throw new AiConnectionException("api_main_missing");
     internal AdvisorApiConfigurationDraft? Sub => Find(SubId);
@@ -29,7 +32,7 @@ internal sealed class AdvisorSettingsDraft
         this.source = (JObject)source.DeepClone();
         var library = AdvisorApiLibrary.Read(source, namePattern);
         configurations = library.Configurations.Select(c => new AdvisorApiConfigurationDraft(c)).ToList();
-        MainId = library.MainId; SubId = library.SubId;
+        MainId = library.MainId; SubId = library.SubId; TranslationId = library.TranslationId;
         LogAiJson = (bool?)source["log_ai_json"] ?? false;
     }
 
@@ -65,6 +68,7 @@ internal sealed class AdvisorSettingsDraft
         // Deleting an assigned entry never silently selects a different credential.
         if (MainId == id) MainId = null;
         if (SubId == id) SubId = null;
+        if (TranslationId == id) TranslationId = null;
     }
 
     // Tests use the chosen pending entry and saved logging preference, independently of role assignments.
@@ -76,7 +80,7 @@ internal sealed class AdvisorSettingsDraft
 
     internal byte[] Data()
     {
-        var library = new AdvisorApiLibrary(configurations.Select(c => c.Build()), MainId, SubId);
+        var library = new AdvisorApiLibrary(configurations.Select(c => c.Build()), MainId, SubId, TranslationId);
         var value = library.Document(source, LogAiJson);
         AdvisorSettings.ValidateDraft(value);
         var data = Encoding.UTF8.GetBytes(value.ToString(Formatting.Indented) + Environment.NewLine);

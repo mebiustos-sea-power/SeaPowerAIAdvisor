@@ -78,6 +78,35 @@ public sealed class Plugin : IAnchorChainMod
             var driverObject = new UnityEngine.GameObject("SeaPowerAIAdvisor.DeveloperLocalApi");
             UnityEngine.Object.DontDestroyOnLoad(driverObject);
             driverObject.AddComponent<AdvisorLocalApiDriver>().Initialize(options, LocalApi, message => Log.LogWarning(message));
+            Translation.ScreenTranslationDriver? screenTranslation = null;
+            try
+            {
+                screenTranslation = driverObject.AddComponent<Translation.ScreenTranslationDriver>();
+                var translationRevision = -1; var translationEnabled = false;
+                bool TranslationEnabled()
+                {
+                    var revision = AdvisorSettings.Revision;
+                    if (translationRevision != revision)
+                    {
+                        translationEnabled = AdvisorSettings.Edit(settingsPath).TranslationId != null;
+                        translationRevision = revision;
+                    }
+                    return translationEnabled;
+                }
+                screenTranslation.Initialize(ModId + ".translation",
+                TranslationEnabled,
+                key => AdvisorText.Load(GameLanguage.Read())[key],
+                error => error is Translation.TranslationException failure
+                    ? AdvisorText.Load(GameLanguage.Read())["translation.error." + failure.Code]
+                    : error is AiConnectionException connection ? AdvisorNotice.Connection(connection).Message(AdvisorText.Load(GameLanguage.Read()))
+                    : AdvisorNotice.Unexpected().Message(AdvisorText.Load(GameLanguage.Read())),
+                (batch, token) => AdvisorTranslationService.RunAsync(settingsPath, AdvisorTrace.DirectoryIn(UnityEngine.Application.persistentDataPath), batch, token),
+                error => Log.LogError("Screen translation failed: " + error)); }
+            catch (Exception error)
+            {
+                if (screenTranslation != null) UnityEngine.Object.Destroy(screenTranslation);
+                Log.LogError("Screen translation initialization failed: " + error);
+            }
             installed = true;
             Log.LogInfo("Advisor 0.18.0 ready for tactical battles. DCM is optional. Open AI in the bottom-right battle toolbar.");
             TryInstallCampaign();

@@ -370,6 +370,8 @@
                 <TextBlock Text="{DynamicResource Advisor.connection.selection_hint}" FontSize="12" TextWrapping="Wrap" Opacity="0.85" Margin="0,0,0,12" />
                 <TextBlock Text="{DynamicResource Advisor.connection.main_heading}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,6" />
                 <ComboBox x:Name="MainApiConfiguration" MinHeight="30" />
+                <TextBlock Text="{DynamicResource Advisor.connection.translation_heading}" FontSize="12" TextWrapping="Wrap" Margin="0,20,0,6" />
+                <ComboBox x:Name="TranslationApiConfiguration" MinHeight="30" />
                 <TextBlock Text="{DynamicResource Advisor.connection.sub_heading}" FontSize="12" TextWrapping="Wrap" Margin="0,20,0,6" />
                 <TextBlock Text="{DynamicResource Advisor.connection.fallback_hint}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8" />
                 <ComboBox x:Name="SubApiConfiguration" MinHeight="30" />

@@ -141,7 +141,7 @@ internal sealed class AdvisorSettings
             if (reader.Read()) throw new JsonReaderException();
         }
         catch (JsonException) { throw new AiConnectionException("settings_invalid"); }
-        if (value.Properties().Any(p => !new[] { "api_key", "fallback_api_key", "model", "fallback_model", "request_timeout_seconds", "fallback_request_timeout_seconds", "consultation_timeout_seconds", "max_output_tokens", "log_ai_json", "schema_version", "api_configurations", "main_api_id", "sub_api_id" }.Contains(p.Name)))
+        if (value.Properties().Any(p => !new[] { "api_key", "fallback_api_key", "model", "fallback_model", "request_timeout_seconds", "fallback_request_timeout_seconds", "consultation_timeout_seconds", "max_output_tokens", "log_ai_json", "schema_version", "api_configurations", "main_api_id", "sub_api_id", "translation_api_id" }.Contains(p.Name)))
             throw new AiConnectionException("settings_invalid");
         _ = Logging(value);
         return value;
@@ -158,7 +158,7 @@ internal sealed class AdvisorSettings
     {
         if (value["schema_version"] == null)
         {
-            if (new[] { "api_configurations", "main_api_id", "sub_api_id" }.Any(k => value[k] != null))
+            if (new[] { "api_configurations", "main_api_id", "sub_api_id", "translation_api_id" }.Any(k => value[k] != null))
                 throw new AiConnectionException("settings_invalid");
             return ParseLegacy(value, requireKey);
         }

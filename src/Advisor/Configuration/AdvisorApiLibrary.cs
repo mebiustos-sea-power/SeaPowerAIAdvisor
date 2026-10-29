@@ -7,7 +7,7 @@ using Newtonsoft.Json.Linq;
 
 namespace SeaPowerAIAdvisor;
 
-// Registered credentials have stable identities; main/sub assignments never move their contents.
+// Registered credentials have stable identities; role assignments never move their contents.
 internal sealed class AdvisorApiConfiguration : AiConnectionProfile
 {
     internal AdvisorSituationDelivery SituationDelivery { get; }
@@ -22,11 +22,14 @@ internal sealed class AdvisorApiConfiguration : AiConnectionProfile
 internal sealed class AdvisorApiLibrary
 {
     internal const int SchemaVersion = 3;
+    internal const string FollowAdvisor = "";
     internal IReadOnlyList<AdvisorApiConfiguration> Configurations { get; }
     internal string? MainId { get; }
     internal string? SubId { get; }
-    internal AdvisorApiLibrary(IEnumerable<AdvisorApiConfiguration> configurations, string? mainId, string? subId)
-    { Configurations = Array.AsReadOnly(configurations.ToArray()); MainId = mainId; SubId = subId; }
+    // Null disables translation; an empty ID follows the advisor assignment without copying its current ID.
+    internal string? TranslationId { get; }
+    internal AdvisorApiLibrary(IEnumerable<AdvisorApiConfiguration> configurations, string? mainId, string? subId, string? translationId = null)
+    { Configurations = Array.AsReadOnly(configurations.ToArray()); MainId = mainId; SubId = subId; TranslationId = translationId; }
     internal AdvisorApiConfiguration? Find(string? id) => id == null ? null : Configurations.SingleOrDefault(c => c.Id == id);
 
     internal static AdvisorApiLibrary Read(JObject source, string namePattern = "API setting {0}")
@@ -37,7 +40,7 @@ internal sealed class AdvisorApiLibrary
         string Name(int number) => string.Format(CultureInfo.InvariantCulture, namePattern, number);
         if (source["schema_version"] == null)
         {
-            if (new[] { "api_configurations", "main_api_id", "sub_api_id" }.Any(k => source[k] != null)) throw Invalid();
+            if (new[] { "api_configurations", "main_api_id", "sub_api_id", "translation_api_id" }.Any(k => source[k] != null)) throw Invalid();
             var main = new AdvisorApiConfiguration("api-1", Name(1), String("api_key", ""), String("model", AdvisorSettings.DefaultModel), legacyTimeout);
             var key = String("fallback_api_key", "");
             var model = String("fallback_model", main.Model);
@@ -53,6 +56,7 @@ internal sealed class AdvisorApiLibrary
             source["api_configurations"] is not JArray entries || source["main_api_id"] == null || source["main_api_id"]!.Type is not (JTokenType.String or JTokenType.Null) ||
             source["sub_api_id"] == null || source["sub_api_id"]!.Type is not (JTokenType.String or JTokenType.Null) ||
             new[] { "api_key", "fallback_api_key", "model", "fallback_model" }.Any(k => source[k] != null)) throw Invalid();
+        if (source["translation_api_id"] != null && source["translation_api_id"]!.Type is not (JTokenType.String or JTokenType.Null)) throw Invalid();
         var items = new List<AdvisorApiConfiguration>();
         foreach (var entry in entries)
         {
@@ -82,7 +86,7 @@ internal sealed class AdvisorApiLibrary
             items.Add(new AdvisorApiConfiguration((string)item["id"]!, (string)item["name"]!, (string)item["provider"]!, settings,
                 AiRequestTimeout.Read(item, legacyTimeout), AdvisorSituationDeliverySetting.Read(item), outputTokens, (string?)item["prompt"] ?? ""));
         }
-        var result = new AdvisorApiLibrary(items, (string?)source["main_api_id"], (string?)source["sub_api_id"]);
+        var result = new AdvisorApiLibrary(items, (string?)source["main_api_id"], (string?)source["sub_api_id"], (string?)source["translation_api_id"]);
         result.ValidateAssignments();
         return result;
     }
@@ -90,7 +94,7 @@ internal sealed class AdvisorApiLibrary
     internal void ValidateAssignments()
     {
         AiConnectionProfile.ValidateLibrary(Configurations);
-        if ((MainId != null && Find(MainId) == null) || (SubId != null && Find(SubId) == null)) throw new AiConnectionException("api_selection_invalid");
+        if ((MainId != null && Find(MainId) == null) || (SubId != null && Find(SubId) == null) || (TranslationId != null && TranslationId != FollowAdvisor && Find(TranslationId) == null)) throw new AiConnectionException("api_selection_invalid");
         if (MainId != null && MainId == SubId) throw new AiConnectionException("api_selection_same");
     }
 
@@ -102,6 +106,7 @@ internal sealed class AdvisorApiLibrary
         result["api_configurations"] = new JArray(Configurations.Select(c => c.Json()));
         result["main_api_id"] = MainId == null ? JValue.CreateNull() : new JValue(MainId);
         result["sub_api_id"] = SubId == null ? JValue.CreateNull() : new JValue(SubId);
+        result["translation_api_id"] = TranslationId == null ? JValue.CreateNull() : new JValue(TranslationId);
         result["log_ai_json"] = log;
         return result;
     }

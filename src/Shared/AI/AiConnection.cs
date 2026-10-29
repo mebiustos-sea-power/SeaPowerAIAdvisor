@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace SeaPowerAIAdvisor.Shared;
 
-// One consultation owns connection selection. Switching never resets knowledge or returns to the main.
+// One task owns connection selection. The host supplies any continuation when switching providers.
 internal sealed class AiConnection : IDisposable
 {
     private readonly IAiProvider main;
@@ -27,7 +27,7 @@ internal sealed class AiConnection : IDisposable
         session = main.Start(input(false).Copy(), continuation);
     }
 
-    internal async Task<AiReply> GenerateAsync(bool allowTools, AiContinuation continuation, CancellationToken cancellation,
+    internal async Task<AiReply> GenerateAsync(bool allowTools, AiContinuation? continuation, CancellationToken cancellation,
         Action<int, bool, string, int> beforeSend)
     {
         async Task<AiReply> Send()

@@ -159,7 +159,7 @@ internal static class AdvisorServices
             catch (Exception error) { transport.CaptureFailure(error); throw; }
         }, trace, cancellation).ConfigureAwait(false);
     }
-    private static void ObserveErrors(AiHttpTransport transport, AdvisorApiConfiguration main, AdvisorApiConfiguration? sub,
+    internal static void ObserveErrors(AiHttpTransport transport, AdvisorApiConfiguration main, AdvisorApiConfiguration? sub,
         AdvisorServiceCatalog catalog, string operation, AdvisorErrorHistory? history)
     {
         history ??= AdvisorErrorHistory.Active;

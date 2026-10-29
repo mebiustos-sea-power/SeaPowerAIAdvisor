@@ -10,7 +10,7 @@ internal sealed class AdvisorApiSettingsView
 {
     private readonly AdvisorApiSettingsStore store;
     private readonly Func<AdvisorText> text;
-    private readonly ComboBox main, sub;
+    private readonly ComboBox main, sub, translation;
     private readonly FrameworkElement useTab;
     private readonly Button saveAssignments;
     private readonly AiConnectionsView connections;
@@ -23,25 +23,26 @@ internal sealed class AdvisorApiSettingsView
     internal string TestName => connections.TestName;
     private string? MainId => main.SelectedIndex <= 0 ? null : ids[main.SelectedIndex - 1];
     private string? SubId => sub.SelectedIndex <= 0 ? null : ids[sub.SelectedIndex - 1];
-    internal bool HasChanges(int tab) => tab == 0 ? data != null && (MainId != data.MainId || SubId != data.SubId) : tab == 1 && connections.HasChanges;
+    private string? TranslationId => translation.SelectedIndex <= 0 ? null : translation.SelectedIndex == 1 ? AdvisorApiLibrary.FollowAdvisor : ids[translation.SelectedIndex - 2];
+    internal bool HasChanges(int tab) => tab == 0 ? data != null && (MainId != data.MainId || SubId != data.SubId || TranslationId != data.TranslationId) : tab == 1 && connections.HasChanges;
     internal AdvisorApiSettingsView(FrameworkElement content, AdvisorApiSettingsStore store, Func<AdvisorText> text,
         Action<Action> guard, TypingScope typing, Action changed, Action saved, Action compositionNotice,
         Action<AiConnectionException> error, Action<string, Action> confirmDelete, Action<Action> confirmDuplicate)
     {
         this.store = store; this.text = text; this.changed = changed; this.saved = saved; this.error = error;
         T Named<T>(string id) where T : class => content.FindName(id) as T ?? throw new InvalidOperationException("Missing API control: " + id);
-        main = Named<ComboBox>("MainApiConfiguration"); sub = Named<ComboBox>("SubApiConfiguration");
+        main = Named<ComboBox>("MainApiConfiguration"); sub = Named<ComboBox>("SubApiConfiguration"); translation = Named<ComboBox>("TranslationApiConfiguration");
         useTab = Named<FrameworkElement>("ApiUseTab"); saveAssignments = Named<Button>("SaveApiAssignments");
         var root = AiConnectionsView.Create(key => text()[key]); Named<ContentControl>("ApiRegistration").Content = root;
         var delivery = new AdvisorConnectionDeliveryView((StackPanel)root.FindName("ConnectionOptions"), text, guard, changed);
         connections = new AiConnectionsView(root, store, () => AdvisorServiceCatalog.BuiltIn.Services, key => text()[key], () => text().Language,
             typing, guard, () => { if (!QuestionInputController.IsComposing) return true; compositionNotice(); return false; },
-            confirmDelete, confirmDuplicate, error, delivery, id => id == data?.MainId ? text()["connection.card_main"] : id == data?.SubId ? text()["connection.card_sub"] : null);
+            confirmDelete, confirmDuplicate, error, delivery, Role);
         connections.Changed += () => { SetBusy(busy); changed(); };
         connections.Saved += () => { RefreshAssignments(true); saved(); };
         saveAssignments.Click += (_, _) => guard(() =>
         {
-            try { store.Assign(MainId, SubId); RefreshAssignments(false); connections.UpdateCards(); changed(); saved(); }
+            try { store.Assign(MainId, SubId, TranslationId); RefreshAssignments(false); connections.UpdateCards(); changed(); saved(); }
             catch (AiConnectionException failure) { error(failure); }
         });
     }
@@ -55,18 +56,31 @@ internal sealed class AdvisorApiSettingsView
     internal void SetBusy(bool value)
     {
         busy = value; useTab.IsEnabled = data != null;
-        main.IsEnabled = sub.IsEnabled = saveAssignments.IsEnabled = data != null && !busy && !Editing;
+        main.IsEnabled = sub.IsEnabled = translation.IsEnabled = saveAssignments.IsEnabled = data != null && !busy && !Editing;
         connections.SetBusy(value);
+    }
+    private string? Role(string id)
+    {
+        if (data == null) return null;
+        var roles = new System.Collections.Generic.List<string>();
+        if (id == data.MainId) roles.Add(text()["connection.card_main"]);
+        if (id == data.TranslationConnectionId) roles.Add(text()["connection.card_translation"]);
+        if (id == data.SubId) roles.Add(text()["connection.card_sub"]);
+        return roles.Count == 0 ? null : string.Join(" / ", roles);
     }
     private void RefreshAssignments(bool keep)
     {
-        var selectedMain = keep ? MainId : null; var selectedSub = keep ? SubId : null;
-        data = store.Read(); if (!keep) { selectedMain = data.MainId; selectedSub = data.SubId; }
+        var selectedMain = keep ? MainId : null; var selectedSub = keep ? SubId : null; var selectedTranslation = keep ? TranslationId : null;
+        data = store.Read(); if (!keep) { selectedMain = data.MainId; selectedSub = data.SubId; selectedTranslation = data.TranslationId; }
         var entries = data.ConfigurationsByName.ToArray(); ids = entries.Select(c => c.Id).ToArray();
-        main.Items.Clear(); sub.Items.Clear(); main.Items.Add(new ComboBoxItem { Content = text()["connection.choose_configuration"] });
+        main.Items.Clear(); sub.Items.Clear(); translation.Items.Clear(); main.Items.Add(new ComboBoxItem { Content = text()["connection.choose_configuration"] });
         sub.Items.Add(new ComboBoxItem { Content = text()["connection.no_sub"] });
-        foreach (var entry in entries) foreach (var control in new[] { main, sub }) control.Items.Add(new ComboBoxItem { Content = entry.Name });
+        translation.Items.Add(new ComboBoxItem { Content = text()["connection.translation_disabled"] });
+        translation.Items.Add(new ComboBoxItem { Content = text()["connection.same_as_advisor"] });
+        foreach (var entry in entries) foreach (var control in new[] { main, sub, translation }) control.Items.Add(new ComboBoxItem { Content = entry.Name });
         main.SelectedIndex = Array.IndexOf(ids, selectedMain) + 1; sub.SelectedIndex = Array.IndexOf(ids, selectedSub) + 1;
+        var translationIndex = Array.IndexOf(ids, selectedTranslation);
+        translation.SelectedIndex = selectedTranslation == AdvisorApiLibrary.FollowAdvisor ? 1 : translationIndex < 0 ? 0 : translationIndex + 2;
     }
 }
 
