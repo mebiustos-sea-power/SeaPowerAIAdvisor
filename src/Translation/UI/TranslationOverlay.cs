@@ -192,9 +192,12 @@ internal sealed class TranslationOverlay : IDisposable
             ? HitTestFilterBehavior.ContinueSkipSelfAndChildren : HitTestFilterBehavior.Continue,
             hit =>
             {
-                for (var node = hit.VisualHit; node != null; node = VisualTreeHelper.GetParent(node))
+                var node = hit.VisualHit;
+                // Inlines have logical owners but no visual parent or layout rectangle of their own.
+                while (node is TextElement) node = LogicalTreeHelper.GetParent(node);
+                for (; node != null; node = VisualTreeHelper.GetParent(node))
                     if (node is FrameworkElement element && element.ActualWidth > 2 && element.ActualHeight > 2) { hitElement = element; break; }
-                return HitTestResultBehavior.Stop;
+                return hitElement == null ? HitTestResultBehavior.Continue : HitTestResultBehavior.Stop;
             }, new PointHitTestParameters(point));
         if (!ReferenceEquals(leaf, hitElement))
         {
