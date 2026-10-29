@@ -14,7 +14,7 @@ Translate text directly in menus and briefings, and request plans combining repe
 - **Sensor control and EMCON:** request changes to sensor controls available through the standard game UI or apply EMCON to specified units.
 - **Attack and cancellation commands:** specify targets, weapons, shot counts and add/switch behavior, or separately cancel attacks and reservations.
 - **Repeating movement routes:** use a one-time approach followed by a repeating patrol section, without repeating existing reservations.
-- **Other improvements:** maximize and restore the adviser window, view the basic information always provided to the AI, and use aircraft-specific cruise altitude/speed references in assessments.
+- **Other improvements:** maximize and restore the adviser window, view the basic information always provided to the AI, and use fixed-wing aircraft cruise altitude/speed references in assessments.
 
 **External extension developers:** v0.19.0 uses public API **contract version 3**. Extensions built for contract 2 need rebuilding against the bundled API DLL; commands and plan-producing integrations also need the documented source changes. See the [public API guide](docs/public-api.md).
 
@@ -58,7 +58,7 @@ Bungalow's Dynamic Campaign Mod is **not required** for battle-screen use. Its c
 ## First use
 
 1. In a mission, open the adviser with **AI** in the bottom-right button row.
-2. Open **Settings → API connections → Registrations**, add a named connection and fill in its provider-specific fields. Saved connections appear as cards with their provider, model and main/sub assignment; select a card to edit it.
+2. Open **Settings → API connections → Registrations**, add a named connection and fill in its provider-specific fields. Saved connections appear as cards showing their provider, model and assigned roles (Advisor, Translation and Fallback); select a card to edit it.
 3. Use **Test connection**, then save the registration. A connection test does not save or select it.
 4. In **Selection**, choose the Advisor connection, a Translation connection (default: **Disabled**, or choose **Same as Advisor** or a registered connection) and optionally a shared Fallback connection, then save.
 5. Return to chat and send a message or select a quick action. **Enter** sends; **Shift+Enter** inserts a new line.
@@ -78,9 +78,9 @@ Choose a model that supports **tool calling**. These are examples, not a guarant
 
 For NanoGPT, we strongly recommend **DeepSeek V4.1 Flash 1017 (non-thinking)**, the primary model used for prompt tuning and evaluation of adviser responses. Other supported services and models remain available, but response quality and information retrieval behavior may vary by model.
 
-Each connection can also have an optional **Connection prompt** (up to 2000 characters), passed unchanged to consultations and screen translations using that connection. It supplements the common prompt and takes precedence when the two conflict; a switch to the sub connection uses that connection’s instructions. Connection tests use their dedicated test instructions.
+Each connection can also have an optional **Connection prompt** (up to 2000 characters), passed unchanged to consultations and screen translations using that connection. In consultations, it supplements the common prompt and takes precedence when the two conflict. Screen translation uses its own translation instructions plus the connection prompt; the adviser’s common prompt and personality settings are not sent. A switch to the Fallback connection uses that connection’s prompt. Connection tests use their dedicated test instructions.
 
-Duplicating a connection immediately saves a separate copy of its saved settings and returns to the card list. Pending edits require confirmation before being discarded. The original connection keeps its main/sub assignments; copies are unassigned. Duplicate names are allowed.
+Duplicating a connection immediately saves a separate copy of its saved settings and returns to the card list. Pending edits require confirmation before being discarded. The original connection keeps its existing role assignments; copies are unassigned. Duplicate names are allowed.
 
 **Save** applies to the current tab’s settings or the individual registration being edited. Leaving a settings tab with pending changes asks whether to continue editing or discard them; switching tabs does not save changes.
 
