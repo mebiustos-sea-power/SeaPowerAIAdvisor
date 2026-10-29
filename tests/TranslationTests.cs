@@ -15,6 +15,18 @@ internal static class TranslationTests
 {
     internal static void Run(Action<string, Action> check)
     {
+        check("Retranslation restores the first source and cannot overwrite subsequent game text or retain an already restored change", () =>
+        {
+            var change = new TranslationTextChange("Mission source", "訳文1");
+            Require(change.OriginalFor("訳文1") == "Mission source", "The initial source was lost");
+            change.Update("訳文1", "訳文2");
+            Require(change.OriginalFor("訳文2") == "Mission source", "Retranslation would restore an intermediate translation");
+            Require(change.OriginalFor("New game message") == null, "Restoration would overwrite updated game text");
+            change.Update("New game message", "新しい訳文");
+            Require(change.OriginalFor("新しい訳文") == "New game message", "A reused control retained the prior message's source");
+            change.Update("新しい訳文", "New game message");
+            Require(change.OriginalFor("New game message") == null, "Already original text retained a restoration record");
+        });
         check("Translation button position survives fresh store instances and updates without depending on number formatting", () =>
         {
             var directory = Path.Combine(Path.GetTempPath(), "translation-position-" + Guid.NewGuid().ToString("N"));

@@ -8,6 +8,14 @@
   </Canvas>
   <Canvas>
     <Thumb x:Name="TranslationLauncher" Width="100" Height="34" Focusable="False" Cursor="Hand">
+      <Thumb.ContextMenu>
+        <ContextMenu>
+          <MenuItem x:Name="RestoreOriginal" IsEnabled="False" />
+        </ContextMenu>
+      </Thumb.ContextMenu>
+      <Thumb.ToolTip>
+        <ToolTip />
+      </Thumb.ToolTip>
       <Thumb.Template>
         <ControlTemplate TargetType="Thumb">
           <Border x:Name="ButtonBackground" Background="{DynamicResource Brush.Button.Background}" Padding="10,5">

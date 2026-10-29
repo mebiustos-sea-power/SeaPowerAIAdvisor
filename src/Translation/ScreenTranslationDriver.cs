@@ -16,6 +16,7 @@ internal sealed class ScreenTranslationDriver : MonoBehaviour
     private static ScreenTranslationDriver? current;
     private static readonly PropertyInfo initialized = typeof(NoesisView).Assembly.GetType("NoesisUnity", true)!.GetProperty("Initialized", BindingFlags.Public | BindingFlags.Static)!;
     private readonly List<NoesisView> views = new();
+    private readonly ScreenTextRestorations restorations = new();
     private Func<bool> isEnabled = null!;
     private Func<string, string> text = null!;
     private Func<Exception, string> message = null!;
@@ -59,11 +60,11 @@ internal sealed class ScreenTranslationDriver : MonoBehaviour
             {
                 overlay?.Dispose(); overlay = null; root = next;
                 if (root != null) overlay = new TranslationOverlay(root, text, message, translate, report, position, p => position = p,
-                    p => positionStore.Save(p.X, p.Y));
+                    p => positionStore.Save(p.X, p.Y), restorations);
             }
             overlay?.Tick();
         }
-        catch (Exception error) { failed = true; report(error); overlay?.Dispose(); overlay = null; root = null; views.Clear(); }
+        catch (Exception error) { failed = true; report(error); overlay?.Dispose(); overlay = null; restorations.Dispose(); root = null; views.Clear(); }
     }
     private bool HasVisibleContent(FrameworkElement content)
     {
@@ -81,6 +82,6 @@ internal sealed class ScreenTranslationDriver : MonoBehaviour
     private static bool HasArea(Noesis.Rect bounds) => bounds.Width > 0 && bounds.Height > 0;
     private void OnDestroy()
     {
-        overlay?.Dispose(); overlay = null; patches?.UnpatchSelf(); if (ReferenceEquals(current, this)) current = null;
+        overlay?.Dispose(); overlay = null; restorations.Dispose(); patches?.UnpatchSelf(); if (ReferenceEquals(current, this)) current = null;
     }
 }

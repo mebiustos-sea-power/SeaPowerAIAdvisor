@@ -53,16 +53,20 @@ internal sealed class ScreenTextTarget
     private readonly FrameworkElement target;
     private readonly DependencyProperty property;
     internal string Original { get; }
+    internal TextBlock Owner => owner;
+    internal string? Text => target.GetValue(property) as string;
+    internal bool SameProperty(ScreenTextTarget other) => ReferenceEquals(owner, other.owner) && ReferenceEquals(target, other.target) && ReferenceEquals(property, other.property);
     internal ScreenTextTarget(TextBlock owner, FrameworkElement target, DependencyProperty property, string original)
     { this.owner = owner; this.target = target; this.property = property; Original = original; }
-    internal string? ChangedReason(FrameworkElement scope)
+    internal string? ChangedReason(FrameworkElement scope) => InScopeReason(scope) ?? (Text == Original ? null : "text_changed");
+    internal string? InScopeReason(FrameworkElement scope)
     {
         if (owner.View == null) return "owner_detached";
         if (!owner.IsVisible) return "owner_hidden";
         if (!ReferenceEquals(owner, scope) && !owner.IsDescendantOf(scope)) return "outside_selection";
         // Inlines belong to the text content, not the visual tree. Validate membership through their owning TextBlock.
         if (!ReferenceEquals(owner, target) && !Contains(owner.Inlines, target)) return "inline_detached";
-        return Equals(target.GetValue(property), Original) ? null : "text_changed";
+        return null;
     }
     private static bool Contains(InlineCollection inlines, FrameworkElement target)
     {
@@ -79,7 +83,7 @@ internal sealed class ScreenTextTarget
     { if (Equals(target.GetValue(property), translated)) target.SetCurrentValue(property, Original); }
 }
 
-// Noesis caches native wrappers weakly. Hold them for this request only, and release immediately on unload or completion.
+// Request ownership ends on unload or completion; successful targets are also retained by the screen restoration registry.
 internal sealed class ScreenTextSnapshot : IDisposable
 {
     private FrameworkElement? scope;
@@ -92,7 +96,7 @@ internal sealed class ScreenTextSnapshot : IDisposable
         this.scope = scope; this.targets = targets; scope.Unloaded += Unloaded;
     }
     private void Unloaded(object sender, RoutedEventArgs args) => Dispose();
-    internal void Apply(TranslationResult result)
+    internal void Apply(TranslationResult result, ScreenTextRestorations restorations)
     {
         var root = scope; var current = targets?.ToArray();
         if (root == null || current == null || root.View == null)
@@ -112,6 +116,7 @@ internal sealed class ScreenTextSnapshot : IDisposable
             if (errors.Count > 1) throw new AggregateException("Translation application and rollback failed.", errors);
             throw;
         }
+        restorations.Remember(current, result.Texts);
     }
     public void Dispose()
     {

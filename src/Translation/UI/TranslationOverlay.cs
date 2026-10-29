@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Noesis;
 using SeaPowerAIAdvisor.Shared;
 using UnityEngine;
+using ContextMenu = Noesis.ContextMenu;
 using Grid = Noesis.Grid;
 using GUI = Noesis.GUI;
 using Rect = Noesis.Rect;
@@ -20,6 +21,12 @@ internal sealed class TranslationOverlay : IDisposable
     private readonly Grid layer;
     private readonly Border shield, outline, help;
     private readonly Thumb launcher;
+    private readonly ScaleTransform launcherScale = new();
+    private readonly ScaleTransform menuScale = new();
+    private readonly ContextMenu contextMenu;
+    private readonly ToolTip toolTip;
+    private readonly MenuItem restoreOriginal;
+    private readonly ScreenTextRestorations restorations;
     private readonly TextBlock helpText;
     private readonly Func<string, string> text;
     private readonly Func<Exception, string> message;
@@ -29,8 +36,9 @@ internal sealed class TranslationOverlay : IDisposable
     private readonly List<FrameworkElement> candidates = new();
     private FrameworkElement? leaf;
     private int index, releaseFrame;
-    private bool selecting, toggle, dragging, disposed;
+    private bool selecting, toggle, dragging, disposed, openMenu, restoreRequested;
     private float dragDistance, width, height;
+    private Point dragPoint;
     private ScreenTextSnapshot? afterRelease;
     private ScreenTextSnapshot? snapshot;
     private float clearStatusAt;
@@ -38,9 +46,9 @@ internal sealed class TranslationOverlay : IDisposable
     private Task<TranslationResult>? task;
     internal Visual Layer => layer;
     internal TranslationOverlay(FrameworkElement view, Func<string, string> text, Func<Exception, string> message,
-        Func<TranslationBatch, CancellationToken, Task<TranslationResult>> translate, Action<Exception> report, Point? position, Action<Point> moved, Action<Point> savePosition)
+        Func<TranslationBatch, CancellationToken, Task<TranslationResult>> translate, Action<Exception> report, Point? position, Action<Point> moved, Action<Point> savePosition, ScreenTextRestorations restorations)
     {
-        this.view = view; this.text = text; this.message = message; this.translate = translate; this.report = report; this.moved = moved; this.savePosition = savePosition;
+        this.view = view; this.text = text; this.message = message; this.translate = translate; this.report = report; this.moved = moved; this.savePosition = savePosition; this.restorations = restorations;
         using var source = typeof(TranslationOverlay).Assembly.GetManifestResourceStream("SeaPowerAIAdvisor.TranslationOverlay.xaml")
             ?? throw new FileNotFoundException("The translation overlay layout is missing.");
         using var reader = new StreamReader(source);
@@ -48,12 +56,25 @@ internal sealed class TranslationOverlay : IDisposable
         T Find<T>(string name) where T : class => layer.FindName(name) as T ?? throw new InvalidDataException("Missing translation control: " + name);
         shield = Find<Border>("SelectionShield"); outline = Find<Border>("SelectionOutline"); help = Find<Border>("SelectionHelp"); launcher = Find<Thumb>("TranslationLauncher");
         helpText = Find<TextBlock>("SelectionHelpText"); launcher.Tag = text("translation.button");
-        launcher.ToolTip = text("translation.button_hint");
-        launcher.DragStarted += (_, _) => { dragging = true; dragDistance = 0; };
-        launcher.DragDelta += (_, args) =>
+        launcher.LayoutTransform = help.LayoutTransform = launcherScale;
+        contextMenu = launcher.ContextMenu ?? throw new InvalidDataException("The translation context menu is missing.");
+        restoreOriginal = contextMenu.Items.OfType<MenuItem>().Single(item => item.Name == "RestoreOriginal");
+        toolTip = launcher.ToolTip as ToolTip ?? throw new InvalidDataException("The translation tooltip is missing.");
+        // XAML applies the standard theme. The menu popup needs the content root's scale explicitly.
+        contextMenu.LayoutTransform = menuScale;
+        contextMenu.PlacementTarget = toolTip.PlacementTarget = view; contextMenu.Placement = PlacementMode.MousePoint;
+        toolTip.Content = text("translation.button_hint"); restoreOriginal.Header = text("translation.restore_original");
+        // Defer popup focus until the game has consumed the right-button release, as with selection mode.
+        launcher.PreviewMouseRightButtonDown += (_, args) => args.Handled = true;
+        launcher.PreviewMouseRightButtonUp += (_, args) => { args.Handled = true; openMenu = true; releaseFrame = Time.frameCount; };
+        restoreOriginal.Click += (_, _) => { restoreRequested = true; releaseFrame = Time.frameCount; };
+        launcher.DragStarted += (_, _) => { dragging = true; dragDistance = 0; dragPoint = Mouse.GetPosition(layer); };
+        launcher.DragDelta += (_, _) =>
         {
-            dragDistance += Math.Abs(args.HorizontalChange) + Math.Abs(args.VerticalChange);
-            Position(new Point(Canvas.GetLeft(launcher) + args.HorizontalChange, Canvas.GetTop(launcher) + args.VerticalChange));
+            // Drag deltas on a scaled Thumb use its local units; placement and saved positions use layer units.
+            var point = Mouse.GetPosition(layer); var dx = point.X - dragPoint.X; var dy = point.Y - dragPoint.Y; dragPoint = point;
+            dragDistance += Math.Abs(dx) + Math.Abs(dy);
+            Position(new Point(Canvas.GetLeft(launcher) + dx, Canvas.GetTop(launcher) + dy));
         };
         launcher.DragCompleted += (_, args) =>
         {
@@ -76,7 +97,7 @@ internal sealed class TranslationOverlay : IDisposable
         };
         shield.PreviewMouseUp += (_, args) => { args.Handled = true; if (args.ChangedButton == MouseButton.Left) releaseFrame = Time.frameCount; };
         view.AddLayer(layer);
-        try { Resize(); Position(position ?? new Point(Math.Max(12, width - 124), 52)); }
+        try { Resize(); Position(position ?? new Point(Math.Max(0, width - (launcher.Width + 24) * launcherScale.ScaleX), 52 * launcherScale.ScaleY)); }
         catch { view.RemoveLayer(layer); throw; }
     }
     private void Guard(Action action)
@@ -96,6 +117,29 @@ internal sealed class TranslationOverlay : IDisposable
                 Guard(() => { if (task != null) { CancelRequest(); return; } if (!selecting) view.Keyboard.ClearFocus(); SetSelecting(!selecting); });
             }
             if (afterRelease != null) { var captured = afterRelease; afterRelease = null; Guard(() => Start(captured)); }
+            if (openMenu)
+            {
+                openMenu = false;
+                Guard(() =>
+                {
+                    if (selecting) SetSelecting(false);
+                    view.Keyboard.ClearFocus();
+                    restoreOriginal.Header = text("translation.restore_original");
+                    restoreOriginal.IsEnabled = task == null && restorations.CanRestore(view);
+                    contextMenu.IsOpen = true;
+                });
+            }
+            if (restoreRequested)
+            {
+                restoreRequested = false;
+                Guard(() =>
+                {
+                    contextMenu.IsOpen = false;
+                    if (task != null) return;
+                    SetSelecting(false);
+                    Status(text(restorations.Restore(view) ? "translation.restored" : "translation.original_unavailable"), 3);
+                });
+            }
         }
         if (selecting && !dragging) Guard(() => Pick(Mouse.GetPosition(view)));
         if (task != null && snapshot?.Available == false) CancelRequest();
@@ -107,7 +151,7 @@ internal sealed class TranslationOverlay : IDisposable
                 var result = finished.GetAwaiter().GetResult();
                 if (cancellation?.IsCancellationRequested == true) throw new OperationCanceledException();
                 if (snapshot == null) throw new TranslationException("target_changed");
-                snapshot.Apply(result); Status(text("translation.completed"), 3);
+                snapshot.Apply(result, restorations); Status(text("translation.completed"), 3);
             }
             catch (OperationCanceledException) { Status(text("translation.cancelled"), 3); }
             catch (Exception error) { report(error); Status(message(error)); }
@@ -176,21 +220,27 @@ internal sealed class TranslationOverlay : IDisposable
     }
     private void Position(Point point)
     {
-        var position = new Point(Math.Max(0, Math.Min(width - launcher.Width, point.X)), Math.Max(0, Math.Min(height - launcher.Height, point.Y)));
+        var bounds = Bounds(launcher);
+        var position = new Point(Math.Max(0, Math.Min(width - bounds.Width, point.X)), Math.Max(0, Math.Min(height - bounds.Height, point.Y)));
         Canvas.SetLeft(launcher, position.X); Canvas.SetTop(launcher, position.Y); moved(position);
     }
     private void Resize()
     {
         var viewport = Bounds(view);
         var nextWidth = Math.Max(0, viewport.Right); var nextHeight = Math.Max(0, viewport.Bottom);
-        if (nextWidth == width && nextHeight == height) return;
+        var scaleX = viewport.Width / view.ActualWidth; var scaleY = viewport.Height / view.ActualHeight;
+        if (nextWidth == width && nextHeight == height && launcherScale.ScaleX == scaleX / 2 && launcherScale.ScaleY == scaleY / 2) return;
         width = nextWidth; height = nextHeight;
+        // The game's 1080p design root scales by 2 at 4K/UI scale 1. Keep the current 100x34 launcher at that reference size.
+        launcherScale.ScaleX = scaleX / 2; launcherScale.ScaleY = scaleY / 2;
+        menuScale.ScaleX = scaleX; menuScale.ScaleY = scaleY;
+        Canvas.SetLeft(help, 12 * launcherScale.ScaleX); Canvas.SetTop(help, 12 * launcherScale.ScaleY);
         layer.Measure(new Size(width, height)); layer.Arrange(new Rect(0, 0, width, height));
         if (!float.IsNaN(Canvas.GetLeft(launcher))) Position(new Point(Canvas.GetLeft(launcher), Canvas.GetTop(launcher)));
     }
     public void Dispose()
     {
-        if (disposed) return; disposed = true; afterRelease?.Dispose(); afterRelease = null; toggle = false; CancelRequest(); candidates.Clear(); leaf = null;
+        if (disposed) return; disposed = true; contextMenu.IsOpen = toolTip.IsOpen = false; launcher.ContextMenu = null; launcher.ToolTip = null; openMenu = restoreRequested = false; afterRelease?.Dispose(); afterRelease = null; toggle = false; CancelRequest(); candidates.Clear(); leaf = null;
         if (task != null) _ = task.ContinueWith(t => { _ = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
         cancellation?.Dispose(); cancellation = null; view.RemoveLayer(layer);
     }
