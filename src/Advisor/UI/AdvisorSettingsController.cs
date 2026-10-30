@@ -82,13 +82,13 @@ internal sealed class AdvisorSettingsController
         foreach (var category in new[] { Category.Profile, Category.Templates, Category.Api, Category.Extensions, Category.Developer })
             BindTabs(category);
         Bind("BackToSettings", BackToHome); Bind("BackToConversation", () => { Close(); back(); });
-        Bind("SaveGeneral", () => Save(() => options.SaveGeneral((AdvisorTextSize)size.SelectedIndex, userName.Text ?? "", linkOwnUnits.IsChecked == true, linkContacts.IsChecked == true, crewEnabled.IsChecked == true)));
+        Bind("SaveGeneral", () => Save(() => options.SaveGeneral((AdvisorTextSize)size.SelectedIndex, userName.Text ?? "", linkOwnUnits.IsChecked == true, linkContacts.IsChecked == true)));
         Bind("SaveConsultation", () => Save(() => options.SaveConsultation(Number(rounds, "query_rounds_invalid"), Number(history, "history_exchanges_invalid"), prompt.Text ?? "")));
         Bind("ResetInformation", () => { if (available) { information.Reset(AdvisorInformation.Default); Notice(""); } });
         Bind("SaveInformation", () => Save(() => options.SaveInformation(information.Value)));
         Bind("SaveCommands", () => Save(() => options.SaveCommands(commands.DisabledCommands)));
         Bind("SaveTemplateOptions", () => Save(() => options.SaveTemplates(new AdvisorTemplateOptions(showSystemTemplates.IsChecked == true, (AdvisorTemplateInsertion)templateInsertion.SelectedIndex))));
-        Bind("SaveWip", () => Save(() => options.SaveCampaign(campaign.IsChecked == true)));
+        Bind("SaveWip", () => Save(() => options.SaveWip(campaign.IsChecked == true, crewEnabled.IsChecked == true)));
         Bind("SaveDeveloper", () => Save(() => apiStore.SaveLogging(log.IsChecked == true)));
         Bind("SaveLocalApi", () => Save(() => options.SaveDeveloper(localApi.IsChecked == true, localConnections.Value)));
         test.Click += (_, _) => guard(TestConnection);
@@ -152,7 +152,10 @@ internal sealed class AdvisorSettingsController
                 tabs[category].Reset();
                 commands.Open(options.Read().DisabledCommands); adapters.Open(); commands.Focus();
             }
-            else if (category == Category.Wip) { campaign.IsChecked = options.Read().CampaignEnabled; campaign.Focus(); }
+            else if (category == Category.Wip)
+            {
+                var saved = options.Read(); campaign.IsChecked = saved.CampaignEnabled; crewEnabled.IsChecked = saved.CrewEnabled; crewEnabled.Focus();
+            }
             else if (category == Category.Developer)
             {
                 tabs[category].Reset();
@@ -163,7 +166,7 @@ internal sealed class AdvisorSettingsController
             else
             {
                 var saved = options.Read();
-                if (category == Category.General) { userName.Text = saved.UserName ?? text()["general.default_user_name"]; size.SelectedIndex = (int)saved.TextSize; linkOwnUnits.IsChecked = saved.LinkOwnUnits; linkContacts.IsChecked = saved.LinkContacts; crewEnabled.IsChecked = saved.CrewEnabled; userName.Focus(); }
+                if (category == Category.General) { userName.Text = saved.UserName ?? text()["general.default_user_name"]; size.SelectedIndex = (int)saved.TextSize; linkOwnUnits.IsChecked = saved.LinkOwnUnits; linkContacts.IsChecked = saved.LinkContacts; userName.Focus(); }
                 if (category == Category.Consultation) { rounds.Text = saved.MaxQueryRounds.ToString(CultureInfo.InvariantCulture); history.Text = saved.HistoryExchanges.ToString(CultureInfo.InvariantCulture); prompt.Text = saved.CommonPrompt; prompt.Focus(); }
                 if (category == Category.Information) { information.Reset(saved.Information); information.Focus(); }
             }
@@ -187,12 +190,12 @@ internal sealed class AdvisorSettingsController
     }
     private string Snapshot() => current switch
     {
-        Category.General => userName.Text + "\0" + size.SelectedIndex + ":" + linkOwnUnits.IsChecked + ":" + linkContacts.IsChecked + ":" + crewEnabled.IsChecked,
+        Category.General => userName.Text + "\0" + size.SelectedIndex + ":" + linkOwnUnits.IsChecked + ":" + linkContacts.IsChecked,
         Category.Consultation => rounds.Text + "\0" + history.Text + "\0" + prompt.Text,
         Category.Information => information.Value.Key,
         Category.Templates when ActiveTab == 0 => showSystemTemplates.IsChecked + ":" + templateInsertion.SelectedIndex,
         Category.Extensions when ActiveTab == 0 => string.Join("\0", commands.DisabledCommands),
-        Category.Wip => campaign.IsChecked.ToString(),
+        Category.Wip => campaign.IsChecked + ":" + crewEnabled.IsChecked,
         Category.Developer when ActiveTab == 0 => log.IsChecked.ToString(),
         Category.Developer when ActiveTab == 1 => localApi.IsChecked + ":" + localConnections.Value.Json().ToString(),
         _ => ""

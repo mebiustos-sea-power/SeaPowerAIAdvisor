@@ -18,11 +18,11 @@ internal sealed class CrewLocalApi
     { this.reports = reports; this.now = now; this.validateConnection = validateConnection; }
     internal JObject Status() => new()
     {
-        ["scope_id"] = ScopeId, ["busy"] = reports.Busy, ["error"] = reports.Error,
+        ["scope_id"] = ScopeId, ["busy"] = reports.Busy, ["paused"] = reports.Paused, ["error"] = reports.Error,
         ["targets"] = new JArray(reports.Targets.Select(t => new JObject
         {
             ["id"] = t.Id, ["display_name"] = t.Name, ["nation"] = t.Nation, ["role"] = t.Role,
-            ["member_unit_ids"] = new JArray(t.Members), ["enabled"] = reports.Enabled(t.Id),
+            ["member_unit_ids"] = new JArray(t.Members), ["enabled"] = reports.Enabled(t.Id), ["can_report"] = t.CanReport,
             ["person"] = reports.Person(t.Id) is CrewPerson person ? new JObject { ["name"] = person.Name, ["personality"] = person.Personality } : JValue.CreateNull()
         })),
         ["history"] = new JArray(reports.History.Select(r => new JObject
@@ -44,8 +44,18 @@ internal sealed class CrewLocalApi
                 throw new LocalApiException(400, "unknown_report_target");
             var enabled = (bool)body["enabled"]!;
             if (enabled) validateConnection();
-            foreach (var id in selected) reports.SetEnabled(id!, enabled, now());
+            var committed = new System.Collections.Generic.HashSet<string>(reports.Targets.Where(t => reports.Enabled(t.Id)).Select(t => t.Id), StringComparer.Ordinal);
+            foreach (var id in selected) { if (enabled) committed.Add(id!); else committed.Remove(id!); }
+            reports.ApplyTargets(committed, now());
             return new LocalApiResponse(200, Status());
+        }
+        if (method == "POST" && path == Path + "/pause")
+        {
+            RequireScope(body, "paused");
+            if (body["paused"]?.Type != JTokenType.Boolean) throw new LocalApiException(400, "invalid_request");
+            var paused = (bool)body["paused"]!;
+            if (!paused && reports.HasEnabledTargets) validateConnection();
+            reports.SetPaused(paused, now()); return new LocalApiResponse(200, Status());
         }
         if (method == "POST" && path == Path + "/stop")
         {

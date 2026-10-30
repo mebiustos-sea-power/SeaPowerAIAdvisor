@@ -539,5 +539,5 @@
   "translation.error.provider_unavailable": "This connection adapter cannot run the translation tool workflow. Choose another connection.",
   "translation.completed": "Translation applied.",
   "translation.error.target_changed": "The selected text changed during translation. Select the region again.",
-  "general.crew_enabled": "Enable AI Crew"
+  "wip.crew_enabled": "Enable AI Crew"
 }

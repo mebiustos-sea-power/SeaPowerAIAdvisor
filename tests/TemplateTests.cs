@@ -73,7 +73,7 @@ internal static class TemplateTests
             Require(store.Current.MaxQueryRounds == 9 && store.Current.HistoryExchanges == 2 && store.Current.CommonPrompt == "Keep my common prompt",
                 "Saving template preferences changed consultation settings");
             foreach (var save in new Action[] { () => store.EnsureUserName("Commander"),
-                () => store.SaveGeneral(AdvisorTextSize.Large, "Admiral"), () => store.SaveCampaign(true),
+                () => store.SaveGeneral(AdvisorTextSize.Large, "Admiral"), () => store.SaveWip(true, store.Read().CrewEnabled),
                 () => store.SaveConsultation(8, 3, "Updated prompt"), () => store.SaveInformation(AdvisorInformation.Default),
                 () => store.SaveDeveloper(false), () => store.SaveCommands(new[] { "custom.disabled" }) })
             {

@@ -224,7 +224,6 @@
               <TextBlock Text="{DynamicResource Advisor.general.user_name}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,6" />
               <TextBox x:Name="UserName" FontSize="14" Padding="7" />
               <TextBlock Text="{DynamicResource Advisor.general.conversation_display}" FontSize="14" FontWeight="Bold" Margin="0,24,0,10" />
-              <CheckBox x:Name="EnableCrew" Content="{DynamicResource Advisor.general.crew_enabled}" Margin="0,0,0,12" />
               <CheckBox x:Name="LinkOwnUnits" HorizontalContentAlignment="Stretch" Margin="0,0,0,8">
                 <TextBlock Text="{DynamicResource Advisor.general.own_unit_links}" TextWrapping="Wrap" />
               </CheckBox>
@@ -481,6 +480,7 @@
         <Grid x:Name="WipCategory" Visibility="Collapsed">
           <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="0,8,8,0">
+              <CheckBox x:Name="EnableCrew" Content="{DynamicResource Advisor.wip.crew_enabled}" Margin="0,0,0,12" />
               <CheckBox x:Name="EnableCampaignAdvisor" HorizontalContentAlignment="Stretch">
                 <TextBlock Text="{DynamicResource Advisor.wip.campaign_alpha}" TextWrapping="Wrap" />
               </CheckBox>

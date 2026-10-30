@@ -70,6 +70,7 @@ internal sealed class CrewPresentation : IDisposable
         Place(notificationPosition);
         layer.Visibility = hudVisible ? Visibility.Visible : Visibility.Collapsed;
         notice.MaxWidth = Math.Max(1, host.ActualWidth - 36);
+        if (reports.Paused || !reports.HasEnabledTargets) { Clear(); return; }
         if (now < until) return;
         notice.Visibility = Visibility.Collapsed;
         if (!hudVisible) return;

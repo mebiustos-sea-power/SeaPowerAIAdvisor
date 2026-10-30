@@ -198,7 +198,7 @@ internal static partial class LocalApiTests
                     "An existing installation implicitly permitted connections");
                 var policy = new AdvisorLocalConnections(new[] { "local" }, "local", true);
                 store.SaveDeveloper(true, policy);
-                store.EnsureUserName("Commander"); store.SaveGeneral(AdvisorTextSize.Small, "Commander"); store.SaveCampaign(true);
+                store.EnsureUserName("Commander"); store.SaveGeneral(AdvisorTextSize.Small, "Commander"); store.SaveWip(true, store.Read().CrewEnabled);
                 store.SaveConsultation(4, 2, ""); store.SaveInformation(AdvisorInformation.Default); store.SaveCommands(new[] { "custom.off" });
                 var reopened = new AdvisorOptionsStore(store.Path);
                 Require(reopened.Current.LocalConnections.AllowModelOverride && reopened.Current.LocalConnections.DefaultId == "local" && reopened.Current.LocalConnections.AllowedIds.SequenceEqual(new[] { "local" }),

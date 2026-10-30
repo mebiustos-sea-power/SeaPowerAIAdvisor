@@ -105,24 +105,24 @@ internal static class OptionsTests
         check("Category saves preserve current values in other categories and discarded candidates do not apply", () => InTemp(directory =>
         {
             var store = new AdvisorOptionsStore(Path.Combine(directory, "options.json"));
-            store.SaveGeneral(AdvisorTextSize.Large, "Commander"); store.SaveCampaign(true);
+            store.SaveGeneral(AdvisorTextSize.Large, "Commander"); store.SaveWip(true, store.Read().CrewEnabled);
             // A second window or file edit saves consultation options after this page was opened.
             var other = new AdvisorOptionsStore(store.Path); other.SaveConsultation(7, 0, "共通の希望");
             store.SaveInformation(AdvisorInformation.All.With(InformationKind.BattleWeapons, false));
             store.SaveGeneral(AdvisorTextSize.Standard, "Commander");
             Require(store.Current.CampaignEnabled, "Saving general settings overwrote the campaign choice");
-            store.SaveCampaign(false);
+            store.SaveWip(false, store.Read().CrewEnabled);
             var saved = new AdvisorOptionsStore(store.Path).Current;
             Require(!saved.CampaignEnabled && saved.TextSize == AdvisorTextSize.Standard && saved.MaxQueryRounds == 7 && saved.HistoryExchanges == 0 &&
                 saved.CommonPrompt == "共通の希望" && !saved.Information.Allows(InformationKind.BattleWeapons), "Saving stale category values lost another completed change");
             foreach (var enabled in new[] { false, true })
             {
-                other.SaveCampaign(enabled);
+                other.SaveWip(enabled, other.Read().CrewEnabled);
                 store.SaveGeneral(AdvisorTextSize.Standard, "Commander");
                 Require(new AdvisorOptionsStore(store.Path).Current.CampaignEnabled == enabled,
                     "A stale general page reset a campaign choice saved separately");
                 var expected = JObject.Parse(File.ReadAllText(store.Path)); expected["campaign_advisor_enabled"] = !enabled;
-                store.SaveCampaign(!enabled);
+                store.SaveWip(!enabled, store.Read().CrewEnabled);
                 Require(JToken.DeepEquals(expected, JObject.Parse(File.ReadAllText(store.Path))),
                     "Saving the campaign choice modified settings belonging to another category");
             }
@@ -137,12 +137,12 @@ internal static class OptionsTests
             var store = new AdvisorOptionsStore(Path.Combine(parent, "options.json"));
             Directory.Delete(parent); File.WriteAllText(parent, "blocked parent");
             var apiPath = Path.Combine(directory, "gemini.json"); File.WriteAllText(apiPath, "untouched");
-            foreach (var save in new Action[] { () => store.SaveGeneral(AdvisorTextSize.Large, "Commander"), () => store.SaveCampaign(true) })
+            foreach (var save in new Action[] { () => store.SaveGeneral(AdvisorTextSize.Large, "Commander"), () => store.SaveWip(true, true) })
             {
                 try { save(); }
                 catch (AdvisorOptionsException error) when (error.Code == "options_write_failed")
                 {
-                    Require(store.Current.TextSize == AdvisorTextSize.Standard && !store.Current.CampaignEnabled && File.ReadAllText(apiPath) == "untouched" &&
+                    Require(store.Current.TextSize == AdvisorTextSize.Standard && !store.Current.CampaignEnabled && !store.Current.CrewEnabled && File.ReadAllText(apiPath) == "untouched" &&
                         store.Current.UserName == null && !File.Exists(AdvisorProfile.SettingsPath(directory)), "A failed options write published changes or modified another category");
                     continue;
                 }

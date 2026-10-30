@@ -176,10 +176,10 @@ internal sealed class AdvisorOptionsStore
         Save(new AdvisorOptions(saved.MaxQueryRounds, saved.CampaignEnabled, saved.Information, saved.CommonPrompt,
             saved.TextSize, saved.HistoryExchanges, initialName, saved.DeveloperApiEnabled, saved.LocalConnections, saved.LinkOwnUnits, saved.LinkContacts, saved.DisabledCommands, saved.Templates, saved.CrewEnabled));
     }
-    internal void SaveGeneral(AdvisorTextSize size, string userName, bool? linkOwnUnits = null, bool? linkContacts = null, bool? crewEnabled = null)
+    internal void SaveGeneral(AdvisorTextSize size, string userName, bool? linkOwnUnits = null, bool? linkContacts = null)
     {
         var saved = Read();
-        Save(new AdvisorOptions(saved.MaxQueryRounds, saved.CampaignEnabled, saved.Information, saved.CommonPrompt, size, saved.HistoryExchanges, userName, saved.DeveloperApiEnabled, saved.LocalConnections, linkOwnUnits ?? saved.LinkOwnUnits, linkContacts ?? saved.LinkContacts, saved.DisabledCommands, saved.Templates, crewEnabled ?? saved.CrewEnabled));
+        Save(new AdvisorOptions(saved.MaxQueryRounds, saved.CampaignEnabled, saved.Information, saved.CommonPrompt, size, saved.HistoryExchanges, userName, saved.DeveloperApiEnabled, saved.LocalConnections, linkOwnUnits ?? saved.LinkOwnUnits, linkContacts ?? saved.LinkContacts, saved.DisabledCommands, saved.Templates, saved.CrewEnabled));
     }
     internal void SaveCrew(bool enabled)
     {
@@ -188,12 +188,12 @@ internal sealed class AdvisorOptionsStore
             saved.TextSize, saved.HistoryExchanges, saved.UserName, saved.DeveloperApiEnabled, saved.LocalConnections,
             saved.LinkOwnUnits, saved.LinkContacts, saved.DisabledCommands, saved.Templates, enabled));
     }
-    internal void SaveCampaign(bool enabled)
+    internal void SaveWip(bool campaignEnabled, bool crewEnabled)
     {
         var saved = Read();
-        Save(new AdvisorOptions(saved.MaxQueryRounds, enabled, saved.Information, saved.CommonPrompt,
+        Save(new AdvisorOptions(saved.MaxQueryRounds, campaignEnabled, saved.Information, saved.CommonPrompt,
             saved.TextSize, saved.HistoryExchanges, saved.UserName, saved.DeveloperApiEnabled, saved.LocalConnections,
-            saved.LinkOwnUnits, saved.LinkContacts, saved.DisabledCommands, saved.Templates, saved.CrewEnabled));
+            saved.LinkOwnUnits, saved.LinkContacts, saved.DisabledCommands, saved.Templates, crewEnabled));
     }
     internal void SaveConsultation(int rounds, int history, string prompt)
     {

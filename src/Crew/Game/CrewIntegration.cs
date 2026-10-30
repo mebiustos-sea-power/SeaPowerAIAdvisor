@@ -37,8 +37,8 @@ internal sealed class CrewIntegration
     private bool active, failed;
     internal CrewIntegration(string settingsPath, Func<bool> enabled, Action<bool> saveEnabled, Action<string> checkLocalConnection, Func<CrewSettingsStore, ICrewConnections> connect, Func<string, string> common, Action<Exception> log)
     { this.settingsPath = settingsPath; this.enabled = enabled; this.saveEnabled = saveEnabled; this.checkLocalConnection = checkLocalConnection; this.connect = connect; this.common = common; this.log = log; }
-    internal void Tick(MainGameViewModel current) => Guard(() => Update(current));
-    private void Update(MainGameViewModel current)
+    internal void Tick(MainGameViewModel current, ToggleButton? hudAnchor) => Guard(() => Update(current, hudAnchor));
+    private void Update(MainGameViewModel current, ToggleButton? hudAnchor)
     {
         if (current.RootControl == null || !SceneCreator.InstanceExists(false) || !SceneCreator.Instance.IsLoadingDone || Globals._playerTaskforce == null)
         { Reset(); return; }
@@ -67,7 +67,7 @@ internal sealed class CrewIntegration
             reports.Refresh(source.Targets()); nextRefresh = clock.Elapsed.TotalSeconds + 1;
             var grid = view.FindName("DisplayAreaGrid") as Grid ?? throw new InvalidOperationException("The battle HUD grid is unavailable.");
             var reference = view.FindName("UnitStatusWindow") as ToggleButton ?? throw new InvalidOperationException("The battle HUD toggle is unavailable.");
-            launcher = new HudButton(grid, reference, "RPT", "AI Crew - Reports", 11);
+            launcher = new HudButton(grid, reference, "RPT", "AI Crew - Reports", 11, before: hudAnchor);
             presentation = new CrewPresentation(GameUi.FindVisual<Grid>(view) ?? throw new InvalidOperationException("The battle content layout is unavailable."));
             launcher.Control.Click += (_, _) => Guard(ToggleWindow);
             active = true;

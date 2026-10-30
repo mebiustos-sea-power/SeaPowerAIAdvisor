@@ -13,7 +13,7 @@ internal interface ICrewConnections
     IReadOnlyList<IAiConnectionProvider> Providers { get; }
     string? Role(string id);
     string Error(AiConnectionException error);
-    Task<IReadOnlyList<CrewSubmission>> GenerateAsync(CrewBatch batch, string id, CancellationToken cancellation);
+    Task<CrewGeneration> GenerateAsync(CrewBatch batch, string id, CancellationToken cancellation);
     Task<string> TestAsync(AiConnectionDraft draft, CancellationToken cancellation);
 }
 

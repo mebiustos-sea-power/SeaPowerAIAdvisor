@@ -12,22 +12,21 @@ internal enum CrewNotificationPosition { TopLeft, TopCenter, TopRight, BottomLef
 // Reports owns its assignment and preferences; the registered connections remain in the shared library.
 internal sealed class CrewSettings
 {
-    internal const CrewNotificationPosition DefaultNotificationPosition = CrewNotificationPosition.TopCenter;
+    internal const int DefaultIntervalMinutes = 3;
+    internal const CrewNotificationPosition DefaultNotificationPosition = CrewNotificationPosition.TopRight;
     internal string? ConnectionId { get; }
-    internal int MinimumMinutes { get; }
-    internal int MaximumMinutes { get; }
+    internal int IntervalMinutes { get; }
     internal int DisplaySeconds { get; }
     internal CrewNotificationPosition NotificationPosition { get; }
-    internal CrewSettings(string? connectionId = null, int minimumMinutes = 1, int maximumMinutes = 5, int displaySeconds = 10, CrewNotificationPosition notificationPosition = DefaultNotificationPosition)
+    internal CrewSettings(string? connectionId = null, int intervalMinutes = DefaultIntervalMinutes, int displaySeconds = 10, CrewNotificationPosition notificationPosition = DefaultNotificationPosition)
     {
         if (connectionId != null && (string.IsNullOrWhiteSpace(connectionId) || connectionId.Length > 80) ||
-            minimumMinutes < 1 || maximumMinutes < minimumMinutes || maximumMinutes > 60 || displaySeconds < 1 || displaySeconds > 60)
+            intervalMinutes < 1 || intervalMinutes > 7 || displaySeconds < 1 || displaySeconds > 60)
             throw new CrewException("settings_invalid");
         _ = PositionCode(notificationPosition); NotificationPosition = notificationPosition;
-        ConnectionId = connectionId; MinimumMinutes = minimumMinutes; MaximumMinutes = maximumMinutes; DisplaySeconds = displaySeconds;
+        ConnectionId = connectionId; IntervalMinutes = intervalMinutes; DisplaySeconds = displaySeconds;
     }
-    internal JObject Json() => new() { ["connection_id"] = ConnectionId, ["minimum_minutes"] = MinimumMinutes,
-        ["maximum_minutes"] = MaximumMinutes, ["display_seconds"] = DisplaySeconds, ["notification_position"] = PositionCode(NotificationPosition) };
+    internal JObject Json() => new() { ["connection_id"] = ConnectionId, ["interval_minutes"] = IntervalMinutes, ["display_seconds"] = DisplaySeconds, ["notification_position"] = PositionCode(NotificationPosition) };
     internal static string PositionCode(CrewNotificationPosition position) => position switch
     {
         CrewNotificationPosition.TopLeft => "top_left", CrewNotificationPosition.TopCenter => "top_center", CrewNotificationPosition.TopRight => "top_right",
@@ -48,12 +47,12 @@ internal sealed class CrewSettings
         {
             var value = JObject.Parse(json);
             foreach (var p in value.Properties())
-                if (p.Name != "connection_id" && p.Name != "minimum_minutes" && p.Name != "maximum_minutes" && p.Name != "display_seconds" && p.Name != "notification_position")
+                if (p.Name != "connection_id" && p.Name != "interval_minutes" && p.Name != "display_seconds" && p.Name != "notification_position")
                     throw new CrewException("settings_invalid");
             if (value["connection_id"] is JToken id && id.Type is not (JTokenType.Null or JTokenType.String)) throw new CrewException("settings_invalid");
             int Read(string key, int fallback) => value[key] == null ? fallback : value[key]!.Type == JTokenType.Integer
                 ? value[key]!.Value<int>() : throw new CrewException("settings_invalid");
-            return new CrewSettings((string?)value["connection_id"], Read("minimum_minutes", 1), Read("maximum_minutes", 5), Read("display_seconds", 10), ReadPosition(value["notification_position"]));
+            return new CrewSettings((string?)value["connection_id"], Read("interval_minutes", DefaultIntervalMinutes), Read("display_seconds", 10), ReadPosition(value["notification_position"]));
         }
         catch (Exception e) when (e is JsonException || e is OverflowException) { throw new CrewException("settings_invalid"); }
     }

@@ -157,7 +157,7 @@ public sealed class Plugin : IAnchorChainMod
     private static void BattleFrame(MainGameViewModel __instance)
     {
         BattleRuntime.Tick(() => battle?.Tick(__instance));
-        crew?.Tick(__instance);
+        crew?.Tick(__instance, battle?.HudControl);
         TryInstallCampaign();
     }
     private static void BattleDestroyed(MainGameViewModel __instance)

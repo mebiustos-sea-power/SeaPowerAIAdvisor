@@ -38,7 +38,7 @@ internal static class OperationTests
                         new AdvisorOptionsStore(path).Current.IsCommandEnabled("custom.new"), "Saving retained the obsolete field or lost individual settings");
                 }
                 store.SaveCommands(new[] { "custom.uninstalled", "custom.off" }); store.EnsureUserName("Commander");
-                store.SaveGeneral(AdvisorTextSize.Large, "Captain", false, true); store.SaveCampaign(true);
+                store.SaveGeneral(AdvisorTextSize.Large, "Captain", false, true); store.SaveWip(true, store.Read().CrewEnabled);
                 store.SaveInformation(AdvisorInformation.Default); store.SaveConsultation(3, 1, "brief"); store.SaveDeveloper(true);
                 var reopened = new AdvisorOptionsStore(store.Path);
                 Require(reopened.Current.DisabledCommands.SequenceEqual(new[] { "custom.off", "custom.uninstalled" }) &&

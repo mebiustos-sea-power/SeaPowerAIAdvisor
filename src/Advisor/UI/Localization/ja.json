@@ -539,5 +539,5 @@
   "translation.error.provider_unavailable": "この接続アダプターは翻訳用のツール呼び出しに対応していません。別の接続を選択してください。",
   "translation.completed": "翻訳しました。",
   "translation.error.target_changed": "翻訳中に対象の表示が変わりました。もう一度範囲を選択してください。",
-  "general.crew_enabled": "AI Crewを有効にする"
+  "wip.crew_enabled": "AI Crewを有効にする"
 }

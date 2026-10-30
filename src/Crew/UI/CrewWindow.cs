@@ -30,9 +30,10 @@ internal sealed class CrewWindow : IDisposable
     private readonly AiConnectionsView editor;
     private readonly SettingsTabNavigation tabs, apiTabs;
     private readonly ComboBox selection, notificationPosition;
-    private readonly TextBox minimum, maximum, duration;
+    private readonly TextBox interval, duration;
     private readonly ImageSource portrait;
     private readonly UiNotice settingsNotice, reportNotice;
+    private readonly CrewTargetSelection targetSelection = new();
     private string[] ids = Array.Empty<string>();
     private string? page, baseline;
     private bool changing, stopped;
@@ -43,8 +44,8 @@ internal sealed class CrewWindow : IDisposable
     internal bool IsOpen => host.Windows.Contains(window);
     private T Find<T>(string name) where T : class => root.FindName(name) as T ?? throw new InvalidOperationException("Missing Reports control: " + name);
     private string? SelectedId => selection.SelectedIndex <= 0 ? null : ids[selection.SelectedIndex - 1];
-    private string Values => page == "reports" ? minimum.Text + ":" + maximum.Text + ":" + duration.Text + ":" + notificationPosition.SelectedIndex : SelectedId ?? "";
-    private bool Dirty => page == "api" && apiTabs.Current == 1 ? editor.HasChanges : page != null && Values != baseline;
+    private string Values => page == "reports" ? interval.Text + ":" + duration.Text + ":" + notificationPosition.SelectedIndex : SelectedId ?? "";
+    private bool Dirty => targetSelection.Dirty || (page == "api" && apiTabs.Current == 1 ? editor.HasChanges : page != null && Values != baseline);
 
     internal CrewWindow(FrameworkElement view, WindowHost host, CrewReports reports, CrewSettingsStore settings, ICrewConnections connections,
         Func<string, string> common, CrewText text, ImageSource portrait, Func<double> now, Action<Action> guard, Action<Exception> log)
@@ -65,7 +66,7 @@ internal sealed class CrewWindow : IDisposable
         selection = Find<ComboBox>("Connection"); notificationPosition = Find<ComboBox>("NotificationPosition");
         foreach (CrewNotificationPosition position in Enum.GetValues(typeof(CrewNotificationPosition)))
             notificationPosition.Items.Add(new ComboBoxItem { Content = text["position." + CrewSettings.PositionCode(position)] });
-        minimum = Find<TextBox>("Minimum"); maximum = Find<TextBox>("Maximum"); duration = Find<TextBox>("Duration");
+        interval = Find<TextBox>("Interval"); duration = Find<TextBox>("Duration");
         var form = AiConnectionsView.Create(common); Find<ContentControl>("Registration").Content = form;
         editor = new AiConnectionsView(form, connections.Store, () => connections.Providers, common, GameLanguage.Read, typing, Run,
             CanCommit, (name, action) => Confirm(action, string.Format(CultureInfo.CurrentCulture, common("settings.delete_question"), name), common("profile.remove"), common("settings.cancel")),
@@ -77,22 +78,36 @@ internal sealed class CrewWindow : IDisposable
         tabs = Navigation("Tabs"); apiTabs = Navigation("ApiTabs");
         Bind("OpenConnections", () => OpenPage("api")); Bind("OpenReports", () => OpenPage("reports"));
         Bind("Back", () => Navigate(Home));
+        Bind("AllTargetsOn", () => { SyncSelection(); targetSelection.SetAll(true); DrawTargets(); });
+        Bind("AllTargetsOff", () => { SyncSelection(); targetSelection.SetAll(false); DrawTargets(); });
+        Bind("ApplyTargets", () =>
+        {
+            if (!CanCommit()) return;
+            SyncSelection(); var selected = targetSelection.Selected;
+            if (selected.Any(id => !reports.Enabled(id))) connections.ValidateSelection(settings.Current.ConnectionId);
+            reports.ApplyTargets(selected, now()); targetSelection.Discard(); DrawTargets(); Notice("");
+        });
+        Bind("PauseReports", () =>
+        {
+            if (reports.Paused && reports.HasEnabledTargets) connections.ValidateSelection(settings.Current.ConnectionId);
+            reports.SetPaused(!reports.Paused, now());
+        });
         Bind("SaveConnection", () =>
         {
             if (!CanCommit()) return;
-            var saved = settings.Current; settings.Save(new CrewSettings(SelectedId, saved.MinimumMinutes, saved.MaximumMinutes, saved.DisplaySeconds, saved.NotificationPosition));
+            var saved = settings.Current; settings.Save(new CrewSettings(SelectedId, saved.IntervalMinutes, saved.DisplaySeconds, saved.NotificationPosition));
             baseline = Values; editor.UpdateCards(); Saved();
         });
         Bind("SaveReports", () =>
         {
             if (!CanCommit()) return;
             int Read(TextBox input) => int.TryParse(input.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : throw new CrewException("settings_invalid");
-            settings.Save(new CrewSettings(settings.Current.ConnectionId, Read(minimum), Read(maximum), Read(duration), (CrewNotificationPosition)notificationPosition.SelectedIndex));
+            settings.Save(new CrewSettings(settings.Current.ConnectionId, Read(interval), Read(duration), (CrewNotificationPosition)notificationPosition.SelectedIndex));
             baseline = Values; Saved();
         });
         Bind("CancelConfirmation", HideConfirmation);
         Bind("Confirm", () => { var action = confirmed; HideConfirmation(); action?.Invoke(); });
-        foreach (var input in new[] { minimum, maximum, duration })
+        foreach (var input in new[] { interval, duration })
         {
             input.GotKeyboardFocus += (_, _) => Run(() => typing.Acquire(input));
             input.LostKeyboardFocus += (_, _) => Run(() => typing.Release(input));
@@ -143,14 +158,14 @@ internal sealed class CrewWindow : IDisposable
     private void Navigate(Action action) { if (Dirty) Confirm(action); else action(); }
     private void Home()
     {
-        typing.Release(); CancelTest(); editor.Close(); page = null; baseline = null; settingsNotice.Show("");
+        typing.Release(); CancelTest(); editor.Close(); targetSelection.Discard(); revision = -1; page = null; baseline = null; settingsNotice.Show("");
         Find<FrameworkElement>("SettingsHome").Visibility = Visibility.Visible;
         Find<FrameworkElement>("SettingsPage").Visibility = Visibility.Collapsed;
     }
     private void OpenPage(string value)
     {
         page = value; typing.Release(); settingsNotice.Show("");
-        Find<TextBlock>("SettingsCategoryTitle").Text = value == "api" ? text["connections"] : "Reports";
+        Find<TextBlock>("SettingsCategoryTitle").Text = text[value == "api" ? "connections" : "reports"];
         Find<FrameworkElement>("SettingsHome").Visibility = Visibility.Collapsed; Find<FrameworkElement>("SettingsPage").Visibility = Visibility.Visible;
         Find<FrameworkElement>("ApiTabs").Visibility = value == "api" ? Visibility.Visible : Visibility.Collapsed;
         Find<FrameworkElement>("ReportsSettings").Visibility = value == "reports" ? Visibility.Visible : Visibility.Collapsed;
@@ -158,7 +173,7 @@ internal sealed class CrewWindow : IDisposable
         else
         {
             var saved = settings.Current;
-            minimum.Text = saved.MinimumMinutes.ToString(CultureInfo.InvariantCulture); maximum.Text = saved.MaximumMinutes.ToString(CultureInfo.InvariantCulture);
+            interval.Text = saved.IntervalMinutes.ToString(CultureInfo.InvariantCulture);
             duration.Text = saved.DisplaySeconds.ToString(CultureInfo.InvariantCulture); notificationPosition.SelectedIndex = (int)saved.NotificationPosition;
         }
         baseline = Values;
@@ -184,6 +199,7 @@ internal sealed class CrewWindow : IDisposable
         if (!IsOpen) return;
         Run(() =>
         {
+            if (revision != reports.Version) SyncSelection();
             tabs.Pump(Dirty, () => { Home(); return true; }, action => Confirm(action));
             apiTabs.Pump(Dirty, () => { typing.Release(); CancelTest(); editor.Close(); RefreshConnections(); editor.Open(); return true; }, action => Confirm(action));
             editor.Tick(); settingsNotice.Tick();
@@ -197,9 +213,11 @@ internal sealed class CrewWindow : IDisposable
             }
             if (revision == reports.Version) return;
             revision = reports.Version; DrawHistory(); DrawTargets();
+            Find<Button>("PauseReports").Content = text[reports.Paused ? "resume" : "pause"];
             if (!stopped)
             {
                 if (reports.Error != null) reportNotice.Show(ErrorMessage(reports.Error), true);
+                else if (reports.Paused) reportNotice.Show(text["paused"]);
                 else if (reports.Busy) reportNotice.Show(text["busy"]);
                 else reportNotice.Show("");
             }
@@ -207,7 +225,7 @@ internal sealed class CrewWindow : IDisposable
     }
     internal void Stop()
     {
-        stopped = true; Find<TabItem>("TargetsTab").IsEnabled = false;
+        stopped = true; Find<TabItem>("TargetsTab").IsEnabled = false; Find<Button>("PauseReports").IsEnabled = false;
         reportNotice.Show(text["error.unexpected_error"], true); if (page != null) settingsNotice.Show(text["error.unexpected_error"], true);
     }
     internal string ErrorMessage(string code) => code is "connection_required" or "connection_missing" or "provider_unavailable" or "invalid_response" or "too_large" or "unexpected_error"
@@ -235,24 +253,24 @@ internal sealed class CrewWindow : IDisposable
         foreach (var report in reports.History.Reverse())
             panel.Children.Add(Card(report.Target.Name + " / " + report.Submission.Person.Name + " / " + report.ReceivedAt.ToString("HH:mm:ss"), report.Submission.Text));
     }
+    private void SyncSelection() => targetSelection.Sync(reports.Targets, reports.Enabled);
     private void DrawTargets()
     {
+        SyncSelection();
+        Find<Button>("ApplyTargets").IsEnabled = targetSelection.Dirty;
         var panel = Find<StackPanel>("Targets"); panel.Children.Clear();
         if (reports.Targets.Count == 0) panel.Children.Add(new TextBlock { Text = text["empty_targets"], TextWrapping = TextWrapping.Wrap });
         foreach (var target in reports.Targets)
         {
             var person = reports.Person(target.Id);
             var label = target.Name + " / " + target.Nation + " / " + string.Format(CultureInfo.InvariantCulture, text["members"], target.Members.Count);
-            var check = new CheckBox { Content = Card(label, person == null ? text["not_appointed"] : person.Name + " / " + person.Personality),
-                IsChecked = reports.Enabled(target.Id), HorizontalContentAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 0, 0, 8) };
+            if (!target.CanReport) label += " / " + text["leader_reports"];
+            var check = new CheckBox { Content = Card(label, person == null ? text[reports.Enabled(target.Id) ? "appointment_pending" : "not_appointed"] : person.Name + " / " + person.Personality),
+                IsChecked = targetSelection.Checked(target.Id), HorizontalContentAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 0, 0, 8) };
             check.Click += (_, _) => Run(() =>
             {
-                if (check.IsChecked == true)
-                {
-                    try { connections.ValidateSelection(settings.Current.ConnectionId); }
-                    catch { check.IsChecked = false; throw; }
-                }
-                reports.SetEnabled(target.Id, check.IsChecked == true, now()); Notice("");
+                targetSelection.Set(target.Id, check.IsChecked == true);
+                Find<Button>("ApplyTargets").IsEnabled = targetSelection.Dirty;
             });
             panel.Children.Add(check);
         }

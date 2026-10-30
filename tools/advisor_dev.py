@@ -364,6 +364,7 @@ def parser():
     targets = reports.add_parser("targets"); targets.add_argument("--scope-id", required=True)
     targets.add_argument("--target-id", action="append", required=True); targets.add_argument("--enabled", choices=("true", "false"), required=True); add_output(targets)
     window = reports.add_parser("window"); window.add_argument("--scope-id", required=True); window.add_argument("--open", choices=("true", "false"), required=True); add_output(window)
+    pause = reports.add_parser("pause"); pause.add_argument("--scope-id", required=True); pause.add_argument("--value", choices=("true", "false"), required=True); add_output(pause)
     stop = reports.add_parser("stop"); stop.add_argument("--scope-id", required=True); add_output(stop)
     notices = commands.add_parser("notices").add_subparsers(dest="notice_command", required=True)
     add_output(notices.add_parser("preview"))
@@ -450,6 +451,8 @@ def main(argv=None):
                 value = client.request("PATCH", path, {"enabled": args.value == "true"})
             elif args.reports_command == "window":
                 value = client.request("POST", path + "/window", {"scope_id": args.scope_id, "open": args.open == "true"})
+            elif args.reports_command == "pause":
+                value = client.request("POST", path + "/pause", {"scope_id": args.scope_id, "paused": args.value == "true"})
             elif args.reports_command == "targets":
                 value = client.request("PATCH", path + "/targets", {"scope_id": args.scope_id, "target_ids": args.target_id, "enabled": args.enabled == "true"})
             else:

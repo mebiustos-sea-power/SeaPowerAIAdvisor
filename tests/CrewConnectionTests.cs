@@ -28,7 +28,7 @@ internal static class CrewConnectionTests
                 return Response(HttpStatusCode.OK);
             }), trace));
             var result = connections.GenerateAsync(Batch(), "reports", CancellationToken.None).GetAwaiter().GetResult();
-            Require(sends == 1 && result.Single().Id == "unit:1", "The terminal report submission caused extra exchanges");
+            Require(sends == 1 && result.Reports.Single().Id == "unit:1", "The terminal report submission caused extra exchanges");
         }));
         check("Missing Reports connections fail before transport creation and server failure never uses the adviser's fallback", () => InTemp(directory =>
         {
@@ -41,7 +41,7 @@ internal static class CrewConnectionTests
             catch (AiConnectionException e) { Require(e.HttpStatus == 503 && sends == 1 && created == 1, "Reports silently tried another assigned model"); }
         }));
     }
-    private static CrewBatch Batch() => new(new JObject { ["reply_language"] = "en", ["reporters"] = new JArray(new JObject { ["id"] = "unit:1" }) }, new Dictionary<string, CrewPerson?> { ["unit:1"] = null });
+    private static CrewBatch Batch() => new(new JObject { ["reply_language"] = "en", ["appointments"] = new JArray(new JObject { ["id"] = "unit:1", ["nation"] = "US", ["role"] = "captain" }), ["reporters"] = new JArray(new JObject { ["id"] = "unit:1" }) }, new Dictionary<string, CrewPerson?> { ["unit:1"] = null }, new[] { "unit:1" });
     private static AdvisorSettingsDraft Settings()
     {
         var saved = new AdvisorSettingsDraft(new JObject());
@@ -51,8 +51,9 @@ internal static class CrewConnectionTests
     }
     private static HttpResponseMessage Response(HttpStatusCode status)
     {
-        var rows = new JArray(new JObject { ["id"] = "unit:1", ["person_name"] = "Fictional", ["personality"] = "Calm", ["text"] = "Maintaining station." });
-        var result = new JObject { ["choices"] = new JArray(new JObject { ["finish_reason"] = "tool_calls", ["message"] = new JObject { ["role"] = "assistant", ["tool_calls"] = new JArray(new JObject { ["id"] = "reports", ["type"] = "function", ["function"] = new JObject { ["name"] = CrewBatch.ToolName, ["arguments"] = new JObject { ["reports"] = rows }.ToString(Newtonsoft.Json.Formatting.None) } }) } }), ["usage"] = new JObject { ["total_tokens"] = 10 } };
+        var rows = new JArray(new JObject { ["id"] = "unit:1", ["text"] = "Maintaining station." });
+        var appointments = new JArray(new JObject { ["id"] = "unit:1", ["person_name"] = "Fictional", ["personality"] = "Calm" });
+        var result = new JObject { ["choices"] = new JArray(new JObject { ["finish_reason"] = "tool_calls", ["message"] = new JObject { ["role"] = "assistant", ["tool_calls"] = new JArray(new JObject { ["id"] = "reports", ["type"] = "function", ["function"] = new JObject { ["name"] = CrewBatch.ToolName, ["arguments"] = new JObject { ["appointments"] = appointments, ["reports"] = rows }.ToString(Newtonsoft.Json.Formatting.None) } }) } }), ["usage"] = new JObject { ["total_tokens"] = 10 } };
         return new HttpResponseMessage(status) { Content = new StringContent(result.ToString(), Encoding.UTF8, "application/json") };
     }
     private sealed class Handler : HttpMessageHandler

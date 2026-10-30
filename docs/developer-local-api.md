@@ -50,6 +50,7 @@ All responses are JSON. These endpoints are experimental and separate from the p
 | GET | `/v1/crew/reports/situation` | Current player-known input facts for eligible Reports targets; no AI request. |
 | PATCH | `/v1/crew/reports` | Save the AI Crew `enabled` flag. Enabling alone does not enable any reporting unit. |
 | PATCH | `/v1/crew/reports/targets` | Toggle explicitly listed reporting targets in the current Reports scope; regular scheduling performs generation. |
+| POST | `/v1/crew/reports/pause` | Pause or resume Reports while retaining the selected targets, people and history. |
 | POST | `/v1/crew/reports/stop` | Stop all Reports targets and cancel pending generation without changing the saved feature flag or session people/history. |
 
 Question bodies specify exactly one of `question` and `shortcut`:
@@ -283,7 +284,9 @@ First read `GET /v1/crew/reports` and use its `scope_id` and `targets[].id`. For
 {"scope_id":"<current Reports scope>","target_ids":["unit:1001","unit:1029"],"enabled":true}
 ```
 
-Send this to `PATCH /v1/crew/reports/targets`. IDs must be eligible formation leaders or independent units; a follower cannot become a separate reporter through this endpoint. The entire requested set is validated before any target changes. Old scope IDs are rejected after a battle session changes. Requests do not bypass the normal coalescing, batching, appointment or notification pipeline. Stop automatic reporting after a bounded test with `POST /v1/crew/reports/stop` and the same scope ID.
+Send this to `PATCH /v1/crew/reports/targets`. IDs may include formation followers. Every selected unit retains its crew and ON/OFF state when formations change; `targets[].can_report` identifies current formation leaders and standalone units. Followers can be appointed but cannot speak until they become eligible. The entire requested set is validated before any target changes. Old scope IDs are rejected after a battle session changes. Requests do not bypass the normal coalescing, batching, appointment or notification pipeline. Stop automatic reporting after a bounded test with `POST /v1/crew/reports/stop` and the same scope ID.
+
+A generation considers at most four speech candidates and may return remarks for zero to two of them. New appointments are returned independently, so silent crew still receive names and personalities. Appointment-only requests contain no situation data and do not accelerate the speech interval. Silence is a successful result and does not necessarily append history. Candidates left silent are not immediately retried; the next opportunity follows the whole-Crew interval. Use the busy state and communication trace when verifying a bounded generation rather than waiting only for history growth.
 
 CLI examples:
 
@@ -291,7 +294,11 @@ CLI examples:
 python3 tools/advisor_dev.py reports status
 python3 tools/advisor_dev.py reports situation
 python3 tools/advisor_dev.py reports targets --scope-id <scope> --target-id unit:1001 --enabled true
+python3 tools/advisor_dev.py reports pause --scope-id <scope> --value true
+python3 tools/advisor_dev.py reports pause --scope-id <scope> --value false
 python3 tools/advisor_dev.py reports stop --scope-id <scope>
 ```
 
 `PATCH /v1/crew/reports` with `{"enabled":false}` exercises the saved global disable path: it hides Crew UI, cancels reports and turns targets OFF. Re-enabling does not resume those targets. `notification` in the status response reports the current visible text, placement and native UI bounds; it does not fabricate a report for display testing.
+
+Reports target API requests are explicit commits; they do not edit the window’s pending checkbox selection. `POST /v1/crew/reports/pause` takes `{"scope_id":"...","paused":true}` or `false`. While paused, confirmed targets remain selected, but neither appointments nor remarks are generated. Resume validates the selected connection permission again. The global disable and `/stop` still turn all targets OFF.

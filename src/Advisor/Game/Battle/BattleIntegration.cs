@@ -24,6 +24,7 @@ internal sealed class BattleIntegration
     private object? mission;
     private object? player;
     private AdvisorHudButton? launcher;
+    internal ToggleButton? HudControl => launcher?.Control;
     private AdvisorWindow? advisor;
     private AdvisorOperations? operations;
     private AdvisorOperationGateway? operationGateway;

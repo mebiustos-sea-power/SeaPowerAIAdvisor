@@ -34,7 +34,7 @@ internal sealed class ReportsConnections : ICrewConnections
         if (id == settings.Current.ConnectionId) roles.Add("Reports");
         return roles.Count == 0 ? null : string.Join(" / ", roles);
     }
-    public async Task<IReadOnlyList<CrewSubmission>> GenerateAsync(CrewBatch batch, string id, CancellationToken cancellation)
+    public async Task<CrewGeneration> GenerateAsync(CrewBatch batch, string id, CancellationToken cancellation)
     {
         var saved = AdvisorSettings.Edit(path);
         var profile = (saved.Find(id) ?? throw new CrewException("connection_missing")).Build();
