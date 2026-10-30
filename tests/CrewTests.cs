@@ -93,6 +93,37 @@ internal static class CrewTests
             using var newSession = new CrewReports(_ => { }); var nextApi = new CrewLocalApi(newSession, () => 0, () => { });
             Require(nextApi.ScopeId != api.ScopeId, "Separate battle lifetimes reused the API scope");
         });
+        check("Exchange preference is sampled only for multi-speaker opportunities and never creates catch-up requests", () =>
+        {
+            foreach (var (count, draw, expected) in new[]
+            {
+                (0, 0.0, false), (1, 0.0, false),
+                (2, CrewReports.ExchangeProbability / 2, true),
+                (2, CrewReports.ExchangeProbability, false),
+                (4, (1 + CrewReports.ExchangeProbability) / 2, false)
+            })
+            {
+                using var rig = new Rig(new FixedRandom(draw));
+                var targets = count == 0 ? new[] { Follower(1) } : Enumerable.Range(1, count).Select(i => Target(i)).ToArray();
+                rig.Reports.Refresh(targets); rig.Reports.ApplyTargets(targets.Select(t => t.Id).ToArray(), 0); rig.Tick(1);
+                var call = rig.Take();
+                Require((bool?)call.Batch.Input("").Data["prefer_exchange"] == expected && rig.Requests == 1,
+                    "The wrong opportunity style was sent, or multiple requests were made");
+                rig.Complete(call); rig.Pump(1); rig.Tick(2);
+                Require(rig.Requests == 1 && rig.Reports.History.Count == 0 && !rig.Reports.Paused,
+                    "A preferred exchange forced speech, retried silence or paused Reports");
+            }
+        });
+        check("Exchange preference accepts silence and a single speaker and preserves the submitted reply order", () =>
+        {
+            var person = new CrewPerson("Crew", "calm");
+            var batch = new CrewBatch(new JObject(), new Dictionary<string, CrewPerson?> { ["unit:1"] = person, ["unit:2"] = person },
+                Array.Empty<string>(), preferExchange: true);
+            Require(batch.Read(Reply(new JArray())).Reports.Count == 0 && batch.Read(Reply(new JArray(Row("unit:1")))).Reports.Count == 1,
+                "Exchange preference became a two-speaker requirement");
+            var result = batch.Read(Reply(new JArray(Row("unit:2"), Row("unit:1"))));
+            Require(result.Reports.Select(r => r.Id).SequenceEqual(new[] { "unit:2", "unit:1" }), "The reply was moved ahead of the first remark");
+        });
         check("A generation appoints silent crew independently, preserves people and rejects incomplete or unknown results", () =>
         {
             var person = new CrewPerson("Existing", "Calm"); var input = new JObject { ["units"] = new JArray("snapshot") };
@@ -367,6 +398,8 @@ internal static class CrewTests
         internal readonly TaskCompletionSource<CrewGeneration> Completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal Call(CrewBatch batch, CancellationToken token) { Batch = batch; Token = token; }
     }
+    private sealed class FixedRandom(double value) : Random
+    { public override double NextDouble() => value; }
     private sealed class Rig : IDisposable
     {
         internal readonly List<Exception> Errors = new();
@@ -375,7 +408,7 @@ internal static class CrewTests
         private readonly int mainThread = Environment.CurrentManagedThreadId;
         private readonly ConcurrentQueue<Call> calls = new();
         private readonly CrewSettings settings = new("reports", 1, 10);
-        internal Rig() => Reports = new CrewReports(Errors.Add, new Random(1));
+        internal Rig(Random? random = null) => Reports = new CrewReports(Errors.Add, random ?? new Random(1));
         internal void Tick(double now) => Reports.Tick(now, settings, "en", _ =>
         { Require(Environment.CurrentManagedThreadId == mainThread, "Capture ran on a worker thread"); Captures++; return new JObject(); },
             async (batch, _, token, usage) =>

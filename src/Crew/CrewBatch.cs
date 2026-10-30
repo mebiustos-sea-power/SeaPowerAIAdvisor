@@ -36,23 +36,25 @@ internal sealed class CrewBatch
     private readonly JObject data;
     private readonly IReadOnlyDictionary<string, CrewPerson?> people;
     private readonly HashSet<string> appointments;
-    internal CrewBatch(JObject data, IReadOnlyDictionary<string, CrewPerson?> people, IEnumerable<string> appointments)
+    internal CrewBatch(JObject data, IReadOnlyDictionary<string, CrewPerson?> people, IEnumerable<string> appointments, bool preferExchange = false)
     {
-        this.data = (JObject)data.DeepClone(); this.people = new Dictionary<string, CrewPerson?>(people);
+        this.data = (JObject)data.DeepClone(); this.data["prefer_exchange"] = preferExchange; this.people = new Dictionary<string, CrewPerson?>(people);
         this.appointments = new HashSet<string>(appointments, StringComparer.Ordinal);
     }
     internal AiProviderInput Input(string connectionPrompt)
     {
+        var exchange = (bool)data["prefer_exchange"]! ?
+            "Create a short exchange: one reporter voices a feeling about the supplied situation; a second responds to that person with acknowledgment, empathy or a contrasting feeling, not advice, orders or new factual claims. If no natural exchange fits, use independent remarks or silence. " : "";
         var instruction = "Appoint only the units listed in input appointments, each exactly once, with a fictional personal name appropriate to its nation and a one-word personality. " +
             "If input appointments is empty, return appointments: []. " +
-            "Independently choose which, if any, of the reporters would naturally speak now, in reply_language. Use their existing or newly appointed personality. " +
+            "Choose which, if any, of the reporters would naturally speak now, in reply_language. Use their existing or newly appointed personality. " + exchange +
             "Use one brief in-character sentence, occasionally two: a restrained feeling, concern, or impression rather than a status summary or tactical advice. " +
             "Let personality shape the remark; thoughts and feelings are fictional, but their factual basis must come from the supplied player-known situation. " +
             "Silence is preferable to filler or repetition; submit an empty reports array when no reporter has a worthwhile remark. Appoint the requested units even when they remain silent. " +
-            "recent_remarks are conversation context, not current observations. Shared fleet contacts do not prove personal detection. " +
+            "Use recent_remarks to avoid repetition, not as current observations. Make this response self-contained. Shared fleet contacts do not prove personal detection. " +
             "posture states allegiance: enemy is confirmed hostile, unknown is undetermined. class_identified describes only class/type recognition. " +
             "Missing values are unknown; ammunition counts are inventory, not launch readiness. Never invent events, damage, detections, or mission completion, or claim or announce actions or orders. " +
-            "Formation leaders may refer to any listed member; others to their own unit. " +
+            "Report unit facts only for the speaker's own unit or, for leaders, its listed formation members; reacting to another speaker's remark is allowed. " +
             "Use submit_reports once, without questions or other commentary.";
         if (!string.IsNullOrWhiteSpace(connectionPrompt))
             instruction += "\nSupplemental instructions for this connection take priority if they conflict:\n" + connectionPrompt;
@@ -75,7 +77,7 @@ internal sealed class CrewBatch
                     }, appointments.Count, appointments.Count),
                     ["reports"] = Rows(new JObject
                     {
-                        ["id"] = id.DeepClone(), ["text"] = new JObject { ["type"] = "string", ["description"] = "The person's remark." }
+                        ["id"] = id.DeepClone(), ["text"] = new JObject { ["type"] = "string", ["description"] = "The person's remark, in display order within this response." }
                     }, Math.Min(MaximumSpeakers, people.Count))
                 } } };
         return new AiProviderInput(data, instruction, tool);

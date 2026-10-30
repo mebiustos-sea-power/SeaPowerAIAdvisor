@@ -32,6 +32,8 @@ internal sealed class CrewReport
 // Session-owned scheduling uses only the caller's monotonic real-time clock, never simulation time or pause state.
 internal sealed class CrewReports : IDisposable
 {
+    // Probability per eligible speech opportunity, not a required fraction of returned conversations.
+    internal const double ExchangeProbability = 1.0 / 3;
     private sealed class State
     {
         internal CrewTarget Target;
@@ -192,7 +194,8 @@ internal sealed class CrewReports : IDisposable
         if (candidates.Length > 0) data["recent_remarks"] = new JArray(history.TakeLast(3).Select(r => new JObject { ["id"] = r.Target.Id, ["text"] = r.Submission.Text }));
         active = appointments.Concat(candidates).Distinct().Select(s => (s, s.Revision, s.Target)).ToArray(); startedAt = now; speechInFlight = candidates.Length > 0;
         cancellation = new CancellationTokenSource();
-        var batch = new CrewBatch(data, candidates.ToDictionary(s => s.Target.Id, s => Person(s.Target.Id)), appointments.Select(s => s.Target.Id));
+        var batch = new CrewBatch(data, candidates.ToDictionary(s => s.Target.Id, s => Person(s.Target.Id)), appointments.Select(s => s.Target.Id),
+            preferExchange: candidates.Length >= 2 && random.NextDouble() < ExchangeProbability);
         var token = cancellation.Token; var connectionId = settings.ConnectionId;
         task = Task.Run(() => generate(batch, connectionId, token, Usage.Record), token); Version++;
     }
