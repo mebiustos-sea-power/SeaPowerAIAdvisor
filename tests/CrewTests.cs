@@ -56,6 +56,26 @@ internal static class CrewTests
                 Throws<CrewException>(() => CrewSettings.Parse(new JObject { ["notification_position"] = invalid }.ToString()));
             Throws<CrewException>(() => new CrewSettings(notificationPosition: (CrewNotificationPosition)99));
         }));
+        check("Reports API changes targets only after scope, complete target set and connection permission validation", () =>
+        {
+            using var rig = new Rig(); rig.Reports.Refresh(new[] { Target(1, 1, 2), Target(3) }); var denied = false; var checkedConnection = 0;
+            var api = new CrewLocalApi(rig.Reports, () => 0, () => { checkedConnection++; if (denied) throw new LocalApiException(403, "connection_not_allowed"); });
+            JObject Request(string scope, params string[] ids) => new() { ["scope_id"] = scope, ["enabled"] = true, ["target_ids"] = new JArray(ids) };
+            Throws<LocalApiException>(() => api.Dispatch("PATCH", CrewLocalApi.Path + "/targets", Request("previous battle", "unit:1")));
+            Throws<LocalApiException>(() => api.Dispatch("PATCH", CrewLocalApi.Path + "/targets", Request(api.ScopeId, "unit:1", "unit:2")));
+            Throws<LocalApiException>(() => api.Dispatch("PATCH", CrewLocalApi.Path + "/targets", Request(api.ScopeId, "unit:1", "unit:1")));
+            Require(!rig.Reports.Enabled("unit:1") && checkedConnection == 0, "An invalid batch partially applied or used a connection");
+            denied = true; Throws<LocalApiException>(() => api.Dispatch("PATCH", CrewLocalApi.Path + "/targets", Request(api.ScopeId, "unit:1")));
+            Require(!rig.Reports.Enabled("unit:1") && rig.Captures == 0, "Denied connection enabled automatic reporting");
+            denied = false; var result = api.Dispatch("PATCH", CrewLocalApi.Path + "/targets", Request(api.ScopeId, "unit:1", "unit:3"));
+            Require(result.Status == 200 && rig.Reports.Enabled("unit:1") && rig.Reports.Enabled("unit:3") && rig.Captures == 0, "Target changes bypassed normal tick scheduling");
+            var view = api.Status(); ((JObject)view["targets"]![0]!)["display_name"] = "mutated";
+            Require(rig.Reports.Targets.All(t => t.Name != "mutated"), "A status response exposed mutable session state");
+            api.Dispatch("POST", CrewLocalApi.Path + "/stop", new JObject { ["scope_id"] = api.ScopeId });
+            Require(!rig.Reports.Enabled("unit:1") && !rig.Reports.Enabled("unit:3"), "Reports stop retained active targets");
+            using var newSession = new CrewReports(_ => { }); var nextApi = new CrewLocalApi(newSession, () => 0, () => { });
+            Require(nextApi.ScopeId != api.ScopeId, "Separate battle lifetimes reused the API scope");
+        });
         check("A report batch accepts out-of-order unique IDs, preserves appointed people and rejects missing or duplicate reporters", () =>
         {
             var person = new CrewPerson("Existing", "Calm"); var input = new JObject { ["units"] = new JArray("snapshot") };
@@ -134,7 +154,7 @@ internal static class CrewTests
             Require(rig.Reports.Error == "invalid_response" && rig.Errors.Count == 1 && !rig.Reports.Enabled("unit:1") && rig.Reports.History.Count == 0, "An invalid response disappeared or left automatic requests running");
         });
     }
-    private static JObject Row(string id, string name = "Fictional") => new() { ["id"] = id, ["name"] = name, ["personality"] = "Calm", ["text"] = "Maintaining station." };
+    private static JObject Row(string id, string name = "Fictional") => new() { ["id"] = id, ["person_name"] = name, ["personality"] = "Calm", ["text"] = "Maintaining station." };
     private static AiReply Reply(JArray rows) => new("", new[] { new AiToolCall("reports", CrewBatch.ToolName, new JObject { ["reports"] = rows }) }, 12);
     private static CrewTarget Target(int id, params int[] members) => new("unit:" + id, "Unit " + id, "US", "captain", members.Length == 0 ? new[] { id } : members);
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }

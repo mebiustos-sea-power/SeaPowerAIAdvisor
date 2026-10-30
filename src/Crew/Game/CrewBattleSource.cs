@@ -69,7 +69,7 @@ internal sealed class CrewBattleSource
             var track = mapUnit.Unit; var position = Member(track, "PositionEstimate"); var identified = (bool)Required(Required(track, "Identified"), "Value");
             var observedClass = Member(track, "Class");
             var row = new JObject { ["track_number"] = track.Id, ["posture"] = posture, ["kind"] = Code(Member(mapUnit, "VisualType")),
-                ["identified"] = identified, ["class_name"] = identified && observedClass != null ? (string)Required(observedClass, "Value") : null,
+                ["class_identified"] = identified, ["class_name"] = identified && observedClass != null ? (string)Required(observedClass, "Value") : null,
                 ["position"] = position == null ? JValue.CreateNull() : Position(Required(position, "Item1")),
                 ["position_source"] = position == null ? "unknown" : (bool)Required(track, "HasLiveTrack") ? "observed_estimate" : "extrapolated_estimate",
                 ["dormant"] = (bool)Required(Required(track, "IsDormant"), "Value") };

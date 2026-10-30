@@ -249,10 +249,8 @@ internal sealed class CrewWindow : IDisposable
             {
                 if (check.IsChecked == true)
                 {
-                    if (settings.Current.ConnectionId == null) { check.IsChecked = false; throw new CrewException("connection_required"); }
-                    var selected = connections.Store.ReadConnections().SingleOrDefault(c => c.Id == settings.Current.ConnectionId);
-                    if (selected == null) { check.IsChecked = false; throw new CrewException("connection_missing"); }
-                    if (!connections.Providers.Any(p => p.Id == selected.Provider)) { check.IsChecked = false; throw new CrewException("provider_unavailable"); }
+                    try { connections.ValidateSelection(settings.Current.ConnectionId); }
+                    catch { check.IsChecked = false; throw; }
                 }
                 reports.SetEnabled(target.Id, check.IsChecked == true, now()); Notice("");
             });

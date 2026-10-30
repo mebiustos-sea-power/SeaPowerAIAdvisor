@@ -45,6 +45,12 @@ All responses are JSON. These endpoints are experimental and separate from the p
 | GET | `/v1/operations` | Current battle scope and operation catalog; empty when commands are disabled. |
 | GET | `/v1/operations/{operation}/candidates` | Current player-owned candidates and ammunition availability for an operation. |
 | POST | `/v1/operation-plans` | Submit and adopt explicit plans without AI or an approval dialog. |
+| GET | `/v1/crew/reports` | Reports availability, current scope, targets, appointments, history and visible notification. Does not open the adviser or send AI requests. |
+| POST | `/v1/crew/reports/window` | Open or close the Reports window through the HUD button action; unsaved edits still require confirmation. |
+| GET | `/v1/crew/reports/situation` | Current player-known input facts for eligible Reports targets; no AI request. |
+| PATCH | `/v1/crew/reports` | Save the AI Crew `enabled` flag. Enabling alone does not enable any reporting unit. |
+| PATCH | `/v1/crew/reports/targets` | Toggle explicitly listed reporting targets in the current Reports scope; regular scheduling performs generation. |
+| POST | `/v1/crew/reports/stop` | Stop all Reports targets and cancel pending generation without changing the saved feature flag or session people/history. |
 
 Question bodies specify exactly one of `question` and `shortcut`:
 
@@ -266,3 +272,26 @@ For `on_request`, initial `input.data` excludes automatically attached situation
 ### Composed native-order trial (no AI)
 
 `POST /v1/operation-plans` accepts an explicit `scope_id`, `request_id`, `plans` and optional `selected_plan_ids`. Use the same [ordered plan and target policy format](ai-unit-control-design.md#18-コマンドをまたぐ予約合成と移動編隊復帰2026-10-25) as AI submissions. Unlike a normal consultation, this development request adopts the selected plan immediately without a dialog. Command enablement, ownership, live preflight, terminal-order checks and replay protection still apply. Consultations, settings and proposal review must be idle. Successful registration is HTTP 200; a pending/rejected result is 409. Reusing an ID with different contents or a different completed selection is a conflict. The CLI exposes this as `operations submit --request-file FILE`; it never retries a POST automatically. There is no separate single-operation submission route; one plan with one operation uses the same endpoint.
+
+## AI Crew Reports verification
+
+Reports uses the same opt-in listener and main-thread queue. Its generation is independent of a tactical adviser conversation. The saved Reports connection must also be in the developer API's allowed connection list before the API can turn a target ON. Reports does not use the adviser's fallback assignment.
+
+First read `GET /v1/crew/reports` and use its `scope_id` and `targets[].id`. For example:
+
+```json
+{"scope_id":"<current Reports scope>","target_ids":["unit:1001","unit:1029"],"enabled":true}
+```
+
+Send this to `PATCH /v1/crew/reports/targets`. IDs must be eligible formation leaders or independent units; a follower cannot become a separate reporter through this endpoint. The entire requested set is validated before any target changes. Old scope IDs are rejected after a battle session changes. Requests do not bypass the normal coalescing, batching, appointment or notification pipeline. Stop automatic reporting after a bounded test with `POST /v1/crew/reports/stop` and the same scope ID.
+
+CLI examples:
+
+```sh
+python3 tools/advisor_dev.py reports status
+python3 tools/advisor_dev.py reports situation
+python3 tools/advisor_dev.py reports targets --scope-id <scope> --target-id unit:1001 --enabled true
+python3 tools/advisor_dev.py reports stop --scope-id <scope>
+```
+
+`PATCH /v1/crew/reports` with `{"enabled":false}` exercises the saved global disable path: it hides Crew UI, cancels reports and turns targets OFF. Re-enabling does not resume those targets. `notification` in the status response reports the current visible text, placement and native UI bounds; it does not fabricate a report for display testing.

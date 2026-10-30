@@ -37,6 +37,7 @@ internal sealed class AdvisorLocalApi
     private readonly Action<Exception> unexpected;
     private readonly Func<JObject> connections;
     private readonly Func<string, bool, string?, AdvisorSituationDelivery?, string?, AdvisorBackendSetup> prepareConnection;
+    private readonly Func<string, string, JObject, LocalApiResponse?>? featureRequest;
     private object? owner;
     private string mode = "";
     private Func<IAdvisorLocalTarget>? target;
@@ -44,8 +45,9 @@ internal sealed class AdvisorLocalApi
     private AdvisorOperations? operations;
     private AdvisorUnitReservations? reservations;
     internal AdvisorLocalApi(Func<AdvisorPromptOverrides> prompts, Action<Exception> unexpected,
-        Func<JObject> connections, Func<string, bool, string?, AdvisorSituationDelivery?, string?, AdvisorBackendSetup> prepareConnection)
-    { this.prompts = prompts; this.unexpected = unexpected; this.connections = connections; this.prepareConnection = prepareConnection; }
+        Func<JObject> connections, Func<string, bool, string?, AdvisorSituationDelivery?, string?, AdvisorBackendSetup> prepareConnection,
+        Func<string, string, JObject, LocalApiResponse?>? featureRequest = null)
+    { this.prompts = prompts; this.unexpected = unexpected; this.connections = connections; this.prepareConnection = prepareConnection; this.featureRequest = featureRequest; }
     // UI guards still record and stop a broken adviser; API callers must also receive the failure.
     internal static void InvokeGuarded(Action<Action> guard, Action action)
     {
@@ -115,6 +117,8 @@ internal sealed class AdvisorLocalApi
     private IAdvisorLocalTarget Target() => target?.Invoke() ?? throw new LocalApiException(409, "no_active_game");
     private LocalApiResponse Dispatch(string method, string path, JObject body)
     {
+        var feature = featureRequest?.Invoke(method, path, body);
+        if (feature != null) return feature;
         if ((method == "PATCH" && path == "/v1/prompts" || method == "POST" && path == "/v1/prompts/reset") &&
             (bool?)target?.Invoke().LocalStatus()["settings_open"] == true)
             throw new LocalApiException(409, "settings_open");

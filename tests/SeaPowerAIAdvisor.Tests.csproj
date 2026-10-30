@@ -7,6 +7,7 @@
     <Compile Include="..\src\ReportsConnections.cs" />
     <Compile Include="..\src\Crew\CrewBatch.cs" />
     <Compile Include="..\src\Crew\CrewReports.cs" />
+    <Compile Include="..\src\Crew\Development\CrewLocalApi.cs" />
     <Compile Include="..\src\MissionCreator\Configuration\MissionCreatorSettings.cs" />
     <Compile Include="..\src\MissionCreator\Connections\MissionCreatorConnections.cs" />
     <Compile Include="..\src\MissionCreator\Development\MissionCreatorLocalApi.cs" />

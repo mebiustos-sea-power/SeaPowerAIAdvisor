@@ -30,22 +30,28 @@ internal sealed class CrewBatch
     { this.data = (JObject)data.DeepClone(); this.people = new Dictionary<string, CrewPerson?>(people); }
     internal AiProviderInput Input(string connectionPrompt)
     {
-        var instruction = "Write one brief in-world status report (1-2 sentences) for each reporter, in reply_language. " +
-            "Reporters are formation leaders speaking for every listed member, or independent units. " +
-            "Use only supplied player-known facts. Fleet contacts are shared information, not proof that this reporter detected them. " +
-            "Keep allegiance separate from class identification. Missing values are unknown; ammunition counts are inventory, not launch readiness. " +
+        var instruction = "Write one or two brief in-character sentences per reporter in reply_language. " +
+            "A reporter is a fictional person, not the unit itself. Formation leaders speak for every listed member; other reporters speak for their own unit. " +
+            "Use only supplied player-known facts. Shared fleet contacts do not prove this reporter detected them. " +
+            "posture states allegiance: enemy is confirmed hostile, unknown is undetermined. class_identified describes only class/type recognition. " +
+            "Missing values are unknown; ammunition counts are inventory, not launch readiness. " +
             "Personality changes tone, never facts. Do not invent events, damage, detections, orders, actions, or mission completion. " +
-            "For an unappointed reporter, invent a plausible fictional name matching its supplied nation and a one-word personality. " +
-            "Preserve an appointed reporter's name and personality. Submit each supplied reporter ID exactly once with submit_reports. " +
-            "Do not ask questions or include commentary outside the reports.";
+            "For an unappointed reporter, create a fictional personal name appropriate to its nation and a one-word personality. " +
+            "Keep an appointed person's name and personality. Focus on relevant status or concerns; omit routine coordinates and exhaustive contact lists. " +
+            "Submit each supplied reporter ID once with submit_reports, without questions or other commentary.";
         if (!string.IsNullOrWhiteSpace(connectionPrompt))
             instruction += "\nSupplemental instructions for this connection take priority if they conflict:\n" + connectionPrompt;
-        var properties = new JObject();
-        foreach (var name in new[] { "id", "name", "personality", "text" }) properties[name] = new JObject { ["type"] = "string" };
+        var properties = new JObject
+        {
+            ["id"] = new JObject { ["type"] = "string", ["description"] = "The supplied reporter ID." },
+            ["person_name"] = new JObject { ["type"] = "string", ["description"] = "The fictional person's personal name, not a unit name or callsign." },
+            ["personality"] = new JObject { ["type"] = "string", ["description"] = "The person's one-word personality." },
+            ["text"] = new JObject { ["type"] = "string", ["description"] = "The person's current status report." }
+        };
         var tool = new JObject { ["name"] = ToolName, ["description"] = "Submit all crew reports, matching the supplied reporter IDs.",
             ["parameters"] = new JObject { ["type"] = "object", ["additionalProperties"] = false, ["required"] = new JArray("reports"),
                 ["properties"] = new JObject { ["reports"] = new JObject { ["type"] = "array", ["items"] = new JObject {
-                    ["type"] = "object", ["additionalProperties"] = false, ["required"] = new JArray("id", "name", "personality", "text"), ["properties"] = properties } } } } };
+                    ["type"] = "object", ["additionalProperties"] = false, ["required"] = new JArray("id", "person_name", "personality", "text"), ["properties"] = properties } } } } };
         return new AiProviderInput(data, instruction, tool);
     }
     internal IReadOnlyList<CrewSubmission> Read(AiReply reply)
@@ -67,7 +73,7 @@ internal sealed class CrewBatch
             }
             var id = Read("id", 80);
             if (!people.TryGetValue(id, out var person) || !seen.Add(id)) throw new CrewException("invalid_response");
-            var name = Read("name", 80); var personality = Read("personality", 40); var text = Read("text", 1200);
+            var name = Read("person_name", 80); var personality = Read("personality", 40); var text = Read("text", 1200);
             // Model output can never rename an already appointed person.
             result.Add(new CrewSubmission(id, person ?? new CrewPerson(name, personality), text));
         }

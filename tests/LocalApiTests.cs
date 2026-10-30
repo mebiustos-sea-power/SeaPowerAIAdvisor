@@ -14,6 +14,26 @@ internal static partial class LocalApiTests
     internal static void Run(Action<string, Action> check)
     {
         RunConnections(check);
+        check("Independent feature routes use the existing opt-in game-thread queue without constructing an adviser", () =>
+        {
+            var thread = 0;
+            var api = new AdvisorLocalApi(() => throw new InvalidOperationException("Unrelated prompts were read"), error => throw error,
+                () => new JObject(), (_, _, _, _, _) => throw new InvalidOperationException("Unrelated connection was opened"),
+                (method, path, body) =>
+                {
+                    if (path != "/v1/crew/reports") return null;
+                    thread = Environment.CurrentManagedThreadId;
+                    return new LocalApiResponse(200, new JObject { ["feature"] = "reports" });
+                });
+            Require(api.Enqueue("GET", "/v1/crew/reports", new()).GetAwaiter().GetResult().Status == 503 && thread == 0, "Disabled listener dispatched feature work");
+            api.Enable();
+            var request = Task.Run(() => api.Enqueue("GET", "/v1/crew/reports", new()));
+            SpinWait.SpinUntil(() => request.IsCompleted, 10);
+            Require(!request.IsCompleted && thread == 0, "An HTTP worker accessed the feature directly");
+            while (!request.IsCompleted) { api.Pump(); Thread.Yield(); }
+            Require(request.GetAwaiter().GetResult().Status == 200 && thread == Environment.CurrentManagedThreadId, "Feature work did not use the main-thread pump");
+            api.Disable();
+        });
         check("Developer API is opt-in and unrelated settings saves preserve its choice", () =>
         {
             var directory = Path.Combine(Path.GetTempPath(), "advisor-local-api-" + Guid.NewGuid().ToString("N"));

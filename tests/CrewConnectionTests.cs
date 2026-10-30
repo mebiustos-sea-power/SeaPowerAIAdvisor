@@ -51,7 +51,7 @@ internal static class CrewConnectionTests
     }
     private static HttpResponseMessage Response(HttpStatusCode status)
     {
-        var rows = new JArray(new JObject { ["id"] = "unit:1", ["name"] = "Fictional", ["personality"] = "Calm", ["text"] = "Maintaining station." });
+        var rows = new JArray(new JObject { ["id"] = "unit:1", ["person_name"] = "Fictional", ["personality"] = "Calm", ["text"] = "Maintaining station." });
         var result = new JObject { ["choices"] = new JArray(new JObject { ["finish_reason"] = "tool_calls", ["message"] = new JObject { ["role"] = "assistant", ["tool_calls"] = new JArray(new JObject { ["id"] = "reports", ["type"] = "function", ["function"] = new JObject { ["name"] = CrewBatch.ToolName, ["arguments"] = new JObject { ["reports"] = rows }.ToString(Newtonsoft.Json.Formatting.None) } }) } }), ["usage"] = new JObject { ["total_tokens"] = 10 } };
         return new HttpResponseMessage(status) { Content = new StringContent(result.ToString(), Encoding.UTF8, "application/json") };
     }

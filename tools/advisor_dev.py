@@ -357,6 +357,14 @@ def parser():
     commands = root.add_subparsers(dest="command", required=True)
     for name in ("discover", "status", "connections", "cancel"):
         add_output(commands.add_parser(name))
+    reports = commands.add_parser("reports", help="Inspect and control AI Crew Reports through its normal runtime.").add_subparsers(dest="reports_command", required=True)
+    for name in ("status", "situation"):
+        add_output(reports.add_parser(name))
+    enabled = reports.add_parser("enabled"); enabled.add_argument("--value", choices=("true", "false"), required=True); add_output(enabled)
+    targets = reports.add_parser("targets"); targets.add_argument("--scope-id", required=True)
+    targets.add_argument("--target-id", action="append", required=True); targets.add_argument("--enabled", choices=("true", "false"), required=True); add_output(targets)
+    window = reports.add_parser("window"); window.add_argument("--scope-id", required=True); window.add_argument("--open", choices=("true", "false"), required=True); add_output(window)
+    stop = reports.add_parser("stop"); stop.add_argument("--scope-id", required=True); add_output(stop)
     notices = commands.add_parser("notices").add_subparsers(dest="notice_command", required=True)
     add_output(notices.add_parser("preview"))
     operations = commands.add_parser("operations").add_subparsers(dest="operation_command", required=True)
@@ -434,6 +442,18 @@ def main(argv=None):
                 value = client.request("GET", consultation_path(args.id))
             if args.answer_file and isinstance(value.get("answer"), str):
                 write_text(args.answer_file, value["answer"])
+        elif args.command == "reports":
+            path = "/v1/crew/reports"
+            if args.reports_command in ("status", "situation"):
+                value = client.request("GET", path if args.reports_command == "status" else path + "/situation")
+            elif args.reports_command == "enabled":
+                value = client.request("PATCH", path, {"enabled": args.value == "true"})
+            elif args.reports_command == "window":
+                value = client.request("POST", path + "/window", {"scope_id": args.scope_id, "open": args.open == "true"})
+            elif args.reports_command == "targets":
+                value = client.request("PATCH", path + "/targets", {"scope_id": args.scope_id, "target_ids": args.target_id, "enabled": args.enabled == "true"})
+            else:
+                value = client.request("POST", path + "/stop", {"scope_id": args.scope_id})
         elif args.command == "operations":
             if args.operation_command == "list":
                 value = client.request("GET", "/v1/operations")

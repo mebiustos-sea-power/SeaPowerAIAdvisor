@@ -181,6 +181,13 @@ internal sealed class AdvisorOptionsStore
         var saved = Read();
         Save(new AdvisorOptions(saved.MaxQueryRounds, saved.CampaignEnabled, saved.Information, saved.CommonPrompt, size, saved.HistoryExchanges, userName, saved.DeveloperApiEnabled, saved.LocalConnections, linkOwnUnits ?? saved.LinkOwnUnits, linkContacts ?? saved.LinkContacts, saved.DisabledCommands, saved.Templates, crewEnabled ?? saved.CrewEnabled));
     }
+    internal void SaveCrew(bool enabled)
+    {
+        var saved = Read();
+        Save(new AdvisorOptions(saved.MaxQueryRounds, saved.CampaignEnabled, saved.Information, saved.CommonPrompt,
+            saved.TextSize, saved.HistoryExchanges, saved.UserName, saved.DeveloperApiEnabled, saved.LocalConnections,
+            saved.LinkOwnUnits, saved.LinkContacts, saved.DisabledCommands, saved.Templates, enabled));
+    }
     internal void SaveCampaign(bool enabled)
     {
         var saved = Read();

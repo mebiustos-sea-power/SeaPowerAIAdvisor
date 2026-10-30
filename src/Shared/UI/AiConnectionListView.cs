@@ -18,9 +18,11 @@ internal sealed class AiConnectionListView
         Action<string> open, Action<Action> guard)
     { this.host = host; this.text = text; this.language = language; this.open = open; this.guard = guard; }
 
+    internal void Clear() => host.Children.Clear();
+
     internal void Show(IReadOnlyList<AiConnectionProfile> orderedEntries, IReadOnlyList<IAiConnectionProvider> choices, Func<string, string?> role)
     {
-        host.Children.Clear();
+        Clear();
         if (orderedEntries.Count == 0)
             host.Children.Add(new TextBlock { Text = text("connection.empty"), TextWrapping = TextWrapping.Wrap });
         foreach (var entry in orderedEntries)

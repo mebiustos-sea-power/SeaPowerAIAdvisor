@@ -53,7 +53,8 @@ public sealed class Plugin : IAnchorChainMod
             harmony = new Harmony(ModId);
             battle = new BattleIntegration(BattleRuntime, message => Log.LogWarning(message), options, Backends);
             crew = new Crew.CrewIntegration(Path.Combine(UnityEngine.Application.persistentDataPath, "SeaPowerAIAdvisor", "crew-reports.json"),
-                () => options.Current.CrewEnabled,
+                () => options.Current.CrewEnabled, options.SaveCrew,
+                id => { if (!options.Current.LocalConnections.AllowedIds.Contains(id)) throw new LocalApiException(403, "connection_not_allowed"); },
                 saved => new ReportsConnections(settingsPath, AdvisorTrace.DirectoryIn(UnityEngine.Application.persistentDataPath), saved, () => AdvisorText.Load(GameLanguage.Read())),
                 key => AdvisorText.Load(GameLanguage.Read())[key], error => Log.LogError("AI Crew Reports failed: " + error));
             harmony.Patch(Required(typeof(MainGameViewModel), "OnLateUpdate"), postfix: new HarmonyMethod(typeof(Plugin), nameof(BattleFrame)));
@@ -79,7 +80,7 @@ public sealed class Plugin : IAnchorChainMod
                     var saved = AdvisorSettings.Edit(settingsPath);
                     options.Current.LocalConnections.Select(saved, id, allowFallback, model, prompt);
                     return AdvisorServices.Prepare(saved, allowFallback: allowFallback, situationDelivery: delivery);
-                });
+                }, (method, path, body) => crew?.LocalRequest(method, path, body));
             var driverObject = new UnityEngine.GameObject("SeaPowerAIAdvisor.DeveloperLocalApi");
             UnityEngine.Object.DontDestroyOnLoad(driverObject);
             driverObject.AddComponent<AdvisorLocalApiDriver>().Initialize(options, LocalApi, message => Log.LogWarning(message));

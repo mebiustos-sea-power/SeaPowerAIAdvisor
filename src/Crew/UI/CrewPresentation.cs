@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using Newtonsoft.Json.Linq;
 using Noesis;
 using UnityEngine;
 using Image = Noesis.Image;
@@ -75,6 +76,13 @@ internal sealed class CrewPresentation : IDisposable
         var report = reports.NextNotification(now); if (report == null) return;
         heading.Text = report.Target.Name + " / " + report.Submission.Person.Name; body.Text = report.Submission.Text;
         notice.Visibility = Visibility.Visible; until = now + seconds;
+    }
+    internal JObject Status()
+    {
+        var bounds = notice.TransformToVisual(host).TransformBounds(new Noesis.Rect(0, 0, notice.ActualWidth, notice.ActualHeight));
+        return new JObject { ["visible"] = layer.IsVisible && notice.IsVisible,
+            ["heading"] = heading.Text, ["text"] = body.Text, ["position"] = position.HasValue ? CrewSettings.PositionCode(position.Value) : null,
+            ["bounds"] = new JObject { ["x"] = bounds.X, ["y"] = bounds.Y, ["width"] = bounds.Width, ["height"] = bounds.Height } };
     }
     internal void Clear() { until = 0; notice.Visibility = Visibility.Collapsed; }
     public void Dispose() { host.Children.Remove(layer); Portrait.Dispose(); UnityEngine.Object.Destroy(texture); }

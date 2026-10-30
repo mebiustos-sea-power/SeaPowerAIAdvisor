@@ -158,7 +158,8 @@ internal sealed class AiConnectionsView
             focus.Cancel(); typing.Release(); editor = null; baseline = null; providerDrafts.Clear(); fields.Children.Clear(); values.Clear(); provider.Items.Clear();
             listPane.Visibility = Visibility.Visible; editorPane.Visibility = Visibility.Collapsed;
             name.Text = timeout.Text = outputTokens.Text = prompt.Text = "";
-            cards.Show(available ? store.ReadConnections() : Array.Empty<AiConnectionProfile>(), providers(), role);
+            if (available) cards.Show(store.ReadConnections(), providers(), role);
+            else cards.Clear();
         }
         finally { updating = false; }
         UpdateEnabled();
