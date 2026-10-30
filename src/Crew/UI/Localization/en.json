@@ -1,6 +1,6 @@
 {
   "help": "Getting started",
-  "help_body": "AI Crew adds immersion through remarks from captains and pilots. Crew members with names and personalities are assigned to the units you select and deliver short reports or impressions based on the current situation through pop-up notifications.\n\n### Getting started with AI Crew\n\n1. **Choose an API connection**  \n   Choose a connection in **Settings > API connections** and save. Connections registered in AI Advisor are also available.\n\n2. **Choose participating units**  \n   Select units under **Reporting units** and press **Apply**. Use **All ON** to select everyone together.\n\n3. **Receive reports**  \n   Names and personalities are generated automatically. Remarks appear as on-screen notifications and can also be read in **Report history**.\n\n### Things to know\n\n- Only current formation leaders and standalone units speak.\n- Not everyone speaks on every occasion.\n- Adjust the interval and notification position in **Settings > Reports**.\n- Closing this window or pausing the game does not stop API requests. To stop them, press **Pause** in **Report history**.\n- Crew identities, unit selections and report history are not stored in saved games.\n",
+  "help_body": "AI Crew adds immersion through remarks from captains and pilots. Crew members with names and personalities are assigned to the units you select and deliver short reports or impressions based on the current situation through pop-up notifications.\n\n### Getting started with AI Crew\n\n1. **Choose an API connection**  \n   Choose a connection in **Settings > API connections** and save. Connections registered in AI Advisor are also available.\n\n2. **Choose participating units**  \n   Select units under **Reporting units** and press **Apply**. Use **All ON** to select everyone together.\n\n3. **Receive reports**  \n   Names and personalities are generated automatically. Remarks appear as on-screen notifications and can also be read in **Report history**.\n\n### Things to know\n\n- Only current formation leaders and standalone units speak.\n- Not everyone speaks on every occasion.\n- Adjust the interval and notification position in **Settings > Reports**.\n- Closing this window or pausing the game does not stop API requests. To stop them, press **Pause** in **Report history**.\n- Crew identities, unit selections and report history are not stored in saved games.\n- AI-generated remarks may contain information that differs from the actual situation.\n- To hide this tab, turn off **Show Getting started tab** in **Settings > Reports** and save.\n\nFuture development may include letting crew members control units.\n",
   "show_help_tab": "Show Getting started tab",
   "history": "Report history",
   "targets": "Reporting units",
@@ -19,7 +19,7 @@
   "error.connection_required": "Choose a Reports connection before enabling a unit.",
   "error.connection_missing": "The selected connection no longer exists. Choose another connection in Settings.",
   "error.provider_unavailable": "This connection adapter does not support Reports.",
-  "error.settings_invalid": "Check the interval (1-7 minutes) and notification settings.",
+  "error.settings_invalid": "Check the interval (1-15 minutes), exchange preference (0-100%), and notification settings.",
   "error.settings_read_failed": "Cannot read Reports settings.",
   "error.settings_write_failed": "Cannot save Reports settings.",
   "error.invalid_response": "The AI returned an invalid report.",
@@ -33,7 +33,7 @@
   "position.bottom_left": "Bottom left",
   "position.bottom_center": "Bottom center",
   "position.bottom_right": "Bottom right",
-  "interval": "Approximate interval (minutes, 1-7)",
+  "interval": "Approximate interval (minutes, 1-15)",
   "appointment_pending": "Appointment pending",
   "all_on": "All ON",
   "all_off": "All OFF",
@@ -46,5 +46,7 @@
   "usage.summary": "Mission usage: {0} tokens / API requests: {1}",
   "usage.unknown": " / Usage unavailable: {0}",
   "usage.latest": "Latest: {0}",
-  "usage.unavailable": "Unavailable"
+  "usage.unavailable": "Unavailable",
+  "exchange_chance": "Chance to encourage an exchange (%, 0-100)",
+  "exchange_chance_hint": "Applies when multiple speakers are eligible. Even at 100%, independent remarks or silence are possible."
 }

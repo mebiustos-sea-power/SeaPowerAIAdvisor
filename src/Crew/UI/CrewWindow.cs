@@ -31,7 +31,7 @@ internal sealed class CrewWindow : IDisposable
     private readonly AiConnectionsView editor;
     private readonly SettingsTabNavigation tabs, apiTabs;
     private readonly ComboBox selection, notificationPosition;
-    private readonly TextBox interval, duration;
+    private readonly TextBox interval, duration, exchangeChance;
     private readonly CheckBox showHelpTab;
     private readonly ImageSource portrait;
     private readonly UiNotice settingsNotice, reportNotice;
@@ -47,7 +47,7 @@ internal sealed class CrewWindow : IDisposable
     internal bool IsOpen => host.Windows.Contains(window);
     private T Find<T>(string name) where T : class => root.FindName(name) as T ?? throw new InvalidOperationException("Missing Reports control: " + name);
     private string? SelectedId => selection.SelectedIndex <= 0 ? null : ids[selection.SelectedIndex - 1];
-    private string Values => page == "reports" ? interval.Text + ":" + duration.Text + ":" + notificationPosition.SelectedIndex + ":" + showHelpTab.IsChecked : SelectedId ?? "";
+    private string Values => page == "reports" ? interval.Text + ":" + duration.Text + ":" + notificationPosition.SelectedIndex + ":" + showHelpTab.IsChecked + ":" + exchangeChance.Text : SelectedId ?? "";
     private bool Dirty => targetSelection.Dirty || (page == "api" && apiTabs.Current == 1 ? editor.HasChanges : page != null && Values != baseline);
 
     internal CrewWindow(FrameworkElement view, WindowHost host, CrewReports reports, CrewSettingsStore settings, ICrewConnections connections,
@@ -71,7 +71,7 @@ internal sealed class CrewWindow : IDisposable
         selection = Find<ComboBox>("Connection"); notificationPosition = Find<ComboBox>("NotificationPosition");
         foreach (CrewNotificationPosition position in Enum.GetValues(typeof(CrewNotificationPosition)))
             notificationPosition.Items.Add(new ComboBoxItem { Content = text["position." + CrewSettings.PositionCode(position)] });
-        interval = Find<TextBox>("Interval"); duration = Find<TextBox>("Duration"); showHelpTab = Find<CheckBox>("ShowHelpTab");
+        interval = Find<TextBox>("Interval"); duration = Find<TextBox>("Duration"); exchangeChance = Find<TextBox>("ExchangeChance"); showHelpTab = Find<CheckBox>("ShowHelpTab");
         var form = AiConnectionsView.Create(common); Find<ContentControl>("Registration").Content = form;
         editor = new AiConnectionsView(form, connections.Store, () => connections.Providers, common, GameLanguage.Read, typing, Run,
             CanCommit, (name, action) => Confirm(action, string.Format(CultureInfo.CurrentCulture, common("settings.delete_question"), name), common("profile.remove"), common("settings.cancel")),
@@ -100,20 +100,20 @@ internal sealed class CrewWindow : IDisposable
         Bind("SaveConnection", () =>
         {
             if (!CanCommit()) return;
-            var saved = settings.Current; settings.Save(new CrewSettings(SelectedId, saved.IntervalMinutes, saved.DisplaySeconds, saved.NotificationPosition, saved.ShowHelpTab));
+            var saved = settings.Current; settings.Save(new CrewSettings(SelectedId, saved.IntervalMinutes, saved.DisplaySeconds, saved.NotificationPosition, saved.ShowHelpTab, saved.ExchangeChancePercent));
             baseline = Values; editor.UpdateCards(); Saved();
         });
         Bind("SaveReports", () =>
         {
             if (!CanCommit()) return;
             int Read(TextBox input) => int.TryParse(input.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : throw new CrewException("settings_invalid");
-            settings.Save(new CrewSettings(settings.Current.ConnectionId, Read(interval), Read(duration), (CrewNotificationPosition)notificationPosition.SelectedIndex, showHelpTab.IsChecked == true));
+            settings.Save(new CrewSettings(settings.Current.ConnectionId, Read(interval), Read(duration), (CrewNotificationPosition)notificationPosition.SelectedIndex, showHelpTab.IsChecked == true, Read(exchangeChance)));
             UpdateHelpTab();
             baseline = Values; Saved();
         });
         Bind("CancelConfirmation", HideConfirmation);
         Bind("Confirm", () => { var action = confirmed; HideConfirmation(); action?.Invoke(); });
-        foreach (var input in new[] { interval, duration })
+        foreach (var input in new[] { interval, duration, exchangeChance })
         {
             input.GotKeyboardFocus += (_, _) => Run(() => typing.Acquire(input));
             input.LostKeyboardFocus += (_, _) => Run(() => typing.Release(input));
@@ -180,6 +180,7 @@ internal sealed class CrewWindow : IDisposable
         {
             var saved = settings.Current;
             interval.Text = saved.IntervalMinutes.ToString(CultureInfo.InvariantCulture);
+            exchangeChance.Text = saved.ExchangeChancePercent.ToString(CultureInfo.InvariantCulture);
             duration.Text = saved.DisplaySeconds.ToString(CultureInfo.InvariantCulture); notificationPosition.SelectedIndex = (int)saved.NotificationPosition;
             showHelpTab.IsChecked = saved.ShowHelpTab;
         }

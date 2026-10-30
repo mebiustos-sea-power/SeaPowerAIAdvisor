@@ -31,7 +31,7 @@ internal sealed class ReportsConnections : ICrewConnections
         if (id == saved.MainId) roles.Add(labels["connection.card_main"]);
         if (id == saved.SubId) roles.Add(labels["connection.card_sub"]);
         if (id == saved.TranslationConnectionId) roles.Add(labels["connection.card_translation"]);
-        if (id == settings.Current.ConnectionId) roles.Add("Reports");
+        if (id == settings.Current.ConnectionId) roles.Add(labels["connection.card_reports"]);
         return roles.Count == 0 ? null : string.Join(" / ", roles);
     }
     public async Task<CrewGeneration> GenerateAsync(CrewBatch batch, string id, CancellationToken cancellation, Action<long?> recordUsage)

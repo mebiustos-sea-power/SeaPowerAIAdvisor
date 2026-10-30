@@ -67,7 +67,10 @@
               <StackPanel Margin="0,8,8,0">
                 <TextBlock Text="{DynamicResource Crew.interval_hint}" FontSize="12" TextWrapping="Wrap" Opacity="0.85" Margin="0,0,0,12" />
                 <TextBlock Text="{DynamicResource Crew.interval}" FontSize="12" Margin="0,0,0,4" />
-                <TextBox x:Name="Interval" Width="140" HorizontalAlignment="Left" FontSize="14" Padding="7" MaxLength="1" />
+                <TextBox x:Name="Interval" Width="140" HorizontalAlignment="Left" FontSize="14" Padding="7" MaxLength="2" />
+                <TextBlock Text="{DynamicResource Crew.exchange_chance}" FontSize="12" Margin="0,12,0,4" />
+                <TextBox x:Name="ExchangeChance" Width="140" HorizontalAlignment="Left" FontSize="14" Padding="7" MaxLength="3" />
+                <TextBlock Text="{DynamicResource Crew.exchange_chance_hint}" FontSize="12" TextWrapping="Wrap" Opacity="0.85" Margin="0,4,0,0" />
                 <TextBlock Text="{DynamicResource Crew.position}" FontSize="12" Margin="0,12,0,6" />
                 <ComboBox x:Name="NotificationPosition" MinHeight="30" />
                 <TextBlock Text="{DynamicResource Crew.duration}" FontSize="12" Margin="0,12,0,4" />

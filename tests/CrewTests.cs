@@ -35,18 +35,29 @@ internal static class CrewTests
             store.Save(new CrewSettings("reports-only", 2, 9, showHelpTab: false));
             var reopened = new CrewSettingsStore(path);
             Require(reopened.Current.ConnectionId == "reports-only" && reopened.Current.IntervalMinutes == 2 && reopened.Current.DisplaySeconds == 9 && !reopened.Current.ShowHelpTab, "Reports preferences were lost");
-            foreach (var interval in new[] { 1, 7 })
+            foreach (var interval in new[] { 1, 8, 15 })
             {
                 store.Save(new CrewSettings("reports-only", interval, 9, showHelpTab: store.Current.ShowHelpTab));
                 Require(new CrewSettingsStore(path).Current.IntervalMinutes == interval && !new CrewSettingsStore(path).Current.ShowHelpTab, "Saving an interval lost the selected interval or help visibility");
             }
-            store.Save(new CrewSettings("reports-only", 7, 9, showHelpTab: true));
-            Require(new CrewSettingsStore(path).Current.ShowHelpTab && store.Current.IntervalMinutes == 7 && store.Current.DisplaySeconds == 9,
+            store.Save(new CrewSettings("reports-only", 15, 9, showHelpTab: true));
+            Require(new CrewSettingsStore(path).Current.ShowHelpTab && store.Current.IntervalMinutes == 15 && store.Current.DisplaySeconds == 9,
                 "Re-enabling guidance changed other Reports preferences or did not persist");
+            Require(new CrewSettings().ExchangeChancePercent == 33 && CrewSettings.Parse("{}").ExchangeChancePercent == 33,
+                "Unset exchange preference did not use its requested default");
+            foreach (var percent in new[] { 0, 33, 100 })
+            {
+                store.Save(new CrewSettings("reports-only", 15, 9, showHelpTab: true, exchangeChancePercent: percent));
+                var read = new CrewSettingsStore(path).Current;
+                Require(read.ExchangeChancePercent == percent && read.ConnectionId == "reports-only" && read.IntervalMinutes == 15 && read.DisplaySeconds == 9 && read.ShowHelpTab,
+                    "Exchange preference did not persist or changed another saved preference");
+            }
+            foreach (var invalid in new JToken[] { new JValue(-1), new JValue(101), new JValue(33.5), new JValue("33"), JValue.CreateNull() })
+                Throws<CrewException>(() => CrewSettings.Parse(new JObject { ["exchange_chance_percent"] = invalid }.ToString()));
             File.Delete(path); Directory.CreateDirectory(path);
             Throws<CrewException>(() => store.Save(new CrewSettings("other", 3, 8)));
             Require(store.Current.ConnectionId == "reports-only", "Failed storage published the pending connection");
-            Throws<CrewException>(() => new CrewSettings("id", 0)); Throws<CrewException>(() => new CrewSettings("id", 8));
+            Throws<CrewException>(() => new CrewSettings("id", 0)); Throws<CrewException>(() => new CrewSettings("id", 16));
             Throws<CrewException>(() => CrewSettings.Parse("{\"interval_minutes\":1.5}"));
             foreach (var invalid in new JToken[] { JValue.CreateNull(), new JValue("false"), new JValue(0) })
                 Throws<CrewException>(() => CrewSettings.Parse(new JObject { ["show_help_tab"] = invalid }.ToString()));
@@ -95,15 +106,14 @@ internal static class CrewTests
         });
         check("Exchange preference is sampled only for multi-speaker opportunities and never creates catch-up requests", () =>
         {
-            foreach (var (count, draw, expected) in new[]
+            foreach (var (percent, count, draw, expected) in new[]
             {
-                (0, 0.0, false), (1, 0.0, false),
-                (2, CrewReports.ExchangeProbability / 2, true),
-                (2, CrewReports.ExchangeProbability, false),
-                (4, (1 + CrewReports.ExchangeProbability) / 2, false)
+                (0, 2, 0.0, false), (100, 0, 0.0, false), (100, 1, 0.0, false),
+                (100, 2, 0.999999, true), (33, 2, 0.329999, true),
+                (33, 2, 0.33, false), (70, 4, 0.699999, true), (70, 4, 0.7, false)
             })
             {
-                using var rig = new Rig(new FixedRandom(draw));
+                using var rig = new Rig(new FixedRandom(draw), new CrewSettings("reports", 1, 10, exchangeChancePercent: percent));
                 var targets = count == 0 ? new[] { Follower(1) } : Enumerable.Range(1, count).Select(i => Target(i)).ToArray();
                 rig.Reports.Refresh(targets); rig.Reports.ApplyTargets(targets.Select(t => t.Id).ToArray(), 0); rig.Tick(1);
                 var call = rig.Take();
@@ -407,8 +417,9 @@ internal static class CrewTests
         internal int Captures, Requests;
         private readonly int mainThread = Environment.CurrentManagedThreadId;
         private readonly ConcurrentQueue<Call> calls = new();
-        private readonly CrewSettings settings = new("reports", 1, 10);
-        internal Rig(Random? random = null) => Reports = new CrewReports(Errors.Add, random ?? new Random(1));
+        private readonly CrewSettings settings;
+        internal Rig(Random? random = null, CrewSettings? settings = null)
+        { Reports = new CrewReports(Errors.Add, random ?? new Random(1)); this.settings = settings ?? new CrewSettings("reports", 1, 10); }
         internal void Tick(double now) => Reports.Tick(now, settings, "en", _ =>
         { Require(Environment.CurrentManagedThreadId == mainThread, "Capture ran on a worker thread"); Captures++; return new JObject(); },
             async (batch, _, token, usage) =>
