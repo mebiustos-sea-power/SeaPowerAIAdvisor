@@ -9,9 +9,10 @@
   <TabControl x:Name="Tabs" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
     <TabItem x:Name="HistoryTab" Header="{DynamicResource Crew.history}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
       <Grid>
-        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
         <Button x:Name="PauseReports" Content="{DynamicResource Crew.pause}" HorizontalAlignment="Right" Height="30" Padding="12,0" Margin="0,8,0,8" />
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel x:Name="History" Margin="0,8,8,0" /></ScrollViewer>
+        <TextBlock x:Name="UsageSummary" Grid.Row="1" TextWrapping="Wrap" FontSize="12" Opacity="0.7" Margin="0,0,0,8" />
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel x:Name="History" Margin="0,8,8,0" /></ScrollViewer>
       </Grid>
     </TabItem>
     <TabItem x:Name="TargetsTab" Header="{DynamicResource Crew.targets}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">

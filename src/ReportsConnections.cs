@@ -34,7 +34,7 @@ internal sealed class ReportsConnections : ICrewConnections
         if (id == settings.Current.ConnectionId) roles.Add("Reports");
         return roles.Count == 0 ? null : string.Join(" / ", roles);
     }
-    public async Task<CrewGeneration> GenerateAsync(CrewBatch batch, string id, CancellationToken cancellation)
+    public async Task<CrewGeneration> GenerateAsync(CrewBatch batch, string id, CancellationToken cancellation, Action<long?> recordUsage)
     {
         var saved = AdvisorSettings.Edit(path);
         var profile = (saved.Find(id) ?? throw new CrewException("connection_missing")).Build();
@@ -45,12 +45,14 @@ internal sealed class ReportsConnections : ICrewConnections
             AdvisorServices.Diagnostics(saved.Options, profile, null, catalog), "crew_reports", new JObject());
         using var transport = transportFactory(trace);
         AdvisorServices.ObserveErrors(transport, profile, null, catalog, "crew_reports", null);
+        var requested = false; long? tokens = null;
         try
         {
             using var connection = new AiConnection(service.Open(profile, saved.Options, false, transport), null,
                 batch.Input(profile.Prompt), _ => throw new InvalidOperationException("Reports has no fallback assignment."));
             var reply = await connection.GenerateAsync(true, null, cancellation, (_, _, _, bytes) =>
-            { if (bytes > 1_000_000) throw new CrewException("too_large"); }).ConfigureAwait(false);
+            { if (bytes > 1_000_000) throw new CrewException("too_large"); requested = true; }).ConfigureAwait(false);
+            tokens = reply.TotalTokens;
             cancellation.ThrowIfCancellationRequested();
             var result = batch.Read(reply);
             trace?.FinishOperation(new JObject { ["outcome"] = "completed", ["api_requests"] = connection.ApiRequests,
@@ -64,6 +66,7 @@ internal sealed class ReportsConnections : ICrewConnections
             trace?.FinishOperation(new JObject { ["outcome"] = "failed", ["error_code"] = error is CrewException crew ? crew.Code : error is AiConnectionException ai ? ai.Code : "unexpected_error" });
             throw;
         }
+        finally { if (requested) recordUsage(tokens); }
     }
     public async Task<string> TestAsync(AiConnectionDraft draft, CancellationToken cancellation)
     {

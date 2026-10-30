@@ -276,6 +276,8 @@ For `on_request`, initial `input.data` excludes automatically attached situation
 
 ## AI Crew Reports verification
 
+`GET /v1/crew/reports` includes mission-scoped `usage`: `api_requests`, `known_total_tokens`, `unknown_requests`, and nullable `last_total_tokens`. Counts update when each generation request finishes, including silent or appointment-only results and rejected reports. Unavailable usage is counted separately, never assumed to be zero. Pre-send failures do not increment requests. Pause, selection changes and global disable preserve these totals; a new mission scope starts at zero. The latest value refers to the last finished generation; it is null before the first request or when that request did not provide usage. Connection tests and other AI features are excluded.
+
 Reports uses the same opt-in listener and main-thread queue. Its generation is independent of a tactical adviser conversation. The saved Reports connection must also be in the developer API's allowed connection list before the API can turn a target ON. Reports does not use the adviser's fallback assignment.
 
 First read `GET /v1/crew/reports` and use its `scope_id` and `targets[].id`. For example:
@@ -302,3 +304,5 @@ python3 tools/advisor_dev.py reports stop --scope-id <scope>
 `PATCH /v1/crew/reports` with `{"enabled":false}` exercises the saved global disable path: it hides Crew UI, cancels reports and turns targets OFF. Re-enabling does not resume those targets. `notification` in the status response reports the current visible text, placement and native UI bounds; it does not fabricate a report for display testing.
 
 Reports target API requests are explicit commits; they do not edit the window’s pending checkbox selection. `POST /v1/crew/reports/pause` takes `{"scope_id":"...","paused":true}` or `false`. While paused, confirmed targets remain selected, but neither appointments nor remarks are generated. Resume validates the selected connection permission again. The global disable and `/stop` still turn all targets OFF.
+
+Reports generation errors pause the whole Reports session without changing the target selection, appointed people, history or usage totals. Read `paused` and `error` from the status. Explicit resume through `/pause` with `paused: false` validates the connection again, clears the error, and resumes with existing people; editing target selection alone does not resume. Global disable and `/stop` still turn targets OFF.

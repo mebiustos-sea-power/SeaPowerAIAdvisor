@@ -38,6 +38,7 @@ internal sealed class CrewWindow : IDisposable
     private string? page, baseline;
     private bool changing, stopped;
     private int revision = -1;
+    private CrewUsageSnapshot? displayedUsage;
     private Action? confirmed;
     private CancellationTokenSource? testingCancellation;
     private Task<string>? testing;
@@ -122,7 +123,7 @@ internal sealed class CrewWindow : IDisposable
         window.ButtonsTemplate = root.Resources["CrewWindowButtons"] as DataTemplate ?? throw new InvalidOperationException("The Reports window buttons are unavailable.");
         window.CloseAction = new CloseCommand(() => Run(RequestClose));
         window.OnClosed += (_, _) => { typing.Release(); CancelTest(); };
-        Home(); tabs.Reset(); apiTabs.Reset();
+        Home(); tabs.Reset(); apiTabs.Reset(); DrawUsage();
     }
     private SettingsTabNavigation Navigation(string name)
     {
@@ -202,7 +203,7 @@ internal sealed class CrewWindow : IDisposable
             if (revision != reports.Version) SyncSelection();
             tabs.Pump(Dirty, () => { Home(); return true; }, action => Confirm(action));
             apiTabs.Pump(Dirty, () => { typing.Release(); CancelTest(); editor.Close(); RefreshConnections(); editor.Open(); return true; }, action => Confirm(action));
-            editor.Tick(); settingsNotice.Tick();
+            editor.Tick(); settingsNotice.Tick(); DrawUsage();
             Find<FrameworkElement>("ReportStatusPane").Visibility = tabs.Current == 2 && page != null ? Visibility.Collapsed : Visibility.Visible;
             if (testing?.IsCompleted == true)
             {
@@ -216,7 +217,7 @@ internal sealed class CrewWindow : IDisposable
             Find<Button>("PauseReports").Content = text[reports.Paused ? "resume" : "pause"];
             if (!stopped)
             {
-                if (reports.Error != null) reportNotice.Show(ErrorMessage(reports.Error), true);
+                if (reports.Error != null) reportNotice.Show(text["paused"] + "\n" + ErrorMessage(reports.Error), true);
                 else if (reports.Paused) reportNotice.Show(text["paused"]);
                 else if (reports.Busy) reportNotice.Show(text["busy"]);
                 else reportNotice.Show("");
@@ -245,6 +246,17 @@ internal sealed class CrewWindow : IDisposable
         var words = new StackPanel(); words.Children.Add(new TextBlock { Text = heading, FontWeight = FontWeights.Bold, TextWrapping = TextWrapping.Wrap });
         words.Children.Add(new TextBlock { Text = body, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 5, 0, 0) }); Grid.SetColumn(words, 1); row.Children.Add(words);
         return new Border { Child = row, BorderBrush = new SolidColorBrush(Color.FromArgb(255, 85, 96, 107)), BorderThickness = new Thickness(1), Padding = new Thickness(10), Margin = new Thickness(0, 0, 0, 8) };
+    }
+    private void DrawUsage()
+    {
+        var usage = reports.Usage.Snapshot;
+        if (ReferenceEquals(displayedUsage, usage)) return;
+        displayedUsage = usage;
+        string Number(long value) => value.ToString("N0", CultureInfo.CurrentCulture);
+        var summary = string.Format(text["usage.summary"], Number(usage.KnownTokens), Number(usage.ApiRequests));
+        if (usage.UnknownRequests > 0) summary += string.Format(text["usage.unknown"], Number(usage.UnknownRequests));
+        var latest = usage.ApiRequests == 0 ? "-" : usage.LastTokens.HasValue ? Number(usage.LastTokens.Value) + " tokens" : text["usage.unavailable"];
+        Find<TextBlock>("UsageSummary").Text = summary + "\n" + string.Format(text["usage.latest"], latest);
     }
     private void DrawHistory()
     {

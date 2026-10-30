@@ -43,11 +43,12 @@ internal sealed class CrewBatch
     }
     internal AiProviderInput Input(string connectionPrompt)
     {
-        var instruction = "Appoint every unit in appointments with a fictional personal name appropriate to its nation and a one-word personality. " +
+        var instruction = "Appoint only the units listed in input appointments, each exactly once, with a fictional personal name appropriate to its nation and a one-word personality. " +
+            "If input appointments is empty, return appointments: []. " +
             "Independently choose which, if any, of the reporters would naturally speak now, in reply_language. Use their existing or newly appointed personality. " +
             "Use one brief in-character sentence, occasionally two: a restrained feeling, concern, or impression rather than a status summary or tactical advice. " +
             "Let personality shape the remark; thoughts and feelings are fictional, but their factual basis must come from the supplied player-known situation. " +
-            "Silence is preferable to filler or repetition; submit an empty reports array when no reporter has a worthwhile remark. Appointments are still required for silent crew. " +
+            "Silence is preferable to filler or repetition; submit an empty reports array when no reporter has a worthwhile remark. Appoint the requested units even when they remain silent. " +
             "recent_remarks are conversation context, not current observations. Shared fleet contacts do not prove personal detection. " +
             "posture states allegiance: enemy is confirmed hostile, unknown is undetermined. class_identified describes only class/type recognition. " +
             "Missing values are unknown; ammunition counts are inventory, not launch readiness. Never invent events, damage, detections, or mission completion, or claim or announce actions or orders. " +

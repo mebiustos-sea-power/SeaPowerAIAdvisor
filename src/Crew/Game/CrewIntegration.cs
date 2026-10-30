@@ -132,7 +132,7 @@ internal sealed class CrewIntegration
     private void Fail(Exception error)
     {
         log(error); failed = true;
-        Cleanup(() => reports?.Suspend(), () => presentation?.Clear(), () => window?.Stop());
+        Cleanup(() => reports?.SetPaused(true, clock.Elapsed.TotalSeconds), () => presentation?.Clear(), () => window?.Stop());
         if (launcher != null) launcher.Control.ToolTip = "AI Crew - Reports / " + error.GetType().Name;
     }
     private void Cleanup(params Action[] actions)

@@ -19,7 +19,7 @@
   "error.settings_invalid": "Check the interval (1-7 minutes) and notification settings.",
   "error.settings_read_failed": "Cannot read Reports settings.",
   "error.settings_write_failed": "Cannot save Reports settings.",
-  "error.invalid_response": "The AI returned an invalid report. Reporting was stopped for the affected units.",
+  "error.invalid_response": "The AI returned an invalid report.",
   "error.too_large": "The report input is too large.",
   "error.unexpected_error": "Reports encountered an error. See the log for details.",
   "report_connection": "Reports API connection",
@@ -39,5 +39,9 @@
   "resume": "Resume",
   "paused": "Reports paused",
   "leader_reports": "Reported by formation leader",
-  "reports": "Reports"
+  "reports": "Reports",
+  "usage.summary": "Mission usage: {0} tokens / API requests: {1}",
+  "usage.unknown": " / Usage unavailable: {0}",
+  "usage.latest": "Latest: {0}",
+  "usage.unavailable": "Unavailable"
 }

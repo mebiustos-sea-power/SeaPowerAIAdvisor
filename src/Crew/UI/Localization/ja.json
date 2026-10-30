@@ -19,7 +19,7 @@
   "error.settings_invalid": "発言間隔 (1-7分) と通知の設定を確認してください。",
   "error.settings_read_failed": "Reportsの設定を読み込めません。",
   "error.settings_write_failed": "Reportsの設定を保存できません。",
-  "error.invalid_response": "AIの報告形式が不正なため、対象ユニットの報告を停止しました。",
+  "error.invalid_response": "AIの報告形式が不正です。",
   "error.too_large": "報告用の入力データが大きすぎます。",
   "error.unexpected_error": "Reportsでエラーが発生しました。詳細はログを確認してください。",
   "report_connection": "Reports用のAPI接続",
@@ -39,5 +39,9 @@
   "resume": "再開",
   "paused": "報告を一時停止中",
   "leader_reports": "編隊長が報告",
-  "reports": "報告"
+  "reports": "報告",
+  "usage.summary": "このミッションの使用量: {0} tokens / API: {1}回",
+  "usage.unknown": " / 使用量不明: {0}回",
+  "usage.latest": "直近: {0}",
+  "usage.unavailable": "不明"
 }

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -13,7 +14,7 @@ internal interface ICrewConnections
     IReadOnlyList<IAiConnectionProvider> Providers { get; }
     string? Role(string id);
     string Error(AiConnectionException error);
-    Task<CrewGeneration> GenerateAsync(CrewBatch batch, string id, CancellationToken cancellation);
+    Task<CrewGeneration> GenerateAsync(CrewBatch batch, string id, CancellationToken cancellation, Action<long?> recordUsage);
     Task<string> TestAsync(AiConnectionDraft draft, CancellationToken cancellation);
 }
 

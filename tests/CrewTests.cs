@@ -283,11 +283,63 @@ internal static class CrewTests
             rig.Complete(second); rig.Pump(2);
             Require(targets.All(t => rig.Reports.Person(t.Id) != null) && rig.Reports.History.Count == 0, "Some silent appointments were lost");
         });
-        check("An invalid result stops only the affected batch and remains a visible logged error", () =>
+        check("Mission usage survives history trimming, selection changes, pause and global suspension but resets for a new mission", () =>
         {
-            using var rig = new Rig(); rig.Reports.Refresh(new[] { Target(1), Target(2) }); rig.SetEnabled("unit:1", true, 0);
-            rig.Tick(1); var call = rig.Take(); call.Completion.SetException(new CrewException("invalid_response")); rig.Pump(1);
-            Require(rig.Reports.Error == "invalid_response" && rig.Errors.Count == 1 && !rig.Reports.Enabled("unit:1") && rig.Reports.History.Count == 0, "An invalid response disappeared or left automatic requests running");
+            using var rig = new Rig(); rig.Reports.Refresh(new[] { Target(1) }); rig.SetEnabled("unit:1", true, 0);
+            for (var i = 0; i < 201; i++)
+            {
+                var now = 1 + i * 80; rig.Tick(now); var request = rig.Take(); rig.Complete(request, "unit:1"); rig.Pump(now);
+            }
+            var usage = rig.Reports.Usage.Snapshot;
+            Require(rig.Reports.History.Count == 200 && usage.ApiRequests == 201 && usage.KnownTokens == 201 * 12 && usage.UnknownRequests == 0 && usage.LastTokens == 12,
+                "Usage followed retained history instead of all completed requests");
+            rig.Reports.SetPaused(true, 20000); rig.Reports.SetPaused(false, 20000); rig.SetEnabled("unit:1", false, 20000);
+            rig.SetEnabled("unit:1", true, 20000); rig.Reports.Suspend();
+            var api = new CrewLocalApi(rig.Reports, () => 20000, () => { }); var status = api.Status();
+            Require(ReferenceEquals(rig.Reports.Usage.Snapshot, usage) && (int?)status["usage"]!["api_requests"] == 201 && (long?)status["usage"]!["known_total_tokens"] == 201 * 12,
+                "A lifecycle operation reset usage or the developer API reported different totals");
+            using var nextMission = new CrewReports(_ => { });
+            Require(nextMission.Usage.Snapshot.ApiRequests == 0 && nextMission.Usage.Snapshot.KnownTokens == 0 && nextMission.Usage.Snapshot.LastTokens == null,
+                "A new mission inherited the previous mission's usage");
+        });
+        check("Late usage is counted while paused even though the cancelled report and appointment are discarded", () =>
+        {
+            using var rig = new Rig(); rig.Reports.Refresh(new[] { Target(1) }); rig.SetEnabled("unit:1", true, 0);
+            rig.Tick(1); var pending = rig.Take(); rig.Reports.SetPaused(true, 1); rig.Complete(pending, "unit:1");
+            Require(SpinWait.SpinUntil(() => rig.Reports.Usage.Snapshot.ApiRequests == 1, 3000), "Late usage was lost when the generation task was detached");
+            rig.Tick(100);
+            Require(rig.Reports.Paused && rig.Reports.Usage.Snapshot.KnownTokens == 12 && rig.Reports.History.Count == 0 && rig.Reports.Person("unit:1") == null,
+                "Late usage resumed reporting or allowed a stale report or appointment");
+        });
+        check("A failed generation pauses all Reports without changing selection, people or history and resumes only explicitly", () =>
+        {
+            foreach (var failure in new Exception[] { new CrewException("invalid_response"), new AiConnectionException("api_error", 503) })
+            {
+                using var rig = new Rig(); var targets = Enumerable.Range(1, 6).Select(i => Target(i)).ToArray(); rig.Reports.Refresh(targets);
+                rig.Reports.ApplyTargets(targets.Select(t => t.Id).ToArray(), 0); rig.Tick(1); var initial = rig.Take();
+                var first = (string)initial.Batch.Input("").Data["reporters"]![0]!["id"]!; rig.Complete(initial, first); rig.Pump(1);
+                var people = targets.ToDictionary(t => t.Id, t => rig.Reports.Person(t.Id));
+                rig.Tick(77); var failed = rig.Take(); failed.Completion.SetException(failure); rig.Pump(77);
+                Require(rig.Reports.Paused && rig.Reports.Error != null && rig.Errors.Count == 1 && targets.All(t => rig.Reports.Enabled(t.Id)) &&
+                    targets.All(t => rig.Reports.Person(t.Id) == people[t.Id]) && rig.Reports.History.Count == 1 && rig.Reports.NextNotification(77) == null,
+                    "An error lost selection, people or history, or did not pause the whole session");
+                rig.Tick(1000); Require(rig.Requests == 2 && !rig.Reports.Busy && rig.Reports.Usage.Snapshot.ApiRequests == 2,
+                    "An error automatically retried or lost request accounting");
+                var selected = rig.Reports.Targets.Select(t => t.Id).ToArray(); rig.Reports.ApplyTargets(selected.Take(5).ToArray(), 1000); rig.Tick(1000);
+                Require(rig.Reports.Paused && rig.Requests == 2, "Editing selection silently resumed an error pause");
+                rig.Reports.SetPaused(false, 1000); Require(rig.Reports.Error == null && !rig.Reports.Paused, "Explicit resume retained an error or paused state");
+                rig.Tick(1001); var resumed = rig.Take();
+                Require(resumed.Batch.Input("").Data["appointments"] is JArray { Count: 0 }, "Resume reappointed existing people");
+                rig.Complete(resumed); rig.Pump(1001); Require(!rig.Reports.Paused && rig.Reports.Error == null, "A successful resumed request retained an error");
+            }
+        });
+        check("A missing Reports connection pauses generation while retaining selected units", () =>
+        {
+            using var reports = new CrewReports(_ => { }); reports.Refresh(new[] { Target(1), Target(2) }); reports.ApplyTargets(new[] { "unit:1", "unit:2" }, 0);
+            reports.Tick(1, new CrewSettings(), "en", _ => throw new InvalidOperationException("Unexpected capture"),
+                (_, _, _, _) => throw new InvalidOperationException("Unexpected request"));
+            Require(reports.Paused && reports.Error == "connection_required" && reports.Enabled("unit:1") && reports.Enabled("unit:2") && reports.Usage.Snapshot.ApiRequests == 0,
+                "Missing configuration cleared user selection or sent a request");
         });
     }
     private static JObject Row(string id) => new() { ["id"] = id, ["text"] = "Maintaining station." };
@@ -321,7 +373,12 @@ internal static class CrewTests
         internal Rig() => Reports = new CrewReports(Errors.Add, new Random(1));
         internal void Tick(double now) => Reports.Tick(now, settings, "en", _ =>
         { Require(Environment.CurrentManagedThreadId == mainThread, "Capture ran on a worker thread"); Captures++; return new JObject(); },
-            (batch, _, token) => { Interlocked.Increment(ref Requests); var call = new Call(batch, token); calls.Enqueue(call); return call.Completion.Task; });
+            async (batch, _, token, usage) =>
+            {
+                Interlocked.Increment(ref Requests); var call = new Call(batch, token); calls.Enqueue(call); long? tokens = null;
+                try { var result = await call.Completion.Task; tokens = 12; return result; }
+                finally { usage(tokens); }
+            });
         internal Call Take()
         {
             Call? call = null; Require(SpinWait.SpinUntil(() => calls.TryDequeue(out call), 3000), "Report generation did not start"); return call!;

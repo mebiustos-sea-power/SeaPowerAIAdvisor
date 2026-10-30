@@ -54,6 +54,7 @@ internal sealed class CrewReports : IDisposable
     private long selectionRound;
     internal string? Error { get; private set; }
     internal bool Busy => task != null;
+    internal CrewUsage Usage { get; } = new();
     internal bool Paused { get; private set; }
     internal bool HasEnabledTargets => states.Values.Any(s => s.Enabled);
     private bool HasReporters => states.Values.Any(s => s.Enabled && s.Target.CanReport);
@@ -107,13 +108,14 @@ internal sealed class CrewReports : IDisposable
         if (value) CancelGeneration();
         else
         {
+            Error = null;
             nextOpportunity = HasEnabledTargets ? now + 1 : double.PositiveInfinity;
             nextAppointments = NeedsAppointment ? now + 1 : double.PositiveInfinity;
         }
         Version++;
     }
     internal void Tick(double now, CrewSettings settings, string language, Func<IReadOnlyList<CrewTarget>, JObject> capture,
-        Func<CrewBatch, string, CancellationToken, Task<CrewGeneration>> generate)
+        Func<CrewBatch, string, CancellationToken, Action<long?>, Task<CrewGeneration>> generate)
     {
         if (retired || Paused) return;
         if (!HasReporters) nextOpportunity = double.PositiveInfinity;
@@ -147,14 +149,13 @@ internal sealed class CrewReports : IDisposable
             catch (Exception e)
             {
                 log(e);
-                foreach (var entry in work)
-                    if (states.TryGetValue(entry.Target.Id, out var current) && ReferenceEquals(current, entry.State) && current.Enabled && current.Revision == entry.Revision)
-                    { current.Enabled = false; Error = e is CrewException crew ? crew.Code : e is Shared.AiConnectionException ai ? ai.Code : "unexpected_error"; }
+                Error = e is CrewException crew ? crew.Code : e is Shared.AiConnectionException ai ? ai.Code : "unexpected_error";
+                SetPaused(true, now);
             }
             finally
             {
                 // Selection changes may already have scheduled fresh work while this request was in flight.
-                if (!HasEnabledTargets) { nextOpportunity = double.PositiveInfinity; nextAppointments = double.PositiveInfinity; }
+                if (Paused || !HasEnabledTargets) { nextOpportunity = double.PositiveInfinity; nextAppointments = double.PositiveInfinity; }
                 else
                 {
                     if (hadSpeech && double.IsPositiveInfinity(nextOpportunity))
@@ -165,12 +166,12 @@ internal sealed class CrewReports : IDisposable
                 cancellation?.Dispose(); cancellation = null; Version++;
             }
         }
-        if (task != null || now < Math.Min(nextOpportunity, nextAppointments)) return;
+        if (Paused || task != null || now < Math.Min(nextOpportunity, nextAppointments)) return;
         var appointments = now < nextAppointments ? Array.Empty<State>() : states.Values.Where(s => s.Enabled && !people.ContainsKey(s.Target.Id)).Take(CrewBatch.MaximumAppointments).ToArray();
         var candidates = now < nextOpportunity ? Array.Empty<State>() : states.Values.Where(s => s.Enabled && s.Target.CanReport && (people.ContainsKey(s.Target.Id) || appointments.Contains(s)))
             .OrderBy(s => s.LastConsidered).ThenBy(_ => random.NextDouble()).Take(4).ToArray();
         if (appointments.Length == 0 && candidates.Length == 0) return;
-        if (settings.ConnectionId == null) { foreach (var s in states.Values) s.Enabled = false; Error = "connection_required"; CancelGeneration(); Version++; return; }
+        if (settings.ConnectionId == null) { Error = "connection_required"; SetPaused(true, now); return; }
         if (appointments.Length > 0) nextAppointments = double.PositiveInfinity;
         if (candidates.Length > 0)
         {
@@ -193,7 +194,7 @@ internal sealed class CrewReports : IDisposable
         cancellation = new CancellationTokenSource();
         var batch = new CrewBatch(data, candidates.ToDictionary(s => s.Target.Id, s => Person(s.Target.Id)), appointments.Select(s => s.Target.Id));
         var token = cancellation.Token; var connectionId = settings.ConnectionId;
-        task = Task.Run(() => generate(batch, connectionId, token), token); Version++;
+        task = Task.Run(() => generate(batch, connectionId, token, Usage.Record), token); Version++;
     }
     internal CrewReport? NextNotification(double now)
     {
