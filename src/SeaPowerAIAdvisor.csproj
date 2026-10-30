@@ -43,11 +43,14 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="$(PkgMarkdig)\lib\netstandard2.1\Markdig.dll" LogicalName="SeaPowerAIAdvisor.Markdig.dll" />
+    <EmbeddedResource Include="Crew\UI\CrewWindow.xaml" LogicalName="SeaPowerAIAdvisor.CrewWindow.xaml" />
+    <EmbeddedResource Include="Crew\UI\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Crew.Localization.%(Filename).json" />
+    <EmbeddedResource Include="Crew\UI\Assets\crew.png" LogicalName="SeaPowerAIAdvisor.Crew.png" />
     <EmbeddedResource Include="Translation\UI\TranslationOverlay.xaml" LogicalName="SeaPowerAIAdvisor.TranslationOverlay.xaml" />
     <EmbeddedResource Include="Advisor\UI\Views\Advisor.xaml" LogicalName="SeaPowerAIAdvisor.Advisor.xaml" />
     <EmbeddedResource Include="Shared\UI\Connections.xaml" LogicalName="SeaPowerAIAdvisor.Shared.Connections.xaml" />
     <EmbeddedResource Include="Shared\UI\Controls.xaml" LogicalName="SeaPowerAIAdvisor.AdvisorControls.xaml" />
-    <EmbeddedResource Include="Advisor\UI\Views\AdvisorHudButton.xaml" LogicalName="SeaPowerAIAdvisor.AdvisorHudButton.xaml" />
+    <EmbeddedResource Include="Shared\UI\HudButton.xaml" LogicalName="SeaPowerAIAdvisor.Shared.HudButton.xaml" />
     <EmbeddedResource Include="Advisor\UI\Views\AdvisorError.xaml" LogicalName="SeaPowerAIAdvisor.AdvisorError.xaml" />
     <EmbeddedResource Include="Advisor\UI\Views\AdvisorUpdateNotice.xaml" LogicalName="SeaPowerAIAdvisor.AdvisorUpdateNotice.xaml" />
     <EmbeddedResource Include="Advisor\UI\Assets\advisor-default.png" LogicalName="SeaPowerAIAdvisor.DefaultPortrait.png" />

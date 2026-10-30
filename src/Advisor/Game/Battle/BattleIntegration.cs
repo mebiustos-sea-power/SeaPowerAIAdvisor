@@ -44,7 +44,7 @@ internal sealed class BattleIntegration
         if (!runtime.Failed && (!SceneCreator.InstanceExists(false) ||
             !SceneCreator.Instance.IsLoadingDone || Globals._playerTaskforce == null))
         { ClearOperations(); return; }
-        var root = ReferenceEquals(model, current) && ReferenceEquals(uiRoot, current.RootControl) ? view : FindView(current.RootControl);
+        var root = ReferenceEquals(model, current) && ReferenceEquals(uiRoot, current.RootControl) ? view : GameUi.FindVisual<MainGameView>(current.RootControl);
         if (root == null || root.ActualWidth <= 0 || root.ActualHeight <= 0) return;
         var currentMission = runtime.Failed ? mission : SceneCreator.Instance;
         var currentPlayer = runtime.Failed ? player : Globals._playerTaskforce;
@@ -70,7 +70,7 @@ internal sealed class BattleIntegration
             }
             void ShowError()
             {
-                var host = FindHost(current.RootControl) ?? throw new InvalidOperationException("The battle window host is unavailable.");
+                var host = GameUi.FindWindowHost(current.RootControl) ?? throw new InvalidOperationException("The battle window host is unavailable.");
                 errorWindow ??= new AdvisorErrorWindow(root, host, runtime, AdvisorText.Load(GameLanguage.Read()),
                     value => button.Control.IsChecked = value, RestartAdvisor);
                 errorWindow.Show();
@@ -101,7 +101,7 @@ internal sealed class BattleIntegration
         launcher.Control.Visibility = current.IsHudVisible ? Visibility.Visible : Visibility.Collapsed;
         if (!runtime.Failed)
         {
-            var host = FindHost(current.RootControl) ?? throw new InvalidOperationException("The battle window host is unavailable.");
+            var host = GameUi.FindWindowHost(current.RootControl) ?? throw new InvalidOperationException("The battle window host is unavailable.");
             mapInput ??= new BattleMapPointInput(root, () => model?.Map?.DisplayMap,
                 () => model?.StateManager.CurrentState.Value, () => advisor?.CanInsertLocation ?? !QuestionInputController.IsComposing,
                 coordinate => GetAdvisor().InsertLocation(coordinate), guard);
@@ -125,7 +125,7 @@ internal sealed class BattleIntegration
     private AdvisorWindow GetAdvisor()
     {
         if (view == null || model?.RootControl == null) throw new InvalidOperationException("The battle advisor view is unavailable.");
-        var host = FindHost(model.RootControl) ?? throw new InvalidOperationException("The battle window host is unavailable.");
+        var host = GameUi.FindWindowHost(model.RootControl) ?? throw new InvalidOperationException("The battle window host is unavailable.");
         mapNavigation ??= new BattleMapNavigation(() => model?.Map);
         EnsureOperations();
         if (advisor == null)
@@ -241,35 +241,6 @@ internal sealed class BattleIntegration
             return new BattleReferenceCatalog(Array.Empty<object>(), Array.Empty<object>(), year, false);
         return new BattleReferenceCatalog(BattleValue.Rows(BattleValue.Required(manager, "MuseumObjectEntries")),
             BattleValue.Rows(BattleValue.Required(manager, "WeaponMuseumEntries")), year, true);
-    }
-
-    private static MainGameView? FindView(DependencyObject node)
-    {
-        if (node is MainGameView game) return game;
-        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(node); i++)
-        {
-            var found = FindView(VisualTreeHelper.GetChild(node, i));
-            if (found != null) return found;
-        }
-        return null;
-    }
-
-    private static WindowHost? FindHost(DependencyObject node)
-    {
-        if (node is WindowHost host) return host;
-        if (node is FrameworkElement root)
-        {
-            if (root.FindName("WindowHost") is WindowHost named) return named;
-            // WindowHost is an attached behavior, so it need not appear as a visual child or have a name.
-            foreach (var behavior in Noesis.Interactivity.Interaction.GetBehaviors(root))
-                if (behavior is WindowHost attached) return attached;
-        }
-        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(node); i++)
-        {
-            var found = FindHost(VisualTreeHelper.GetChild(node, i));
-            if (found != null) return found;
-        }
-        return null;
     }
 
     internal void Destroy(MainGameViewModel current)

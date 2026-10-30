@@ -538,5 +538,6 @@
   "translation.error.invalid_response": "Could not match the translations to all source texts. Please try again.",
   "translation.error.provider_unavailable": "This connection adapter cannot run the translation tool workflow. Choose another connection.",
   "translation.completed": "Translation applied.",
-  "translation.error.target_changed": "The selected text changed during translation. Select the region again."
+  "translation.error.target_changed": "The selected text changed during translation. Select the region again.",
+  "general.crew_enabled": "Enable AI Crew"
 }

@@ -1,6 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><TargetFramework>net10.0</TargetFramework><OutputType>Exe</OutputType><AssemblyName>SeaPowerAIAdvisor.Tests</AssemblyName></PropertyGroup>
   <ItemGroup>
+    <Compile Include="..\src\Shared\Game\UnitStatusFacts.cs" />
+    <Compile Include="..\src\Crew\CrewSettings.cs" />
+    <Compile Include="..\src\Crew\ICrewConnections.cs" />
+    <Compile Include="..\src\ReportsConnections.cs" />
+    <Compile Include="..\src\Crew\CrewBatch.cs" />
+    <Compile Include="..\src\Crew\CrewReports.cs" />
     <Compile Include="..\src\MissionCreator\Configuration\MissionCreatorSettings.cs" />
     <Compile Include="..\src\MissionCreator\Connections\MissionCreatorConnections.cs" />
     <Compile Include="..\src\MissionCreator\Development\MissionCreatorLocalApi.cs" />
@@ -83,7 +89,7 @@
     <Compile Include="..\src\Advisor\Game\AdvisorSource.cs" Link="AdvisorSource.cs" />
     <Compile Include="..\src\Advisor\Game\Battle\BattleBriefingReader.cs" Link="BattleBriefingReader.cs" />
     <Compile Include="..\src\Advisor\Game\Battle\BattleMissionAreaReader.cs" Link="BattleMissionAreaReader.cs" />
-    <Compile Include="..\src\Advisor\Game\Battle\BattleValue.cs" Link="BattleValue.cs" />
+    <Compile Include="..\src\Shared\Game\BattleValue.cs" Link="BattleValue.cs" />
     <Compile Include="..\src\Advisor\Game\Battle\BattleWeaponReader.cs" Link="BattleWeaponReader.cs" />
     <Compile Include="..\src\Advisor\Game\Battle\BattleSensorReader.cs" Link="BattleSensorReader.cs" />
     <Compile Include="..\src\Advisor\Game\Battle\BattleSensorUiControls.cs" Link="BattleSensorUiControls.cs" />
@@ -98,8 +104,8 @@
     <Compile Include="..\src\Advisor\Game\Battle\BattleQuerySession.cs" Link="BattleQuerySession.cs" />
     <Compile Include="..\src\Advisor\Game\Battle\BattleMovementReader.cs" Link="BattleMovementReader.cs" />
     <Compile Include="..\src\Advisor\Game\Battle\BattleSituationReader.cs" Link="BattleSituationReader.cs" />
-    <Compile Include="..\src\Advisor\Game\Battle\BattleContactMotionReader.cs" Link="BattleContactMotionReader.cs" />
-    <Compile Include="..\src\Advisor\Game\Battle\BattleVerticalPosition.cs" Link="BattleVerticalPosition.cs" />
+    <Compile Include="..\src\Shared\Game\BattleContactMotionReader.cs" Link="BattleContactMotionReader.cs" />
+    <Compile Include="..\src\Shared\Game\BattleVerticalPosition.cs" Link="BattleVerticalPosition.cs" />
     <Compile Include="..\src\Advisor\Game\Battle\BattleContactEvidenceReader.cs" Link="BattleContactEvidenceReader.cs" />
     <Compile Include="..\src\Advisor\Game\Battle\BattleContactAssessment.cs" Link="BattleContactAssessment.cs" />
     <Compile Include="..\src\Advisor\Consultation\AdvisorConversation.cs" Link="AdvisorConversation.cs" />

@@ -13,7 +13,7 @@
                 BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1"
                 HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                 SnapsToDevicePixels="True">
-          <TextBlock Text="AI" FontFamily="{TemplateBinding FontFamily}"
+          <TextBlock Text="{TemplateBinding Tag}" FontFamily="{TemplateBinding FontFamily}"
                      FontSize="{TemplateBinding FontSize}" FontWeight="Bold"
                      Foreground="{TemplateBinding Foreground}" Stroke="{TemplateBinding Foreground}"
                      StrokeThickness="0.25" HorizontalAlignment="Center"

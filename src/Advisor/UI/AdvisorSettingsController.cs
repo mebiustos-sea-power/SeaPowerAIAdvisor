@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -31,8 +30,8 @@ internal sealed class AdvisorSettingsController
     private readonly Action<string> warn;
     private readonly TextBox rounds, history, prompt, userName;
     private readonly ComboBox size, templateInsertion;
-    private readonly CheckBox campaign, log, localApi, linkOwnUnits, linkContacts, showSystemTemplates;
-    private readonly TextBlock status, title, testStatus, testError, confirmationText;
+    private readonly CheckBox campaign, log, localApi, linkOwnUnits, linkContacts, showSystemTemplates, crewEnabled;
+    private readonly TextBlock title, testStatus, testError, confirmationText;
     private readonly Button test, accept, cancelConfirmation, throwException;
     private readonly Dictionary<Category, SettingsTabNavigation> tabs = new();
     private Category? current;
@@ -41,7 +40,7 @@ internal sealed class AdvisorSettingsController
     private Action? confirmed;
     private AdvisorJob? testing;
     private bool available;
-    private readonly Stopwatch savedNotice = new();
+    private readonly UiNotice notice;
 
     internal AdvisorSettingsController(FrameworkElement content, Func<AdvisorText> text, AdvisorOptionsStore options,
         string profileDirectory, string settingsPath, AdvisorTextTemplateStore templateStore, Func<byte[]> defaultPortrait, Action<Action> guard, TypingScope typing,
@@ -54,14 +53,14 @@ internal sealed class AdvisorSettingsController
         page = Named<FrameworkElement>("SettingsCategoryPage"); chat = Named<FrameworkElement>("ConversationPane");
         confirmation = Named<FrameworkElement>("SettingsConfirmation"); confirmationText = Named<TextBlock>("SettingsConfirmationText");
         accept = Named<Button>("AcceptConfirmation"); cancelConfirmation = Named<Button>("CancelConfirmation");
-        status = Named<TextBlock>("SettingsStatus"); title = Named<TextBlock>("SettingsCategoryTitle");
+        notice = new UiNotice(Named<TextBlock>("SettingsStatus"), content); title = Named<TextBlock>("SettingsCategoryTitle");
         rounds = Named<TextBox>("MaxQueryRounds"); history = Named<TextBox>("HistoryExchanges"); prompt = Named<TextBox>("CommonPrompt");
         prompt.MaxLength = AdvisorOptions.MaxCommonPromptLength;
         userName = Named<TextBox>("UserName"); userName.MaxLength = AdvisorOptions.MaxUserNameLength;
         size = Named<ComboBox>("ConversationTextSize"); campaign = Named<CheckBox>("EnableCampaignAdvisor"); log = Named<CheckBox>("LogAiJson");
         localApi = Named<CheckBox>("EnableLocalApi");
         showSystemTemplates = Named<CheckBox>("ShowSystemTemplates"); templateInsertion = Named<ComboBox>("TemplateInsertion");
-        linkOwnUnits = Named<CheckBox>("LinkOwnUnits"); linkContacts = Named<CheckBox>("LinkContacts");
+        crewEnabled = Named<CheckBox>("EnableCrew"); linkOwnUnits = Named<CheckBox>("LinkOwnUnits"); linkContacts = Named<CheckBox>("LinkContacts");
         localConnections = new AdvisorLocalConnectionsView(Named<StackPanel>("LocalApiConnections"), Named<ComboBox>("LocalApiDefaultConnection"), Named<CheckBox>("AllowLocalApiModelOverride"), text, guard);
         information = new AdvisorInformationView(Named<StackPanel>("InformationChoices"), text(), guard);
         throwException = Named<Button>("ThrowTestException");
@@ -83,7 +82,7 @@ internal sealed class AdvisorSettingsController
         foreach (var category in new[] { Category.Profile, Category.Templates, Category.Api, Category.Extensions, Category.Developer })
             BindTabs(category);
         Bind("BackToSettings", BackToHome); Bind("BackToConversation", () => { Close(); back(); });
-        Bind("SaveGeneral", () => Save(() => options.SaveGeneral((AdvisorTextSize)size.SelectedIndex, userName.Text ?? "", linkOwnUnits.IsChecked == true, linkContacts.IsChecked == true)));
+        Bind("SaveGeneral", () => Save(() => options.SaveGeneral((AdvisorTextSize)size.SelectedIndex, userName.Text ?? "", linkOwnUnits.IsChecked == true, linkContacts.IsChecked == true, crewEnabled.IsChecked == true)));
         Bind("SaveConsultation", () => Save(() => options.SaveConsultation(Number(rounds, "query_rounds_invalid"), Number(history, "history_exchanges_invalid"), prompt.Text ?? "")));
         Bind("ResetInformation", () => { if (available) { information.Reset(AdvisorInformation.Default); Notice(""); } });
         Bind("SaveInformation", () => Save(() => options.SaveInformation(information.Value)));
@@ -164,7 +163,7 @@ internal sealed class AdvisorSettingsController
             else
             {
                 var saved = options.Read();
-                if (category == Category.General) { userName.Text = saved.UserName ?? text()["general.default_user_name"]; size.SelectedIndex = (int)saved.TextSize; linkOwnUnits.IsChecked = saved.LinkOwnUnits; linkContacts.IsChecked = saved.LinkContacts; userName.Focus(); }
+                if (category == Category.General) { userName.Text = saved.UserName ?? text()["general.default_user_name"]; size.SelectedIndex = (int)saved.TextSize; linkOwnUnits.IsChecked = saved.LinkOwnUnits; linkContacts.IsChecked = saved.LinkContacts; crewEnabled.IsChecked = saved.CrewEnabled; userName.Focus(); }
                 if (category == Category.Consultation) { rounds.Text = saved.MaxQueryRounds.ToString(CultureInfo.InvariantCulture); history.Text = saved.HistoryExchanges.ToString(CultureInfo.InvariantCulture); prompt.Text = saved.CommonPrompt; prompt.Focus(); }
                 if (category == Category.Information) { information.Reset(saved.Information); information.Focus(); }
             }
@@ -188,7 +187,7 @@ internal sealed class AdvisorSettingsController
     }
     private string Snapshot() => current switch
     {
-        Category.General => userName.Text + "\0" + size.SelectedIndex + ":" + linkOwnUnits.IsChecked + ":" + linkContacts.IsChecked,
+        Category.General => userName.Text + "\0" + size.SelectedIndex + ":" + linkOwnUnits.IsChecked + ":" + linkContacts.IsChecked + ":" + crewEnabled.IsChecked,
         Category.Consultation => rounds.Text + "\0" + history.Text + "\0" + prompt.Text,
         Category.Information => information.Value.Key,
         Category.Templates when ActiveTab == 0 => showSystemTemplates.IsChecked + ":" + templateInsertion.SelectedIndex,
@@ -273,14 +272,9 @@ internal sealed class AdvisorSettingsController
     private static int Number(TextBox input, string code) => int.TryParse(input.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number) ? number : throw new AdvisorOptionsException(code);
     private void Saved()
     {
-        changed(); Notice(text()["settings.saved"]); status.Opacity = 0; savedNotice.Restart();
+        changed(); notice.ShowBriefly(text()["settings.saved"]);
     }
-    private void Notice(string message, bool error = false)
-    {
-        savedNotice.Reset(); status.Opacity = 1;
-        status.Text = message; status.Visibility = message.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-        status.Foreground = (Brush)content.FindResource(error ? "AdvisorErrorBrush" : "AdvisorNoticeBrush");
-    }
+    private void Notice(string message, bool error = false) => notice.Show(message, error);
     private void ApiError(AiConnectionException error)
     {
         var key = "settings.error." + error.Code;
@@ -338,12 +332,7 @@ internal sealed class AdvisorSettingsController
         profiles.Tick(); api.Tick();
         Named<TextBlock>("LocalApiStatus").Text = AdvisorLocalApiDriver.Status;
         errorHistory.Tick(current == Category.Api && Named<TabControl>("ApiCategory").SelectedIndex == 2);
-        if (savedNotice.IsRunning)
-        {
-            var elapsed = savedNotice.Elapsed.TotalSeconds;
-            if (elapsed >= 3) Notice("");
-            else status.Opacity = (float)Math.Min(1, elapsed / 0.2);
-        }
+        notice.Tick();
         var job = testing; if (job == null || !job.Completion.IsCompleted) return;
         testing = null; var result = job.TakeCompleted(); UpdateBusy();
         if (result.UnexpectedError != null) { TestError(AdvisorNotice.Unexpected().Message(text())); throw result.UnexpectedError; }

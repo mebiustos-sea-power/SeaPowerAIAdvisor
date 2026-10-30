@@ -53,7 +53,6 @@
       </StackPanel>
     </DataTemplate>
     <SolidColorBrush x:Key="AdvisorConversationBackgroundBrush" Color="#202B38" />
-    <SolidColorBrush x:Key="AdvisorErrorBrush" Color="#FF9B8F" />
     <SolidColorBrush x:Key="AdvisorReservationAppendBrush" Color="#2D6384" />
     <SolidColorBrush x:Key="AdvisorReservationReplaceBrush" Color="#965C2E" />
     <SolidColorBrush x:Key="AdvisorPlayerNameBrush" Color="#9BC7FF" />
@@ -225,6 +224,7 @@
               <TextBlock Text="{DynamicResource Advisor.general.user_name}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,6" />
               <TextBox x:Name="UserName" FontSize="14" Padding="7" />
               <TextBlock Text="{DynamicResource Advisor.general.conversation_display}" FontSize="14" FontWeight="Bold" Margin="0,24,0,10" />
+              <CheckBox x:Name="EnableCrew" Content="{DynamicResource Advisor.general.crew_enabled}" Margin="0,0,0,12" />
               <CheckBox x:Name="LinkOwnUnits" HorizontalContentAlignment="Stretch" Margin="0,0,0,8">
                 <TextBlock Text="{DynamicResource Advisor.general.own_unit_links}" TextWrapping="Wrap" />
               </CheckBox>
@@ -614,7 +614,7 @@
         <ScrollViewer x:Name="OperationReviewScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="300" Margin="0,8,0,0">
           <TextBlock x:Name="OperationReviewText" TextWrapping="Wrap" FontSize="14" />
         </ScrollViewer>
-        <TextBlock x:Name="OperationReviewFailure" TextWrapping="Wrap" FontSize="12" Margin="0,8,0,0" Foreground="{StaticResource AdvisorErrorBrush}" />
+        <TextBlock x:Name="OperationReviewFailure" TextWrapping="Wrap" FontSize="12" Margin="0,8,0,0" Foreground="{DynamicResource AdvisorErrorBrush}" />
         <Border x:Name="OperationReviewTargets" BorderBrush="#55606B" BorderThickness="1" Padding="8" Margin="0,12,0,0" />
         <WrapPanel HorizontalAlignment="Right" Margin="0,20,0,0">
           <Button x:Name="CloseProposal" Content="{DynamicResource Advisor.operation.back}" Height="30" Padding="12,0" />

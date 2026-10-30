@@ -96,21 +96,7 @@ internal sealed class BattleSensorReader
         row["detection_threshold_db"] = Number(Required(parameters, "_detectionTreshold"));
     }
 
-    private static string? Kind(object system)
-    {
-        for (var type = system.GetType(); type != null; type = type.BaseType)
-        {
-            switch (type.Name)
-            {
-                case "SensorSystemRadar": return "radar";
-                case "SensorSystemSonar": return "sonar";
-                case "SensorSystemVisual": return "visual";
-                case "SensorSystemESM": return "esm";
-                case "SensorSystemMAD": return "mad";
-            }
-        }
-        return null;
-    }
+    private static string? Kind(object system) => Shared.UnitStatusFacts.SensorKind(system);
 
     // The map uses these same groups in MakeSourceDescription (R/E/S and the other displayed methods).
     internal static JToken DetectionMethods(object track)

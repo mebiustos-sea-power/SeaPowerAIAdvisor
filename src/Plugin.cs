@@ -17,6 +17,7 @@ public sealed class Plugin : IAnchorChainMod
     private static Harmony? harmony;
     private static CampaignIntegration? campaign;
     private static BattleIntegration? battle;
+    private static Crew.CrewIntegration? crew;
     private static AdvisorOptionsStore? options;
     private static AdvisorBackendRegistry? backends;
     internal static AdvisorLocalApi? LocalApi { get; private set; }
@@ -51,6 +52,10 @@ public sealed class Plugin : IAnchorChainMod
             EmbeddedDependencies.LoadMarkdown(typeof(Plugin).Assembly);
             harmony = new Harmony(ModId);
             battle = new BattleIntegration(BattleRuntime, message => Log.LogWarning(message), options, Backends);
+            crew = new Crew.CrewIntegration(Path.Combine(UnityEngine.Application.persistentDataPath, "SeaPowerAIAdvisor", "crew-reports.json"),
+                () => options.Current.CrewEnabled,
+                saved => new ReportsConnections(settingsPath, AdvisorTrace.DirectoryIn(UnityEngine.Application.persistentDataPath), saved, () => AdvisorText.Load(GameLanguage.Read())),
+                key => AdvisorText.Load(GameLanguage.Read())[key], error => Log.LogError("AI Crew Reports failed: " + error));
             harmony.Patch(Required(typeof(MainGameViewModel), "OnLateUpdate"), postfix: new HarmonyMethod(typeof(Plugin), nameof(BattleFrame)));
             harmony.Patch(Required(typeof(MainGameViewModel), "OnDestroy"), prefix: new HarmonyMethod(typeof(Plugin), nameof(BattleDestroyed)));
             SeaPowerAIAdvisor.Api.AdvisorApi.Attach(extension =>
@@ -151,9 +156,14 @@ public sealed class Plugin : IAnchorChainMod
     private static void BattleFrame(MainGameViewModel __instance)
     {
         BattleRuntime.Tick(() => battle?.Tick(__instance));
+        crew?.Tick(__instance);
         TryInstallCampaign();
     }
-    private static void BattleDestroyed(MainGameViewModel __instance) => BattleRuntime.Cleanup(() => battle?.Destroy(__instance));
+    private static void BattleDestroyed(MainGameViewModel __instance)
+    {
+        crew?.Destroy(__instance);
+        BattleRuntime.Cleanup(() => battle?.Destroy(__instance));
+    }
     private static void CampaignFrame(object __instance) => CampaignRuntime.Tick(() => campaign?.Tick(__instance));
     private static void CampaignDetach() => CampaignRuntime.Cleanup(() => campaign?.Reset());
     private static void CampaignSceneUnloaded(UnityEngine.SceneManagement.Scene scene) => CampaignRuntime.Cleanup(() => campaign?.SceneUnloaded(scene));

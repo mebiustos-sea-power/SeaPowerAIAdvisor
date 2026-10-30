@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.Linq;
 using Newtonsoft.Json.Linq;
+using SeaPowerAIAdvisor.Shared;
 using static SeaPowerAIAdvisor.BattleValue;
 
 namespace SeaPowerAIAdvisor;
@@ -40,7 +41,7 @@ internal sealed class BattleCapabilityReader
         {
             ["id"] = id, ["display_name"] = name,
             ["sensors"] = sensorData.State, ["sensor_performance"] = sensorData.Performance,
-            ["fuel"] = Fuel(unit, parameters), ["damage"] = Damage(unit, parameters),
+            ["fuel"] = Fuel(unit, parameters), ["damage"] = UnitStatusFacts.Damage(unit, parameters),
             ["weapons"] = new JObject
             {
                 ["source"] = "player_unit_ammunition_display",
@@ -54,55 +55,9 @@ internal sealed class BattleCapabilityReader
 
     private JObject Fuel(object unit, object parameters)
     {
-        var kind = Code(Required(unit, "_type"));
-        if (kind != "aircraft" && kind != "helicopter")
-            return new JObject { ["status"] = "not_displayed_for_unit_type", ["remaining_mass_kg"] = JValue.CreateNull() };
-        var mass = Nonnegative(Required(parameters, "_currentFuelMass"));
-        var capacity = Nonnegative(Required(parameters, "_maxFuel"));
-        var internalCapacity = Nonnegative(Required(parameters, "_defaultMaxFuel"));
-        var fuel = new JObject
-        {
-            ["status"] = (bool)Required(unit, "_unlimitedFuel") ? "unlimited" : "measured",
-            ["source"] = "player_unit_fuel_display",
-            ["remaining_mass_kg"] = mass, ["capacity_mass_kg"] = capacity,
-            ["internal_capacity_mass_kg"] = internalCapacity,
-            ["percent_of_internal_capacity"] = internalCapacity > 0 ? new JValue(100 * mass / internalCapacity) : JValue.CreateNull(),
-            ["estimated_flight_time_left_seconds"] = Math.Max(0, Number(Required(Required(unit, "FlightTimeLeftInSec"), "Value")))
-        };
-        if (kind == "aircraft") fuel["economic_cruise"] = BattleAircraftCruise.Capture(parameters, speedOfSound);
+        var fuel = UnitStatusFacts.Fuel(unit, parameters);
+        if (Code(Required(unit, "_type")) == "aircraft") fuel["economic_cruise"] = BattleAircraftCruise.Capture(parameters, speedOfSound);
         return fuel;
-    }
-
-    private static JObject Damage(object unit, object parameters)
-    {
-        var compartments = Member(unit, "Compartments");
-        var damaged = new JArray();
-        foreach (var system in Rows(Required(parameters, "_systems")))
-        {
-            var state = Code(Required(system, "CurrentDamageType"));
-            if (state == "no") continue;
-            damaged.Add(new JObject
-            {
-                ["display_name"] = (string)Required(Required(system, "DisplayName"), "Value"),
-                ["damage_state"] = state, ["repairable"] = (bool)Required(system, "Repairable")
-            });
-        }
-        return new JObject
-        {
-            ["source"] = "player_unit_damage_control",
-            ["destroyed"] = (bool)Required(unit, "IsDestroyed"), ["disabled"] = (bool)Required(unit, "Disabled"),
-            ["hull_status"] = compartments == null ? "not_applicable" : "measured",
-            ["hull_integrity_percent"] = compartments == null ? JValue.CreateNull() : new JValue(Percent(Required(compartments, "IntegrityPercentage"))),
-            ["flooding_percent"] = compartments == null ? JValue.CreateNull() : new JValue(Percent(Required(compartments, "FloodingPercentage"))),
-            ["damaged_systems"] = damaged
-        };
-    }
-
-    private static double Percent(object value)
-    {
-        var number = Nonnegative(value);
-        if (number > 100.001) throw new InvalidOperationException("Invalid battle damage percentage.");
-        return Math.Min(100, number);
     }
     private static int Count(object value)
     {
