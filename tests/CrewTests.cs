@@ -31,20 +31,25 @@ internal static class CrewTests
         check("Reports settings persist independently and failed writes cannot apply a draft", () => Temp(directory =>
         {
             var path = Path.Combine(directory, "crew.json"); var store = new CrewSettingsStore(path);
-            Require(store.Current.ConnectionId == null && !File.Exists(path), "Opening Reports implicitly selected or saved a connection");
-            store.Save(new CrewSettings("reports-only", 2, 9));
+            Require(store.Current.ConnectionId == null && store.Current.ShowHelpTab && CrewSettings.Parse("{}").ShowHelpTab && !File.Exists(path), "Opening Reports selected a connection, hid guidance or saved settings");
+            store.Save(new CrewSettings("reports-only", 2, 9, showHelpTab: false));
             var reopened = new CrewSettingsStore(path);
-            Require(reopened.Current.ConnectionId == "reports-only" && reopened.Current.IntervalMinutes == 2 && reopened.Current.DisplaySeconds == 9, "Reports preferences were lost");
+            Require(reopened.Current.ConnectionId == "reports-only" && reopened.Current.IntervalMinutes == 2 && reopened.Current.DisplaySeconds == 9 && !reopened.Current.ShowHelpTab, "Reports preferences were lost");
             foreach (var interval in new[] { 1, 7 })
             {
-                store.Save(new CrewSettings("reports-only", interval, 9));
-                Require(new CrewSettingsStore(path).Current.IntervalMinutes == interval, "A selectable interval boundary did not persist");
+                store.Save(new CrewSettings("reports-only", interval, 9, showHelpTab: store.Current.ShowHelpTab));
+                Require(new CrewSettingsStore(path).Current.IntervalMinutes == interval && !new CrewSettingsStore(path).Current.ShowHelpTab, "Saving an interval lost the selected interval or help visibility");
             }
+            store.Save(new CrewSettings("reports-only", 7, 9, showHelpTab: true));
+            Require(new CrewSettingsStore(path).Current.ShowHelpTab && store.Current.IntervalMinutes == 7 && store.Current.DisplaySeconds == 9,
+                "Re-enabling guidance changed other Reports preferences or did not persist");
             File.Delete(path); Directory.CreateDirectory(path);
             Throws<CrewException>(() => store.Save(new CrewSettings("other", 3, 8)));
             Require(store.Current.ConnectionId == "reports-only", "Failed storage published the pending connection");
             Throws<CrewException>(() => new CrewSettings("id", 0)); Throws<CrewException>(() => new CrewSettings("id", 8));
             Throws<CrewException>(() => CrewSettings.Parse("{\"interval_minutes\":1.5}"));
+            foreach (var invalid in new JToken[] { JValue.CreateNull(), new JValue("false"), new JValue(0) })
+                Throws<CrewException>(() => CrewSettings.Parse(new JObject { ["show_help_tab"] = invalid }.ToString()));
         }));
         check("Report positions default to top right, persist all six choices and reject invalid saved values", () => Temp(directory =>
         {

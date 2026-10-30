@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using System.Xml.Linq;
 using Noesis;
 using SeapowerUI;
 using SeaPowerAIAdvisor.Shared;
@@ -31,6 +32,7 @@ internal sealed class CrewWindow : IDisposable
     private readonly SettingsTabNavigation tabs, apiTabs;
     private readonly ComboBox selection, notificationPosition;
     private readonly TextBox interval, duration;
+    private readonly CheckBox showHelpTab;
     private readonly ImageSource portrait;
     private readonly UiNotice settingsNotice, reportNotice;
     private readonly CrewTargetSelection targetSelection = new();
@@ -45,7 +47,7 @@ internal sealed class CrewWindow : IDisposable
     internal bool IsOpen => host.Windows.Contains(window);
     private T Find<T>(string name) where T : class => root.FindName(name) as T ?? throw new InvalidOperationException("Missing Reports control: " + name);
     private string? SelectedId => selection.SelectedIndex <= 0 ? null : ids[selection.SelectedIndex - 1];
-    private string Values => page == "reports" ? interval.Text + ":" + duration.Text + ":" + notificationPosition.SelectedIndex : SelectedId ?? "";
+    private string Values => page == "reports" ? interval.Text + ":" + duration.Text + ":" + notificationPosition.SelectedIndex + ":" + showHelpTab.IsChecked : SelectedId ?? "";
     private bool Dirty => targetSelection.Dirty || (page == "api" && apiTabs.Current == 1 ? editor.HasChanges : page != null && Values != baseline);
 
     internal CrewWindow(FrameworkElement view, WindowHost host, CrewReports reports, CrewSettingsStore settings, ICrewConnections connections,
@@ -62,12 +64,14 @@ internal sealed class CrewWindow : IDisposable
         root.Resources["Crew.connection_selection"] = common("settings.selection_tab");
         root.Resources["Crew.registration"] = common("settings.registration_tab");
         UiResources.Apply(root);
+        Find<ContentControl>("HelpContent").Content = GUI.ParseXaml(MarkdownRenderer.Render(text["help_body"]).ToString(SaveOptions.DisableFormatting)) as FrameworkElement
+            ?? throw new InvalidOperationException("The Reports help view is invalid.");
         settingsNotice = new UiNotice(Find<TextBlock>("SettingsStatus"), root);
         reportNotice = new UiNotice(Find<TextBlock>("ReportStatus"), root);
         selection = Find<ComboBox>("Connection"); notificationPosition = Find<ComboBox>("NotificationPosition");
         foreach (CrewNotificationPosition position in Enum.GetValues(typeof(CrewNotificationPosition)))
             notificationPosition.Items.Add(new ComboBoxItem { Content = text["position." + CrewSettings.PositionCode(position)] });
-        interval = Find<TextBox>("Interval"); duration = Find<TextBox>("Duration");
+        interval = Find<TextBox>("Interval"); duration = Find<TextBox>("Duration"); showHelpTab = Find<CheckBox>("ShowHelpTab");
         var form = AiConnectionsView.Create(common); Find<ContentControl>("Registration").Content = form;
         editor = new AiConnectionsView(form, connections.Store, () => connections.Providers, common, GameLanguage.Read, typing, Run,
             CanCommit, (name, action) => Confirm(action, string.Format(CultureInfo.CurrentCulture, common("settings.delete_question"), name), common("profile.remove"), common("settings.cancel")),
@@ -96,14 +100,15 @@ internal sealed class CrewWindow : IDisposable
         Bind("SaveConnection", () =>
         {
             if (!CanCommit()) return;
-            var saved = settings.Current; settings.Save(new CrewSettings(SelectedId, saved.IntervalMinutes, saved.DisplaySeconds, saved.NotificationPosition));
+            var saved = settings.Current; settings.Save(new CrewSettings(SelectedId, saved.IntervalMinutes, saved.DisplaySeconds, saved.NotificationPosition, saved.ShowHelpTab));
             baseline = Values; editor.UpdateCards(); Saved();
         });
         Bind("SaveReports", () =>
         {
             if (!CanCommit()) return;
             int Read(TextBox input) => int.TryParse(input.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : throw new CrewException("settings_invalid");
-            settings.Save(new CrewSettings(settings.Current.ConnectionId, Read(interval), Read(duration), (CrewNotificationPosition)notificationPosition.SelectedIndex));
+            settings.Save(new CrewSettings(settings.Current.ConnectionId, Read(interval), Read(duration), (CrewNotificationPosition)notificationPosition.SelectedIndex, showHelpTab.IsChecked == true));
+            UpdateHelpTab();
             baseline = Values; Saved();
         });
         Bind("CancelConfirmation", HideConfirmation);
@@ -123,7 +128,7 @@ internal sealed class CrewWindow : IDisposable
         window.ButtonsTemplate = root.Resources["CrewWindowButtons"] as DataTemplate ?? throw new InvalidOperationException("The Reports window buttons are unavailable.");
         window.CloseAction = new CloseCommand(() => Run(RequestClose));
         window.OnClosed += (_, _) => { typing.Release(); CancelTest(); };
-        Home(); tabs.Reset(); apiTabs.Reset(); DrawUsage();
+        Home(); ResetTabs(); apiTabs.Reset(); DrawUsage();
     }
     private SettingsTabNavigation Navigation(string name)
     {
@@ -176,6 +181,7 @@ internal sealed class CrewWindow : IDisposable
             var saved = settings.Current;
             interval.Text = saved.IntervalMinutes.ToString(CultureInfo.InvariantCulture);
             duration.Text = saved.DisplaySeconds.ToString(CultureInfo.InvariantCulture); notificationPosition.SelectedIndex = (int)saved.NotificationPosition;
+            showHelpTab.IsChecked = saved.ShowHelpTab;
         }
         baseline = Values;
     }
@@ -191,8 +197,15 @@ internal sealed class CrewWindow : IDisposable
     internal void Toggle()
     {
         if (IsOpen) RequestClose();
-        else { Home(); HideConfirmation(); tabs.Reset(); revision = -1; WindowHostCommands.OpenWindowCommand.Execute(window, view);
+        else { Home(); HideConfirmation(); ResetTabs(); revision = -1; WindowHostCommands.OpenWindowCommand.Execute(window, view);
             if (!IsOpen) throw new InvalidOperationException("The game window host did not open Reports."); }
+    }
+    private void UpdateHelpTab() => Find<TabItem>("HelpTab").Visibility = settings.Current.ShowHelpTab ? Visibility.Visible : Visibility.Collapsed;
+    private void ResetTabs()
+    {
+        UpdateHelpTab();
+        var initial = Find<TabItem>(settings.Current.ShowHelpTab ? "HelpTab" : "HistoryTab");
+        tabs.Reset(Find<TabControl>("Tabs").Items.IndexOf(initial));
     }
     private void RequestClose() => Navigate(() => { Home(); window.CloseWindowNow(); });
     internal void Tick()
@@ -204,7 +217,7 @@ internal sealed class CrewWindow : IDisposable
             tabs.Pump(Dirty, () => { Home(); return true; }, action => Confirm(action));
             apiTabs.Pump(Dirty, () => { typing.Release(); CancelTest(); editor.Close(); RefreshConnections(); editor.Open(); return true; }, action => Confirm(action));
             editor.Tick(); settingsNotice.Tick(); DrawUsage();
-            Find<FrameworkElement>("ReportStatusPane").Visibility = tabs.Current == 2 && page != null ? Visibility.Collapsed : Visibility.Visible;
+            Find<FrameworkElement>("ReportStatusPane").Visibility = Find<TabItem>("SettingsTab").IsSelected && page != null ? Visibility.Collapsed : Visibility.Visible;
             if (testing?.IsCompleted == true)
             {
                 var completed = testing; testing = null; testingCancellation?.Dispose(); testingCancellation = null; editor.SetBusy(false);

@@ -18,15 +18,16 @@ internal sealed class CrewSettings
     internal int IntervalMinutes { get; }
     internal int DisplaySeconds { get; }
     internal CrewNotificationPosition NotificationPosition { get; }
-    internal CrewSettings(string? connectionId = null, int intervalMinutes = DefaultIntervalMinutes, int displaySeconds = 10, CrewNotificationPosition notificationPosition = DefaultNotificationPosition)
+    internal bool ShowHelpTab { get; }
+    internal CrewSettings(string? connectionId = null, int intervalMinutes = DefaultIntervalMinutes, int displaySeconds = 10, CrewNotificationPosition notificationPosition = DefaultNotificationPosition, bool showHelpTab = true)
     {
         if (connectionId != null && (string.IsNullOrWhiteSpace(connectionId) || connectionId.Length > 80) ||
             intervalMinutes < 1 || intervalMinutes > 7 || displaySeconds < 1 || displaySeconds > 60)
             throw new CrewException("settings_invalid");
         _ = PositionCode(notificationPosition); NotificationPosition = notificationPosition;
-        ConnectionId = connectionId; IntervalMinutes = intervalMinutes; DisplaySeconds = displaySeconds;
+        ConnectionId = connectionId; IntervalMinutes = intervalMinutes; DisplaySeconds = displaySeconds; ShowHelpTab = showHelpTab;
     }
-    internal JObject Json() => new() { ["connection_id"] = ConnectionId, ["interval_minutes"] = IntervalMinutes, ["display_seconds"] = DisplaySeconds, ["notification_position"] = PositionCode(NotificationPosition) };
+    internal JObject Json() => new() { ["connection_id"] = ConnectionId, ["interval_minutes"] = IntervalMinutes, ["display_seconds"] = DisplaySeconds, ["notification_position"] = PositionCode(NotificationPosition), ["show_help_tab"] = ShowHelpTab };
     internal static string PositionCode(CrewNotificationPosition position) => position switch
     {
         CrewNotificationPosition.TopLeft => "top_left", CrewNotificationPosition.TopCenter => "top_center", CrewNotificationPosition.TopRight => "top_right",
@@ -47,12 +48,13 @@ internal sealed class CrewSettings
         {
             var value = JObject.Parse(json);
             foreach (var p in value.Properties())
-                if (p.Name != "connection_id" && p.Name != "interval_minutes" && p.Name != "display_seconds" && p.Name != "notification_position")
+                if (p.Name != "connection_id" && p.Name != "interval_minutes" && p.Name != "display_seconds" && p.Name != "notification_position" && p.Name != "show_help_tab")
                     throw new CrewException("settings_invalid");
             if (value["connection_id"] is JToken id && id.Type is not (JTokenType.Null or JTokenType.String)) throw new CrewException("settings_invalid");
+            if (value["show_help_tab"] is JToken showHelp && showHelp.Type != JTokenType.Boolean) throw new CrewException("settings_invalid");
             int Read(string key, int fallback) => value[key] == null ? fallback : value[key]!.Type == JTokenType.Integer
                 ? value[key]!.Value<int>() : throw new CrewException("settings_invalid");
-            return new CrewSettings((string?)value["connection_id"], Read("interval_minutes", DefaultIntervalMinutes), Read("display_seconds", 10), ReadPosition(value["notification_position"]));
+            return new CrewSettings((string?)value["connection_id"], Read("interval_minutes", DefaultIntervalMinutes), Read("display_seconds", 10), ReadPosition(value["notification_position"]), (bool?)value["show_help_tab"] ?? true);
         }
         catch (Exception e) when (e is JsonException || e is OverflowException) { throw new CrewException("settings_invalid"); }
     }

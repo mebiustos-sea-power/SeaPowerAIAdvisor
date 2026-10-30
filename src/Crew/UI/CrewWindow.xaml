@@ -7,6 +7,11 @@
     <RowDefinition Height="Auto" />
   </Grid.RowDefinitions>
   <TabControl x:Name="Tabs" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+    <TabItem x:Name="HelpTab" Header="{DynamicResource Crew.help}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <ContentControl x:Name="HelpContent" Margin="0,12,8,0" HorizontalContentAlignment="Stretch" />
+      </ScrollViewer>
+    </TabItem>
     <TabItem x:Name="HistoryTab" Header="{DynamicResource Crew.history}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
       <Grid>
         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
@@ -67,6 +72,7 @@
                 <ComboBox x:Name="NotificationPosition" MinHeight="30" />
                 <TextBlock Text="{DynamicResource Crew.duration}" FontSize="12" Margin="0,12,0,4" />
                 <TextBox x:Name="Duration" Width="140" HorizontalAlignment="Left" FontSize="14" Padding="7" MaxLength="2" />
+                <CheckBox x:Name="ShowHelpTab" Content="{DynamicResource Crew.show_help_tab}" Margin="0,16,0,0" />
                 <WrapPanel HorizontalAlignment="Right" Margin="0,8,0,0">
                   <Button x:Name="SaveReports" Content="{DynamicResource Crew.save}" Height="30" Padding="12,0" Margin="8,0,0,0" />
                 </WrapPanel>

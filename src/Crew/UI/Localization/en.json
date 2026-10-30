@@ -1,4 +1,7 @@
 {
+  "help": "Getting started",
+  "help_body": "AI Crew adds immersion through remarks from captains and pilots. Crew members with names and personalities are assigned to the units you select and deliver short reports or impressions based on the current situation through pop-up notifications.\n\n### Getting started with AI Crew\n\n1. **Choose an API connection**  \n   Choose a connection in **Settings > API connections** and save. Connections registered in AI Advisor are also available.\n\n2. **Choose participating units**  \n   Select units under **Reporting units** and press **Apply**. Use **All ON** to select everyone together.\n\n3. **Receive reports**  \n   Names and personalities are generated automatically. Remarks appear as on-screen notifications and can also be read in **Report history**.\n\n### Things to know\n\n- Only current formation leaders and standalone units speak.\n- Not everyone speaks on every occasion.\n- Adjust the interval and notification position in **Settings > Reports**.\n- Closing this window or pausing the game does not stop API requests. To stop them, press **Pause** in **Report history**.\n- Crew identities, unit selections and report history are not stored in saved games.\n",
+  "show_help_tab": "Show Getting started tab",
   "history": "Report history",
   "targets": "Reporting units",
   "settings": "Settings",
