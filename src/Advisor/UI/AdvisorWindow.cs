@@ -25,6 +25,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     private readonly AdvisorDraft draft = new();
     private readonly AdvisorDraftBadgeView draftBadges;
     private readonly AdvisorDraftMapPreview draftMap;
+    private readonly AdvisorUnitPicker? unitPicker;
     private readonly Window window;
     private readonly AdvisorSettingsController settings;
     private readonly AdvisorConsultationMenu consultationMenu;
@@ -45,7 +46,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     private AdvisorProfile? appliedProfile;
     private string speakerName;
     private bool profileLoaded;
-    private readonly Button send, captureAction, inputAction, insertSelectedUnit, clearInput;
+    private readonly Button send, captureAction, inputAction, insertSelectedUnit, browseUnits, clearInput;
     private readonly (AdvisorShortcut Shortcut, Button Button)[] shortcuts;
     private AdvisorJob? active;
     private AdvisorLocalRun? localRun;
@@ -95,8 +96,10 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         send = Named<Button>(content, "Send");
         send.Click += (_, _) => guard(Send);
         insertSelectedUnit = Named<Button>(content, "InsertSelectedUnit");
-        insertSelectedUnit.Visibility = navigation == null ? Visibility.Collapsed : Visibility.Visible;
+        Named<FrameworkElement>(content, "InsertUnitButtons").Visibility = navigation == null ? Visibility.Collapsed : Visibility.Visible;
         insertSelectedUnit.Click += (_, _) => guard(InsertSelectedUnit);
+        browseUnits = Named<Button>(content, "BrowseUnits");
+        browseUnits.Click += (_, _) => guard(OpenUnitPicker);
         Named<Button>(content, "Clear").Click += (_, _) => guard(Clear);
         clearInput = Named<Button>(content, "ClearInput");
         clearInput.Click += (_, _) => guard(ClearInput);
@@ -127,6 +130,8 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
             item.Button.Click += (_, _) => guard(() => ConsultShortcut(item.Shortcut, item.Button));
 
         questionInput = new QuestionInputController(question, typing, () => active != null, StartConsultation, guard);
+        if (navigation != null)
+            unitPicker = new AdvisorUnitPicker(content, navigation.OwnUnits, () => text, typing, InsertUnit, questionInput.RequestFocus, guard);
         var templates = new AdvisorTextTemplateStore(profileDirectory);
         consultationMenu = new AdvisorConsultationMenu(content, templates, () => text, ChooseTemplate, guard, warn, () => options.Current.Templates);
         otherConsultations = Named<ToggleButton>(content, "OtherConsultations");
@@ -238,11 +243,13 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     {
         CompleteActive();
         UpdateActiveProgress();
-        if (!IsOpen) { draftMap.Dispose(); updateNotice.Hide(); operationReview.Close(); questionInput.Reset(); typing.Release(); ReleasePortrait(); return; }
+        if (!IsOpen) { unitPicker?.Close(); draftMap.Dispose(); updateNotice.Hide(); operationReview.Close(); questionInput.Reset(); typing.Release(); ReleasePortrait(); return; }
         settings.Tick();
         operationReview.Tick();
         draftMap.Update(draft.Locations, DraftMapVisible);
         UpdateUnitInsertion();
+        if (CanConsult && question.IsVisible && !question.IsReadOnly && !updateNotice.IsOpen) unitPicker?.Tick();
+        else unitPicker?.Close();
         questionInput.Tick();
         transcript.Tick();
         if (diagnosticScrollPending)
@@ -306,12 +313,25 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
 
     private void ReleaseInput()
     {
+        unitPicker?.Close();
         questionInput.Reset();
         typing.Release();
         if (window.IsKeyboardFocusWithin) window.Keyboard.ClearFocus();
     }
 
-    private void UpdateUnitInsertion() => insertSelectedUnit.IsEnabled = active == null && navigation?.SelectedUnit() != null;
+    private void UpdateUnitInsertion()
+    {
+        insertSelectedUnit.IsEnabled = active == null && navigation?.SelectedUnit() != null;
+        browseUnits.IsEnabled = CanConsult && !question.IsReadOnly && navigation != null;
+    }
+
+    private void OpenUnitPicker()
+    {
+        if (!CanEditDraft() || unitPicker == null) return;
+        questionInput.Reset();
+        if (unitPicker.IsOpen) { unitPicker.Close(); questionInput.RequestFocus(); }
+        else unitPicker.Open(draft.Units.Select(u => u.Id));
+    }
 
     private void InsertSelectedUnit() => InsertUnit(navigation?.SelectedUnit());
     private void InsertUnit(int unitId) => InsertUnit(navigation?.GetUnit(unitId));
@@ -778,6 +798,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
 
     private void ShowConversation(bool updateStatus = true, string? empty = null)
     {
+        unitPicker?.Close();
         consultationMenu.Close();
         OperationService?.DiscardProposalsExcept(conversation.Turns.Select(turn => turn.OperationId));
         pendingScroll = null;

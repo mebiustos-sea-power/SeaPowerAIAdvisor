@@ -163,7 +163,22 @@
         <ColumnDefinition Width="Auto" />
       </Grid.ColumnDefinitions>
       <Button x:Name="Settings" Content="{DynamicResource Advisor.action.settings}" Height="30" Padding="12,0" />
-      <Button x:Name="InsertSelectedUnit" Grid.Column="1" Content="{DynamicResource Advisor.action.insert_selected_unit}" Height="30" Padding="10,0" Margin="8,0,0,0" Focusable="False" Visibility="Collapsed" />
+      <Grid x:Name="InsertUnitButtons" Grid.Column="1" Margin="8,0,0,0" Visibility="Collapsed">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+        <Button x:Name="InsertSelectedUnit" Content="{DynamicResource Advisor.action.insert_selected_unit}" Height="30" Padding="10,0" Focusable="False" />
+        <Button x:Name="BrowseUnits" Grid.Column="1" Content="▼" ToolTip="{DynamicResource Advisor.action.browse_units}" Width="26" Height="30" Padding="0" Focusable="False" />
+        <Popup x:Name="UnitPickerPopup" PlacementTarget="{Binding ElementName=InsertUnitButtons}" Placement="Top" VerticalOffset="-4" StaysOpen="False">
+          <Border Background="{StaticResource AdvisorConversationBackgroundBrush}" BorderBrush="#607080" BorderThickness="1" Padding="8">
+            <Grid x:Name="UnitPickerPane" Width="320">
+              <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+              <TextBox x:Name="UnitPickerSearch" Placeholder="{DynamicResource Advisor.input.unit_search}" MinHeight="30" FontSize="14" Padding="6" MaxLength="120" Margin="0,0,0,6" />
+              <ListBox x:Name="UnitPickerList" Grid.Row="1" MaxHeight="240" SelectionMode="Single" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled" />
+              <TextBlock x:Name="UnitPickerEmpty" Grid.Row="1" TextWrapping="Wrap" FontSize="13" Margin="4,8" Visibility="Collapsed" />
+              <TextBlock x:Name="UnitPickerCount" Grid.Row="2" FontSize="12" Opacity="0.7" Margin="0,6,0,0" />
+            </Grid>
+          </Border>
+        </Popup>
+      </Grid>
       <Button x:Name="ClearInput" Grid.Column="3" Content="{DynamicResource Advisor.action.clear_input}" Height="30" Padding="10,0" Margin="8,0,0,0" Focusable="False" />
       <Button x:Name="Send" Grid.Column="4" Content="{DynamicResource Advisor.action.send}" MinWidth="70" Height="30" Margin="8,0,0,0" />
     </Grid>

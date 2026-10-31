@@ -75,7 +75,7 @@
   "status.tokens_unknown": "使用トークン数は未取得",
   "status.new_question": "メッセージを入力するか、クイック相談を選んでください。",
   "transcript.empty": "メッセージを入力するか、クイック相談を選んでください。\nここに会話が表示されます。",
-  "transcript.track_navigation": "**地図から地点を指定する**\n\n地図の空白部分を **Ctrl+左クリック**すると、入力欄に地点バッジを追加できます。AIアドバイザーが閉じている場合は、自動で開きます。\n\n**履歴内のユニットを操作する**\n\n- **左クリック**: ユニットを選択し、マップ中央に表示\n- **右クリック**: ゲーム標準のメニューを開く\n- **Ctrl+左クリック**: 入力欄にユニットバッジを追加",
+  "transcript.track_navigation": "**味方ユニットを一覧から指定する**\n\n「選択ユニットを挿入」の右の **▼** から、名前で検索してユニットバッジを追加できます。\n\n**地図から地点を指定する**\n\n地図の空白部分を **Ctrl+左クリック**すると、入力欄に地点バッジを追加できます。AIアドバイザーが閉じている場合は、自動で開きます。\n\n**履歴内のユニットを操作する**\n\n- **左クリック**: ユニットを選択し、マップ中央に表示\n- **右クリック**: ゲーム標準のメニューを開く\n- **Ctrl+左クリック**: 入力欄にユニットバッジを追加",
   "input.location_label": "地点{0}",
   "transcript.cleared": "会話を消去しました。",
   "preset.next_steps": "次の行動",
@@ -535,5 +535,10 @@
   "translation.error.provider_unavailable": "この接続アダプターは翻訳用のツール呼び出しに対応していません。別の接続を選択してください。",
   "translation.completed": "翻訳しました。",
   "translation.error.target_changed": "翻訳中に対象の表示が変わりました。もう一度範囲を選択してください。",
-  "wip.crew_enabled": "AI Crewを有効にする"
+  "wip.crew_enabled": "AI Crewを有効にする",
+  "action.browse_units": "味方ユニットを一覧から挿入",
+  "input.unit_search": "ユニット名で検索",
+  "input.no_available_units": "挿入できる味方ユニットがありません。",
+  "input.no_unit_matches": "該当する味方ユニットがありません。",
+  "input.unit_match_count": "候補: {0}"
 }

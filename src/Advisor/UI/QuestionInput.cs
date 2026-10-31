@@ -9,6 +9,7 @@ internal sealed class QuestionInput
     private bool held;
     private bool composing;
     private int pendingFrame = -1;
+    internal bool Pending => pendingFrame >= 0;
 
     internal QuestionKeyAction Enter(int frame, bool shift, bool repeat, bool busy, bool ime)
     {

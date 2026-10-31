@@ -185,6 +185,7 @@ internal static class Program
         FallbackTests.Run(Check);
         FallbackModelTests.Run(Check);
         QuestionInputTests.Run(args[2], Check);
+        UnitPickerTests.Run(Check);
         PresentationTests.Run(args[1], args[0], Check);
         CancellationBoundaryTests.Run(args[1], Check);
         MarkdownTests.Run(args[1], Check);
