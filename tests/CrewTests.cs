@@ -82,7 +82,7 @@ internal static class CrewTests
         {
             var path = Path.Combine(directory, "crew.json"); var store = new CrewSettingsStore(path);
             Require(CrewInformation.Items.All(i => store.Current.Information.Allows(i.Id)) && !File.Exists(path), "Default coverage changed or opening saved settings");
-            var information = CrewInformation.Default.With("fuel", false).With("contacts", false);
+            var information = CrewInformation.Default.With("fuel", false).With("contacts", false).With("threat_alerts", false);
             store.Save(new CrewSettings("reports-only", 5, 12, CrewNotificationPosition.BottomCenter, false, 72, information));
             var adviser = new AdvisorOptionsStore(Path.Combine(directory, "options.json"));
             adviser.SaveInformation(AdvisorInformation.Default.With(InformationKind.BattleSensors, false));
@@ -103,7 +103,8 @@ internal static class CrewTests
             {
                 ("movement", new[] { "position", "heading_deg", "speed_knots", "altitude_ft", "depth_ft" }),
                 ("damage", new[] { "damage" }), ("fuel", new[] { "fuel" }),
-                ("weapons", new[] { "weapons" }), ("sensors", new[] { "sensors" })
+                ("weapons", new[] { "weapons" }), ("sensors", new[] { "sensors" }),
+                ("threat_alerts", new[] { "active_threat_alerts" })
             };
             var selections = new List<CrewInformation> { CrewInformation.Default };
             selections.AddRange(CrewInformation.Items.Select(i => CrewInformation.Default.With(i.Id, false)));
@@ -126,6 +127,9 @@ internal static class CrewTests
                                 "Provider input leaked or unexpectedly omitted " + category.Item1 + "/" + field);
                 Require((data["contacts"] != null) == information.Allows("contacts") &&
                     (!information.Allows("contacts") || JToken.DeepEquals(data["contacts"], original["contacts"])), "Contact selection changed own-unit facts or disclosed excluded contacts");
+                Require((data["launched_weapons"] != null) == information.Allows("launched_weapons") &&
+                    (!information.Allows("launched_weapons") || JToken.DeepEquals(data["launched_weapons"], original["launched_weapons"])),
+                    "Weapon selection leaked excluded facts or changed other categories");
                 Require(JToken.DeepEquals(rig.Situation, original), "Selecting input mutated the captured situation");
                 rig.Complete(call); rig.Pump(1);
             }
@@ -468,11 +472,12 @@ internal static class CrewTests
         {"captured_at_utc":"1985-06-26T20:57:00Z","units":[
           {"id":"unit:1","display_name":"Helicopter","nation":"US","kind":"helicopter","acting_independently":false,
            "position":{"latitude_deg":26.5,"longitude_deg":127.3},"heading_deg":90,"speed_knots":70,"altitude_ft":200,
-           "damage":{"disabled":false},"fuel":{"remaining_mass_kg":600},"weapons":{"ammunition":[{"remaining_count":12}]},"sensors":[{"on":true}]},
+           "damage":{"disabled":false},"fuel":{"remaining_mass_kg":600},"weapons":{"ammunition":[{"remaining_count":12}]},"sensors":[{"on":true}],"active_threat_alerts":["missile"]},
           {"id":"unit:2","display_name":"Submarine","nation":"US","kind":"submarine","acting_independently":true,
            "position":{"latitude_deg":26.6,"longitude_deg":127.4},"heading_deg":180,"speed_knots":10,"depth_ft":400,
-           "damage":{"disabled":false},"fuel":{"status":"not_displayed_for_unit_type"},"weapons":{"ammunition":[{"remaining_count":4}]},"sensors":[{"on":false}]}
-        ],"contacts":[{"track_number":7017,"posture":"enemy","position":{"latitude_deg":26.8,"longitude_deg":126.5}}]}
+           "damage":{"disabled":false},"fuel":{"status":"not_displayed_for_unit_type"},"weapons":{"ammunition":[{"remaining_count":4}]},"sensors":[{"on":false}],"active_threat_alerts":["torpedo"]}
+        ],"contacts":[{"track_number":7017,"posture":"enemy","position":{"latitude_deg":26.8,"longitude_deg":126.5}}],
+        "launched_weapons":[{"posture":"enemy","kind":"missile","count":2,"launch_platform":null,"tracked_target":{"id":"unit:1","display_name":"Helicopter"}}]}
         """);
     private static JObject AppointmentRow(string id, string name = "Fictional") => new() { ["id"] = id, ["person_name"] = name, ["personality"] = "Calm" };
     private static AiReply Reply(JArray rows, JArray? appointments = null) => new("", new[] { new AiToolCall("reports", CrewBatch.ToolName, new JObject { ["appointments"] = appointments ?? new JArray(), ["reports"] = rows }) }, 12);

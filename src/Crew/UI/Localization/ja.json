@@ -50,7 +50,7 @@
   "exchange_chance": "掛け合いを促す確率 (%, 0-100)",
   "exchange_chance_hint": "複数の発言候補がいる回で適用します。100%でも、独立した発言や沈黙になることがあります。",
   "information": "AIに渡す情報",
-  "information.hint": "報告候補とその編隊メンバーの状態、プレイヤーが把握している接触を提供します。選択内容はAI Crew専用です。",
+  "information.hint": "報告候補とその編隊メンバーの状態、プレイヤーが把握している接触や発射後の兵器の状況を提供します。選択内容はAI Crew専用です。",
   "information.always": "常に提供",
   "information.identity": "担当者・ユニットの基本情報（名前・性格・所属国・役割など）",
   "information.formation": "編隊構成・個別行動の状態",
@@ -67,8 +67,12 @@
   "information.weapons_hint": "弾薬名、残数、射撃管制状態。",
   "information.sensors": "センサー状態",
   "information.sensors_hint": "装備名、ON/OFF、使用不能状態、ソナーのアクティブ送信状態。",
+  "information.threat_alerts": "ミサイル・魚雷警報",
+  "information.threat_alerts_hint": "各自軍ユニットに対し、ゲームが現在認識しているミサイル・魚雷の警報。",
   "information.contacts": "敵・不明接触",
-  "information.contacts_hint": "敵味方区分、識別状態、判明している種類、位置・運動情報など。",
+  "information.contacts_hint": "敵味方区分、識別状態、判明している種類、位置・運動情報など。ミサイル・魚雷は別項目です。",
+  "information.launched_weapons": "ミサイル・魚雷の状況",
+  "information.launched_weapons_hint": "発射後の兵器の敵味方区分・種類・数と、判明している発射元・追尾対象。",
   "information.apply_hint": "保存後、次の生成から適用します。設定変更前の発言はAIへ再送しません。ブリーフィング・作戦目標・予約経路・性能資料は提供していません。",
   "error.information_invalid": "AIに渡す情報の設定が不正です。"
 }

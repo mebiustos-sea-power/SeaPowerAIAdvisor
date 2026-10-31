@@ -1,5 +1,4 @@
 using System;
-using System.Reflection;
 using Newtonsoft.Json.Linq;
 using static SeaPowerAIAdvisor.BattleValue;
 
@@ -8,13 +7,12 @@ namespace SeaPowerAIAdvisor;
 // Own weapons are not platforms. Other weapons expose only the tracking relation shown on the player's map.
 internal static class BattleWeaponReader
 {
-    internal static bool IsKind(string kind) => kind is "missile" or "torpedo";
+    internal static bool IsKind(string kind) => BattleWeaponFacts.IsKind(kind);
 
     internal static JObject? CaptureOwn(object weapon, string id)
     {
         var kind = Code(Required(weapon, "_type"));
-        if (!IsKind(kind) || !CallBool(weapon, "isLaunched") || (bool)Required(weapon, "IsDestroyed") ||
-            Code(Required(weapon, "_flightStage")) is "debris" or "terminated" or "selfdestruct") return null;
+        if (!BattleWeaponFacts.IsActiveOwn(weapon)) return null;
         return new JObject
         {
             ["id"] = id,
@@ -40,15 +38,9 @@ internal static class BattleWeaponReader
         // A positional order is separate from a target's actual position.
         var commandPosition = commanded == null ? Member(weapon, "CommandPosition") : null;
         targeting["commanded_position"] = commandPosition == null ? JValue.CreateNull() : Position(commandPosition);
-        var seeker = Member(weapon, "_seeker");
-        if (seeker == null || !CallBool(seeker, "isActive")) targeting["tracking_status"] = "inactive";
-        else
-        {
-            var echo = Member(weapon, "CurrentStrongestTargetEcho");
-            var target = echo == null ? null : Member(echo, "_objectBase");
-            if (target == null) targeting["tracking_status"] = "searching";
-            else SetTrackedTarget(targeting, target, resolve);
-        }
+        var tracking = BattleWeaponFacts.OwnTracking(weapon);
+        if (tracking.Target == null) targeting["tracking_status"] = tracking.Status;
+        else SetTrackedTarget(targeting, tracking.Target, resolve);
         row["targeting"] = targeting;
     }
 
@@ -56,19 +48,7 @@ internal static class BattleWeaponReader
     {
         var targeting = UnknownTracking();
         row["targeting"] = targeting;
-        if ((bool)row["destroyed"]! || (bool)row["dormant"]!) return;
-        var model = Member(mapUnit, "ObjectViewModel");
-        if (model == null || model.GetType().GetProperty("LineToTarget", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic) == null)
-            return;
-        var color = Required(model, "LineToTargetColor");
-        if (Number(Required(color, "A")) <= 0) return;
-        var line = Rows(Member(model, "LineToTarget"));
-        if (line.Length != 2 || JToken.DeepEquals(Position(line[0]), Position(line[1]))) return;
-        var weapon = Required(model, "WeaponBase");
-        // This is the game's target-line disclosure test. Never read another side's commanded target.
-        if (!CallBool(weapon, "TargetedAtUnitWhichCanReportDetection")) return;
-        var echo = Member(weapon, "CurrentStrongestTargetEcho");
-        var target = echo == null ? null : Member(echo, "_objectBase");
+        var target = BattleWeaponFacts.VisibleTrackedTarget(mapUnit, (bool)row["destroyed"]!, (bool)row["dormant"]!);
         if (target != null) SetTrackedTarget(targeting, target, resolve);
     }
 
@@ -87,12 +67,6 @@ internal static class BattleWeaponReader
     {
         var id = target == null ? null : resolve(target);
         return id == null ? JValue.CreateNull() : new JValue(id);
-    }
-    private static bool CallBool(object value, string name)
-    {
-        var method = value.GetType().GetMethod(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-            null, Type.EmptyTypes, null) ?? throw new MissingMethodException(value.GetType().FullName, name);
-        return (bool)method.Invoke(value, null)!;
     }
     private static JObject Position(object position) => AdvisorInputBuilder.Position(new MapPosition(
         Number(Required(position, "Latitude")), Number(Required(position, "Longitude"))));

@@ -13,7 +13,8 @@ internal sealed class CrewInformation
         ("movement", new[] { "position", "heading_deg", "speed_knots", "altitude_ft", "depth_ft" }),
         ("damage", new[] { "damage" }), ("fuel", new[] { "fuel" }),
         ("weapons", new[] { "weapons" }), ("sensors", new[] { "sensors" }),
-        ("contacts", Array.Empty<string>())
+        ("threat_alerts", new[] { "active_threat_alerts" }),
+        ("contacts", Array.Empty<string>()), ("launched_weapons", Array.Empty<string>())
     });
     internal static readonly CrewInformation Default = new(Array.Empty<string>());
     private readonly HashSet<string> excluded;
@@ -47,6 +48,7 @@ internal sealed class CrewInformation
                 foreach (var item in Items.Where(i => !Allows(i.Id)))
                     foreach (var field in item.UnitFields) unit.Remove(field);
         if (!Allows("contacts")) result.Remove("contacts");
+        if (!Allows("launched_weapons")) result.Remove("launched_weapons");
         if (excluded.Count > 0) result["excluded_information"] = new JArray(Items.Where(i => !Allows(i.Id)).Select(i => i.Id));
         return result;
     }

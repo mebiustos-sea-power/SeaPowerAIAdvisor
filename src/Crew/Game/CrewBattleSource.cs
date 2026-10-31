@@ -48,7 +48,7 @@ internal sealed class CrewBattleSource
                 ["heading_deg"] = Number(Required(Required(unit, "Heading"), "Value")), ["speed_knots"] = Number(Required(unit, "_velocityInKnots")),
                 ["acting_independently"] = unit.Formation != null && !unit.IsFormationLeader && !unit.FollowingFormation,
                 ["damage"] = UnitStatusFacts.Damage(unit, parameters), ["fuel"] = UnitStatusFacts.Fuel(unit, parameters),
-                ["sensors"] = UnitStatusFacts.Sensors(parameters) };
+                ["sensors"] = UnitStatusFacts.Sensors(parameters), ["active_threat_alerts"] = UnitThreatFacts.ActiveAlerts(unit) };
             var verticalField = BattleVerticalPosition.FieldName(kind);
             if (verticalField != null) row[verticalField] = BattleVerticalPosition.Read(kind, Required(Required(unit, "Altitude"), "Value"));
             var names = Rows(Required(unit, "AmmunitionNameToAmmunitionDictionary")).ToDictionary(p => (string)Required(p, "Key"), p => Member(p, "Value"));
@@ -63,20 +63,13 @@ internal sealed class CrewBattleSource
             row["weapons"] = new JObject { ["fire_control_state"] = Code(Required(Required(unit, "WeaponState"), "Value")), ["ammunition"] = ammunition };
             units.Add(row);
         }
-        var contacts = new JArray();
-        foreach (var mapUnit in model.Map.MapKnownUnits.AllUnits)
+        var observed = CrewContactReader.Capture(model.Map.MapKnownUnits.AllUnits.Cast<object>(),
+            Globals._playerTaskforce?.TaskforceObjects.Cast<object>() ?? Array.Empty<object>());
+        return new JObject
         {
-            var posture = Code(Member(mapUnit, "VisualPosture")); if (posture is not ("enemy" or "unknown")) continue;
-            var track = mapUnit.Unit; var position = Member(track, "PositionEstimate"); var identified = (bool)Required(Required(track, "Identified"), "Value");
-            var observedClass = Member(track, "Class");
-            var row = new JObject { ["track_number"] = track.Id, ["posture"] = posture, ["kind"] = Code(Member(mapUnit, "VisualType")),
-                ["class_identified"] = identified, ["class_name"] = identified && observedClass != null ? (string)Required(observedClass, "Value") : null,
-                ["position"] = position == null ? JValue.CreateNull() : Position(Required(position, "Item1")),
-                ["position_source"] = position == null ? "unknown" : (bool)Required(track, "HasLiveTrack") ? "observed_estimate" : "extrapolated_estimate",
-                ["dormant"] = (bool)Required(Required(track, "IsDormant"), "Value") };
-            BattleContactMotionReader.CopyTo(row, track); contacts.Add(row);
-        }
-        return new JObject { ["captured_at_utc"] = SeaPower.Environment.Instance.DateTime.ToString("o", CultureInfo.InvariantCulture), ["units"] = units, ["contacts"] = contacts };
+            ["captured_at_utc"] = SeaPower.Environment.Instance.DateTime.ToString("o", CultureInfo.InvariantCulture),
+            ["units"] = units, ["contacts"] = observed.Contacts, ["launched_weapons"] = observed.LaunchedWeapons
+        };
     }
     private static JObject Position(object position) => new() { ["latitude_deg"] = Number(Required(position, "Latitude")), ["longitude_deg"] = Number(Required(position, "Longitude")) };
 }
