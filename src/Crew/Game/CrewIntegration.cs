@@ -69,9 +69,7 @@ internal sealed class CrewIntegration
             var grid = view.FindName("DisplayAreaGrid") as Grid ?? throw new InvalidOperationException("The battle HUD grid is unavailable.");
             var reference = view.FindName("UnitStatusWindow") as ToggleButton ?? throw new InvalidOperationException("The battle HUD toggle is unavailable.");
             launcherTooltip = new CrewText(GameLanguage.Read())["launcher.tooltip"];
-            launcher = new HudButton(grid, reference, "CREW", launcherTooltip, 11, before: hudAnchor);
-            var button = launcher;
-            button.Control.Loaded += (_, _) => Guard(() => button.FitLabel("CRW"));
+            launcher = new HudButton(grid, reference, "CRW", launcherTooltip, 11, before: hudAnchor);
             presentation = new CrewPresentation(GameUi.FindVisual<Grid>(view) ?? throw new InvalidOperationException("The battle content layout is unavailable."));
             launcher.Control.Click += (_, _) => Guard(ToggleWindow);
             active = true;

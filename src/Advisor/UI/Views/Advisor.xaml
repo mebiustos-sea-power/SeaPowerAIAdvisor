@@ -491,7 +491,8 @@
         <Grid x:Name="WipCategory" Visibility="Collapsed">
           <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="0,8,8,0">
-              <CheckBox x:Name="EnableCrew" Content="{DynamicResource Advisor.wip.crew_enabled}" Margin="0,0,0,12" />
+              <CheckBox x:Name="EnableCrew" Content="{DynamicResource Advisor.wip.crew_enabled}" Margin="0,0,0,4" />
+              <TextBlock Text="{DynamicResource Advisor.wip.crew_enabled_hint}" FontSize="12" TextWrapping="Wrap" Opacity="0.7" Margin="20,0,0,12" />
               <CheckBox x:Name="EnableCampaignAdvisor" HorizontalContentAlignment="Stretch">
                 <TextBlock Text="{DynamicResource Advisor.wip.campaign_alpha}" TextWrapping="Wrap" />
               </CheckBox>

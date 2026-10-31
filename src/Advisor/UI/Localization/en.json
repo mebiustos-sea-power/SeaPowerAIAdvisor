@@ -539,6 +539,7 @@
   "translation.completed": "Translation applied.",
   "translation.error.target_changed": "The selected text changed during translation. Select the region again.",
   "wip.crew_enabled": "Enable AI Crew",
+  "wip.crew_enabled_hint": "Enabling this displays the CRW button at the bottom of the screen.",
   "action.browse_units": "Insert a friendly unit from the list",
   "input.unit_search": "Search by unit name",
   "input.no_available_units": "No friendly units are available to insert.",

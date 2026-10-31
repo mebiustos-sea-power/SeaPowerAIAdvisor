@@ -539,6 +539,7 @@
   "translation.completed": "翻訳しました。",
   "translation.error.target_changed": "翻訳中に対象の表示が変わりました。もう一度範囲を選択してください。",
   "wip.crew_enabled": "AI Crewを有効にする",
+  "wip.crew_enabled_hint": "有効にすると、画面下部に『CRW』ボタンが表示されます。",
   "action.browse_units": "味方ユニットを一覧から挿入",
   "input.unit_search": "ユニット名で検索",
   "input.no_available_units": "挿入できる味方ユニットがありません。",
