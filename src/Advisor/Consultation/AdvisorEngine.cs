@@ -9,7 +9,6 @@ namespace SeaPowerAIAdvisor;
 // Optional standard retrieval strategy. The host owns deadlines; providers own API formats and conversation state.
 internal sealed class AdvisorEngine : IAdvisorBackend
 {
-    internal const int MaxTotalRequestBytes = 1_000_000;
     internal const int MaxToolCallsPerResponse = AdvisorToolSession.MaxCallsPerResponse;
     private readonly IAiProvider main;
     private readonly IAiProvider? sub;
@@ -31,7 +30,6 @@ internal sealed class AdvisorEngine : IAdvisorBackend
         var session = context.Knowledge;
         var tools = context.Tools;
         var maxExchanges = Math.Max(0, session.MaxRounds - (continuation == null ? 0 : session.RoundsUsed));
-        var bytesSent = 0;
         long totalTokens = 0;
         var usageKnown = true;
         AdvisorCompletionReason? limit = null;
@@ -52,10 +50,8 @@ internal sealed class AdvisorEngine : IAdvisorBackend
             if (limit.HasValue || session.RoundsUsed >= session.MaxRounds)
                 return Result("", limit ?? AdvisorCompletionReason.RoundLimit);
             var reply = await connection.GenerateAsync(true, new AiContinuation(retrievals, session.RoundsUsed, session.MaxRounds, context.Operations?.History), cancellation,
-                (requestNumber, fallback, model, size) =>
+                (requestNumber, fallback, model, _) =>
                 {
-                    if (size > MaxTotalRequestBytes - bytesSent) throw new AiConnectionException("request_budget");
-                    bytesSent += size;
                     lastApiRequest = requestNumber;
                     context.Progress?.Invoke(new AdvisorProgress(AdvisorStage.Waiting,
                         requestNumber, session.RoundsUsed, session.MaxRounds, lastQueries, fallback, model));

@@ -141,14 +141,23 @@ internal static class FallbackTests
             { Require(handler.Calls == 1, "Cancellation during the handoff sent another request"); return; }
             throw new InvalidOperationException("Cancellation was ignored");
         }));
-        check("Resending counts against the existing payload budget instead of resetting consultation limits", () => Async(async () =>
+        check("Fallback can resend history after cumulative requests exceed one megabyte", () => Async(async () =>
         {
-            var handler = new Handler((request, token) => Task.FromResult(Response(503,"{}")));
+            var bytes = new List<int>(); var keys = new List<string>();
+            var handler = new Handler(async (request, token) =>
+            {
+                var body = await request.Content!.ReadAsStringAsync(token);
+                bytes.Add(Encoding.UTF8.GetByteCount(body)); keys.Add(Key(request));
+                return keys.Count == 1 ? Response(503, "{}") : Response(200, Reply(new JObject { ["text"] = "Recovered" }));
+            });
             using var transport = new GeminiTransport(handler);
             var session = Session();
-            await Fails("request_budget", () => new GeminiFixture(transport).ConsultAsync(session, Settings(),
-                new[] { new ChatExchange("Earlier question", new string('x', 550000)) }, CancellationToken.None));
-            Require(handler.Calls == 1 && session.RoundsUsed == 0, "Failover bypassed the byte budget or consumed an information round");
+            var answer = await new GeminiFixture(transport).ConsultAsync(session, Settings(),
+                new[] { new ChatExchange("Earlier question", new string('x', 550_000)) }, CancellationToken.None);
+            Require(bytes.Count == 2 && bytes.All(size => size < 1_000_000) && bytes.Sum() > 1_000_000 &&
+                keys.SequenceEqual(new[] { Main, Backup }) && answer.Completed && answer.Text == "Recovered" &&
+                answer.ApiRequests == 2 && session.RoundsUsed == 0 && answer.TotalTokens == null,
+                "Resending history prevented fallback completion or changed request and retrieval accounting");
         }));
         check("Each connection test uses only its chosen pending key and cannot conceal a failing main key through fallback", () => Async(async () =>
         {

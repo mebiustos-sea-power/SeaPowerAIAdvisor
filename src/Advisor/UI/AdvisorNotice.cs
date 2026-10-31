@@ -34,7 +34,6 @@ internal sealed class AdvisorNotice
             "network_error" => "network_error",
             "output_limit" => "output_limit",
             "response_blocked" or "generation_failed" => "response_blocked",
-            "request_budget" or "request_limit" => "request_budget",
             "tool_call_limit" => "tool_call_limit",
             _ => "unknown"
         };

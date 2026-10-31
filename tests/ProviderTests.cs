@@ -88,34 +88,35 @@ internal static partial class ProviderTests
                 main.Sessions.Single().Disposed && sub.Sessions.Single().Disposed,
                 "Cross-provider fallback changed actual attempts, usage uncertainty, progress, or session cleanup");
         }));
-        check("The shared engine stops at the knowledge limit without another model request or fallback", () => Async(async () =>
+        check("Large cumulative requests still stop at the configured consultation limit without fallback", () => Async(async () =>
         {
-            var knowledge = new Knowledge(1);
+            var knowledge = new Knowledge(3);
             var provider = new FakeProvider("independent", (s, n, allowed, token) =>
             {
-                Require(n == 1 && allowed, "A tools-disabled or extra request was sent");
+                Require(n <= 3 && allowed, "A tools-disabled or extra request was sent");
                 return Task.FromResult(Reply(Call("call-" + n, "catalog")));
-            });
+            }, bytes: 600_000);
             var fallback = new FakeProvider("unused", (_, _, _, _) => throw new Exception("Limit triggered fallback"));
             var result = await new AdvisorEngine(provider, fallback).ConsultAsync(
                 AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>()), CancellationToken.None);
             Require(!result.Completed && result.CompletionReason == AdvisorCompletionReason.RoundLimit && result.Text == "" &&
-                result.TotalTokens == 7 && result.ApiRequests == 1 && knowledge.RoundsUsed == 1 &&
-                provider.Sessions.Single().Sends == 1 && provider.Sessions.Single().Disposed && fallback.Sessions.Count == 0,
+                result.TotalTokens == 21 && result.ApiRequests == 3 && knowledge.RoundsUsed == 3 &&
+                provider.Sessions.Single().Sends == 3 && provider.Sessions.Single().Disposed && fallback.Sessions.Count == 0,
                 "A limit was treated as success, retried, or lost its usage accounting");
         }));
-        check("The shared request byte budget is checked before an independent provider sends any data", () => Async(async () =>
+        check("Standard consultations can complete after requests exceeding one megabyte individually and cumulatively", () => Async(async () =>
         {
-            var provider = new FakeProvider("independent", (s, n, allowed, token) => throw new InvalidOperationException("Oversized request was sent"),
-                AdvisorEngine.MaxTotalRequestBytes + 1);
-            try { await new AdvisorEngine(provider).ConsultAsync(AdvisorContext.Create(new Knowledge(1), Array.Empty<ChatExchange>()), CancellationToken.None); }
-            catch (AiConnectionException error)
+            var provider = new FakeProvider("independent", (s, n, allowed, token) =>
             {
-                Require(error.Code == "request_budget" && provider.Sessions.Single().Sends == 0 && provider.Sessions.Single().Disposed,
-                    "The provider sent an oversized request or its session was not cleaned up");
-                return;
-            }
-            throw new InvalidOperationException("Oversized input was accepted");
+                Require(n <= 3 && allowed, "The consultation sent an extra request or disabled tools");
+                return Task.FromResult(n < 3 ? Reply(Call("call-" + n, "catalog")) :
+                    new AiReply("Completed answer", Array.Empty<AiToolCall>(), 7));
+            }, bytes: 1_000_001);
+            var result = await new AdvisorEngine(provider).ConsultAsync(
+                AdvisorContext.Create(new Knowledge(3), Array.Empty<ChatExchange>()), CancellationToken.None);
+            Require(result.Completed && result.Text == "Completed answer" && result.ApiRequests == 3 && result.QueryRounds == 2 &&
+                result.TotalTokens == 21 && provider.Sessions.Single().Sends == 3 && provider.Sessions.Single().Disposed,
+                "Request size prevented completion or changed accounting and session cleanup");
         }));
     }
 

@@ -92,15 +92,10 @@ internal static partial class ProviderTests
             Require(answer.Text == "External standard answer" && answer.ApiRequests == 2 && answer.QueryRounds == 1 &&
                 answer.TotalTokens == 7 && knowledge.Requests.Count == 1 && disposed, "The public standard adapter changed engine accounting or lifecycle");
         }));
-        check("External standard requests respect the host byte budget and cannot complete with an empty answer", () => Async(async () =>
+        check("External standard requests cannot complete with an empty answer", () => Async(async () =>
         {
             var external = new Client.StandardExtension(); using var host = new PublicHost(external);
-            var sent = false; var disposed = false;
-            external.Open = (_, _, _, _) => new Client.Session(_ => new Api.ProviderRequest(AdvisorEngine.MaxTotalRequestBytes + 1, _ =>
-            { sent = true; return Task.FromResult(new Api.ProviderReply("Should not send")); }), _ => { }, () => disposed = true);
-            try { await RunPrepared(AdvisorServices.Prepare(ExtensionDraft(external))); throw new Exception("Oversized external request sent"); }
-            catch (AiConnectionException error) { Require(error.Code == "request_budget" && !sent && disposed, "Public request bypassed the standard byte budget or leaked its session"); }
-            disposed = false;
+            var disposed = false;
             external.Open = (_, _, _, _) => new Client.Session(_ => new Api.ProviderRequest(1, _ => Task.FromResult(new Api.ProviderReply("   "))),
                 _ => { }, () => disposed = true);
             try { await RunPrepared(AdvisorServices.Prepare(ExtensionDraft(external))); throw new Exception("Empty public answer succeeded"); }

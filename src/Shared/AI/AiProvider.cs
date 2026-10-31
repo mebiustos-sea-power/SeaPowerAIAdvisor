@@ -20,7 +20,7 @@ internal interface IAiProviderSession : IDisposable
     void AcceptResults(IReadOnlyList<AiToolResult> results);
 }
 
-// Preparing a request performs no network I/O. The host checks its byte budget before sending it.
+// Preparing a request performs no network I/O and reports its UTF-8 byte count before sending.
 internal sealed class AiProviderRequest
 {
     internal int Bytes { get; }

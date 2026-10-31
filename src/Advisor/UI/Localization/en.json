@@ -99,7 +99,6 @@
   "connection.network_error": "Cannot connect to the AI server. Check its address and that it is running.",
   "connection.output_limit": "The AI reached its output limit. Adjust the output limit or narrow the question.",
   "connection.response_blocked": "The AI did not complete an answer.",
-  "connection.request_budget": "The consultation reached its request limit. Narrow the question or clear the chat.",
   "connection.tool_call_limit": "One AI response exceeded the limit of {0} requests.",
   "connection.unknown": "Cannot process the AI response. Try again.",
   "situation.error.fog_disabled": "Situation capture is disabled because fog of war is off.",

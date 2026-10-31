@@ -305,13 +305,6 @@ internal static class GeminiTests
                 }
             }
         }));
-        check("Cumulative request budget prevents a network call before oversized history is transmitted", () => Async(async () =>
-        {
-            var transport = new Fake((n, b, c) => throw new InvalidOperationException("Network should not be called"));
-            var history = new[] { new ChatExchange("以前の質問", new string('報', 360_000)) };
-            await ThrowsCodeAsync("request_budget", () => new GeminiFixture(transport).ConsultAsync(Session(assembly), Settings(), history, CancellationToken.None));
-            Require(transport.Calls == 0, "Oversized request was sent");
-        }));
         check("Incomplete or blocked generations cannot be displayed as successful advice", () => Async(async () =>
         {
             foreach (var (finish, code) in new[] { ("MAX_TOKENS", "output_limit"), ("SAFETY", "generation_failed") })

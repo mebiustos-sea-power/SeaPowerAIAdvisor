@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace SeaPowerAIAdvisor.Api;
 
-// Prepare performs no I/O. The standard engine checks the byte budget before SendAsync.
+// Prepare performs no I/O and reports the UTF-8 byte count before SendAsync.
 public sealed class ProviderRequest
 {
     public int Bytes { get; }

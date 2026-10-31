@@ -85,7 +85,7 @@ Provider error history is independent of the optional full communication log. Th
 Implement `IStandardAdvisorExtension` and return `IAdvisorSession` from `OpenSession`. The standard engine supplies an arbitrary list of tool definitions through `ConsultationInput.ToolsJson`. Preserve every supplied definition; no additional opt-in interface is required.
 
 1. `ConsultationInput` separates `DataJson`, `SystemInstruction` and `ToolsJson` (a read-only list of tool-definition JSON strings). Encode every supplied definition for the service API.
-2. `Prepare(allowTools)` returns a `ProviderRequest` containing its UTF-8 byte count and deferred send callback. Preparing must not perform I/O. The host checks the sending budget before invoking it.
+2. `Prepare(allowTools)` returns a `ProviderRequest` containing its UTF-8 byte count and deferred send callback. Preparing must not perform I/O. The standard consultation engine does not impose a cumulative request-byte limit; API exchange and information-retrieval limits still apply.
 3. Return final text or `ToolCall` objects normalized to the supplied host tool names and schemas. AI-facing names or wire formats may differ.
 4. `AcceptResults` receives matching call IDs/names and result JSON. The adapter owns API history, signatures, continuation IDs and thinking.
 5. Dispose session-owned resources; do not dispose shared connection services.

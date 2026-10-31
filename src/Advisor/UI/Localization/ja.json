@@ -99,7 +99,6 @@
   "connection.network_error": "AIサーバーへ接続できません。接続先と、サーバーが起動しているかを確認してください。",
   "connection.output_limit": "AIの出力上限に達しました。出力上限を調整するか、質問を絞ってください。",
   "connection.response_blocked": "AIが回答を完了できませんでした。",
-  "connection.request_budget": "相談の通信上限に達しました。質問を絞るか会話を消去してください。",
   "connection.tool_call_limit": "一度に受け付けられる要求数の上限（{0}件）を超えました。",
   "connection.unknown": "AIの回答を処理できませんでした。再度相談してください。",
   "situation.error.fog_disabled": "戦場の霧が無効のため、状況の取得を停止しました。",
