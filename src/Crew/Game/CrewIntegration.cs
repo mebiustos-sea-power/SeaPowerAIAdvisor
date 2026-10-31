@@ -119,7 +119,7 @@ internal sealed class CrewIntegration
                 return new LocalApiResponse(200, Status());
             }
             if (method == "GET" && path == CrewLocalApi.Path + "/situation")
-                return new LocalApiResponse(200, source!.Capture(reports!.Targets));
+                return new LocalApiResponse(200, settings!.Current.Information.Filter(source!.Capture(reports!.Targets)));
             return local.Dispatch(method, path, body);
         }
         catch (CrewException error) { log(error); return LocalApiResponse.Error(400, error.Code); }

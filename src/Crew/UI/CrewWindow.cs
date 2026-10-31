@@ -36,6 +36,8 @@ internal sealed class CrewWindow : IDisposable
     private readonly ImageSource portrait;
     private readonly UiNotice settingsNotice, reportNotice;
     private readonly CrewTargetSelection targetSelection = new();
+    private readonly Dictionary<string, CheckBox> informationChoices = new(StringComparer.Ordinal);
+    private CrewInformation information = CrewInformation.Default;
     private string[] ids = Array.Empty<string>();
     private string? page, baseline;
     private bool changing, stopped;
@@ -47,7 +49,12 @@ internal sealed class CrewWindow : IDisposable
     internal bool IsOpen => host.Windows.Contains(window);
     private T Find<T>(string name) where T : class => root.FindName(name) as T ?? throw new InvalidOperationException("Missing Reports control: " + name);
     private string? SelectedId => selection.SelectedIndex <= 0 ? null : ids[selection.SelectedIndex - 1];
-    private string Values => page == "reports" ? interval.Text + ":" + duration.Text + ":" + notificationPosition.SelectedIndex + ":" + showHelpTab.IsChecked + ":" + exchangeChance.Text : SelectedId ?? "";
+    private string Values => page switch
+    {
+        "reports" => interval.Text + ":" + duration.Text + ":" + notificationPosition.SelectedIndex + ":" + showHelpTab.IsChecked + ":" + exchangeChance.Text,
+        "information" => information.Key,
+        _ => SelectedId ?? ""
+    };
     private bool Dirty => targetSelection.Dirty || (page == "api" && apiTabs.Current == 1 ? editor.HasChanges : page != null && Values != baseline);
 
     internal CrewWindow(FrameworkElement view, WindowHost host, CrewReports reports, CrewSettingsStore settings, ICrewConnections connections,
@@ -63,6 +70,7 @@ internal sealed class CrewWindow : IDisposable
         root.Resources["Crew.back_categories"] = common("settings.back_categories");
         root.Resources["Crew.connection_selection"] = common("settings.selection_tab");
         root.Resources["Crew.registration"] = common("settings.registration_tab");
+        root.Resources["Crew.restore_defaults"] = common("information.restore_defaults");
         UiResources.Apply(root);
         Find<ContentControl>("HelpContent").Content = GUI.ParseXaml(MarkdownRenderer.Render(text["help_body"]).ToString(SaveOptions.DisableFormatting)) as FrameworkElement
             ?? throw new InvalidOperationException("The Reports help view is invalid.");
@@ -72,6 +80,17 @@ internal sealed class CrewWindow : IDisposable
         foreach (CrewNotificationPosition position in Enum.GetValues(typeof(CrewNotificationPosition)))
             notificationPosition.Items.Add(new ComboBoxItem { Content = text["position." + CrewSettings.PositionCode(position)] });
         interval = Find<TextBox>("Interval"); duration = Find<TextBox>("Duration"); exchangeChance = Find<TextBox>("ExchangeChance"); showHelpTab = Find<CheckBox>("ShowHelpTab");
+        var fixedInformation = Find<FrameworkElement>("InformationFixed");
+        fixedInformation.Loaded += (_, _) => Run(() => UiResources.ApplyDisabledCheckBoxBrushes(fixedInformation));
+        foreach (var item in CrewInformation.Items)
+        {
+            var label = new StackPanel();
+            label.Children.Add(new TextBlock { Text = text["information." + item.Id], TextWrapping = TextWrapping.Wrap });
+            label.Children.Add(new TextBlock { Text = text["information." + item.Id + "_hint"], TextWrapping = TextWrapping.Wrap, FontSize = 12, Opacity = 0.7f, Margin = new Thickness(0, 3, 0, 0) });
+            var box = new CheckBox { Content = label, HorizontalContentAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 4, 0, 8) };
+            box.Click += (_, _) => Run(() => information = information.With(item.Id, box.IsChecked == true));
+            informationChoices.Add(item.Id, box); Find<StackPanel>("InformationChoices").Children.Add(box);
+        }
         var form = AiConnectionsView.Create(common); Find<ContentControl>("Registration").Content = form;
         editor = new AiConnectionsView(form, connections.Store, () => connections.Providers, common, GameLanguage.Read, typing, Run,
             CanCommit, (name, action) => Confirm(action, string.Format(CultureInfo.CurrentCulture, common("settings.delete_question"), name), common("profile.remove"), common("settings.cancel")),
@@ -82,6 +101,8 @@ internal sealed class CrewWindow : IDisposable
         editor.Find<Button>("TestConnection").Click += (_, _) => Run(Test);
         tabs = Navigation("Tabs"); apiTabs = Navigation("ApiTabs");
         Bind("OpenConnections", () => OpenPage("api")); Bind("OpenReports", () => OpenPage("reports"));
+        Bind("OpenInformation", () => OpenPage("information"));
+        Bind("ResetInformation", () => { SetInformation(CrewInformation.Default); settingsNotice.Show(""); });
         Bind("Back", () => Navigate(Home));
         Bind("AllTargetsOn", () => { SyncSelection(); targetSelection.SetAll(true); DrawTargets(); });
         Bind("AllTargetsOff", () => { SyncSelection(); targetSelection.SetAll(false); DrawTargets(); });
@@ -100,15 +121,22 @@ internal sealed class CrewWindow : IDisposable
         Bind("SaveConnection", () =>
         {
             if (!CanCommit()) return;
-            var saved = settings.Current; settings.Save(new CrewSettings(SelectedId, saved.IntervalMinutes, saved.DisplaySeconds, saved.NotificationPosition, saved.ShowHelpTab, saved.ExchangeChancePercent));
+            var saved = settings.Current; settings.Save(new CrewSettings(SelectedId, saved.IntervalMinutes, saved.DisplaySeconds, saved.NotificationPosition, saved.ShowHelpTab, saved.ExchangeChancePercent, saved.Information));
             baseline = Values; editor.UpdateCards(); Saved();
         });
         Bind("SaveReports", () =>
         {
             if (!CanCommit()) return;
             int Read(TextBox input) => int.TryParse(input.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : throw new CrewException("settings_invalid");
-            settings.Save(new CrewSettings(settings.Current.ConnectionId, Read(interval), Read(duration), (CrewNotificationPosition)notificationPosition.SelectedIndex, showHelpTab.IsChecked == true, Read(exchangeChance)));
+            settings.Save(new CrewSettings(settings.Current.ConnectionId, Read(interval), Read(duration), (CrewNotificationPosition)notificationPosition.SelectedIndex, showHelpTab.IsChecked == true, Read(exchangeChance), settings.Current.Information));
             UpdateHelpTab();
+            baseline = Values; Saved();
+        });
+        Bind("SaveInformation", () =>
+        {
+            if (!CanCommit()) return;
+            var saved = settings.Current;
+            settings.Save(new CrewSettings(saved.ConnectionId, saved.IntervalMinutes, saved.DisplaySeconds, saved.NotificationPosition, saved.ShowHelpTab, saved.ExchangeChancePercent, information));
             baseline = Values; Saved();
         });
         Bind("CancelConfirmation", HideConfirmation);
@@ -171,12 +199,13 @@ internal sealed class CrewWindow : IDisposable
     private void OpenPage(string value)
     {
         page = value; typing.Release(); settingsNotice.Show("");
-        Find<TextBlock>("SettingsCategoryTitle").Text = text[value == "api" ? "connections" : "reports"];
+        Find<TextBlock>("SettingsCategoryTitle").Text = text[value switch { "api" => "connections", "reports" => "reports", "information" => "information", _ => throw new ArgumentOutOfRangeException(nameof(value)) }];
         Find<FrameworkElement>("SettingsHome").Visibility = Visibility.Collapsed; Find<FrameworkElement>("SettingsPage").Visibility = Visibility.Visible;
         Find<FrameworkElement>("ApiTabs").Visibility = value == "api" ? Visibility.Visible : Visibility.Collapsed;
         Find<FrameworkElement>("ReportsSettings").Visibility = value == "reports" ? Visibility.Visible : Visibility.Collapsed;
+        Find<FrameworkElement>("InformationSettings").Visibility = value == "information" ? Visibility.Visible : Visibility.Collapsed;
         if (value == "api") { apiTabs.Reset(); RefreshConnections(); editor.Open(); }
-        else
+        else if (value == "reports")
         {
             var saved = settings.Current;
             interval.Text = saved.IntervalMinutes.ToString(CultureInfo.InvariantCulture);
@@ -184,7 +213,13 @@ internal sealed class CrewWindow : IDisposable
             duration.Text = saved.DisplaySeconds.ToString(CultureInfo.InvariantCulture); notificationPosition.SelectedIndex = (int)saved.NotificationPosition;
             showHelpTab.IsChecked = saved.ShowHelpTab;
         }
+        else SetInformation(settings.Current.Information);
         baseline = Values;
+    }
+    private void SetInformation(CrewInformation value)
+    {
+        information = value;
+        foreach (var item in informationChoices) item.Value.IsChecked = information.Allows(item.Key);
     }
     private void RefreshConnections()
     {

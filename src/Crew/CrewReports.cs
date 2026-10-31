@@ -25,8 +25,9 @@ internal sealed class CrewReport
     internal DateTime ReceivedAt { get; } = DateTime.Now;
     internal double ExpiresAt { get; }
     internal int Revision { get; }
-    internal CrewReport(CrewTarget target, CrewSubmission submission, double expiresAt, int revision)
-    { Target = target; Submission = submission; ExpiresAt = expiresAt; Revision = revision; }
+    internal int InformationRevision { get; }
+    internal CrewReport(CrewTarget target, CrewSubmission submission, double expiresAt, int revision, int informationRevision)
+    { Target = target; Submission = submission; ExpiresAt = expiresAt; Revision = revision; InformationRevision = informationRevision; }
 }
 
 // Session-owned scheduling uses only the caller's monotonic real-time clock, never simulation time or pause state.
@@ -52,6 +53,8 @@ internal sealed class CrewReports : IDisposable
     private bool retired, speechInFlight;
     private double startedAt, nextOpportunity = double.PositiveInfinity, nextAppointments = double.PositiveInfinity;
     private long selectionRound;
+    private string informationKey = CrewInformation.Default.Key;
+    private int informationRevision, activeInformationRevision;
     internal string? Error { get; private set; }
     internal bool Busy => task != null;
     internal CrewUsage Usage { get; } = new();
@@ -117,7 +120,12 @@ internal sealed class CrewReports : IDisposable
     internal void Tick(double now, CrewSettings settings, string language, Func<IReadOnlyList<CrewTarget>, JObject> capture,
         Func<CrewBatch, string, CancellationToken, Action<long?>, Task<CrewGeneration>> generate)
     {
-        if (retired || Paused) return;
+        if (retired) return;
+        if (informationKey != settings.Information.Key)
+        {
+            informationKey = settings.Information.Key; informationRevision++;
+        }
+        if (Paused) return;
         if (!HasReporters) nextOpportunity = double.PositiveInfinity;
         else if (double.IsPositiveInfinity(nextOpportunity) && !speechInFlight) nextOpportunity = now + 1;
         if (task?.IsCompleted == true)
@@ -140,7 +148,7 @@ internal sealed class CrewReports : IDisposable
                     var entry = work.Single(w => w.Target.Id == submission.Id);
                     if (!Valid(entry) || !entry.State.Target.CanReport || !entry.State.Target.Members.SequenceEqual(entry.Target.Members)) continue;
                     var bound = new CrewSubmission(submission.Id, people[submission.Id], submission.Text);
-                    var report = new CrewReport(entry.Target, bound, now + 120, entry.Revision);
+                    var report = new CrewReport(entry.Target, bound, now + 120, entry.Revision, activeInformationRevision);
                     history.Add(report); if (history.Count > 200) history.RemoveAt(0);
                     pending.Enqueue(report); while (pending.Count > 16) pending.Dequeue();
                 }
@@ -178,7 +186,7 @@ internal sealed class CrewReports : IDisposable
             nextOpportunity = double.PositiveInfinity; var round = ++selectionRound;
             foreach (var candidate in candidates) candidate.LastConsidered = round;
         }
-        var data = candidates.Length == 0 ? new JObject() : capture(candidates.Select(s => s.Target).ToArray());
+        var data = candidates.Length == 0 ? new JObject() : settings.Information.Filter(capture(candidates.Select(s => s.Target).ToArray()));
         data["reply_language"] = language;
         JObject Identity(State state) => new() { ["id"] = state.Target.Id, ["display_name"] = state.Target.Name, ["nation"] = state.Target.Nation, ["role"] = state.Target.Role };
         data["appointments"] = new JArray(appointments.Select(Identity));
@@ -189,8 +197,9 @@ internal sealed class CrewReports : IDisposable
             row["person"] = person == null ? JValue.CreateNull() : new JObject { ["name"] = person.Name, ["personality"] = person.Personality };
             return row;
         }));
-        if (candidates.Length > 0) data["recent_remarks"] = new JArray(history.TakeLast(3).Select(r => new JObject { ["id"] = r.Target.Id, ["text"] = r.Submission.Text }));
+        if (candidates.Length > 0) data["recent_remarks"] = new JArray(history.Where(r => r.InformationRevision == informationRevision).TakeLast(3).Select(r => new JObject { ["id"] = r.Target.Id, ["text"] = r.Submission.Text }));
         active = appointments.Concat(candidates).Distinct().Select(s => (s, s.Revision, s.Target)).ToArray(); startedAt = now; speechInFlight = candidates.Length > 0;
+        activeInformationRevision = informationRevision;
         cancellation = new CancellationTokenSource();
         var batch = new CrewBatch(data, candidates.ToDictionary(s => s.Target.Id, s => Person(s.Target.Id)), appointments.Select(s => s.Target.Id),
             preferExchange: candidates.Length >= 2 && random.NextDouble() < settings.ExchangeChancePercent / 100.0);

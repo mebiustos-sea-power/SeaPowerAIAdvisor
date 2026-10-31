@@ -78,6 +78,81 @@ internal static class CrewTests
                 Throws<CrewException>(() => CrewSettings.Parse(new JObject { ["notification_position"] = invalid }.ToString()));
             Throws<CrewException>(() => new CrewSettings(notificationPosition: (CrewNotificationPosition)99));
         }));
+        check("Reports information defaults to the existing coverage and persists independently of adviser choices", () => Temp(directory =>
+        {
+            var path = Path.Combine(directory, "crew.json"); var store = new CrewSettingsStore(path);
+            Require(CrewInformation.Items.All(i => store.Current.Information.Allows(i.Id)) && !File.Exists(path), "Default coverage changed or opening saved settings");
+            var information = CrewInformation.Default.With("fuel", false).With("contacts", false);
+            store.Save(new CrewSettings("reports-only", 5, 12, CrewNotificationPosition.BottomCenter, false, 72, information));
+            var adviser = new AdvisorOptionsStore(Path.Combine(directory, "options.json"));
+            adviser.SaveInformation(AdvisorInformation.Default.With(InformationKind.BattleSensors, false));
+            var read = new CrewSettingsStore(path).Current;
+            Require(read.Information.Key == information.Key && read.ConnectionId == "reports-only" && read.IntervalMinutes == 5 && read.DisplaySeconds == 12 &&
+                read.NotificationPosition == CrewNotificationPosition.BottomCenter && !read.ShowHelpTab && read.ExchangeChancePercent == 72,
+                "Reloading Reports or changing adviser coverage lost Reports preferences");
+            Require(read.Information.Allows("sensors") && adviser.Current.Information.Allows(InformationKind.BattleFuel), "The features shared information selections");
+            foreach (var invalid in new JToken[] { JValue.CreateNull(), new JArray(), new JObject { ["fuel"] = "false" }, new JObject { ["not_a_category"] = false } })
+                Throws<CrewException>(() => CrewSettings.Parse(new JObject { ["information_selection"] = invalid }.ToString()));
+            File.Delete(path); Directory.CreateDirectory(path);
+            Throws<CrewException>(() => store.Save(new CrewSettings(information: CrewInformation.Default)));
+            Require(store.Current.Information.Key == information.Key, "Failed storage applied information edits");
+        }));
+        check("Reports excludes disabled facts from provider input while retaining identities, formation and unrelated categories", () =>
+        {
+            var categories = new[]
+            {
+                ("movement", new[] { "position", "heading_deg", "speed_knots", "altitude_ft", "depth_ft" }),
+                ("damage", new[] { "damage" }), ("fuel", new[] { "fuel" }),
+                ("weapons", new[] { "weapons" }), ("sensors", new[] { "sensors" })
+            };
+            var selections = new List<CrewInformation> { CrewInformation.Default };
+            selections.AddRange(CrewInformation.Items.Select(i => CrewInformation.Default.With(i.Id, false)));
+            selections.Add(CrewInformation.Items.Aggregate(CrewInformation.Default, (p, i) => p.With(i.Id, false)));
+            foreach (var information in selections)
+            {
+                using var rig = new Rig(settings: new CrewSettings("reports", information: information));
+                rig.Situation = ReportSituation(); var original = rig.Situation.DeepClone();
+                rig.Reports.Refresh(new[] { Target(1, 1, 2) }); rig.Reports.ApplyTargets(new[] { "unit:1" }, 0); rig.Tick(1);
+                var call = rig.Take(); var data = call.Batch.Input("").Data;
+                var units = (JArray)data["units"]!;
+                Require((string?)units[0]["id"] == "unit:1" && (string?)units[1]["id"] == "unit:2" &&
+                    units.All(u => u["display_name"] != null && u["nation"] != null && u["kind"] != null && u["acting_independently"] != null) &&
+                    data["reporters"]![0]!["member_unit_ids"]!.Count() == 2 && (string?)data["reply_language"] == "en" && data["captured_at_utc"] != null,
+                    "Optional selections removed the speaker, formation or basic context");
+                foreach (var category in categories)
+                    foreach (var field in category.Item2)
+                        for (var i = 0; i < units.Count; i++)
+                            Require((units[i][field] != null) == (information.Allows(category.Item1) && original["units"]![i]![field] != null),
+                                "Provider input leaked or unexpectedly omitted " + category.Item1 + "/" + field);
+                Require((data["contacts"] != null) == information.Allows("contacts") &&
+                    (!information.Allows("contacts") || JToken.DeepEquals(data["contacts"], original["contacts"])), "Contact selection changed own-unit facts or disclosed excluded contacts");
+                Require(JToken.DeepEquals(rig.Situation, original), "Selecting input mutated the captured situation");
+                rig.Complete(call); rig.Pump(1);
+            }
+        });
+        check("Reports information changes retain visible history but exclude old and late-arriving remarks from later input", () =>
+        {
+            using var rig = new Rig(new FixedRandom(0));
+            rig.Reports.Refresh(new[] { Target(1) }); rig.Reports.ApplyTargets(new[] { "unit:1" }, 0); rig.Tick(1);
+            var first = rig.Take(); rig.Complete(first, "unit:1"); rig.Pump(1);
+            rig.Settings = new CrewSettings("reports", 1, information: CrewInformation.Default.With("fuel", false));
+            rig.Tick(100); var reduced = rig.Take();
+            Require(reduced.Batch.Input("").Data["recent_remarks"] is JArray { Count: 0 } && rig.Reports.History.Count == 1,
+                "Old facts were resent or the player's displayed history was cleared");
+            rig.Complete(reduced, "unit:1"); rig.Pump(100);
+            rig.Settings = new CrewSettings("reports", 1);
+            rig.Tick(200); var restored = rig.Take();
+            Require(restored.Batch.Input("").Data["recent_remarks"] is JArray { Count: 0 }, "Re-enabling information revived an earlier context");
+            rig.Complete(restored, "unit:1"); rig.Pump(200);
+            rig.Tick(300); var same = rig.Take();
+            Require(same.Batch.Input("").Data["recent_remarks"] is JArray { Count: 1 }, "Unchanged information lost useful recent remarks");
+            rig.Settings = new CrewSettings("reports", 1, information: CrewInformation.Default.With("contacts", false));
+            rig.Complete(same, "unit:1"); rig.Pump(300);
+            rig.Tick(400); var next = rig.Take();
+            Require(next.Batch.Input("").Data["recent_remarks"] is JArray { Count: 0 } && rig.Reports.History.Count == 4 &&
+                rig.Reports.Person("unit:1") != null && rig.Reports.Enabled("unit:1"), "A late response leaked old facts or lost history, crew or selection");
+            rig.Complete(next); rig.Pump(400);
+        });
         check("Reports API changes targets only after scope, complete target set and connection permission validation", () =>
         {
             using var rig = new Rig(); rig.Reports.Refresh(new[] { Target(1, 1, 2), Target(3) }); var denied = false; var checkedConnection = 0;
@@ -389,6 +464,16 @@ internal static class CrewTests
         });
     }
     private static JObject Row(string id) => new() { ["id"] = id, ["text"] = "Maintaining station." };
+    private static JObject ReportSituation() => JObject.Parse("""
+        {"captured_at_utc":"1985-06-26T20:57:00Z","units":[
+          {"id":"unit:1","display_name":"Helicopter","nation":"US","kind":"helicopter","acting_independently":false,
+           "position":{"latitude_deg":26.5,"longitude_deg":127.3},"heading_deg":90,"speed_knots":70,"altitude_ft":200,
+           "damage":{"disabled":false},"fuel":{"remaining_mass_kg":600},"weapons":{"ammunition":[{"remaining_count":12}]},"sensors":[{"on":true}]},
+          {"id":"unit:2","display_name":"Submarine","nation":"US","kind":"submarine","acting_independently":true,
+           "position":{"latitude_deg":26.6,"longitude_deg":127.4},"heading_deg":180,"speed_knots":10,"depth_ft":400,
+           "damage":{"disabled":false},"fuel":{"status":"not_displayed_for_unit_type"},"weapons":{"ammunition":[{"remaining_count":4}]},"sensors":[{"on":false}]}
+        ],"contacts":[{"track_number":7017,"posture":"enemy","position":{"latitude_deg":26.8,"longitude_deg":126.5}}]}
+        """);
     private static JObject AppointmentRow(string id, string name = "Fictional") => new() { ["id"] = id, ["person_name"] = name, ["personality"] = "Calm" };
     private static AiReply Reply(JArray rows, JArray? appointments = null) => new("", new[] { new AiToolCall("reports", CrewBatch.ToolName, new JObject { ["appointments"] = appointments ?? new JArray(), ["reports"] = rows }) }, 12);
     private static CrewTarget Target(int id, params int[] members) => new("unit:" + id, "Unit " + id, "US", "captain", members.Length == 0 ? new[] { id } : members, true);
@@ -417,11 +502,12 @@ internal static class CrewTests
         internal int Captures, Requests;
         private readonly int mainThread = Environment.CurrentManagedThreadId;
         private readonly ConcurrentQueue<Call> calls = new();
-        private readonly CrewSettings settings;
+        internal CrewSettings Settings;
+        internal JObject Situation = new();
         internal Rig(Random? random = null, CrewSettings? settings = null)
-        { Reports = new CrewReports(Errors.Add, random ?? new Random(1)); this.settings = settings ?? new CrewSettings("reports", 1, 10); }
-        internal void Tick(double now) => Reports.Tick(now, settings, "en", _ =>
-        { Require(Environment.CurrentManagedThreadId == mainThread, "Capture ran on a worker thread"); Captures++; return new JObject(); },
+        { Reports = new CrewReports(Errors.Add, random ?? new Random(1)); Settings = settings ?? new CrewSettings("reports", 1, 10); }
+        internal void Tick(double now) => Reports.Tick(now, Settings, "en", _ =>
+        { Require(Environment.CurrentManagedThreadId == mainThread, "Capture ran on a worker thread"); Captures++; return Situation; },
             async (batch, _, token, usage) =>
             {
                 Interlocked.Increment(ref Requests); var call = new Call(batch, token); calls.Enqueue(call); long? tokens = null;
