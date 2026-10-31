@@ -81,6 +81,8 @@ internal sealed class CrewBatch
         if (!string.IsNullOrWhiteSpace(connectionPrompt))
             instruction += "\nSupplemental instructions for this connection take priority if they conflict:\n" + connectionPrompt;
         var id = new JObject { ["type"] = "string", ["description"] = "The supplied unit ID." };
+        var speakerId = new JObject { ["type"] = "string", ["description"] = "A unit ID from input speakers." };
+        if (people.Count > 0) speakerId["enum"] = new JArray(people.Keys);
         JObject Rows(JObject fields, int maximum, int minimum = 0) => new()
         {
             ["type"] = "array", ["minItems"] = minimum, ["maxItems"] = maximum,
@@ -101,7 +103,7 @@ internal sealed class CrewBatch
                     }, appointments.Count, appointments.Count),
                     ["remarks"] = Rows(new JObject
                     {
-                        ["id"] = id.DeepClone(), ["text"] = new JObject { ["type"] = "string", ["description"] = "The person's remark, in display order within this response." }
+                        ["id"] = speakerId, ["text"] = new JObject { ["type"] = "string", ["description"] = "The person's remark, in display order within this response." }
                     }, Math.Min(MaximumSpeakers, people.Count))
                 } } };
         return new AiProviderInput(data, instruction, tool);

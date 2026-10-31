@@ -30,6 +30,44 @@ internal static class CrewConnectionTests
             var result = connections.GenerateAsync(Batch(), "chatter", CancellationToken.None, usage.Record).GetAwaiter().GetResult();
             Require(sends == 1 && result.Remarks.Single().Id == "unit:1" && usage.Snapshot.KnownTokens == 10 && usage.Snapshot.ApiRequests == 1, "The terminal remark submission caused extra exchanges or lost usage");
         }));
+        check("Chatter restricts speaker choices to the current candidates, excluding appointed and contextual units", () => InTemp(directory =>
+        {
+            var path = Path.Combine(directory, "api.json"); AdvisorSettings.WriteBytes(path, Settings().Data());
+            var expected = Array.Empty<string>(); var invalid = false; var sends = 0;
+            var connections = new ChatterConnections(path, directory, new CrewSettingsStore(Path.Combine(directory, "crew.json")), () => AdvisorText.Load("en"), transportFactory: trace =>
+                new AiHttpTransport(new Handler(async (request, _) =>
+                {
+                    sends++; var body = JObject.Parse(await request.Content!.ReadAsStringAsync());
+                    var remarks = body["tools"]![0]!["function"]!["parameters"]!["properties"]!["remarks"]!;
+                    var choices = remarks["items"]!["properties"]!["id"]!["enum"];
+                    if (expected.Length == 0)
+                        Require((int?)remarks["maxItems"] == 0 && choices == null, "An appointment-only request allowed speech or sent an empty enum");
+                    else
+                        Require(choices is JArray ids && ids.Count == expected.Length &&
+                            new HashSet<string>(ids.Values<string>()!, StringComparer.Ordinal).SetEquals(expected),
+                            "Speaker choices omitted candidates or included an appointment or a contextual formation member");
+                    return Response(HttpStatusCode.OK, silent: !invalid, invalid: invalid);
+                }), trace));
+            CrewBatch BatchFor(string[] ids) => new(new JObject
+            {
+                ["appointments"] = new JArray(new JObject { ["id"] = "unit:1" }),
+                ["speakers"] = new JArray(ids.Select(id => new JObject { ["id"] = id })),
+                ["units"] = new JArray(new[] { "unit:1", "unit:2", "unit:3", "unit:4", "unit:5", "unit:99" }.Select(id => new JObject { ["id"] = id }))
+            }, ids.ToDictionary(id => id, _ => (CrewPerson?)new CrewPerson("Existing", "Cmdr.", "Calm")), new[] { "unit:1" });
+            foreach (var ids in new[] { Array.Empty<string>(), new[] { "unit:2" }, new[] { "unit:2", "unit:3" }, new[] { "unit:2", "unit:3", "unit:4", "unit:5" } })
+            {
+                expected = ids;
+                var result = connections.GenerateAsync(BatchFor(ids), "chatter", CancellationToken.None, _ => { }).GetAwaiter().GetResult();
+                Require(result.Appointments.Count == 1 && result.Remarks.Count == 0, "Restricting speakers prevented appointment or silence");
+            }
+            invalid = true;
+            try
+            {
+                _ = connections.GenerateAsync(BatchFor(expected), "chatter", CancellationToken.None, _ => { }).GetAwaiter().GetResult();
+                throw new InvalidOperationException("A contextual unit outside the speaker choices was accepted");
+            }
+            catch (CrewException e) { Require(e.Code == "invalid_response" && sends == 5, "Candidate validation changed or triggered an extra request"); }
+        }));
         check("An invalid auxiliary rank vote preserves a successful generation, its remark and single-request usage", () => InTemp(directory =>
         {
             var path = Path.Combine(directory, "api.json"); AdvisorSettings.WriteBytes(path, Settings().Data()); var usage = new CrewUsage(); var sends = 0;
