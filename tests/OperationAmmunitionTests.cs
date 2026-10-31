@@ -13,7 +13,7 @@ internal static class OperationAmmunitionTests
         check("Weapon aliases and exact display names share canonical proposals while diagnostics retain the original arguments", () =>
         {
             using var trial = new Trial();
-            var source = new BattleAdvisorSource(() => Snapshot(), () => trial.Gateway);
+            var source = new BattleAdvisorSource(_ => Snapshot(), () => trial.Gateway);
             var knowledge = source.CreateSession("en", "Deploy a buoy");
             var references = ((IAdvisorOperationReferenceSource)knowledge).OperationReferences;
             var run = new AdvisorLocalRun();

@@ -12,7 +12,8 @@ internal sealed class BattleSituationReader
 {
     internal BattleSnapshot Capture(object knownUnits, object player, object objectives, object missionAreas, object eventLog,
         DateTime now, string missionName, bool enemyControl, BattleCapabilityReader knowledge,
-        string xmlBriefing = "", bool briefingUnavailable = false, bool briefingFromBase = false)
+        string xmlBriefing = "", bool briefingUnavailable = false, bool briefingFromBase = false,
+        IReadOnlyDictionary<string, bool>? attackRanges = null)
     {
         if (enemyControl) throw new SituationUnavailableException("battle_disclosure");
         var ownObjects = Sequence(Member(player, "TaskforceObjects")).ToArray();
@@ -103,6 +104,8 @@ internal sealed class BattleSituationReader
                 ["position_error_nm"] = JValue.CreateNull()
             });
             var contact = (JObject)contacts.Last!;
+            if (attackRanges != null && attackRanges.TryGetValue("unit:" + Convert.ToInt32(Required(vehicle, "Id"), CultureInfo.InvariantCulture), out var inRange))
+                contact["has_in_range_attack_option"] = inRange;
             unitReferences.Add(((string)contact["id"]!, (int)contact["track_number"]!));
             if (identity != null) identities.Add((identity, (string)contact["id"]!));
             if (BattleWeaponReader.IsKind(contactKind)) weaponContacts.Add((mapUnit, contact));

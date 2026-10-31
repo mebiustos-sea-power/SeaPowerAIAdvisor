@@ -79,11 +79,13 @@ internal sealed partial class BattleOperationSupport : IAdvisorCombatSupport
         // Removing immediate BT nodes shifts the running index. Reset it through the native node lifecycle.
         if (nodes.Length > 0) unit._userRoot.Reset(false);
     }
-    public IReadOnlyList<AttackUnitInfo> GetAttackUnits()
+    public IReadOnlyList<AttackUnitInfo> GetAttackUnits() => ReadAttackUnits(AttackTargets());
+    private IReadOnlyList<AttackUnitInfo> ReadAttackUnits(IReadOnlyList<(CombatTargetInfo Info, ObjectBase Object)> targets,
+        string? shooter = null, ISet<string>? contacts = null)
     {
-        Require("battle_units"); Require("battle_weapons"); var targets = AttackTargets();
+        Require("battle_units"); Require("battle_weapons");
         var result = new List<AttackUnitInfo>();
-        foreach (var unit in VisibleUnits())
+        foreach (var unit in VisibleUnits().Where(u => shooter == null || CombatIdentity(u, true).Target == shooter))
         {
             var pending = PendingAttackTasks(unit).ToArray();
             var ammo = GetAmmunition("unit:" + unit.Id.ToString(CultureInfo.InvariantCulture)).Where(a =>
@@ -93,7 +95,7 @@ internal sealed partial class BattleOperationSupport : IAdvisorCombatSupport
                     .Sum(v => (long)((AttackAtWaypoint)v.Task)._salvo) ?? 0;
                 var notStarted = pending.Where(p => p.ammunitionForEngage.value == a.Id).Sum(p => (long)Math.Max(0, p.salvo.value));
                 return new AttackAmmunitionInfo(a.Id, a.Name, a.Remaining, (int)Math.Max(0, a.Available - notStarted),
-                    (int)Math.Max(0, a.Remaining - reserved), targets.Where(t => !t.Info.Destroyed &&
+                    (int)Math.Max(0, a.Remaining - reserved), targets.Where(t => !t.Info.Destroyed && (contacts == null || contacts.Contains(t.Info.Target)) &&
                         unit.DoesAmmoMatchTarget(a.Id, t.Object, true)).Select(t => t.Info.Target));
             }).ToArray();
             var attacks = new List<AttackInstruction>();

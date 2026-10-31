@@ -52,6 +52,8 @@ class MockApi:
                         value = {"request_id": body["request_id"], "status": "registered"}
                     else:
                         value = {"scope_id": "loaded-game", "enabled": True, "operations": []}
+                elif self.path == "/v1/operations/seapower.attack/candidates":
+                    value = {"candidates": [], "total_count": 0, "has_more": False}
                 elif self.path == "/v1/operations/seapower.schedule_sonobuoy_drop/candidates":
                     value = {"scope_id": "loaded-game", "candidates": [{"target_ref": "unit:42"}]}
                 elif self.path == "/v1/units/42/reservations":
@@ -112,6 +114,13 @@ class MockApi:
 
 
 class CliTests(unittest.TestCase):
+    def test_attack_candidates_batch_contacts_and_actor_with_paging_in_one_read(self):
+        with MockApi() as api:
+            self.assertEqual(api.run("operations", "candidates", "seapower.attack", "--contact-ref", "unit:7017",
+                "--contact-ref", "unit:7022", "--target-ref", "unit:1002", "--offset", "0", "--limit", "20")[0], 0)
+            self.assertEqual([call[:3] for call in api.calls], [("POST", "/v1/operations/seapower.attack/candidates",
+                {"contact_refs": ["unit:7017", "unit:7022"], "target_ref": "unit:1002", "offset": 0, "limit": 20})])
+
     def test_operations_use_supplied_scope_and_request_id_without_consultation_or_retries(self):
         with MockApi() as api, tempfile.TemporaryDirectory() as temporary:
             self.assertEqual(api.run("operations", "list")[0], 0)

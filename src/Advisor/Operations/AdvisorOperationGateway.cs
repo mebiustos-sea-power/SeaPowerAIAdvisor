@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
@@ -22,7 +23,7 @@ internal sealed class AdvisorOperationGateway : IDisposable
     private static readonly AdvisorRequestShape[] requestShapes = {
         new(new[] { "list" }, Array.Empty<string>(), "search", "offset", "limit"),
         new(new[] { "describe" }, new[] { "operation_id" }),
-        new(new[] { "candidates" }, new[] { "operation_id" }, "target_ref", "offset", "limit"),
+        new(new[] { "candidates" }, new[] { "operation_id" }, "target_ref", "contact_refs", "offset", "limit"),
         new(new[] { "submit" }, new[] { "request_id", "plans" })
     };
     internal static JObject ActionSchema(JObject tool, string action) => requestShapes.Single(s => s.Matches(action)).Schema("action",
@@ -101,8 +102,6 @@ internal sealed class AdvisorOperationGateway : IDisposable
         var action = Text(request, "action");
         if (requestShapes.Any(s => s.Matches(action)) && !requestShapes.Any(s => s.Matches(action) && s.AllowsFields(request, "action") && s.HasRequired(request)))
             throw new AdvisorOperationException(400, "invalid_operation_request");
-        if (action == "candidates" && request["target_ref"] != null)
-            request = NormalizeTarget(request, references, resolutions);
         switch (action)
         {
             case "list":
@@ -112,8 +111,7 @@ internal sealed class AdvisorOperationGateway : IDisposable
             case "describe":
                 return operations.Describe(Text(request, "operation_id"));
             case "candidates":
-                return operations.CandidatePage(Text(request, "operation_id"), request["target_ref"] == null ? null : Text(request, "target_ref"),
-                    Number(request, "offset", 0, int.MaxValue), Number(request, "limit", 10, 20, 1));
+                return ReadCandidates(operations, request, references, resolutions);
             case "submit":
                 var submission = (JObject)request.DeepClone(); submission.Remove("action");
                 AdvisorOperationPlanBatch.Validate(submission);
@@ -144,6 +142,36 @@ internal sealed class AdvisorOperationGateway : IDisposable
                 return operations.SubmitPlans(owner, submission);
             default: throw new AdvisorOperationException(400, "unknown_operation_action");
         }
+    }
+    internal static JObject ReadCandidates(AdvisorOperations operations, JObject request, AdvisorOperationReferences references, JObject resolutions)
+    {
+        var shape = requestShapes.Single(s => s.Matches("candidates"));
+        if (!shape.AllowsFields(request, "action") || !shape.HasRequired(request))
+            throw new AdvisorOperationException(400, "invalid_operation_request");
+        if (request["target_ref"] != null) request = NormalizeTarget(request, references, resolutions);
+        return operations.CandidatePage(Text(request, "operation_id"), request["target_ref"] == null ? null : Text(request, "target_ref"),
+            Number(request, "offset", 0, int.MaxValue), Number(request, "limit", 10, 20, 1), ContactReferences(request, references, resolutions));
+    }
+    private static IReadOnlyList<string>? ContactReferences(JObject request, AdvisorOperationReferences references, JObject resolutions)
+    {
+        if (request["contact_refs"] == null) return null;
+        if (request["contact_refs"] is not JArray values || values.Count < 1 || values.Count > AdvisorQueryLimits.MaxIdsPerQuery)
+            throw new AdvisorOperationException(400, "invalid_attack_contacts");
+        var contacts = new List<string>(); var changes = new JArray();
+        foreach (var value in values)
+        {
+            if (value.Type != JTokenType.String || (string?)value is not string original || string.IsNullOrWhiteSpace(original) || original.Length > 200)
+                throw new AdvisorOperationException(400, "invalid_attack_contacts");
+            var alias = original.StartsWith("unit:", StringComparison.Ordinal) ? original.Substring(5) : original;
+            var canonical = alias.StartsWith("observed_contact_", StringComparison.Ordinal)
+                ? "unit:" + (references.Units.Resolve(alias) ?? throw new AdvisorOperationException(400, "unknown_unit_reference")).ToString(CultureInfo.InvariantCulture)
+                : original;
+            if (contacts.Contains(canonical)) throw new AdvisorOperationException(400, "invalid_attack_contacts");
+            contacts.Add(canonical);
+            if (canonical != original) changes.Add(new JObject { ["requested"] = original, ["resolved"] = canonical });
+        }
+        if (changes.Count > 0) resolutions["contact_ref_resolutions"] = changes;
+        return contacts;
     }
     private static JObject NormalizeTarget(JObject request, AdvisorOperationReferences references, JObject resolutions)
     {
@@ -202,6 +230,9 @@ internal sealed class AdvisorOperationGateway : IDisposable
                     ["offset"] = new JObject { ["type"] = "integer", ["minimum"] = 0 },
                     ["limit"] = new JObject { ["type"] = "integer", ["minimum"] = 1, ["maximum"] = 20 },
                     ["operation_id"] = new JObject { ["type"] = "string" },
+                    ["contact_refs"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = AdvisorQueryLimits.MaxIdsPerQuery,
+                        ["items"] = new JObject { ["type"] = "string", ["minLength"] = 1, ["maxLength"] = 200 },
+                        ["description"] = prompts.Text("battle.json", "operation_contact_refs") },
                     ["target_ref"] = new JObject { ["type"] = "string", ["description"] = prompts.Text("battle.json", "operation_target_ref") },
                     ["request_id"] = batch["properties"]!["request_id"]!.DeepClone(),
                     ["plans"] = batch["properties"]!["plans"]!.DeepClone()

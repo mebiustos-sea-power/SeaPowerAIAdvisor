@@ -28,6 +28,11 @@ internal interface IAdvisorOperationArgumentNormalizer
     JObject NormalizeArguments(string target, JObject arguments, AdvisorOperationReferences references, JArray resolutions);
 }
 
+internal interface IAdvisorOperationContactQuery
+{
+    JArray Candidates(IReadOnlyList<string> contacts, string? shooter);
+}
+
 internal sealed class AdvisorOperationException : Exception
 {
     internal int Status { get; }
@@ -98,11 +103,12 @@ internal sealed partial class AdvisorOperations
     }
     internal JObject Describe(string id)
     { CheckEnabled(); return new JObject { ["operation"] = Definition(Operation(id)) }; }
-    internal JObject CandidatePage(string id, string? target, int offset, int limit)
+    internal JObject CandidatePage(string id, string? target, int offset, int limit, IReadOnlyList<string>? contacts = null)
     {
         CheckEnabled();
         var operation = Operation(id);
-        var rows = operation.Candidates();
+        var rows = contacts == null ? operation.Candidates() : operation is IAdvisorOperationContactQuery query
+            ? query.Candidates(contacts, target) : throw new AdvisorOperationException(400, "candidate_contacts_unsupported");
         if (target != null) rows = new JArray(rows.Where(c => (string?)c["target_ref"] == target));
         var result = Page(rows, offset, limit, "candidates");
         // Supply the contract with live choices so a plan needs no separate definition lookup.

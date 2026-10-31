@@ -9,8 +9,15 @@ public interface IAdvisorCombatSupport
     IReadOnlyList<GameUnitInfo> GetCombatUnits();
     IReadOnlyList<CombatTargetInfo> GetAttackTargets();
     IReadOnlyList<AttackUnitInfo> GetAttackUnits();
+    IReadOnlyList<AttackUnitInfo> GetInRangeAttackUnits(IReadOnlyList<string> contacts, string? shooter = null);
     void IssueAttack(string target, AttackUpdateMode mode, IReadOnlyList<AttackInstruction> attacks);
     void CancelAttack(string target);
+}
+
+// Optional contact-scoped candidate lookup; ordinary discovery remains available for approach planning.
+public interface IAdvisorOperationContactCandidates
+{
+    string GetCandidates(IReadOnlyList<string> contacts, string? shooter);
 }
 
 public enum AttackUpdateMode { Append, Replace }
@@ -33,9 +40,32 @@ public sealed class AttackUnitInfo
     public GameUnitInfo Unit { get; }
     public IReadOnlyList<AttackAmmunitionInfo> Ammunition { get; }
     public IReadOnlyList<AttackInstruction> PendingAttacks { get; }
-    public AttackUnitInfo(GameUnitInfo unit, IEnumerable<AttackAmmunitionInfo> ammunition, IEnumerable<AttackInstruction> pendingAttacks)
+    public IReadOnlyList<AttackRangeInfo> Ranges { get; }
+    public AttackUnitInfo(GameUnitInfo unit, IEnumerable<AttackAmmunitionInfo> ammunition, IEnumerable<AttackInstruction> pendingAttacks,
+        IEnumerable<AttackRangeInfo>? ranges = null)
     { Unit = unit; Ammunition = new List<AttackAmmunitionInfo>(ammunition).AsReadOnly();
-        PendingAttacks = new List<AttackInstruction>(pendingAttacks).AsReadOnly(); }
+        PendingAttacks = new List<AttackInstruction>(pendingAttacks).AsReadOnly();
+        Ranges = new List<AttackRangeInfo>(ranges ?? Array.Empty<AttackRangeInfo>()).AsReadOnly(); }
+}
+
+// Native range estimates, in nautical miles. Reloading and automatic approach remain game-owned.
+public sealed class AttackRangeInfo
+{
+    public string Target { get; }
+    public string Ammunition { get; }
+    public double Distance { get; }
+    public double Minimum { get; }
+    public double Maximum { get; }
+    public string LimitingFactor { get; }
+    public bool InRange => Distance >= Minimum && Distance <= Maximum;
+    public AttackRangeInfo(string target, string ammunition, double distance, double minimum, double maximum, string limitingFactor)
+    {
+        if (double.IsNaN(distance) || double.IsInfinity(distance) || distance < 0 ||
+            double.IsNaN(minimum) || double.IsInfinity(minimum) || minimum < 0 ||
+            double.IsNaN(maximum) || double.IsInfinity(maximum) || maximum < 0)
+            throw new ArgumentOutOfRangeException(nameof(distance), "Range values must be finite and nonnegative.");
+        Target = target; Ammunition = ammunition; Distance = distance; Minimum = minimum; Maximum = maximum; LimitingFactor = limitingFactor;
+    }
 }
 
 public sealed class AttackAmmunitionInfo

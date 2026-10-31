@@ -56,7 +56,8 @@ internal sealed partial class BattleQuerySession : IAdvisorQuerySession, IAdviso
                     (ammo, reference) => new[] { ((string)reference["id"]!, (string)reference["reference_key"]!, (string)ammo["display_name"]!),
                         ((string)reference["id"]!, (string)reference["reference_key"]!, (string?)reference["display_name"] ?? (string)ammo["display_name"]!) }).SelectMany(rows => rows))
             : AdvisorWeaponReferences.Empty;
-        OperationReferences = new AdvisorOperationReferences(UnitReferences, weaponReferences);
+        OperationReferences = new AdvisorOperationReferences(situation.UnitReferences.Only(
+            Rows("friendly_units").Concat(Rows("observed_contacts")).Select(row => (string)row["id"]!)), weaponReferences);
         if (context != null) assessment = new BattleContactAssessment(snapshot, context, information);
         initial = AdvisorInputBuilder.Header(language, question, Prompts, true);
         initial["schema_version"] = 5;
@@ -92,6 +93,9 @@ internal sealed partial class BattleQuerySession : IAdvisorQuerySession, IAdviso
                 ["report_limit"] = 10
             }
         };
+        var attackOverview = Rows("observed_contacts").OfType<JObject>().Where(c => c["has_in_range_attack_option"] != null)
+            .Select(c => new JObject { ["contact_ref"] = c["id"]!.DeepClone(), ["has_in_range_attack_option"] = c["has_in_range_attack_option"]!.DeepClone() }).ToArray();
+        if (attackOverview.Length > 0) initial["situation"]!["attack_range_overview"] = new JArray(attackOverview);
         var mentions = AdvisorUnitMentions.Bind(question ?? string.Empty, situation.UnitReferences,
             Rows("friendly_units").Concat(Rows("observed_contacts")).Concat(Rows("friendly_launched_weapons")).OfType<JObject>());
         if (mentions.Count > 0) initial["referenced_units"] = mentions;

@@ -38,6 +38,8 @@ internal static class BattleInformation
             (BattleWeaponReader.IsKind((string)c["kind"]!) && !information.Allows(InformationKind.BattleWeaponContacts)) ||
             ((string?)c["posture"] == "neutral" && !information.Allows(InformationKind.BattleNeutralContacts)) ||
             ((bool?)c["destroyed"] == true && !information.Allows(InformationKind.BattleDestroyedContacts))).ToArray()) contact.Remove();
+        if (!information.Allows(InformationKind.BattleUnits) || !information.Allows(InformationKind.BattleWeapons))
+            foreach (var contact in contacts.OfType<JObject>()) contact.Remove("has_in_range_attack_option");
         var weapons = (JArray)snapshot["friendly_launched_weapons"]!;
         if (!information.Allows(InformationKind.BattleLaunchedWeapons)) weapons.Clear();
         var visibleIds = ids.Concat(contacts.OfType<JObject>().Select(c => (string)c["id"]!))

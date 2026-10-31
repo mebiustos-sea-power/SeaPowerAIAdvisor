@@ -13,7 +13,7 @@ internal static class OperationTargetTests
         check("Operation candidates resolve exact consultation aliases and retain the original request in diagnostics", () =>
         {
             using var trial = new Trial();
-            var source = new BattleAdvisorSource(() => throw new InvalidOperationException("Unexpected capture"), () => trial.Gateway);
+            var source = new BattleAdvisorSource(_ => throw new InvalidOperationException("Unexpected capture"), () => trial.Gateway);
             var recording = new AdvisorLocalRun();
             using var session = recording.Observe(source.CreateOperations("candidates", AdvisorPrompts.Current, References())!);
             foreach (var alias in new[] { "own_unit_8", "unit:own_unit_8" })

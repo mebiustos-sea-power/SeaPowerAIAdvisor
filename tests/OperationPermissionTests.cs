@@ -14,7 +14,7 @@ internal static partial class ProviderTests
         {
             var opened = 0; var operation = new LookupOperation(); var registry = new AdvisorOperations(_ => true); registry.Register(operation);
             using var gateway = new AdvisorOperationGateway(registry);
-            var source = new BattleAdvisorSource(() => throw new InvalidOperationException("Unexpected capture"), () => { opened++; return gateway; });
+            var source = new BattleAdvisorSource(_ => throw new InvalidOperationException("Unexpected capture"), () => { opened++; return gateway; });
             Require(!AdvisorShortcut.MoreDetail.Prepare("More detail").AllowOperations, "Explanation-only follow-up enabled commands");
             foreach (var shortcut in AdvisorShortcut.All)
             foreach (var delivery in new[] { AdvisorSituationDelivery.OnDemand, AdvisorSituationDelivery.Upfront, AdvisorSituationDelivery.OnRequest })
@@ -55,7 +55,7 @@ internal static partial class ProviderTests
                 var enabled = false; var unit = new OperationHelicopter();
                 var registry = new AdvisorOperations(_ => enabled); registry.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { unit }));
                 using var gateway = new AdvisorOperationGateway(registry);
-                var source = new BattleAdvisorSource(() => throw new InvalidOperationException("Unexpected capture"), () => gateway);
+                var source = new BattleAdvisorSource(_ => throw new InvalidOperationException("Unexpected capture"), () => gateway);
                 var request = shortcut.Prepare("Action proposal");
                 Require(request.AllowOperations, "An action shortcut disabled commands");
                 var manual = new AdvisorDraft(); manual.Add(42, unit.Name); var manualRequest = manual.Prepare("Drop one buoy");
@@ -102,7 +102,7 @@ internal static partial class ProviderTests
             var chat = new AdvisorConversation(); var turn = chat.Begin(request); turn.Fail(AdvisorNotice.Connection(new AiConnectionException("request_timeout"))); chat.Retry(turn);
             Require(ReferenceEquals(turn.Request, request) && !turn.Request.AllowOperations, "Retry changed the accepted operation policy");
             var opened = 0;
-            var source = new BattleAdvisorSource(() => throw new Exception("Unexpected capture"), () => { opened++; throw new InvalidOperationException("Disabled operations were opened"); });
+            var source = new BattleAdvisorSource(_ => throw new Exception("Unexpected capture"), () => { opened++; throw new InvalidOperationException("Disabled operations were opened"); });
             using var operations = AdvisorConsultation.CreateOperations(turn.Request, source, turn.OperationId, AdvisorPrompts.Current, AdvisorOperationReferences.Empty);
             var main = new FakeProvider("main", (_, _, _, _) => throw new AiConnectionException("rate_limited", 429));
             var sub = new FakeProvider("sub", (s, _, _, _) =>

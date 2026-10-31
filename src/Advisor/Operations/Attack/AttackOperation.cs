@@ -37,20 +37,34 @@ internal sealed class AttackExtension : IAdvisorOperationExtension, IAdvisorOper
     public IAdvisorOperationHandler CreateSession(IAdvisorOperationContext context) => new AttackOperation(context);
 }
 
-internal sealed class AttackOperation : CombatOperationBase, SeaPowerAIAdvisor.Api.IAdvisorOperationArgumentNormalizer
+internal sealed class AttackOperation : CombatOperationBase, SeaPowerAIAdvisor.Api.IAdvisorOperationArgumentNormalizer, SeaPowerAIAdvisor.Api.IAdvisorOperationContactCandidates
 {
     internal AttackOperation(IAdvisorOperationContext context) : base(context) { }
     public override string GetCandidates()
     {
         CheckInformation(true);
-        var targets = Combat.GetAttackTargets();
-        return new JArray(Combat.GetAttackUnits().Select(unit =>
+        return CandidateRows(Combat.GetAttackUnits(), Combat.GetAttackTargets());
+    }
+    public string GetCandidates(IReadOnlyList<string> contacts, string? shooter)
+    {
+        CheckInformation(true);
+        return CandidateRows(Combat.GetInRangeAttackUnits(contacts, shooter), Combat.GetAttackTargets());
+    }
+    private static string CandidateRows(IReadOnlyList<AttackUnitInfo> units, IReadOnlyList<CombatTargetInfo> targets)
+    {
+        return new JArray(units.Select(unit =>
         {
             var row = Identity(unit.Unit);
             row["pending_attacks"] = new JArray(unit.PendingAttacks.Select(AttackJson));
-            row["ammunition"] = new JArray(unit.Ammunition.Select(a => new JObject
-            { ["id"] = a.Id, ["display_name"] = a.Name, ["remaining_count"] = a.Remaining, ["available_count"] = a.Available,
-                ["available_after_switch_count"] = a.AvailableAfterSwitch, ["compatible_targets"] = new JArray(a.CompatibleTargets) }));
+            row["ammunition"] = new JArray(unit.Ammunition.Select(a =>
+            {
+                var ammo = new JObject { ["id"] = a.Id, ["display_name"] = a.Name, ["remaining_count"] = a.Remaining, ["available_count"] = a.Available,
+                    ["available_after_switch_count"] = a.AvailableAfterSwitch, ["compatible_targets"] = new JArray(a.CompatibleTargets) };
+                if (unit.Ranges.Count > 0) ammo["in_range_options"] = new JArray(unit.Ranges.Where(r => r.Ammunition == a.Id).Select(r => new JObject
+                { ["target_ref"] = r.Target, ["distance_nm"] = Math.Round(r.Distance, 3), ["minimum_range_nm"] = Math.Round(r.Minimum, 3),
+                    ["maximum_range_nm"] = Math.Round(r.Maximum, 3), ["limiting_factor"] = r.LimitingFactor }));
+                return ammo;
+            }));
             row["targets"] = new JArray(targets.Where(t => unit.Ammunition.Any(a => a.CompatibleTargets.Contains(t.Target))).Select(t => new JObject
             { ["target_ref"] = t.Target, ["display_name"] = t.Name, ["kind"] = t.Kind, ["posture"] = t.Posture,
                 ["position"] = t.Position is AdvisorMapCoordinate point ? new JObject { ["latitude"] = point.Latitude, ["longitude"] = point.Longitude } : null,

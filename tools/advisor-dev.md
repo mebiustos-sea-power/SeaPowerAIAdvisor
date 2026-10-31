@@ -75,6 +75,14 @@ For single or composed trials, use `operations submit --request-file FILE`. The 
 python3 tools/advisor_dev.py operations submit --request-file artifacts/composed-plan.json --output artifacts/composed-result.json
 ```
 
+Attack range details can be read without AI, including several contacts in one request:
+
+```sh
+python3 tools/advisor_dev.py operations candidates seapower.attack --contact-ref unit:7017 --contact-ref unit:7022 --target-ref unit:1002 --limit 20
+```
+
+`--target-ref` selects the firing unit; repeated `--contact-ref` values select opponents. This uses the read-only POST candidate endpoint and the same filtering as AI queries. It returns current in-range choices and their definition, without adopting a plan. Omit these options for general carried ammunition/compatibility. `--offset` and `--limit` page the filtered result. Developer requests use native `unit:N` references; AI consultations may additionally use their own observed-contact aliases.
+
 ## Questions, connection and recording
 
 ```sh

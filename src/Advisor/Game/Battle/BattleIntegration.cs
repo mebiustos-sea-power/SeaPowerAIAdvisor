@@ -131,7 +131,7 @@ internal sealed class BattleIntegration
         EnsureOperations();
         if (advisor == null)
         {
-            advisor = new AdvisorWindow(view, host, guard, new BattleAdvisorSource(Capture, () => operationGateway), GameLanguage.Read, warn, options, backends,
+            advisor = new AdvisorWindow(view, host, guard, new BattleAdvisorSource(CaptureWithInformation, () => operationGateway), GameLanguage.Read, warn, options, backends,
                 new BattleUnitNavigation(() => model?.Map, () => this.view), new BattleWeaponNavigation(() => this.view, guard), mapNavigation);
         }
         return advisor;
@@ -176,8 +176,9 @@ internal sealed class BattleIntegration
         return model!.Map.MapKnownUnits.AllUnits.ToArray();
     }
 
-    private BattleSnapshot Capture()
+    private BattleSnapshot CaptureWithInformation(AdvisorInformation? information)
     {
+        information ??= options.Current.Information;
         if (model == null || view == null || !ReferenceEquals(model.RootControl, uiRoot) ||
             !SceneCreator.InstanceExists(false) || !ReferenceEquals(mission, SceneCreator.Instance) ||
             !SceneCreator.Instance.IsLoadingDone || !ReferenceEquals(player, Globals._playerTaskforce) ||
@@ -222,10 +223,13 @@ internal sealed class BattleIntegration
             briefingUnavailable = true;
             warn("Public mission briefing unavailable: " + error);
         }
+        IReadOnlyDictionary<string, bool>? attackRanges = null;
+        if (information.Allows(InformationKind.BattleUnits) && information.Allows(InformationKind.BattleWeapons) && information.Allows(InformationKind.BattleContacts))
+            attackRanges = new BattleOperationSupport(OperationObjects, () => information, OperationKnownUnits).GetAttackRangeOverview();
         return reader.Capture(map.MapKnownUnits.AllUnits, player!, MissionManager.Instance.Objectives, MissionManager.Instance.OnMapAreas, EventLog.Instance,
             now, SceneCreator.Instance.CurrentMissionName,
             EnemyControlEnabled,
-            new BattleCapabilityReader(references, Atmosphere.SpeedOfSound), xmlBriefing, briefingUnavailable, briefingFromBase);
+            new BattleCapabilityReader(references, Atmosphere.SpeedOfSound), xmlBriefing, briefingUnavailable, briefingFromBase, attackRanges);
     }
 
     private static BattleReferenceCatalog ReadReferenceCatalog(int year)

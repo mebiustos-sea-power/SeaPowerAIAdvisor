@@ -44,6 +44,7 @@ All responses are JSON. These endpoints are experimental and separate from the p
 | POST | `/v1/prompts/reset` | Restore the prompt bundle loaded at startup. |
 | GET | `/v1/operations` | Current battle scope and operation catalog; empty when commands are disabled. |
 | GET | `/v1/operations/{operation}/candidates` | Current player-owned candidates and ammunition availability for an operation. |
+| POST | `/v1/operations/{operation}/candidates` | Read filtered/paged candidates with their definition. Optional `target_ref`, `contact_refs`, `offset`, `limit`; attack `contact_refs` batches up to 10 observed `unit:N` targets and returns current in-range choices. No AI request or execution. |
 | POST | `/v1/operation-plans` | Submit and adopt explicit plans without AI or an approval dialog. |
 | GET | `/v1/crew/reports` | Reports availability, current scope, targets, appointments, history and visible notification. Does not open the adviser or send AI requests. |
 | POST | `/v1/crew/reports/window` | Open or close the Reports window through the HUD button action; unsaved edits still require confirmation. |

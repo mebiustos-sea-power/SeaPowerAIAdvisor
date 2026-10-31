@@ -11,7 +11,7 @@ namespace SeaPowerAIAdvisor;
 
 // All built-in and external commands cross this boundary before entering the existing approval engine.
 internal sealed class AdvisorRegisteredOperation : IAdvisorOperation, IAdvisorOperationPlans,
-    IAdvisorOperationPreview, IAdvisorOperationArgumentNormalizer, IAdvisorReservationCommand, IAdvisorExtensionVersion, IDisposable
+    IAdvisorOperationPreview, IAdvisorOperationArgumentNormalizer, IAdvisorOperationContactQuery, IAdvisorReservationCommand, IAdvisorExtensionVersion, IDisposable
 {
     private readonly AdvisorOperationRegistration registration;
     private readonly AdvisorOperationContext context;
@@ -59,6 +59,9 @@ internal sealed class AdvisorRegisteredOperation : IAdvisorOperation, IAdvisorOp
     private static IReadOnlyList<OperationOrder> Orders(IReadOnlyList<AdvisorOperationOrder> orders) =>
         Array.AsReadOnly(orders.Select(o => new OperationOrder(o.Target, o.Arguments.ToString(Formatting.None))).ToArray());
     public JArray Candidates() => Call(h => JArray.Parse(h.GetCandidates()));
+    public JArray Candidates(IReadOnlyList<string> contacts, string? shooter) => Call(h =>
+        h is Api.IAdvisorOperationContactCandidates query ? JArray.Parse(query.GetCandidates(contacts, shooter))
+            : throw new OperationException(400, "candidate_contacts_unsupported"));
     public void Validate(IReadOnlyList<AdvisorOperationOrder> orders) => Call(h => { Actions(h).Validate(Orders(orders)); return true; });
     public string DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => Call(h => Actions(h).DescribeProposal(Orders(orders), language));
     public JObject Execute(string target, JObject arguments) => Call(h => JObject.Parse(Actions(h).Execute(new OperationOrder(target, arguments.ToString(Formatting.None)))));

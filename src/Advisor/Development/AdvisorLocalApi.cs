@@ -143,10 +143,13 @@ internal sealed class AdvisorLocalApi
             }
         }
         if (method == "GET" && path == "/v1/operations") return new(200, Operations().Catalog());
-        if (method == "GET" && path.StartsWith("/v1/operations/", StringComparison.Ordinal) && path.EndsWith("/candidates", StringComparison.Ordinal) && path.Length > "/v1/operations/".Length + "/candidates".Length)
+        if (method is "GET" or "POST" && path.StartsWith("/v1/operations/", StringComparison.Ordinal) && path.EndsWith("/candidates", StringComparison.Ordinal) && path.Length > "/v1/operations/".Length + "/candidates".Length)
         {
             var id = path.Substring("/v1/operations/".Length, path.Length - "/v1/operations/".Length - "/candidates".Length);
-            return new(200, Operations().Candidates(id));
+            if (method == "GET") { Empty(body); return new(200, Operations().Candidates(id)); }
+            if (body["action"] != null || body["operation_id"] != null) throw new LocalApiException(400, "invalid_operation_request");
+            var request = (JObject)body.DeepClone(); request["action"] = "candidates"; request["operation_id"] = id;
+            return new(200, AdvisorOperationGateway.ReadCandidates(Operations(), request, AdvisorOperationReferences.Empty, new JObject()));
         }
         if (method == "POST" && path == "/v1/operation-plans")
         {

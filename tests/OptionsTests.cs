@@ -185,7 +185,7 @@ internal static class OptionsTests
                 ["unit_capabilities"] = new JArray(), ["contact_threat_references"] = new JArray(), ["weapon_references"] = new JArray(),
                 ["observed_contacts"] = new JArray(), ["published_reports"] = new JArray(), ["mission_briefing"] = "Known briefing"
             });
-            IAdvisorSource[] sources = { new CampaignAdvisorSource(() => campaign), new BattleAdvisorSource(() => battle) };
+            IAdvisorSource[] sources = { new CampaignAdvisorSource(() => campaign), new BattleAdvisorSource(_ => battle) };
             foreach (var source in sources)
             foreach (var limit in new[] { 1, 7 })
             {

@@ -38,6 +38,8 @@ internal sealed class AdvisorOperationContext : IAdvisorOperationContext, IAdvis
     public IReadOnlyList<GameUnitInfo> GetCombatUnits() { Check(); return Combat.GetCombatUnits(); }
     public IReadOnlyList<CombatTargetInfo> GetAttackTargets() { Check(); return Combat.GetAttackTargets(); }
     public IReadOnlyList<AttackUnitInfo> GetAttackUnits() { Check(); return Combat.GetAttackUnits(); }
+    public IReadOnlyList<AttackUnitInfo> GetInRangeAttackUnits(IReadOnlyList<string> contacts, string? shooter = null)
+    { Check(); return Combat.GetInRangeAttackUnits(contacts, shooter); }
     public void IssueAttack(string target, AttackUpdateMode mode, IReadOnlyList<AttackInstruction> attacks) { Check(); Combat.IssueAttack(target, mode, attacks); }
     public void CancelAttack(string target) { Check(); Combat.CancelAttack(target); }
     public IReadOnlyList<SensorUnitInfo> GetSensorUnits() { Check(); return Sensors.GetSensorUnits(); }

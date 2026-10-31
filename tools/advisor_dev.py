@@ -370,7 +370,10 @@ def parser():
     add_output(notices.add_parser("preview"))
     operations = commands.add_parser("operations").add_subparsers(dest="operation_command", required=True)
     add_output(operations.add_parser("list"))
-    candidates = operations.add_parser("candidates"); candidates.add_argument("operation"); add_output(candidates)
+    candidates = operations.add_parser("candidates"); candidates.add_argument("operation")
+    candidates.add_argument("--contact-ref", dest="contact_refs", action="append", help="Observed contact unit:N; repeat to batch attack range details.")
+    candidates.add_argument("--target-ref", help="Limit candidate lookup to one acting unit:N.")
+    candidates.add_argument("--offset", type=int); candidates.add_argument("--limit", type=int); add_output(candidates)
     plan = operations.add_parser("submit", help="Register one explicitly selected composed plan without AI or approval UI."); plan.add_argument("--request-file", required=True); add_output(plan)
     reservations = commands.add_parser("reservations").add_subparsers(dest="reservation_command", required=True)
     for name in ("list", "clear"):
@@ -461,7 +464,10 @@ def main(argv=None):
             if args.operation_command == "list":
                 value = client.request("GET", "/v1/operations")
             elif args.operation_command == "candidates":
-                value = client.request("GET", "/v1/operations/" + urllib.parse.quote(args.operation, safe="") + "/candidates")
+                path = "/v1/operations/" + urllib.parse.quote(args.operation, safe="") + "/candidates"
+                body = {key: value for key, value in (("contact_refs", args.contact_refs), ("target_ref", args.target_ref),
+                    ("offset", args.offset), ("limit", args.limit)) if value is not None}
+                value = client.request("POST", path, body) if body else client.request("GET", path)
             else:
                 body = load(args.request_file)
                 if not isinstance(body, dict):

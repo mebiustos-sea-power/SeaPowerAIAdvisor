@@ -6,10 +6,11 @@ using Newtonsoft.Json.Linq;
 using SeaPowerAIAdvisor;
 using SeaPowerAIAdvisor.Api;
 
-internal static class CombatOperationTests
+internal static partial class CombatOperationTests
 {
     internal static void Run(Action<string, Action> check)
     {
+        RunRangeTests(check);
         check("Attack discovery keeps actor/observed target identities and per-ammunition compatibility without issuing attacks", () =>
         {
             var game = new Game(); var s = Service(game);
@@ -187,7 +188,10 @@ internal static class CombatOperationTests
     { try { action(); } catch (AdvisorOperationException e) when (e.Code == code) { return; } throw new InvalidOperationException("Expected " + code); }
     private sealed class Game : IAdvisorGameSupport, IAdvisorCombatSupport, IAdvisorMovementSupport, IAdvisorReservationSequenceSupport, IAdvisorReservationSupport
     {
-        internal bool Information = true, Weapons = true, Contacts = true;
+        internal bool Information = true, Weapons = true, Contacts = true, NoInRangeOptions;
+        internal string[] RangeContacts = Array.Empty<string>();
+        internal string? RangeShooter;
+        internal int RangeCalls;
         internal string Fault = "", ExecutionFailure = "";
         internal readonly List<string> Log = new();
         private readonly Dictionary<string, int> Used = new();
@@ -202,6 +206,14 @@ internal static class CombatOperationTests
             Fault == "ammo" ? Array.Empty<AttackAmmunitionInfo>() : new[] { new AttackAmmunitionInfo("missile", "Test missile", 10,
                 Fault == "quantity" ? 0 : Math.Max(0, (Switched.Contains(u.Target) ? 10 : 6) - (Used.TryGetValue(u.Target, out var n) ? n : 0)), 10,
                 Fault == "compatibility" ? Array.Empty<string>() : new[] { "unit:7022", "unit:7023" }) }, Array.Empty<AttackInstruction>())).ToArray();
+        public IReadOnlyList<AttackUnitInfo> GetInRangeAttackUnits(IReadOnlyList<string> contacts, string? shooter = null)
+        {
+            RangeCalls++; RangeContacts = contacts.ToArray(); RangeShooter = shooter;
+            return NoInRangeOptions ? Array.Empty<AttackUnitInfo>() : GetAttackUnits()
+                .Where(u => shooter == null || u.Unit.Target == shooter).Select(u => new AttackUnitInfo(u.Unit,
+                    u.Ammunition.Select(a => new AttackAmmunitionInfo(a.Id, a.Name, a.Remaining, a.Available, a.AvailableAfterSwitch, contacts)),
+                    u.PendingAttacks, contacts.Select(c => new AttackRangeInfo(c, "missile", 10, 1, 20, "sensor")))).ToArray();
+        }
         public void IssueAttack(string target, AttackUpdateMode mode, IReadOnlyList<AttackInstruction> attacks)
         {
             if (mode == AttackUpdateMode.Replace) { Used[target] = 0; Switched.Add(target); }

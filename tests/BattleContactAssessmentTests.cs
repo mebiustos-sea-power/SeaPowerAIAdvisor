@@ -28,7 +28,7 @@ internal static partial class BattleTests
             var context = AssessmentContext();
             var request = new AdvisorQuestion("Assess this contact", "Contact 7についての見解", true, context);
             context["track_number"] = 999;
-            var source = new BattleAdvisorSource(() => f.Capture());
+            var source = new BattleAdvisorSource(_ => f.Capture());
             var session = source.CreateSession("ja", request.Text, context: request.Context);
             var initial = session.InitialInput();
             Require((string?)initial["contact_assessment"]!["contact"]!["id"] == "observed_contact_1" &&
@@ -93,7 +93,7 @@ internal static partial class BattleTests
             {
                 var code = BattleContactAssessment.AffiliationCode(assumption);
                 var request = BattleContactAssessment.Reassess(turn, assumption, "Reassess " + code);
-                var session = new BattleAdvisorSource(() => f.Capture()).CreateSession("en", request.Text, context: request.Context);
+                var session = new BattleAdvisorSource(_ => f.Capture()).CreateSession("en", request.Text, context: request.Context);
                 var focus = session.InitialInput()["contact_assessment"]!;
                 Require(!request.AllowOperations && (int?)focus["contact"]!["track_number"] == 7 && (string?)focus["assumed_affiliation"] == code &&
                     (string?)focus["contact"]!["posture"] == "unknown" && (bool?)focus["contact"]!["identified"] == false &&

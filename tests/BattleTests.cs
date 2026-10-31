@@ -28,6 +28,7 @@ internal static partial class BattleTests
         RunMissionAreas(check);
         RunUnitMentions(check);
         RunUnitDraft(check);
+        RunAttackRangeOverview(check);
         check("Battle capture excludes hidden objectives, future reports and actual enemy details", () =>
         {
             var f = new Fixture();
@@ -286,7 +287,7 @@ internal static partial class BattleTests
         {
             var policy = AdvisorInformation.All;
             foreach (var item in AdvisorInformation.Items) policy = policy.With(item.Kind, false);
-            var source = new BattleAdvisorSource(() => new Fixture().Capture());
+            var source = new BattleAdvisorSource(_ => new Fixture().Capture());
             var session = source.CreateSession("ja", "What now?", 20, policy);
             var initial = session.InitialInput();
             Require(!initial["situation"]!["overview"]!.HasValues && !initial["knowledge_catalog"]!.HasValues &&
