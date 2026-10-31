@@ -44,17 +44,15 @@ internal sealed class AdvisorQuestion
 internal sealed class AdvisorShortcut
 {
     internal static readonly AdvisorShortcut NextSteps = new("preset.next_steps",
-        "next_steps", situationDelivery: AdvisorSituationDelivery.Upfront);
+        "next_steps", allowOperations: true, situationDelivery: AdvisorSituationDelivery.Upfront);
     internal static readonly AdvisorShortcut MoreDetail = new("preset.more_detail",
         "more_detail", true, situationDelivery: AdvisorSituationDelivery.Upfront);
     internal static readonly AdvisorShortcut KeyRisks = new("preset.key_risks",
-        "key_risks", situationDelivery: AdvisorSituationDelivery.Upfront);
+        "key_risks", allowOperations: true, situationDelivery: AdvisorSituationDelivery.Upfront);
+    internal static readonly AdvisorShortcut AttackProposal = new("preset.attack_proposal",
+        "attack_proposal", allowOperations: true, situationDelivery: AdvisorSituationDelivery.Upfront);
     internal static readonly AdvisorShortcut RadarOperations = new("preset.radar_operations",
-        "radar_operations", situationDelivery: AdvisorSituationDelivery.Upfront);
-    internal static readonly AdvisorShortcut OwnUnits = new("preset.own_units",
-        "own_units", situationDelivery: AdvisorSituationDelivery.Upfront);
-    internal static readonly AdvisorShortcut Contacts = new("preset.contacts",
-        "contacts", situationDelivery: AdvisorSituationDelivery.Upfront);
+        "radar_operations", allowOperations: true, situationDelivery: AdvisorSituationDelivery.Upfront);
 
     internal string LabelKey { get; }
     internal string Id { get; }
@@ -67,7 +65,7 @@ internal sealed class AdvisorShortcut
         LabelKey = key; Id = prompt; RequiresHistory = history; AllowOperations = allowOperations; SituationDelivery = situationDelivery;
     }
 
-    internal static readonly IReadOnlyList<AdvisorShortcut> All = Array.AsReadOnly(new[] { NextSteps, KeyRisks, RadarOperations, OwnUnits, Contacts, MoreDetail });
+    internal static readonly IReadOnlyList<AdvisorShortcut> All = Array.AsReadOnly(new[] { NextSteps, KeyRisks, AttackProposal, RadarOperations, MoreDetail });
     internal static AdvisorShortcut? Find(string id) => All.FirstOrDefault(shortcut => shortcut.Id == id);
 
     internal bool IsAvailable(bool busy, int exchangeCount, int historyExchanges = AdvisorOptions.DefaultHistoryExchanges) =>

@@ -392,7 +392,7 @@ def parser():
     request = commands.add_parser("consult")
     question = request.add_mutually_exclusive_group(required=True)
     question.add_argument("--question"); question.add_argument("--question-file")
-    question.add_argument("--shortcut", choices=("key_risks", "next_steps", "radar_operations", "own_units", "contacts", "more_detail"))
+    question.add_argument("--shortcut", choices=("key_risks", "next_steps", "attack_proposal", "radar_operations", "more_detail"))
     question.add_argument("--request-file", help="Full consultation request JSON.")
     request.add_argument("--connection-id", help="Omit to use the developer default.")
     request.add_argument("--model", help="Override this consultation model when permitted in Local API settings; saved connections are unchanged.")

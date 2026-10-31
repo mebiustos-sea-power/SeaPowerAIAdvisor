@@ -193,13 +193,13 @@ internal static class PromptTests
         {
             Prepare(directory); var original = AdvisorPrompts.Load(directory); var runtime = new AdvisorPromptOverrides(original);
             var edits = original.Fields.ToDictionary(f => f.Id, f => f.Value);
-            foreach (var key in new[] { "next_steps", "key_risks", "radar_operations", "more_detail", "own_units", "contacts" }) edits["requests.json:" + key] = "EDITED_REQUEST_" + key;
+            foreach (var key in new[] { "next_steps", "key_risks", "attack_proposal", "radar_operations", "more_detail" }) edits["requests.json:" + key] = "EDITED_REQUEST_" + key;
             edits["requests.json:connection_test"] = "EDITED_CONNECTION_CHECK";
             edits["requests.json:connection_tool_test"] = "EDITED_TOOL_CONNECTION_CHECK";
             var oldQuestion = AdvisorShortcut.KeyRisks.Prepare("主なリスク", original);
             runtime.Apply(edits);
             var chat = new AdvisorConversation();
-            foreach (var pair in new[] { (AdvisorShortcut.NextSteps, "next_steps"), (AdvisorShortcut.KeyRisks, "key_risks"), (AdvisorShortcut.RadarOperations, "radar_operations"), (AdvisorShortcut.MoreDetail, "more_detail"), (AdvisorShortcut.OwnUnits, "own_units"), (AdvisorShortcut.Contacts, "contacts") })
+            foreach (var pair in new[] { (AdvisorShortcut.NextSteps, "next_steps"), (AdvisorShortcut.KeyRisks, "key_risks"), (AdvisorShortcut.RadarOperations, "radar_operations"), (AdvisorShortcut.MoreDetail, "more_detail"), (AdvisorShortcut.AttackProposal, "attack_proposal") })
             {
                 var question = pair.Item1.Prepare("Visible caption", runtime.Current);
                 var transport = new CaptureTransport(body => Require((string?)InteractionFixture.Initial(body)["question"] == "EDITED_REQUEST_" + pair.Item2,

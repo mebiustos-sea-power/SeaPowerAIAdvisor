@@ -158,11 +158,13 @@ internal static partial class LocalApiTests
                     "Malformed permission reached consultation execution");
             }
             foreach (var (body, allowed) in new[] {
-                (new JObject { ["shortcut"] = "key_risks" }, false),
-                (new JObject { ["shortcut"] = "key_risks", ["allow_operations"] = true }, true),
+                (new JObject { ["shortcut"] = "key_risks" }, true),
+                (new JObject { ["shortcut"] = "key_risks", ["allow_operations"] = false }, false),
+                (new JObject { ["shortcut"] = "attack_proposal" }, true),
+                (new JObject { ["shortcut"] = "more_detail" }, false),
                 (new JObject { ["question"] = "Manual question", ["allow_operations"] = false }, false),
                 (new JObject { ["question"] = "Manual question" }, true),
-                (new JObject { ["shortcut"] = "key_risks" }, false) })
+                (new JObject { ["shortcut"] = "key_risks" }, true) })
             {
                 var accepted = Send(api, "POST", "/v1/consultations", body);
                 Require(accepted.Status == 202 && (bool?)accepted.Data["allow_operations"] == allowed && target.Turn!.Request.AllowOperations == allowed,

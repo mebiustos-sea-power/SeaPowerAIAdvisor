@@ -35,8 +35,8 @@ internal static partial class ProviderTests
                 var setup = AdvisorServices.Prepare(settings, allowFallback: false, situationDelivery: request.SituationDelivery,
                     transportFactory: trace => new AiHttpTransport(handler, trace));
                 var answer = await AdvisorConsultation.RunAsync(setup, AdvisorContext.Create(DeliveryKnowledge(), Array.Empty<ChatExchange>()), "unused", request, CancellationToken.None);
-                Require(answer.Completed && sends == 1 && settings.Data().SequenceEqual(original) &&
-                    (shortcut == null || !request.AllowOperations), "A shortcut changed storage, added a read or enabled operations");
+                Require(answer.Completed && sends == 1 && settings.Data().SequenceEqual(original),
+                    "A shortcut changed storage or added a read");
             }
         }));
         check("Shortcut delivery reaches both standard connections while inheritance keeps their individual modes and storage unchanged", () => Async(async () =>

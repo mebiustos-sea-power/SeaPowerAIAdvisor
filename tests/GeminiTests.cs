@@ -283,7 +283,7 @@ internal static class GeminiTests
             {
                 var ui = AdvisorText.Load(language);
                 var chat = new AdvisorConversation();
-                foreach (var shortcut in new[] { AdvisorShortcut.NextSteps, AdvisorShortcut.MoreDetail, AdvisorShortcut.KeyRisks, AdvisorShortcut.RadarOperations, AdvisorShortcut.OwnUnits, AdvisorShortcut.Contacts })
+                foreach (var shortcut in AdvisorShortcut.All)
                 {
                     var request = shortcut.Prepare(ui[shortcut.LabelKey]);
                     var prior = chat.Exchanges.ToArray();

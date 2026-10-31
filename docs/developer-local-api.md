@@ -89,7 +89,7 @@ The selected connection's credentials, endpoint and other settings are reused in
 
 With the default, a selected-connection failure ends the consultation. When explicitly allowed, fallback uses the saved sub connection only if it is also permitted for the local API and differs from the selected connection. The saved main/sub assignments remain unchanged. UI-initiated consultations keep their normal fallback behavior. The accepted response and retained result include the effective `allow_fallback` value. A custom consultation backend that cannot honor a no-fallback policy is rejected before execution.
 
-`allow_operations` is an optional boolean for that consultation. Omit it to follow the request's default: built-in advice/list shortcuts disable operations, while typed questions permit them. Set it explicitly to override that request's choice:
+`allow_operations` is an optional boolean for that consultation. Omit it to follow the request's default: `next_steps`, `key_risks`, `attack_proposal`, `radar_operations` and typed questions permit operations, while the explanation-only `more_detail` shortcut disables them. Set it explicitly to override that request's choice:
 
 ```json
 {"shortcut":"key_risks","allow_operations":false,"allow_fallback":false}
@@ -107,7 +107,7 @@ With the default, a selected-connection failure ends the consultation. When expl
 
 The selected/saved adviser and shared preferences are not modified. The answer and waiting transcript use Michael Reed; the profile sidebar keeps the user's selection. External system instructions and their temporary overrides, game data, language, user name and configured history are retained. Clear history explicitly when a comparison needs it. Acceptance and retained diagnostics include the effective `plain_advisor` flag. It does not affect later UI or local consultations unless requested again.
 
-Quick IDs are `key_risks`, `next_steps`, `radar_operations`, `own_units`, `contacts` and `more_detail`. They use the current request prompts and localized UI captions. `more_detail` remains available through the API and requires an answered exchange and enabled conversation history. Questions use the normal 2,000-character limit.
+Quick IDs are `key_risks`, `next_steps`, `attack_proposal`, `radar_operations` and `more_detail`. They use the current request prompts and localized UI captions. `more_detail` remains available through the API and requires an answered exchange and enabled conversation history. Questions use the normal 2,000-character limit.
 
 Notice preview takes an empty object (`{}`), needs no permitted AI connection and makes no provider request. It returns `shown`, `notice_id` and `preview`. Status includes `advisor.window_open`, `advisor.notice_open` and `advisor.notice_preview`. Settings, proposal review, active consultation and IME composition reject the request; an already-open normal notice returns `notice_already_open`. A build without a notice returns `notice_unavailable`. Preview uses the normal localized Markdown window and leaves read receipts unchanged on display and dismissal.
 

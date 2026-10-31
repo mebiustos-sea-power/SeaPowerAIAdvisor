@@ -120,9 +120,8 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         {
             (AdvisorShortcut.NextSteps, Named<Button>(content, "NextSteps")),
             (AdvisorShortcut.KeyRisks, Named<Button>(content, "KeyRisks")),
-            (AdvisorShortcut.RadarOperations, Named<Button>(content, "RadarOperations")),
-            (AdvisorShortcut.OwnUnits, Named<Button>(content, "OwnUnits")),
-            (AdvisorShortcut.Contacts, Named<Button>(content, "Contacts"))
+            (AdvisorShortcut.AttackProposal, Named<Button>(content, "AttackProposal")),
+            (AdvisorShortcut.RadarOperations, Named<Button>(content, "RadarOperations"))
         };
         foreach (var item in shortcuts)
             item.Button.Click += (_, _) => guard(() => ConsultShortcut(item.Shortcut, item.Button));

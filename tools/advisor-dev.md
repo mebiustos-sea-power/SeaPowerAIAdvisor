@@ -82,11 +82,11 @@ python3 tools/advisor_dev.py --quiet consult --shortcut key_risks --output artif
 python3 tools/advisor_dev.py --quiet consult --question-file artifacts/question.txt --connection-id api-example --no-fallback --clear-history --output artifacts/prompt-tests/question-01
 ```
 
-Choose exactly one of `--question TEXT`, `--question-file FILE`, `--shortcut ID`, or `--request-file FILE`. Files are UTF-8, optionally with a BOM. Quick IDs are `key_risks`, `next_steps`, `radar_operations`, and `more_detail`.
+Choose exactly one of `--question TEXT`, `--question-file FILE`, `--shortcut ID`, or `--request-file FILE`. Files are UTF-8, optionally with a BOM. Quick IDs are `key_risks`, `next_steps`, `attack_proposal`, `radar_operations`, and `more_detail`.
 
 Omitting `--connection-id` uses the saved **developer default**, not the normal main assignment. Fallback defaults to **false**; use `--allow-fallback` to permit it explicitly or `--no-fallback` to override a request file. History is preserved unless `--clear-history` is supplied. Each `consult` starts one consultation; its internal provider requests remain controlled by the MOD.
 
-Use `--no-operations` to disable operation lookup/proposal tools for one consultation, or `--allow-operations` to permit them. Permission still requires commands to be enabled and retains approval; it never forces execution. With neither flag, the request file's `allow_operations` boolean applies if present, otherwise built-in advice/list shortcuts default to OFF and typed questions default to permission. An explicit flag overrides the file. Invalid file values are rejected before history clearing or API access. The accepted/result JSON records the resolved policy.
+Use `--no-operations` to disable operation lookup/proposal tools for one consultation, or `--allow-operations` to permit them. Permission still requires commands to be enabled and retains approval; it never forces execution. With neither flag, the request file's `allow_operations` boolean applies if present, otherwise action shortcuts (`next_steps`, `key_risks`, `attack_proposal`, `radar_operations`) and typed questions permit operations, while `more_detail` defaults to OFF. An explicit flag overrides the file. Invalid file values are rejected before history clearing or API access. The accepted/result JSON records the resolved policy.
 
 ```sh
 python3 tools/advisor_dev.py consult --shortcut key_risks --no-operations --no-fallback --output artifacts/prompt-tests/advice-only

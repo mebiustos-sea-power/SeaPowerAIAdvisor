@@ -89,7 +89,7 @@ internal static class PresentationTests
             foreach (var code in new[] { "en", "ja" })
             {
                 var text = AdvisorText.Load(code);
-                foreach (var shortcut in new[] { AdvisorShortcut.NextSteps, AdvisorShortcut.MoreDetail, AdvisorShortcut.KeyRisks, AdvisorShortcut.RadarOperations, AdvisorShortcut.OwnUnits, AdvisorShortcut.Contacts })
+                foreach (var shortcut in AdvisorShortcut.All)
                 {
                     var request = shortcut.Prepare(text[shortcut.LabelKey]);
                     var conversation = new AdvisorConversation();
@@ -112,9 +112,9 @@ internal static class PresentationTests
         });
         check("Shortcut availability prevents concurrent requests and More detail requires a real answer", () =>
         {
-            foreach (var shortcut in new[] { AdvisorShortcut.NextSteps, AdvisorShortcut.MoreDetail, AdvisorShortcut.KeyRisks, AdvisorShortcut.RadarOperations, AdvisorShortcut.OwnUnits, AdvisorShortcut.Contacts })
+            foreach (var shortcut in AdvisorShortcut.All)
                 Require(!shortcut.IsAvailable(true, 0) && !shortcut.IsAvailable(true, 1), "A busy shortcut could start or cancel a consultation");
-            foreach (var shortcut in new[] { AdvisorShortcut.NextSteps, AdvisorShortcut.KeyRisks, AdvisorShortcut.RadarOperations, AdvisorShortcut.OwnUnits, AdvisorShortcut.Contacts })
+            foreach (var shortcut in AdvisorShortcut.All.Where(shortcut => shortcut != AdvisorShortcut.MoreDetail))
                 Require(shortcut.IsAvailable(false, 0, 0), "An independent shortcut requires earlier conversation history");
             var chat = new AdvisorConversation();
             Require(!AdvisorShortcut.MoreDetail.IsAvailable(false, chat.Exchanges.Count), "More detail has no answer to refer to");

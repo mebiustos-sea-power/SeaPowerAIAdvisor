@@ -10,15 +10,16 @@ internal static partial class ProviderTests
 {
     private static void RunOperationPermission(Action<string, Action> check)
     {
-        check("Advisory shortcuts never open operation services and retain situation advice across delivery modes", () => Async(async () =>
+        check("Explanation-only and explicitly disabled shortcuts retain situation advice without operation services", () => Async(async () =>
         {
             var opened = 0; var operation = new LookupOperation(); var registry = new AdvisorOperations(_ => true); registry.Register(operation);
             using var gateway = new AdvisorOperationGateway(registry);
             var source = new BattleAdvisorSource(() => throw new InvalidOperationException("Unexpected capture"), () => { opened++; return gateway; });
-            foreach (var shortcut in new[] { AdvisorShortcut.NextSteps, AdvisorShortcut.KeyRisks, AdvisorShortcut.RadarOperations, AdvisorShortcut.OwnUnits, AdvisorShortcut.Contacts, AdvisorShortcut.MoreDetail })
+            Require(!AdvisorShortcut.MoreDetail.Prepare("More detail").AllowOperations, "Explanation-only follow-up enabled commands");
+            foreach (var shortcut in AdvisorShortcut.All)
             foreach (var delivery in new[] { AdvisorSituationDelivery.OnDemand, AdvisorSituationDelivery.Upfront, AdvisorSituationDelivery.OnRequest })
             {
-                var request = shortcut.Prepare("Advice"); var knowledge = DeliveryKnowledge();
+                var request = shortcut.Prepare("Advice").WithOperations(false); var knowledge = DeliveryKnowledge();
                 using var operations = AdvisorConsultation.CreateOperations(request, source, "advisory", knowledge.Prompts, AdvisorOperationReferences.Empty);
                 Require(operations == null && opened == 0, "An advisory shortcut opened a command gateway");
                 Task<AiReply> Send(FakeSession session, int n, bool _, CancellationToken __)
@@ -46,45 +47,50 @@ internal static partial class ProviderTests
             catch (AiConnectionException error) when (error.Code == "invalid_function_call") { }
             Require(opened == 0 && operation.Writes == 0, "A forged command opened operation access");
         }));
-        check("Permitted custom shortcuts retain approval, manual requests remain permitted and neither can override WIP or force execution", () =>
+        check("Action shortcuts and manual requests permit proposals while respecting disabled commands and approval", () =>
         {
-            var enabled = false; var unit = new OperationHelicopter();
-            var registry = new AdvisorOperations(_ => enabled); registry.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { unit }));
-            using var gateway = new AdvisorOperationGateway(registry);
-            var source = new BattleAdvisorSource(() => throw new InvalidOperationException("Unexpected capture"), () => gateway);
-            var custom = new AdvisorShortcut("custom.drop", "next_steps", allowOperations: true).Prepare("Drop buoys");
-            var manual = new AdvisorDraft(); manual.Add(42, unit.Name); var manualRequest = manual.Prepare("Drop one buoy");
-            var knowledge = DeliveryKnowledge();
-            foreach (var request in new[] { custom, manualRequest })
-                Require(AdvisorConsultation.CreateOperations(request, source, "wip-off", knowledge.Prompts, AdvisorOperationReferences.Empty) == null,
-                    "A permitted request enabled WIP implicitly");
-            enabled = true;
-            using (var idle = AdvisorConsultation.CreateOperations(manualRequest, source, "manual", knowledge.Prompts, AdvisorOperationReferences.Empty))
+            foreach (var shortcut in new[] { AdvisorShortcut.NextSteps, AdvisorShortcut.KeyRisks, AdvisorShortcut.AttackProposal,
+                AdvisorShortcut.RadarOperations, new AdvisorShortcut("custom.drop", "next_steps", allowOperations: true) })
             {
-                Require(idle != null, "Manual requests lost operation access");
-                var provider = new FakeProvider("optional", (session, _, _, _) =>
+                var enabled = false; var unit = new OperationHelicopter();
+                var registry = new AdvisorOperations(_ => enabled); registry.Register(SonobuoyFixture.Create(() => new IBattleSonobuoyUnit[] { unit }));
+                using var gateway = new AdvisorOperationGateway(registry);
+                var source = new BattleAdvisorSource(() => throw new InvalidOperationException("Unexpected capture"), () => gateway);
+                var request = shortcut.Prepare("Action proposal");
+                Require(request.AllowOperations, "An action shortcut disabled commands");
+                var manual = new AdvisorDraft(); manual.Add(42, unit.Name); var manualRequest = manual.Prepare("Drop one buoy");
+                var knowledge = DeliveryKnowledge();
+                foreach (var disabled in new[] { request, manualRequest })
+                    Require(AdvisorConsultation.CreateOperations(disabled, source, "disabled", knowledge.Prompts, AdvisorOperationReferences.Empty) == null,
+                        "A permitted request enabled a disabled command");
+                enabled = true;
+                using (var idle = AdvisorConsultation.CreateOperations(manualRequest, source, "manual", knowledge.Prompts, AdvisorOperationReferences.Empty))
                 {
-                    Require(session.Input.Tools.Any(t => (string?)t["name"] == "propose_operation_plans"), "Permitted tools are missing");
-                    return Task.FromResult(new AiReply("A normal answer without commands", Array.Empty<AiToolCall>(), 1));
-                });
-                var answer = OperationGatewayTests.Finish(gateway, new AdvisorEngine(provider).ConsultAsync(
-                    AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: idle), CancellationToken.None));
-                var idleProposal = registry.FinishProposal("manual", true);
-                Require(answer.Completed && idleProposal != null && idleProposal.Orders.Count == 0 &&
-                    idleProposal.State == AdvisorProposalState.Rejected && unit.Calls == 0,
-                    "Permission forced an operation or created a reviewable proposal");
+                    Require(idle != null, "Manual requests lost operation access");
+                    var provider = new FakeProvider("optional", (session, _, _, _) =>
+                    {
+                        Require(session.Input.Tools.Any(t => (string?)t["name"] == "propose_operation_plans"), "Permitted tools are missing");
+                        return Task.FromResult(new AiReply("A normal answer without commands", Array.Empty<AiToolCall>(), 1));
+                    });
+                    var answer = OperationGatewayTests.Finish(gateway, new AdvisorEngine(provider).ConsultAsync(
+                        AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: idle), CancellationToken.None));
+                    var idleProposal = registry.FinishProposal("manual", true);
+                    Require(answer.Completed && idleProposal != null && idleProposal.Orders.Count == 0 &&
+                        idleProposal.State == AdvisorProposalState.Rejected && unit.Calls == 0,
+                        "Permission forced an operation or created a reviewable proposal");
+                }
+                using var operations = AdvisorConsultation.CreateOperations(request, source, "custom", knowledge.Prompts, AdvisorOperationReferences.Empty);
+                Require(operations != null, "An action shortcut could not use operations");
+                var executor = new FakeProvider("custom", (session, n, _, _) => Task.FromResult(n switch {
+                    1 => OperationReply("definition", new JObject { ["action"] = "describe", ["operation_id"] = SonobuoyDropExtension.OperationId }),
+                    2 => ProposalReply("drop", BuoyRequest()),
+                    _ => new AiReply("Awaiting approval", Array.Empty<AiToolCall>(), 1) }));
+                var result = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(executor).ConsultAsync(
+                    AdvisorContext.Create(DeliveryKnowledge(), Array.Empty<ChatExchange>(), operations: operations), CancellationToken.None)));
+                Require(result.Completed && unit.Calls == 0, "Permitted shortcut bypassed approval");
+                var proposal = registry.FinishProposal("custom", true)!; Require(proposal.Plans.Count == 2 && proposal.Orders.Count == 2, "The shortcut proposal was lost");
+                registry.Approve(proposal, new[] { "a" }); Require(unit.Calls == 1, "Approval did not register exactly one order");
             }
-            using var operations = AdvisorConsultation.CreateOperations(custom, source, "custom", knowledge.Prompts, AdvisorOperationReferences.Empty);
-            Require(operations != null, "A custom shortcut could not opt into operations");
-            var executor = new FakeProvider("custom", (session, n, _, _) => Task.FromResult(n switch {
-                1 => OperationReply("definition", new JObject { ["action"] = "describe", ["operation_id"] = SonobuoyDropExtension.OperationId }),
-                2 => ProposalReply("drop", BuoyRequest()),
-                _ => new AiReply("Awaiting approval", Array.Empty<AiToolCall>(), 1) }));
-            var result = OperationGatewayTests.Finish(gateway, Task.Run(() => new AdvisorEngine(executor).ConsultAsync(
-                AdvisorContext.Create(DeliveryKnowledge(), Array.Empty<ChatExchange>(), operations: operations), CancellationToken.None)));
-            Require(result.Completed && unit.Calls == 0, "Permitted shortcut bypassed approval");
-            var proposal = registry.FinishProposal("custom", true)!; Require(proposal.Plans.Count == 2 && proposal.Orders.Count == 2, "The custom proposal was lost");
-            registry.Approve(proposal, new[] { "a" }); Require(unit.Calls == 1, "Approval did not register exactly one order");
         });
         check("Disabled operation policy survives retry, standard provider switching and independent fallback", () => Async(async () =>
         {
