@@ -52,11 +52,11 @@ public sealed class Plugin : IAnchorChainMod
             EmbeddedDependencies.LoadMarkdown(typeof(Plugin).Assembly);
             harmony = new Harmony(ModId);
             battle = new BattleIntegration(BattleRuntime, message => Log.LogWarning(message), options, Backends);
-            crew = new Crew.CrewIntegration(Path.Combine(UnityEngine.Application.persistentDataPath, "SeaPowerAIAdvisor", "crew-reports.json"),
+            crew = new Crew.CrewIntegration(Path.Combine(UnityEngine.Application.persistentDataPath, "SeaPowerAIAdvisor", "crew-chatter.json"),
                 () => options.Current.CrewEnabled, options.SaveCrew,
                 id => { if (!options.Current.LocalConnections.AllowedIds.Contains(id)) throw new LocalApiException(403, "connection_not_allowed"); },
-                saved => new ReportsConnections(settingsPath, AdvisorTrace.DirectoryIn(UnityEngine.Application.persistentDataPath), saved, () => AdvisorText.Load(GameLanguage.Read())),
-                key => AdvisorText.Load(GameLanguage.Read())[key], error => Log.LogError("AI Crew Reports failed: " + error));
+                saved => new ChatterConnections(settingsPath, AdvisorTrace.DirectoryIn(UnityEngine.Application.persistentDataPath), saved, () => AdvisorText.Load(GameLanguage.Read())),
+                key => AdvisorText.Load(GameLanguage.Read())[key], error => Log.LogError("AI Crew Chatter failed: " + error));
             harmony.Patch(Required(typeof(MainGameViewModel), "OnLateUpdate"), postfix: new HarmonyMethod(typeof(Plugin), nameof(BattleFrame)));
             harmony.Patch(Required(typeof(MainGameViewModel), "OnDestroy"), prefix: new HarmonyMethod(typeof(Plugin), nameof(BattleDestroyed)));
             SeaPowerAIAdvisor.Api.AdvisorApi.Attach(extension =>

@@ -7,7 +7,7 @@ using SeaPowerAIAdvisor.Shared;
 
 namespace SeaPowerAIAdvisor.Crew;
 
-// The MOD supplies registered connections; Reports owns only its selected ID and detached generation input.
+// The MOD supplies registered connections; Chatter owns only its selected ID and detached generation input.
 internal interface ICrewConnections
 {
     IAiConnectionStore Store { get; }

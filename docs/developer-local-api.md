@@ -46,13 +46,13 @@ All responses are JSON. These endpoints are experimental and separate from the p
 | GET | `/v1/operations/{operation}/candidates` | Current player-owned candidates and ammunition availability for an operation. |
 | POST | `/v1/operations/{operation}/candidates` | Read filtered/paged candidates with their definition. Optional `target_ref`, `contact_refs`, `offset`, `limit`; attack `contact_refs` batches up to 10 observed `unit:N` targets and returns current in-range choices. No AI request or execution. |
 | POST | `/v1/operation-plans` | Submit and adopt explicit plans without AI or an approval dialog. |
-| GET | `/v1/crew/reports` | Reports availability, current scope, targets, appointments, history and visible notification. Does not open the adviser or send AI requests. |
-| POST | `/v1/crew/reports/window` | Open or close the Reports window through the HUD button action; unsaved edits still require confirmation. |
-| GET | `/v1/crew/reports/situation` | Current player-known input facts for eligible Reports targets; no AI request. |
-| PATCH | `/v1/crew/reports` | Save the AI Crew `enabled` flag. Enabling alone does not enable any reporting unit. |
-| PATCH | `/v1/crew/reports/targets` | Toggle explicitly listed reporting targets in the current Reports scope; regular scheduling performs generation. |
-| POST | `/v1/crew/reports/pause` | Pause or resume Reports while retaining the selected targets, people and history. |
-| POST | `/v1/crew/reports/stop` | Stop all Reports targets and cancel pending generation without changing the saved feature flag or session people/history. |
+| GET | `/v1/crew/chatter` | Chatter availability, current scope, targets, appointments, history and visible notification. Does not open the adviser or send AI requests. |
+| POST | `/v1/crew/chatter/window` | Open or close the Chatter window through the HUD button action; unsaved edits still require confirmation. |
+| GET | `/v1/crew/chatter/situation` | Current player-known input facts for eligible Chatter targets; no AI request. |
+| PATCH | `/v1/crew/chatter` | Save the AI Crew `enabled` flag. Enabling alone does not enable any reporting unit. |
+| PATCH | `/v1/crew/chatter/targets` | Toggle explicitly listed reporting targets in the current Chatter scope; regular scheduling performs generation. |
+| POST | `/v1/crew/chatter/pause` | Pause or resume Chatter while retaining the selected targets, people and history. |
+| POST | `/v1/crew/chatter/stop` | Stop all Chatter targets and cancel pending generation without changing the saved feature flag or session people/history. |
 
 Question bodies specify exactly one of `question` and `shortcut`:
 
@@ -275,35 +275,35 @@ For `on_request`, initial `input.data` excludes automatically attached situation
 
 `POST /v1/operation-plans` accepts an explicit `scope_id`, `request_id`, `plans` and optional `selected_plan_ids`. Use the same [ordered plan and target policy format](ai-unit-control-design.md#18-コマンドをまたぐ予約合成と移動編隊復帰2026-10-25) as AI submissions. Unlike a normal consultation, this development request adopts the selected plan immediately without a dialog. Command enablement, ownership, live preflight, terminal-order checks and replay protection still apply. Consultations, settings and proposal review must be idle. Successful registration is HTTP 200; a pending/rejected result is 409. Reusing an ID with different contents or a different completed selection is a conflict. The CLI exposes this as `operations submit --request-file FILE`; it never retries a POST automatically. There is no separate single-operation submission route; one plan with one operation uses the same endpoint.
 
-## AI Crew Reports verification
+## AI Crew Chatter verification
 
-`GET /v1/crew/reports` includes mission-scoped `usage`: `api_requests`, `known_total_tokens`, `unknown_requests`, and nullable `last_total_tokens`. Counts update when each generation request finishes, including silent or appointment-only results and rejected reports. Unavailable usage is counted separately, never assumed to be zero. Pre-send failures do not increment requests. Pause, selection changes and global disable preserve these totals; a new mission scope starts at zero. The latest value refers to the last finished generation; it is null before the first request or when that request did not provide usage. Connection tests and other AI features are excluded.
+`GET /v1/crew/chatter` includes mission-scoped `usage`: `api_requests`, `known_total_tokens`, `unknown_requests`, and nullable `last_total_tokens`. Counts update when each generation request finishes, including silent or appointment-only results and rejected reports. Unavailable usage is counted separately, never assumed to be zero. Pre-send failures do not increment requests. Pause, selection changes and global disable preserve these totals; a new mission scope starts at zero. The latest value refers to the last finished generation; it is null before the first request or when that request did not provide usage. Connection tests and other AI features are excluded.
 
-Reports uses the same opt-in listener and main-thread queue. Its generation is independent of a tactical adviser conversation. The saved Reports connection must also be in the developer API's allowed connection list before the API can turn a target ON. Reports does not use the adviser's fallback assignment.
+Chatter uses the same opt-in listener and main-thread queue. Its generation is independent of a tactical adviser conversation. The saved Chatter connection must also be in the developer API's allowed connection list before the API can turn a target ON. Chatter does not use the adviser's fallback assignment.
 
-First read `GET /v1/crew/reports` and use its `scope_id` and `targets[].id`. For example:
+First read `GET /v1/crew/chatter` and use its `scope_id` and `targets[].id`. For example:
 
 ```json
-{"scope_id":"<current Reports scope>","target_ids":["unit:1001","unit:1029"],"enabled":true}
+{"scope_id":"<current Chatter scope>","target_ids":["unit:1001","unit:1029"],"enabled":true}
 ```
 
-Send this to `PATCH /v1/crew/reports/targets`. IDs may include formation followers. Every selected unit retains its crew and ON/OFF state when formations change; `targets[].can_report` identifies current formation leaders and standalone units. Followers can be appointed but cannot speak until they become eligible. The entire requested set is validated before any target changes. Old scope IDs are rejected after a battle session changes. Requests do not bypass the normal coalescing, batching, appointment or notification pipeline. Stop automatic reporting after a bounded test with `POST /v1/crew/reports/stop` and the same scope ID.
+Send this to `PATCH /v1/crew/chatter/targets`. IDs may include formation followers. Every selected unit retains its crew and ON/OFF state when formations change; `targets[].can_speak` identifies current formation leaders and standalone units. Followers can be appointed but cannot speak until they become eligible. The entire requested set is validated before any target changes. Old scope IDs are rejected after a battle session changes. Requests do not bypass the normal coalescing, batching, appointment or notification pipeline. Stop automatic reporting after a bounded test with `POST /v1/crew/chatter/stop` and the same scope ID.
 
 A generation considers at most four speech candidates and may return remarks for zero to two of them. New appointments are returned independently, so silent crew still receive names and personalities. Appointment-only requests contain no situation data and do not accelerate the speech interval. Silence is a successful result and does not necessarily append history. Candidates left silent are not immediately retried; the next opportunity follows the whole-Crew interval. Use the busy state and communication trace when verifying a bounded generation rather than waiting only for history growth.
 
 CLI examples:
 
 ```sh
-python3 tools/advisor_dev.py reports status
-python3 tools/advisor_dev.py reports situation
-python3 tools/advisor_dev.py reports targets --scope-id <scope> --target-id unit:1001 --enabled true
-python3 tools/advisor_dev.py reports pause --scope-id <scope> --value true
-python3 tools/advisor_dev.py reports pause --scope-id <scope> --value false
-python3 tools/advisor_dev.py reports stop --scope-id <scope>
+python3 tools/advisor_dev.py chatter status
+python3 tools/advisor_dev.py chatter situation
+python3 tools/advisor_dev.py chatter targets --scope-id <scope> --target-id unit:1001 --enabled true
+python3 tools/advisor_dev.py chatter pause --scope-id <scope> --value true
+python3 tools/advisor_dev.py chatter pause --scope-id <scope> --value false
+python3 tools/advisor_dev.py chatter stop --scope-id <scope>
 ```
 
-`PATCH /v1/crew/reports` with `{"enabled":false}` exercises the saved global disable path: it hides Crew UI, cancels reports and turns targets OFF. Re-enabling does not resume those targets. `notification` in the status response reports the current visible text, placement and native UI bounds; it does not fabricate a report for display testing.
+`PATCH /v1/crew/chatter` with `{"enabled":false}` exercises the saved global disable path: it hides Crew UI, cancels reports and turns targets OFF. Re-enabling does not resume those targets. `notification` in the status response reports the current visible text, placement and native UI bounds; it does not fabricate a report for display testing.
 
-Reports target API requests are explicit commits; they do not edit the window’s pending checkbox selection. `POST /v1/crew/reports/pause` takes `{"scope_id":"...","paused":true}` or `false`. While paused, confirmed targets remain selected, but neither appointments nor remarks are generated. Resume validates the selected connection permission again. The global disable and `/stop` still turn all targets OFF.
+Chatter target API requests are explicit commits; they do not edit the window’s pending checkbox selection. `POST /v1/crew/chatter/pause` takes `{"scope_id":"...","paused":true}` or `false`. While paused, confirmed targets remain selected, but neither appointments nor remarks are generated. Resume validates the selected connection permission again. The global disable and `/stop` still turn all targets OFF.
 
-Reports generation errors pause the whole Reports session without changing the target selection, appointed people, history or usage totals. Read `paused` and `error` from the status. Explicit resume through `/pause` with `paused: false` validates the connection again, clears the error, and resumes with existing people; editing target selection alone does not resume. Global disable and `/stop` still turn targets OFF.
+Chatter generation errors pause the whole Chatter session without changing the target selection, appointed people, history or usage totals. Read `paused` and `error` from the status. Explicit resume through `/pause` with `paused: false` validates the connection again, clears the error, and resumes with existing people; editing target selection alone does not resume. Global disable and `/stop` still turn targets OFF.

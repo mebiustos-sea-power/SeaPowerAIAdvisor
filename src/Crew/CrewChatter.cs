@@ -14,11 +14,11 @@ internal sealed class CrewTarget
     internal string Nation { get; }
     internal string Role { get; }
     internal IReadOnlyList<int> Members { get; }
-    internal bool CanReport { get; }
-    internal CrewTarget(string id, string name, string nation, string role, IReadOnlyList<int> members, bool canReport)
-    { Id = id; Name = name; Nation = nation; Role = role; Members = members; CanReport = canReport; }
+    internal bool CanSpeak { get; }
+    internal CrewTarget(string id, string name, string nation, string role, IReadOnlyList<int> members, bool canSpeak)
+    { Id = id; Name = name; Nation = nation; Role = role; Members = members; CanSpeak = canSpeak; }
 }
-internal sealed class CrewReport
+internal sealed class CrewRemark
 {
     internal CrewTarget Target { get; }
     internal CrewSubmission Submission { get; }
@@ -26,12 +26,12 @@ internal sealed class CrewReport
     internal double ExpiresAt { get; }
     internal int Revision { get; }
     internal int InformationRevision { get; }
-    internal CrewReport(CrewTarget target, CrewSubmission submission, double expiresAt, int revision, int informationRevision)
+    internal CrewRemark(CrewTarget target, CrewSubmission submission, double expiresAt, int revision, int informationRevision)
     { Target = target; Submission = submission; ExpiresAt = expiresAt; Revision = revision; InformationRevision = informationRevision; }
 }
 
 // Session-owned scheduling uses only the caller's monotonic real-time clock, never simulation time or pause state.
-internal sealed class CrewReports : IDisposable
+internal sealed class CrewChatter : IDisposable
 {
     private sealed class State
     {
@@ -43,8 +43,8 @@ internal sealed class CrewReports : IDisposable
     }
     private readonly Dictionary<string, State> states = new(StringComparer.Ordinal);
     private readonly Dictionary<string, CrewPerson> people = new(StringComparer.Ordinal);
-    private readonly List<CrewReport> history = new();
-    private readonly Queue<CrewReport> pending = new();
+    private readonly List<CrewRemark> history = new();
+    private readonly Queue<CrewRemark> pending = new();
     private readonly Random random;
     private readonly Action<Exception> log;
     private CancellationTokenSource? cancellation;
@@ -60,21 +60,21 @@ internal sealed class CrewReports : IDisposable
     internal CrewUsage Usage { get; } = new();
     internal bool Paused { get; private set; }
     internal bool HasEnabledTargets => states.Values.Any(s => s.Enabled);
-    private bool HasReporters => states.Values.Any(s => s.Enabled && s.Target.CanReport);
+    private bool HasSpeakers => states.Values.Any(s => s.Enabled && s.Target.CanSpeak);
     private bool NeedsAppointment => states.Values.Any(s => s.Enabled && !people.ContainsKey(s.Target.Id));
     internal int Version { get; private set; }
-    internal IReadOnlyList<CrewReport> History => history;
+    internal IReadOnlyList<CrewRemark> History => history;
     internal IReadOnlyList<CrewTarget> Targets => states.Values.Select(s => s.Target).OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
     internal CrewPerson? Person(string id) => people.TryGetValue(id, out var person) ? person : null;
     internal bool Enabled(string id) => states.TryGetValue(id, out var s) && s.Enabled;
-    internal CrewReports(Action<Exception> log, Random? random = null) { this.log = log; this.random = random ?? new Random(); }
+    internal CrewChatter(Action<Exception> log, Random? random = null) { this.log = log; this.random = random ?? new Random(); }
     internal void Refresh(IReadOnlyList<CrewTarget> targets)
     {
         var ids = new HashSet<string>(targets.Select(t => t.Id), StringComparer.Ordinal);
         foreach (var id in states.Keys.Where(id => !ids.Contains(id)).ToArray()) { states.Remove(id); Version++; }
         foreach (var target in targets)
             if (states.TryGetValue(target.Id, out var state))
-            { if (state.Target.Name != target.Name || state.Target.CanReport != target.CanReport || !state.Target.Members.SequenceEqual(target.Members)) Version++; state.Target = target; }
+            { if (state.Target.Name != target.Name || state.Target.CanSpeak != target.CanSpeak || !state.Target.Members.SequenceEqual(target.Members)) Version++; state.Target = target; }
             else { states.Add(target.Id, new State(target)); Version++; }
         if (!HasEnabledTargets)
         {
@@ -87,7 +87,7 @@ internal sealed class CrewReports : IDisposable
     internal void ApplyTargets(IReadOnlyCollection<string> selected, double now)
     {
         var ids = new HashSet<string>(selected, StringComparer.Ordinal);
-        if (ids.Count != selected.Count || ids.Any(id => !states.ContainsKey(id))) throw new ArgumentException("Invalid Reports selection.", nameof(selected));
+        if (ids.Count != selected.Count || ids.Any(id => !states.ContainsKey(id))) throw new ArgumentException("Invalid Chatter selection.", nameof(selected));
         if (states.Values.All(s => s.Enabled == ids.Contains(s.Target.Id))) return;
         var wasActive = HasEnabledTargets;
         foreach (var state in states.Values)
@@ -126,7 +126,7 @@ internal sealed class CrewReports : IDisposable
             informationKey = settings.Information.Key; informationRevision++;
         }
         if (Paused) return;
-        if (!HasReporters) nextOpportunity = double.PositiveInfinity;
+        if (!HasSpeakers) nextOpportunity = double.PositiveInfinity;
         else if (double.IsPositiveInfinity(nextOpportunity) && !speechInFlight) nextOpportunity = now + 1;
         if (task?.IsCompleted == true)
         {
@@ -143,14 +143,14 @@ internal sealed class CrewReports : IDisposable
                     var entry = work.Single(w => w.Target.Id == appointment.Key);
                     if (Valid(entry) && !people.ContainsKey(appointment.Key)) people.Add(appointment.Key, appointment.Value);
                 }
-                foreach (var submission in result.Reports)
+                foreach (var submission in result.Remarks)
                 {
                     var entry = work.Single(w => w.Target.Id == submission.Id);
-                    if (!Valid(entry) || !entry.State.Target.CanReport || !entry.State.Target.Members.SequenceEqual(entry.Target.Members)) continue;
+                    if (!Valid(entry) || !entry.State.Target.CanSpeak || !entry.State.Target.Members.SequenceEqual(entry.Target.Members)) continue;
                     var bound = new CrewSubmission(submission.Id, people[submission.Id], submission.Text);
-                    var report = new CrewReport(entry.Target, bound, now + 120, entry.Revision, activeInformationRevision);
-                    history.Add(report); if (history.Count > 200) history.RemoveAt(0);
-                    pending.Enqueue(report); while (pending.Count > 16) pending.Dequeue();
+                    var remark = new CrewRemark(entry.Target, bound, now + 120, entry.Revision, activeInformationRevision);
+                    history.Add(remark); if (history.Count > 200) history.RemoveAt(0);
+                    pending.Enqueue(remark); while (pending.Count > 16) pending.Dequeue();
                 }
             }
             catch (OperationCanceledException) { }
@@ -176,7 +176,7 @@ internal sealed class CrewReports : IDisposable
         }
         if (Paused || task != null || now < Math.Min(nextOpportunity, nextAppointments)) return;
         var appointments = now < nextAppointments ? Array.Empty<State>() : states.Values.Where(s => s.Enabled && !people.ContainsKey(s.Target.Id)).Take(CrewBatch.MaximumAppointments).ToArray();
-        var candidates = now < nextOpportunity ? Array.Empty<State>() : states.Values.Where(s => s.Enabled && s.Target.CanReport && (people.ContainsKey(s.Target.Id) || appointments.Contains(s)))
+        var candidates = now < nextOpportunity ? Array.Empty<State>() : states.Values.Where(s => s.Enabled && s.Target.CanSpeak && (people.ContainsKey(s.Target.Id) || appointments.Contains(s)))
             .OrderBy(s => s.LastConsidered).ThenBy(_ => random.NextDouble()).Take(4).ToArray();
         if (appointments.Length == 0 && candidates.Length == 0) return;
         if (settings.ConnectionId == null) { Error = "connection_required"; SetPaused(true, now); return; }
@@ -190,7 +190,7 @@ internal sealed class CrewReports : IDisposable
         data["reply_language"] = language;
         JObject Identity(State state) => new() { ["id"] = state.Target.Id, ["display_name"] = state.Target.Name, ["nation"] = state.Target.Nation, ["role"] = state.Target.Role };
         data["appointments"] = new JArray(appointments.Select(Identity));
-        data["reporters"] = new JArray(candidates.Select(s =>
+        data["speakers"] = new JArray(candidates.Select(s =>
         {
             var row = Identity(s); var person = Person(s.Target.Id);
             row["member_unit_ids"] = new JArray(s.Target.Members.Select(id => "unit:" + id));
@@ -206,14 +206,14 @@ internal sealed class CrewReports : IDisposable
         var token = cancellation.Token; var connectionId = settings.ConnectionId;
         task = Task.Run(() => generate(batch, connectionId, token, Usage.Record), token); Version++;
     }
-    internal CrewReport? NextNotification(double now)
+    internal CrewRemark? NextNotification(double now)
     {
         if (Paused) return null;
         while (pending.Count > 0)
         {
-            var report = pending.Dequeue();
-            if (report.ExpiresAt > now && states.TryGetValue(report.Target.Id, out var state) && state.Enabled && state.Target.CanReport &&
-                state.Revision == report.Revision && state.Target.Members.SequenceEqual(report.Target.Members)) return report;
+            var remark = pending.Dequeue();
+            if (remark.ExpiresAt > now && states.TryGetValue(remark.Target.Id, out var state) && state.Enabled && state.Target.CanSpeak &&
+                state.Revision == remark.Revision && state.Target.Members.SequenceEqual(remark.Target.Members)) return remark;
         }
         return null;
     }

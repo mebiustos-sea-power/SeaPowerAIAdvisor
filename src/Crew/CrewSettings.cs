@@ -9,7 +9,7 @@ namespace SeaPowerAIAdvisor.Crew;
 
 internal enum CrewNotificationPosition { TopLeft, TopCenter, TopRight, BottomLeft, BottomCenter, BottomRight }
 
-// Reports owns its assignment and preferences; the registered connections remain in the shared library.
+// Chatter owns its assignment and preferences; the registered connections remain in the shared library.
 internal sealed class CrewSettings
 {
     internal const int DefaultIntervalMinutes = 3;

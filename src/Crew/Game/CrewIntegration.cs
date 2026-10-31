@@ -10,7 +10,7 @@ using SeaPowerAIAdvisor.Shared;
 
 namespace SeaPowerAIAdvisor.Crew;
 
-// Independent mission lifetime: the tactical advisor's window and consultation runtime do not own Reports.
+// Independent mission lifetime: the tactical advisor's window and consultation runtime do not own Chatter.
 internal sealed class CrewIntegration
 {
     private readonly Func<bool> enabled;
@@ -25,7 +25,7 @@ internal sealed class CrewIntegration
     private object? mission, player;
     private FrameworkElement? root;
     private MainGameView? view;
-    private CrewReports? reports;
+    private CrewChatter? chatter;
     private CrewLocalApi? local;
     private CrewBattleSource? source;
     private CrewSettingsStore? settings;
@@ -58,33 +58,35 @@ internal sealed class CrewIntegration
         if (!active)
         {
             settings ??= new CrewSettingsStore(settingsPath); connections ??= connect(settings);
-            source ??= new CrewBattleSource(current); reports ??= new CrewReports(log);
-            local ??= new CrewLocalApi(reports, () => clock.Elapsed.TotalSeconds, () =>
+            source ??= new CrewBattleSource(current); chatter ??= new CrewChatter(log);
+            local ??= new CrewLocalApi(chatter, () => clock.Elapsed.TotalSeconds, () =>
             {
                 connections.ValidateSelection(settings.Current.ConnectionId);
                 checkLocalConnection(settings.Current.ConnectionId!);
             });
-            reports.Refresh(source.Targets()); nextRefresh = clock.Elapsed.TotalSeconds + 1;
+            chatter.Refresh(source.Targets()); nextRefresh = clock.Elapsed.TotalSeconds + 1;
             var grid = view.FindName("DisplayAreaGrid") as Grid ?? throw new InvalidOperationException("The battle HUD grid is unavailable.");
             var reference = view.FindName("UnitStatusWindow") as ToggleButton ?? throw new InvalidOperationException("The battle HUD toggle is unavailable.");
-            launcher = new HudButton(grid, reference, "RPT", "AI Crew - Reports", 11, before: hudAnchor);
+            launcher = new HudButton(grid, reference, "CREW", "AI Crew", 11, before: hudAnchor);
+            var button = launcher;
+            button.Control.Loaded += (_, _) => Guard(() => button.FitLabel("CRW"));
             presentation = new CrewPresentation(GameUi.FindVisual<Grid>(view) ?? throw new InvalidOperationException("The battle content layout is unavailable."));
             launcher.Control.Click += (_, _) => Guard(ToggleWindow);
             active = true;
         }
         var now = clock.Elapsed.TotalSeconds;
-        if (now >= nextRefresh) { reports!.Refresh(source!.Targets()); nextRefresh = now + 1; }
-        reports!.Tick(now, settings!.Current, GameLanguage.Read(), source!.Capture, connections!.GenerateAsync);
-        window?.Tick(); presentation!.Tick(reports, now, settings.Current.DisplaySeconds, settings.Current.NotificationPosition, current.IsHudVisible);
+        if (now >= nextRefresh) { chatter!.Refresh(source!.Targets()); nextRefresh = now + 1; }
+        chatter!.Tick(now, settings!.Current, GameLanguage.Read(), source!.Capture, connections!.GenerateAsync);
+        window?.Tick(); presentation!.Tick(chatter, now, settings.Current.DisplaySeconds, settings.Current.NotificationPosition, current.IsHudVisible);
         launcher!.Control.Visibility = current.IsHudVisible ? Visibility.Visible : Visibility.Collapsed;
         launcher.Control.IsChecked = window?.IsOpen == true;
-        launcher.Control.ToolTip = reports.Error == null ? "AI Crew - Reports" : "AI Crew - Reports / " + reports.Error;
+        launcher.Control.ToolTip = chatter.Error == null ? "AI Crew" : "AI Crew / " + chatter.Error;
     }
     private void ToggleWindow()
     {
         var current = model ?? throw new InvalidOperationException("The battle model is unavailable.");
         var host = GameUi.FindWindowHost(current.RootControl) ?? throw new InvalidOperationException("The battle window host is unavailable.");
-        window ??= new CrewWindow(view!, host, reports!, settings!, connections!, common, new CrewText(GameLanguage.Read()), presentation!.Portrait,
+        window ??= new CrewWindow(view!, host, chatter!, settings!, connections!, common, new CrewText(GameLanguage.Read()), presentation!.Portrait,
             () => clock.Elapsed.TotalSeconds, Guard, log);
         window.Toggle(); if (failed) window.Stop(); launcher!.Control.IsChecked = window.IsOpen;
     }
@@ -107,9 +109,9 @@ internal sealed class CrewIntegration
                 var value = (bool)body["enabled"]!; saveEnabled(value); if (!value) Suspend();
                 return new LocalApiResponse(200, Status());
             }
-            if (local == null) return LocalApiResponse.Error(409, "no_active_reports");
+            if (local == null) return LocalApiResponse.Error(409, "no_active_chatter");
             if (method == "POST" && path == CrewLocalApi.Path + "/stop") return local.Dispatch(method, path, body);
-            if (!active || failed) return LocalApiResponse.Error(409, failed ? "reports_failed" : "reports_disabled");
+            if (!active || failed) return LocalApiResponse.Error(409, failed ? "chatter_failed" : "chatter_disabled");
             if (method == "POST" && path == CrewLocalApi.Path + "/window")
             {
                 local.RequireScope(body, "open");
@@ -119,7 +121,7 @@ internal sealed class CrewIntegration
                 return new LocalApiResponse(200, Status());
             }
             if (method == "GET" && path == CrewLocalApi.Path + "/situation")
-                return new LocalApiResponse(200, settings!.Current.Information.Filter(source!.Capture(reports!.Targets)));
+                return new LocalApiResponse(200, settings!.Current.Information.Filter(source!.Capture(chatter!.Targets)));
             return local.Dispatch(method, path, body);
         }
         catch (CrewException error) { log(error); return LocalApiResponse.Error(400, error.Code); }
@@ -132,8 +134,8 @@ internal sealed class CrewIntegration
     private void Fail(Exception error)
     {
         log(error); failed = true;
-        Cleanup(() => reports?.SetPaused(true, clock.Elapsed.TotalSeconds), () => presentation?.Clear(), () => window?.Stop());
-        if (launcher != null) launcher.Control.ToolTip = "AI Crew - Reports / " + error.GetType().Name;
+        Cleanup(() => chatter?.SetPaused(true, clock.Elapsed.TotalSeconds), () => presentation?.Clear(), () => window?.Stop());
+        if (launcher != null) launcher.Control.ToolTip = "AI Crew / " + error.GetType().Name;
     }
     private void Cleanup(params Action[] actions)
     {
@@ -145,12 +147,12 @@ internal sealed class CrewIntegration
         var oldWindow = window; window = null;
         var oldPresentation = presentation; presentation = null;
         var oldLauncher = launcher; launcher = null;
-        Cleanup(() => reports?.Suspend(), () => oldWindow?.Dispose(), () => oldPresentation?.Dispose(), () => oldLauncher?.Dispose());
+        Cleanup(() => chatter?.Suspend(), () => oldWindow?.Dispose(), () => oldPresentation?.Dispose(), () => oldLauncher?.Dispose());
     }
     internal void Destroy(MainGameViewModel current) { if (ReferenceEquals(model, current)) Guard(Reset); }
     private void Reset()
     {
-        Suspend(); var oldReports = reports; reports = null; Cleanup(() => oldReports?.Dispose()); local = null; source = null; connections = null; settings = null;
+        Suspend(); var oldChatter = chatter; chatter = null; Cleanup(() => oldChatter?.Dispose()); local = null; source = null; connections = null; settings = null;
         model = null; root = null; view = null; mission = null; player = null; failed = false; nextRefresh = 0;
     }
 }

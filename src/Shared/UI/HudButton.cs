@@ -42,6 +42,14 @@ internal sealed class HudButton : IDisposable
         }
         catch { Dispose(); throw; }
     }
+    internal void FitLabel(string compactLabel)
+    {
+        var text = GameUi.FindVisual<TextBlock>(Control) ?? throw new InvalidOperationException("The HUD label is unavailable.");
+        var tile = GameUi.FindVisual<Border>(Control) ?? throw new InvalidOperationException("The HUD tile is unavailable.");
+        text.Measure(new Size(float.PositiveInfinity, float.PositiveInfinity));
+        var available = Math.Min(Control.Width, tile.MaxWidth) - tile.BorderThickness.Left - tile.BorderThickness.Right;
+        if (text.DesiredSize.Width > available) Control.Tag = compactLabel;
+    }
     public void Dispose()
     {
         grid.Children.Remove(Control); var index = grid.ColumnDefinitions.IndexOf(column); if (index < 0) return;

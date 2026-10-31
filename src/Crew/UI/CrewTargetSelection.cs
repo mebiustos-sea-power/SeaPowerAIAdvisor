@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace SeaPowerAIAdvisor.Crew;
 
-// Only explicit edits are staged, so background updates cannot restore a target that stopped reporting.
+// Only explicit edits are staged, so background updates cannot restore a target that stopped speaking.
 internal sealed class CrewTargetSelection
 {
     private readonly Dictionary<string, bool> current = new(StringComparer.Ordinal);

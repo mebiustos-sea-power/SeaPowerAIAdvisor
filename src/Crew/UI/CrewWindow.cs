@@ -13,13 +13,13 @@ using SeaPowerAIAdvisor.Shared;
 
 namespace SeaPowerAIAdvisor.Crew;
 
-// This window owns drafts and presentation. Closing it never stops the reporting session.
+// This window owns drafts and presentation. Closing it never stops the speaking session.
 internal sealed class CrewWindow : IDisposable
 {
     private readonly FrameworkElement view, root;
     private readonly WindowHost host;
     private readonly Window window;
-    private readonly CrewReports reports;
+    private readonly CrewChatter chatter;
     private readonly CrewSettingsStore settings;
     private readonly ICrewConnections connections;
     private readonly CrewText text;
@@ -34,7 +34,7 @@ internal sealed class CrewWindow : IDisposable
     private readonly TextBox interval, duration, exchangeChance;
     private readonly CheckBox showHelpTab;
     private readonly ImageSource portrait;
-    private readonly UiNotice settingsNotice, reportNotice;
+    private readonly UiNotice settingsNotice, chatterNotice;
     private readonly CrewTargetSelection targetSelection = new();
     private readonly Dictionary<string, CheckBox> informationChoices = new(StringComparer.Ordinal);
     private CrewInformation information = CrewInformation.Default;
@@ -47,24 +47,24 @@ internal sealed class CrewWindow : IDisposable
     private CancellationTokenSource? testingCancellation;
     private Task<string>? testing;
     internal bool IsOpen => host.Windows.Contains(window);
-    private T Find<T>(string name) where T : class => root.FindName(name) as T ?? throw new InvalidOperationException("Missing Reports control: " + name);
+    private T Find<T>(string name) where T : class => root.FindName(name) as T ?? throw new InvalidOperationException("Missing Chatter control: " + name);
     private string? SelectedId => selection.SelectedIndex <= 0 ? null : ids[selection.SelectedIndex - 1];
     private string Values => page switch
     {
-        "reports" => interval.Text + ":" + duration.Text + ":" + notificationPosition.SelectedIndex + ":" + showHelpTab.IsChecked + ":" + exchangeChance.Text,
+        "chatter" => interval.Text + ":" + duration.Text + ":" + notificationPosition.SelectedIndex + ":" + showHelpTab.IsChecked + ":" + exchangeChance.Text,
         "information" => information.Key,
         _ => SelectedId ?? ""
     };
     private bool Dirty => targetSelection.Dirty || (page == "api" && apiTabs.Current == 1 ? editor.HasChanges : page != null && Values != baseline);
 
-    internal CrewWindow(FrameworkElement view, WindowHost host, CrewReports reports, CrewSettingsStore settings, ICrewConnections connections,
+    internal CrewWindow(FrameworkElement view, WindowHost host, CrewChatter chatter, CrewSettingsStore settings, ICrewConnections connections,
         Func<string, string> common, CrewText text, ImageSource portrait, Func<double> now, Action<Action> guard, Action<Exception> log)
     {
-        this.view = view; this.host = host; this.reports = reports; this.settings = settings; this.connections = connections;
+        this.view = view; this.host = host; this.chatter = chatter; this.settings = settings; this.connections = connections;
         this.common = common; this.text = text; this.portrait = portrait; this.now = now; this.guard = guard; this.log = log;
-        using var source = typeof(CrewWindow).Assembly.GetManifestResourceStream("SeaPowerAIAdvisor.CrewWindow.xaml") ?? throw new FileNotFoundException("The Reports view is missing.");
+        using var source = typeof(CrewWindow).Assembly.GetManifestResourceStream("SeaPowerAIAdvisor.CrewWindow.xaml") ?? throw new FileNotFoundException("The Chatter view is missing.");
         using var reader = new StreamReader(source);
-        root = GUI.ParseXaml(reader.ReadToEnd()) as FrameworkElement ?? throw new InvalidOperationException("The Reports view is invalid.");
+        root = GUI.ParseXaml(reader.ReadToEnd()) as FrameworkElement ?? throw new InvalidOperationException("The Chatter view is invalid.");
         foreach (var item in text.Values) root.Resources["Crew." + item.Key] = item.Value;
         root.Resources["Crew.save"] = common("settings.save_form");
         root.Resources["Crew.back_categories"] = common("settings.back_categories");
@@ -73,9 +73,9 @@ internal sealed class CrewWindow : IDisposable
         root.Resources["Crew.restore_defaults"] = common("information.restore_defaults");
         UiResources.Apply(root);
         Find<ContentControl>("HelpContent").Content = GUI.ParseXaml(MarkdownRenderer.Render(text["help_body"]).ToString(SaveOptions.DisableFormatting)) as FrameworkElement
-            ?? throw new InvalidOperationException("The Reports help view is invalid.");
+            ?? throw new InvalidOperationException("The Chatter help view is invalid.");
         settingsNotice = new UiNotice(Find<TextBlock>("SettingsStatus"), root);
-        reportNotice = new UiNotice(Find<TextBlock>("ReportStatus"), root);
+        chatterNotice = new UiNotice(Find<TextBlock>("ChatterStatus"), root);
         selection = Find<ComboBox>("Connection"); notificationPosition = Find<ComboBox>("NotificationPosition");
         foreach (CrewNotificationPosition position in Enum.GetValues(typeof(CrewNotificationPosition)))
             notificationPosition.Items.Add(new ComboBoxItem { Content = text["position." + CrewSettings.PositionCode(position)] });
@@ -100,7 +100,7 @@ internal sealed class CrewWindow : IDisposable
         editor.Changed += () => { if (testing == null) TestNotice(""); };
         editor.Find<Button>("TestConnection").Click += (_, _) => Run(Test);
         tabs = Navigation("Tabs"); apiTabs = Navigation("ApiTabs");
-        Bind("OpenConnections", () => OpenPage("api")); Bind("OpenReports", () => OpenPage("reports"));
+        Bind("OpenConnections", () => OpenPage("api")); Bind("OpenChatter", () => OpenPage("chatter"));
         Bind("OpenInformation", () => OpenPage("information"));
         Bind("ResetInformation", () => { SetInformation(CrewInformation.Default); settingsNotice.Show(""); });
         Bind("Back", () => Navigate(Home));
@@ -110,13 +110,13 @@ internal sealed class CrewWindow : IDisposable
         {
             if (!CanCommit()) return;
             SyncSelection(); var selected = targetSelection.Selected;
-            if (selected.Any(id => !reports.Enabled(id))) connections.ValidateSelection(settings.Current.ConnectionId);
-            reports.ApplyTargets(selected, now()); targetSelection.Discard(); DrawTargets(); Notice("");
+            if (selected.Any(id => !chatter.Enabled(id))) connections.ValidateSelection(settings.Current.ConnectionId);
+            chatter.ApplyTargets(selected, now()); targetSelection.Discard(); DrawTargets(); Notice("");
         });
-        Bind("PauseReports", () =>
+        Bind("PauseChatter", () =>
         {
-            if (reports.Paused && reports.HasEnabledTargets) connections.ValidateSelection(settings.Current.ConnectionId);
-            reports.SetPaused(!reports.Paused, now());
+            if (chatter.Paused && chatter.HasEnabledTargets) connections.ValidateSelection(settings.Current.ConnectionId);
+            chatter.SetPaused(!chatter.Paused, now());
         });
         Bind("SaveConnection", () =>
         {
@@ -124,7 +124,7 @@ internal sealed class CrewWindow : IDisposable
             var saved = settings.Current; settings.Save(new CrewSettings(SelectedId, saved.IntervalMinutes, saved.DisplaySeconds, saved.NotificationPosition, saved.ShowHelpTab, saved.ExchangeChancePercent, saved.Information));
             baseline = Values; editor.UpdateCards(); Saved();
         });
-        Bind("SaveReports", () =>
+        Bind("SaveChatter", () =>
         {
             if (!CanCommit()) return;
             int Read(TextBox input) => int.TryParse(input.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : throw new CrewException("settings_invalid");
@@ -147,13 +147,13 @@ internal sealed class CrewWindow : IDisposable
             input.LostKeyboardFocus += (_, _) => Run(() => typing.Release(input));
         }
         var width = Math.Min(760, view.ActualWidth - 40); var height = Math.Min(620, view.ActualHeight - 80);
-        window = new Window { Header = "AI Crew - Reports", Content = root, Width = width, Height = height,
+        window = new Window { Header = "AI Crew - " + text["chatter"], Content = root, Width = width, Height = height,
             MinWidth = Math.Min(420, width), MinHeight = Math.Min(300, height), MaxWidth = view.ActualWidth - 20, MaxHeight = view.ActualHeight - 40,
             X = (float)Math.Max(10, (view.ActualWidth - width) / 2), Y = 60, Draggable = true, CanResize = true,
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
         window.DataContext = window;
         window.Template = view.TryFindResource("WindowLayoutNoScroll") as ControlTemplate ?? throw new InvalidOperationException("The game window template is unavailable.");
-        window.ButtonsTemplate = root.Resources["CrewWindowButtons"] as DataTemplate ?? throw new InvalidOperationException("The Reports window buttons are unavailable.");
+        window.ButtonsTemplate = root.Resources["CrewWindowButtons"] as DataTemplate ?? throw new InvalidOperationException("The Chatter window buttons are unavailable.");
         window.CloseAction = new CloseCommand(() => Run(RequestClose));
         window.OnClosed += (_, _) => { typing.Release(); CancelTest(); };
         Home(); ResetTabs(); apiTabs.Reset(); DrawUsage();
@@ -199,13 +199,13 @@ internal sealed class CrewWindow : IDisposable
     private void OpenPage(string value)
     {
         page = value; typing.Release(); settingsNotice.Show("");
-        Find<TextBlock>("SettingsCategoryTitle").Text = text[value switch { "api" => "connections", "reports" => "reports", "information" => "information", _ => throw new ArgumentOutOfRangeException(nameof(value)) }];
+        Find<TextBlock>("SettingsCategoryTitle").Text = text[value switch { "api" => "connections", "chatter" => "chatter", "information" => "information", _ => throw new ArgumentOutOfRangeException(nameof(value)) }];
         Find<FrameworkElement>("SettingsHome").Visibility = Visibility.Collapsed; Find<FrameworkElement>("SettingsPage").Visibility = Visibility.Visible;
         Find<FrameworkElement>("ApiTabs").Visibility = value == "api" ? Visibility.Visible : Visibility.Collapsed;
-        Find<FrameworkElement>("ReportsSettings").Visibility = value == "reports" ? Visibility.Visible : Visibility.Collapsed;
+        Find<FrameworkElement>("ChatterSettings").Visibility = value == "chatter" ? Visibility.Visible : Visibility.Collapsed;
         Find<FrameworkElement>("InformationSettings").Visibility = value == "information" ? Visibility.Visible : Visibility.Collapsed;
         if (value == "api") { apiTabs.Reset(); RefreshConnections(); editor.Open(); }
-        else if (value == "reports")
+        else if (value == "chatter")
         {
             var saved = settings.Current;
             interval.Text = saved.IntervalMinutes.ToString(CultureInfo.InvariantCulture);
@@ -234,7 +234,7 @@ internal sealed class CrewWindow : IDisposable
     {
         if (IsOpen) RequestClose();
         else { Home(); HideConfirmation(); ResetTabs(); revision = -1; WindowHostCommands.OpenWindowCommand.Execute(window, view);
-            if (!IsOpen) throw new InvalidOperationException("The game window host did not open Reports."); }
+            if (!IsOpen) throw new InvalidOperationException("The game window host did not open Chatter."); }
     }
     private void UpdateHelpTab() => Find<TabItem>("HelpTab").Visibility = settings.Current.ShowHelpTab ? Visibility.Visible : Visibility.Collapsed;
     private void ResetTabs()
@@ -249,11 +249,11 @@ internal sealed class CrewWindow : IDisposable
         if (!IsOpen) return;
         Run(() =>
         {
-            if (revision != reports.Version) SyncSelection();
+            if (revision != chatter.Version) SyncSelection();
             tabs.Pump(Dirty, () => { Home(); return true; }, action => Confirm(action));
             apiTabs.Pump(Dirty, () => { typing.Release(); CancelTest(); editor.Close(); RefreshConnections(); editor.Open(); return true; }, action => Confirm(action));
             editor.Tick(); settingsNotice.Tick(); DrawUsage();
-            Find<FrameworkElement>("ReportStatusPane").Visibility = Find<TabItem>("SettingsTab").IsSelected && page != null ? Visibility.Collapsed : Visibility.Visible;
+            Find<FrameworkElement>("ChatterStatusPane").Visibility = Find<TabItem>("SettingsTab").IsSelected && page != null ? Visibility.Collapsed : Visibility.Visible;
             if (testing?.IsCompleted == true)
             {
                 var completed = testing; testing = null; testingCancellation?.Dispose(); testingCancellation = null; editor.SetBusy(false);
@@ -261,27 +261,27 @@ internal sealed class CrewWindow : IDisposable
                 catch (OperationCanceledException) { TestNotice(common("connection.test_cancelled")); }
                 catch (Exception e) { log(e); if (e is AiConnectionException ai) TestNotice(connections.Error(ai), true); else throw; }
             }
-            if (revision == reports.Version) return;
-            revision = reports.Version; DrawHistory(); DrawTargets();
-            Find<Button>("PauseReports").Content = text[reports.Paused ? "resume" : "pause"];
+            if (revision == chatter.Version) return;
+            revision = chatter.Version; DrawHistory(); DrawTargets();
+            Find<Button>("PauseChatter").Content = text[chatter.Paused ? "resume" : "pause"];
             if (!stopped)
             {
-                if (reports.Error != null) reportNotice.Show(text["paused"] + "\n" + ErrorMessage(reports.Error), true);
-                else if (reports.Paused) reportNotice.Show(text["paused"]);
-                else if (reports.Busy) reportNotice.Show(text["busy"]);
-                else reportNotice.Show("");
+                if (chatter.Error != null) chatterNotice.Show(text["paused"] + "\n" + ErrorMessage(chatter.Error), true);
+                else if (chatter.Paused) chatterNotice.Show(text["paused"]);
+                else if (chatter.Busy) chatterNotice.Show(text["busy"]);
+                else chatterNotice.Show("");
             }
         });
     }
     internal void Stop()
     {
-        stopped = true; Find<TabItem>("TargetsTab").IsEnabled = false; Find<Button>("PauseReports").IsEnabled = false;
-        reportNotice.Show(text["error.unexpected_error"], true); if (page != null) settingsNotice.Show(text["error.unexpected_error"], true);
+        stopped = true; Find<TabItem>("TargetsTab").IsEnabled = false; Find<Button>("PauseChatter").IsEnabled = false;
+        chatterNotice.Show(text["error.unexpected_error"], true); if (page != null) settingsNotice.Show(text["error.unexpected_error"], true);
     }
     internal string ErrorMessage(string code) => code is "connection_required" or "connection_missing" or "provider_unavailable" or "invalid_response" or "too_large" or "unexpected_error"
         ? text["error." + code] : connections.Error(new AiConnectionException(code));
     private void Saved() => settingsNotice.ShowBriefly(common("settings.saved"));
-    internal void Notice(string message, bool error = false) => (page == null ? reportNotice : settingsNotice).Show(message, error);
+    internal void Notice(string message, bool error = false) => (page == null ? chatterNotice : settingsNotice).Show(message, error);
     private void TestNotice(string message, bool error = false)
     {
         editor.Find<TextBlock>("ConnectionTestStatus").Text = error ? "" : message;
@@ -298,7 +298,7 @@ internal sealed class CrewWindow : IDisposable
     }
     private void DrawUsage()
     {
-        var usage = reports.Usage.Snapshot;
+        var usage = chatter.Usage.Snapshot;
         if (ReferenceEquals(displayedUsage, usage)) return;
         displayedUsage = usage;
         string Number(long value) => value.ToString("N0", CultureInfo.CurrentCulture);
@@ -310,23 +310,23 @@ internal sealed class CrewWindow : IDisposable
     private void DrawHistory()
     {
         var panel = Find<StackPanel>("History"); panel.Children.Clear();
-        if (reports.History.Count == 0) panel.Children.Add(new TextBlock { Text = text["empty_history"], TextWrapping = TextWrapping.Wrap });
-        foreach (var report in reports.History.Reverse())
-            panel.Children.Add(Card(report.Target.Name + " / " + report.Submission.Person.Name + " / " + report.ReceivedAt.ToString("HH:mm:ss"), report.Submission.Text));
+        if (chatter.History.Count == 0) panel.Children.Add(new TextBlock { Text = text["empty_history"], TextWrapping = TextWrapping.Wrap });
+        foreach (var remark in chatter.History.Reverse())
+            panel.Children.Add(Card(remark.Target.Name + " / " + remark.Submission.Person.Name + " / " + remark.ReceivedAt.ToString("HH:mm:ss"), remark.Submission.Text));
     }
-    private void SyncSelection() => targetSelection.Sync(reports.Targets, reports.Enabled);
+    private void SyncSelection() => targetSelection.Sync(chatter.Targets, chatter.Enabled);
     private void DrawTargets()
     {
         SyncSelection();
         Find<Button>("ApplyTargets").IsEnabled = targetSelection.Dirty;
         var panel = Find<StackPanel>("Targets"); panel.Children.Clear();
-        if (reports.Targets.Count == 0) panel.Children.Add(new TextBlock { Text = text["empty_targets"], TextWrapping = TextWrapping.Wrap });
-        foreach (var target in reports.Targets)
+        if (chatter.Targets.Count == 0) panel.Children.Add(new TextBlock { Text = text["empty_targets"], TextWrapping = TextWrapping.Wrap });
+        foreach (var target in chatter.Targets)
         {
-            var person = reports.Person(target.Id);
+            var person = chatter.Person(target.Id);
             var label = target.Name + " / " + target.Nation + " / " + string.Format(CultureInfo.InvariantCulture, text["members"], target.Members.Count);
-            if (!target.CanReport) label += " / " + text["leader_reports"];
-            var check = new CheckBox { Content = Card(label, person == null ? text[reports.Enabled(target.Id) ? "appointment_pending" : "not_appointed"] : person.Name + " / " + person.Personality),
+            if (!target.CanSpeak) label += " / " + text["leader_speaks"];
+            var check = new CheckBox { Content = Card(label, person == null ? text[chatter.Enabled(target.Id) ? "appointment_pending" : "not_appointed"] : person.Name + " / " + person.Personality),
                 IsChecked = targetSelection.Checked(target.Id), HorizontalContentAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 0, 0, 8) };
             check.Click += (_, _) => Run(() =>
             {

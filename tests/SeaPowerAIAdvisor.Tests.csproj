@@ -9,9 +9,9 @@
     <Compile Include="..\src\Crew\CrewSettings.cs" />
     <Compile Include="..\src\Crew\CrewInformation.cs" />
     <Compile Include="..\src\Crew\ICrewConnections.cs" />
-    <Compile Include="..\src\ReportsConnections.cs" />
+    <Compile Include="..\src\ChatterConnections.cs" />
     <Compile Include="..\src\Crew\CrewBatch.cs" />
-    <Compile Include="..\src\Crew\CrewReports.cs" />
+    <Compile Include="..\src\Crew\CrewChatter.cs" />
     <Compile Include="..\src\Crew\CrewUsage.cs" />
     <Compile Include="..\src\Crew\UI\CrewTargetSelection.cs" />
     <Compile Include="..\src\Crew\Development\CrewLocalApi.cs" />

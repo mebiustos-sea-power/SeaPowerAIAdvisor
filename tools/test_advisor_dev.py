@@ -38,7 +38,7 @@ class MockApi:
                 body = json.loads(raw) if raw else None
                 api.calls.append((self.command, self.path, body, self.headers.get("X-Advisor-Developer")))
                 status = 200
-                if self.path.startswith("/v1/crew/reports"):
+                if self.path.startswith("/v1/crew/chatter"):
                     value = {"scope_id": "loaded-game", "targets": [], "history": []}
                 elif self.path == "/v1/status":
                     value = {"enabled": True, "advisor": {"busy": api.busy, "settings_open": False}, "last_consultation_id": "test-job"}
@@ -153,22 +153,22 @@ class CliTests(unittest.TestCase):
             self.assertEqual(len(api.calls), 1, "A lost acknowledgement retried the reservation reset")
             self.assertEqual(api.calls[0][:3], ("POST", "/v1/units/42/reservations/clear", {"scope_id": "loaded-game"}))
 
-    def test_reports_keep_explicit_scope_target_ids_and_boolean_values(self):
+    def test_chatter_keep_explicit_scope_target_ids_and_boolean_values(self):
         with MockApi() as api:
-            self.assertEqual(api.run("reports", "status")[0], 0)
-            self.assertEqual(api.calls[-1][:3], ("GET", "/v1/crew/reports", None))
-            self.assertEqual(api.run("reports", "situation")[0], 0)
-            self.assertEqual(api.calls[-1][:3], ("GET", "/v1/crew/reports/situation", None))
-            self.assertEqual(api.run("reports", "targets", "--scope-id", "loaded-game", "--target-id", "unit:1001", "--target-id", "unit:1029", "--enabled", "true")[0], 0)
-            self.assertEqual(api.calls[-1][:3], ("PATCH", "/v1/crew/reports/targets", {"scope_id": "loaded-game", "target_ids": ["unit:1001", "unit:1029"], "enabled": True}))
-            self.assertEqual(api.run("reports", "enabled", "--value", "false")[0], 0)
-            self.assertEqual(api.calls[-1][:3], ("PATCH", "/v1/crew/reports", {"enabled": False}))
-            self.assertEqual(api.run("reports", "window", "--scope-id", "loaded-game", "--open", "true")[0], 0)
-            self.assertEqual(api.calls[-1][:3], ("POST", "/v1/crew/reports/window", {"scope_id": "loaded-game", "open": True}))
-            self.assertEqual(api.run("reports", "pause", "--scope-id", "loaded-game", "--value", "true")[0], 0)
-            self.assertEqual(api.calls[-1][:3], ("POST", "/v1/crew/reports/pause", {"scope_id": "loaded-game", "paused": True}))
-            self.assertEqual(api.run("reports", "stop", "--scope-id", "loaded-game")[0], 0)
-            self.assertEqual(api.calls[-1][:3], ("POST", "/v1/crew/reports/stop", {"scope_id": "loaded-game"}))
+            self.assertEqual(api.run("chatter", "status")[0], 0)
+            self.assertEqual(api.calls[-1][:3], ("GET", "/v1/crew/chatter", None))
+            self.assertEqual(api.run("chatter", "situation")[0], 0)
+            self.assertEqual(api.calls[-1][:3], ("GET", "/v1/crew/chatter/situation", None))
+            self.assertEqual(api.run("chatter", "targets", "--scope-id", "loaded-game", "--target-id", "unit:1001", "--target-id", "unit:1029", "--enabled", "true")[0], 0)
+            self.assertEqual(api.calls[-1][:3], ("PATCH", "/v1/crew/chatter/targets", {"scope_id": "loaded-game", "target_ids": ["unit:1001", "unit:1029"], "enabled": True}))
+            self.assertEqual(api.run("chatter", "enabled", "--value", "false")[0], 0)
+            self.assertEqual(api.calls[-1][:3], ("PATCH", "/v1/crew/chatter", {"enabled": False}))
+            self.assertEqual(api.run("chatter", "window", "--scope-id", "loaded-game", "--open", "true")[0], 0)
+            self.assertEqual(api.calls[-1][:3], ("POST", "/v1/crew/chatter/window", {"scope_id": "loaded-game", "open": True}))
+            self.assertEqual(api.run("chatter", "pause", "--scope-id", "loaded-game", "--value", "true")[0], 0)
+            self.assertEqual(api.calls[-1][:3], ("POST", "/v1/crew/chatter/pause", {"scope_id": "loaded-game", "paused": True}))
+            self.assertEqual(api.run("chatter", "stop", "--scope-id", "loaded-game")[0], 0)
+            self.assertEqual(api.calls[-1][:3], ("POST", "/v1/crew/chatter/stop", {"scope_id": "loaded-game"}))
 
     def test_notice_preview_does_not_submit_a_consultation_or_change_settings(self):
         with MockApi() as api:

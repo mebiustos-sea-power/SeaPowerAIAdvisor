@@ -65,17 +65,17 @@ internal sealed class CrewPresentation : IDisposable
         notice.Margin = top ? new Thickness(18, 60, 18, 0) : new Thickness(18, 0, 18, 90);
         position = value;
     }
-    internal void Tick(CrewReports reports, double now, int seconds, CrewNotificationPosition notificationPosition, bool hudVisible)
+    internal void Tick(CrewChatter chatter, double now, int seconds, CrewNotificationPosition notificationPosition, bool hudVisible)
     {
         Place(notificationPosition);
         layer.Visibility = hudVisible ? Visibility.Visible : Visibility.Collapsed;
         notice.MaxWidth = Math.Max(1, host.ActualWidth - 36);
-        if (reports.Paused || !reports.HasEnabledTargets) { Clear(); return; }
+        if (chatter.Paused || !chatter.HasEnabledTargets) { Clear(); return; }
         if (now < until) return;
         notice.Visibility = Visibility.Collapsed;
         if (!hudVisible) return;
-        var report = reports.NextNotification(now); if (report == null) return;
-        heading.Text = report.Target.Name + " / " + report.Submission.Person.Name; body.Text = report.Submission.Text;
+        var remark = chatter.NextNotification(now); if (remark == null) return;
+        heading.Text = remark.Target.Name + " / " + remark.Submission.Person.Name; body.Text = remark.Submission.Text;
         notice.Visibility = Visibility.Visible; until = now + seconds;
     }
     internal JObject Status()

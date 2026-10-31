@@ -21,13 +21,13 @@ internal static partial class LocalApiTests
                 () => new JObject(), (_, _, _, _, _) => throw new InvalidOperationException("Unrelated connection was opened"),
                 (method, path, body) =>
                 {
-                    if (path != "/v1/crew/reports") return null;
+                    if (path != "/v1/crew/chatter") return null;
                     thread = Environment.CurrentManagedThreadId;
-                    return new LocalApiResponse(200, new JObject { ["feature"] = "reports" });
+                    return new LocalApiResponse(200, new JObject { ["feature"] = "chatter" });
                 });
-            Require(api.Enqueue("GET", "/v1/crew/reports", new()).GetAwaiter().GetResult().Status == 503 && thread == 0, "Disabled listener dispatched feature work");
+            Require(api.Enqueue("GET", "/v1/crew/chatter", new()).GetAwaiter().GetResult().Status == 503 && thread == 0, "Disabled listener dispatched feature work");
             api.Enable();
-            var request = Task.Run(() => api.Enqueue("GET", "/v1/crew/reports", new()));
+            var request = Task.Run(() => api.Enqueue("GET", "/v1/crew/chatter", new()));
             SpinWait.SpinUntil(() => request.IsCompleted, 10);
             Require(!request.IsCompleted && thread == 0, "An HTTP worker accessed the feature directly");
             while (!request.IsCompleted) { api.Pump(); Thread.Yield(); }

@@ -28,11 +28,11 @@ internal sealed class CrewBattleSource
         var own = OwnUnits(); var result = new List<CrewTarget>();
         foreach (var unit in own)
         {
-            var canReport = unit.Unit.Formation == null || unit.Unit.IsFormationLeader;
-            var members = unit.Unit.Formation == null || !canReport ? new[] { unit.Id } : own.Where(m => ReferenceEquals(m.Unit.Formation, unit.Unit.Formation)).Select(m => m.Id).OrderBy(id => id).ToArray();
+            var canSpeak = unit.Unit.Formation == null || unit.Unit.IsFormationLeader;
+            var members = unit.Unit.Formation == null || !canSpeak ? new[] { unit.Id } : own.Where(m => ReferenceEquals(m.Unit.Formation, unit.Unit.Formation)).Select(m => m.Id).OrderBy(id => id).ToArray();
             var kind = Code(Required(unit.Unit, "_type"));
             result.Add(new CrewTarget("unit:" + unit.Id.ToString(CultureInfo.InvariantCulture), unit.Unit.Name.Value, unit.Unit.Nation.Value,
-                kind is "aircraft" or "helicopter" ? "pilot" : "captain", members, canReport));
+                kind is "aircraft" or "helicopter" ? "pilot" : "captain", members, canSpeak));
         }
         return result;
     }

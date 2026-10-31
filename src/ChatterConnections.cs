@@ -9,7 +9,7 @@ using SeaPowerAIAdvisor.Crew;
 namespace SeaPowerAIAdvisor;
 
 // MOD-level bridge: credential storage and adapter diagnostics are not part of the tactical conversation.
-internal sealed class ReportsConnections : ICrewConnections
+internal sealed class ChatterConnections : ICrewConnections
 {
     private readonly string path, logDirectory;
     private readonly Func<AdvisorText> text;
@@ -18,7 +18,7 @@ internal sealed class ReportsConnections : ICrewConnections
     private readonly Func<AdvisorTrace?, AiHttpTransport> transportFactory;
     public IAiConnectionStore Store { get; }
     public IReadOnlyList<IAiConnectionProvider> Providers => catalog.Services.Where(s => !s.Independent).Cast<IAiConnectionProvider>().ToArray();
-    internal ReportsConnections(string path, string logDirectory, CrewSettingsStore settings, Func<AdvisorText> text, AdvisorServiceCatalog? catalog = null, Func<AdvisorTrace?, AiHttpTransport>? transportFactory = null)
+    internal ChatterConnections(string path, string logDirectory, CrewSettingsStore settings, Func<AdvisorText> text, AdvisorServiceCatalog? catalog = null, Func<AdvisorTrace?, AiHttpTransport>? transportFactory = null)
     {
         this.transportFactory = transportFactory ?? (trace => new AiHttpTransport(trace));
         this.text = text; this.path = path; this.logDirectory = logDirectory; this.settings = settings; this.catalog = catalog ?? AdvisorServiceCatalog.BuiltIn;
@@ -31,7 +31,7 @@ internal sealed class ReportsConnections : ICrewConnections
         if (id == saved.MainId) roles.Add(labels["connection.card_main"]);
         if (id == saved.SubId) roles.Add(labels["connection.card_sub"]);
         if (id == saved.TranslationConnectionId) roles.Add(labels["connection.card_translation"]);
-        if (id == settings.Current.ConnectionId) roles.Add(labels["connection.card_reports"]);
+        if (id == settings.Current.ConnectionId) roles.Add(labels["connection.card_chatter"]);
         return roles.Count == 0 ? null : string.Join(" / ", roles);
     }
     public async Task<CrewGeneration> GenerateAsync(CrewBatch batch, string id, CancellationToken cancellation, Action<long?> recordUsage)
@@ -41,15 +41,15 @@ internal sealed class ReportsConnections : ICrewConnections
         var service = catalog.Require(profile.Provider);
         if (service.Independent) throw new CrewException("provider_unavailable");
         service.Validate(profile.Settings);
-        using var trace = AdvisorTrace.StartOperation(logDirectory, "reports-" + Guid.NewGuid().ToString("N"),
-            AdvisorServices.Diagnostics(saved.Options, profile, null, catalog), "crew_reports", new JObject());
+        using var trace = AdvisorTrace.StartOperation(logDirectory, "chatter-" + Guid.NewGuid().ToString("N"),
+            AdvisorServices.Diagnostics(saved.Options, profile, null, catalog), "crew_chatter", new JObject());
         using var transport = transportFactory(trace);
-        AdvisorServices.ObserveErrors(transport, profile, null, catalog, "crew_reports", null);
+        AdvisorServices.ObserveErrors(transport, profile, null, catalog, "crew_chatter", null);
         var requested = false; long? tokens = null;
         try
         {
             using var connection = new AiConnection(service.Open(profile, saved.Options, false, transport), null,
-                batch.Input(profile.Prompt), _ => throw new InvalidOperationException("Reports has no fallback assignment."));
+                batch.Input(profile.Prompt), _ => throw new InvalidOperationException("Chatter has no fallback assignment."));
             var reply = await connection.GenerateAsync(true, null, cancellation, (_, _, _, bytes) =>
             { if (bytes > 1_000_000) throw new CrewException("too_large"); requested = true; }).ConfigureAwait(false);
             tokens = reply.TotalTokens;

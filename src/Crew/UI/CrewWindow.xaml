@@ -15,7 +15,7 @@
     <TabItem x:Name="HistoryTab" Header="{DynamicResource Crew.history}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
       <Grid>
         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-        <Button x:Name="PauseReports" Content="{DynamicResource Crew.pause}" HorizontalAlignment="Right" Height="30" Padding="12,0" Margin="0,8,0,8" />
+        <Button x:Name="PauseChatter" Content="{DynamicResource Crew.pause}" HorizontalAlignment="Right" Height="30" Padding="12,0" Margin="0,8,0,8" />
         <TextBlock x:Name="UsageSummary" Grid.Row="1" TextWrapping="Wrap" FontSize="12" Opacity="0.7" Margin="0,0,0,8" />
         <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel x:Name="History" Margin="0,8,8,0" /></ScrollViewer>
       </Grid>
@@ -37,7 +37,7 @@
         <Grid x:Name="SettingsHome" VerticalAlignment="Top">
           <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
           <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-          <Button x:Name="OpenReports" Grid.Column="0" Content="{DynamicResource Crew.reports}" Height="64" Margin="4" FontSize="15" />
+          <Button x:Name="OpenChatter" Grid.Column="0" Content="{DynamicResource Crew.chatter}" Height="64" Margin="4" FontSize="15" />
           <Button x:Name="OpenConnections" Grid.Column="1" Content="{DynamicResource Crew.connections}" Height="64" Margin="4" FontSize="15" />
           <Button x:Name="OpenInformation" Grid.Row="1" Grid.Column="0" Content="{DynamicResource Crew.information}" Height="64" Margin="4" FontSize="15" />
         </Grid>
@@ -55,7 +55,7 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                   <StackPanel Margin="0,8,8,0">
                     <TextBlock Text="{DynamicResource Crew.connection_hint}" FontSize="12" TextWrapping="Wrap" Opacity="0.85" Margin="0,0,0,12" />
-                    <TextBlock Text="{DynamicResource Crew.report_connection}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,6" />
+                    <TextBlock Text="{DynamicResource Crew.chatter_connection}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,6" />
                     <ComboBox x:Name="Connection" MinHeight="30" />
                     <WrapPanel HorizontalAlignment="Right" Margin="0,8,0,0">
                       <Button x:Name="SaveConnection" Content="{DynamicResource Crew.save}" Height="30" Padding="12,0" Margin="8,0,0,0" />
@@ -65,7 +65,7 @@
               </TabItem>
               <TabItem x:Name="ApiEdit" Header="{DynamicResource Crew.registration}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"><ContentControl x:Name="Registration" /></TabItem>
             </TabControl>
-            <ScrollViewer x:Name="ReportsSettings" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <ScrollViewer x:Name="ChatterSettings" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
               <StackPanel Margin="0,8,8,0">
                 <TextBlock Text="{DynamicResource Crew.interval_hint}" FontSize="12" TextWrapping="Wrap" Opacity="0.85" Margin="0,0,0,12" />
                 <TextBlock Text="{DynamicResource Crew.interval}" FontSize="12" Margin="0,0,0,4" />
@@ -79,7 +79,7 @@
                 <TextBox x:Name="Duration" Width="140" HorizontalAlignment="Left" FontSize="14" Padding="7" MaxLength="2" />
                 <CheckBox x:Name="ShowHelpTab" Content="{DynamicResource Crew.show_help_tab}" Margin="0,16,0,0" />
                 <WrapPanel HorizontalAlignment="Right" Margin="0,8,0,0">
-                  <Button x:Name="SaveReports" Content="{DynamicResource Crew.save}" Height="30" Padding="12,0" Margin="8,0,0,0" />
+                  <Button x:Name="SaveChatter" Content="{DynamicResource Crew.save}" Height="30" Padding="12,0" Margin="8,0,0,0" />
                 </WrapPanel>
               </StackPanel>
             </ScrollViewer>
@@ -111,8 +111,8 @@
       </Grid>
     </TabItem>
   </TabControl>
-  <Border x:Name="ReportStatusPane" Grid.Row="1">
-    <TextBlock x:Name="ReportStatus" TextWrapping="Wrap" FontSize="12" Margin="0,8,0,0" Visibility="Collapsed" />
+  <Border x:Name="ChatterStatusPane" Grid.Row="1">
+    <TextBlock x:Name="ChatterStatus" TextWrapping="Wrap" FontSize="12" Margin="0,8,0,0" Visibility="Collapsed" />
   </Border>
   <Grid x:Name="Confirmation" Grid.RowSpan="2" Background="#B0000000" Visibility="Collapsed">
     <Border Background="#202B38" BorderBrush="#607080" BorderThickness="1" Padding="20" MaxWidth="420" HorizontalAlignment="Center" VerticalAlignment="Center">

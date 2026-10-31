@@ -10,7 +10,7 @@ internal sealed class CrewUsageSnapshot
     { ApiRequests = requests; KnownTokens = knownTokens; UnknownRequests = unknownRequests; LastTokens = lastTokens; }
 }
 
-// A mission owns these totals. Cancelled work can finish on a worker after reporting has paused.
+// A mission owns these totals. Cancelled work can finish on a worker after speaking has paused.
 internal sealed class CrewUsage
 {
     private readonly object sync = new();
