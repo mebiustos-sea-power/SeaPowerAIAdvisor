@@ -45,9 +45,10 @@ internal sealed class CrewBatch
     {
         var exchange = (bool)data["prefer_exchange"]! ?
             "Create a short exchange: one speaker voices a feeling about the supplied situation; a second responds to that person with acknowledgment, empathy or a contrasting feeling, not advice, orders or new factual claims. If no natural exchange fits, use independent remarks or silence. " : "";
-        var instruction = "Appoint only the units listed in input appointments, each exactly once, with a fictional personal name appropriate to its nation and a one-word personality. " +
+        var instruction = "Use reply_language for crew names, personality labels and remarks, rendering names in that language's usual script. " +
+            "Appoint only the units listed in input appointments, each exactly once, with a fictional personal name appropriate to its nation and a one-word personality. " +
             "If input appointments is empty, return appointments: []. " +
-            "Choose which, if any, of the speakers would naturally speak now, in reply_language. Use their existing or newly appointed personality. " + exchange +
+            "Choose which, if any, of the speakers would naturally speak now. Use their existing or newly appointed personality. " + exchange +
             "Use one brief in-character sentence, occasionally two: a restrained feeling, concern, or impression rather than a status summary or tactical advice. " +
             "Let personality shape the remark; thoughts and feelings are fictional, but their factual basis must come from the supplied player-known situation. " +
             "Silence is preferable to filler or repetition; submit an empty remarks array when no speaker has a worthwhile remark. Appoint the requested units even when they remain silent. " +
