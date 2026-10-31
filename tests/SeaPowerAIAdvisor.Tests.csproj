@@ -128,6 +128,7 @@
     <Compile Include="..\src\Advisor\UI\AdvisorTranscript.cs" Link="AdvisorTranscript.cs" />
     <Compile Include="..\src\Advisor\UI\AdvisorUnitLinks.cs" Link="AdvisorUnitLinks.cs" />
     <Compile Include="..\src\Advisor\UI\AdvisorUnitSearch.cs" Link="AdvisorUnitSearch.cs" />
+    <Compile Include="..\src\Advisor\UI\AdvisorMentionQuery.cs" Link="AdvisorMentionQuery.cs" />
     <Compile Include="..\src\Advisor\UI\AdvisorBadge.cs" Link="AdvisorBadge.cs" />
     <Compile Include="..\src\Advisor\UI\AdvisorWeaponLinks.cs" Link="AdvisorWeaponLinks.cs" />
     <Compile Include="..\src\Advisor\UI\AdvisorCoordinateLinks.cs" Link="AdvisorCoordinateLinks.cs" />

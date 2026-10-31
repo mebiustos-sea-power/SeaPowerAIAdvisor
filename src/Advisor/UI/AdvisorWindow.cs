@@ -26,6 +26,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     private readonly AdvisorDraftBadgeView draftBadges;
     private readonly AdvisorDraftMapPreview draftMap;
     private readonly AdvisorUnitPicker? unitPicker;
+    private readonly AdvisorUnitMentionController? unitMentions;
     private readonly Window window;
     private readonly AdvisorSettingsController settings;
     private readonly AdvisorConsultationMenu consultationMenu;
@@ -130,8 +131,6 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
             item.Button.Click += (_, _) => guard(() => ConsultShortcut(item.Shortcut, item.Button));
 
         questionInput = new QuestionInputController(question, typing, () => active != null, StartConsultation, guard);
-        if (navigation != null)
-            unitPicker = new AdvisorUnitPicker(content, navigation.OwnUnits, () => text, typing, InsertUnit, questionInput.RequestFocus, guard);
         var templates = new AdvisorTextTemplateStore(profileDirectory);
         consultationMenu = new AdvisorConsultationMenu(content, templates, () => text, ChooseTemplate, guard, warn, () => options.Current.Templates);
         otherConsultations = Named<ToggleButton>(content, "OtherConsultations");
@@ -180,6 +179,13 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
                 status.Text = text["update_notice.error." + error.Code];
                 warn("Update notice read receipts failed: " + error);
             });
+        if (navigation != null)
+        {
+            unitPicker = new AdvisorUnitPicker(content, navigation.OwnUnits, () => text, typing, InsertUnit, questionInput.RequestFocus, guard);
+            unitMentions = new AdvisorUnitMentionController(content, question, unitPicker,
+                () => options.Current.UnitMentionCompletion && CanConsult && question.IsVisible && !question.IsReadOnly && !updateNotice.IsOpen,
+                () => draft.Units.Select(u => u.Id), InsertUnit, guard);
+        }
         Named<Button>(content, "Settings").Click += (_, _) => guard(settings.Open);
         try
         {
@@ -248,6 +254,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         operationReview.Tick();
         draftMap.Update(draft.Locations, DraftMapVisible);
         UpdateUnitInsertion();
+        unitMentions?.Tick();
         if (CanConsult && question.IsVisible && !question.IsReadOnly && !updateNotice.IsOpen) unitPicker?.Tick();
         else unitPicker?.Close();
         questionInput.Tick();

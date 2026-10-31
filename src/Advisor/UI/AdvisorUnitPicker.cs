@@ -22,10 +22,17 @@ internal sealed class AdvisorUnitPicker
     private readonly TypingScope typing;
     private readonly DeferredInputFocus focus;
     private readonly QuestionInput confirmation = new();
+    private readonly UIElement anchor;
+    private TextBox? inlineInput;
+    private Action<int>? inlineChoose;
+    private Action? inlineClosed;
+    private string query = "";
     private int? pendingId;
     private IReadOnlyList<(int Id, string Name)> roster = Array.Empty<(int, string)>(), matches = Array.Empty<(int, string)>();
     private readonly HashSet<int> excluded = new();
     internal bool IsOpen => popup.IsOpen;
+    internal bool IsInline => IsOpen && inlineInput != null;
+    internal bool HasKeyboardFocus => pane.IsKeyboardFocusWithin;
     private static bool EnterDown => Input.GetKey(KeyCode.Return) || Input.GetKey(KeyCode.KeypadEnter);
 
     internal AdvisorUnitPicker(FrameworkElement content, Func<IReadOnlyList<(int Id, string Name)>> ownUnits, Func<AdvisorText> text,
@@ -35,6 +42,7 @@ internal sealed class AdvisorUnitPicker
         focus = new DeferredInputFocus(typing);
         T Named<T>(string name) where T : class => content.FindName(name) as T ?? throw new InvalidOperationException("Missing unit picker control: " + name);
         popup = Named<Popup>("UnitPickerPopup"); pane = Named<FrameworkElement>("UnitPickerPane");
+        anchor = Named<FrameworkElement>("InsertUnitButtons");
         search = Named<TextBox>("UnitPickerSearch"); list = Named<ListBox>("UnitPickerList");
         empty = Named<TextBlock>("UnitPickerEmpty"); count = Named<TextBlock>("UnitPickerCount");
         search.PreviewGotKeyboardFocus += (_, e) => { if (focus.Pending(search)) e.Handled = true; };
@@ -43,23 +51,37 @@ internal sealed class AdvisorUnitPicker
         {
             if (!pane.IsKeyboardFocusWithin) { ResetConfirmation(); typing.Release(pane); }
         });
-        search.TextChanged += (_, _) => guard(() => { ResetConfirmation(); if (IsOpen) Refresh(); });
-        pane.PreviewKeyDown += (_, e) => guard(() => KeyDown(e));
-        popup.Opened += (_, _) => guard(() => focus.Request(search));
+        search.TextChanged += (_, _) => guard(() => { if (IsOpen && !IsInline) { query = search.Text ?? ""; ResetConfirmation(); Refresh(); } });
+        pane.PreviewKeyDown += (_, e) => guard(() => HandleKey(e));
+        popup.Opened += (_, _) => guard(() => { if (!IsInline) focus.Request(search); });
         popup.Closed += (_, _) => guard(Cleanup);
     }
 
     internal void Open(IEnumerable<int> insertedIds)
     {
+        Close();
+        search.Visibility = Visibility.Visible; popup.PlacementTarget = anchor; popup.StaysOpen = false;
         excluded.Clear(); excluded.UnionWith(insertedIds);
         ResetConfirmation();
-        roster = ownUnits(); search.Text = "";
+        roster = ownUnits(); search.Text = query = "";
+        popup.IsOpen = true; Refresh();
+    }
+
+    internal void ShowInline(TextBox input, string query, IEnumerable<int> insertedIds, Action<int> choose, Action closed)
+    {
+        if (!IsInline)
+        {
+            Close(); roster = ownUnits(); inlineInput = input;
+            search.Visibility = Visibility.Collapsed; popup.PlacementTarget = input; popup.StaysOpen = true;
+        }
+        this.query = query; inlineChoose = choose; inlineClosed = closed;
+        excluded.Clear(); excluded.UnionWith(insertedIds); ResetConfirmation();
         popup.IsOpen = true; Refresh();
     }
 
     private void Refresh()
     {
-        matches = AdvisorUnitSearch.Find(roster, search.Text ?? "", excluded);
+        matches = AdvisorUnitSearch.Find(roster, query, excluded);
         list.Items.Clear();
         foreach (var unit in matches)
         {
@@ -75,7 +97,7 @@ internal sealed class AdvisorUnitPicker
         list.SelectedIndex = matches.Count == 0 ? -1 : 0;
         list.Visibility = matches.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
         empty.Visibility = matches.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        empty.Text = text()[string.IsNullOrWhiteSpace(search.Text) ? "input.no_available_units" : "input.no_unit_matches"];
+        empty.Text = text()[string.IsNullOrWhiteSpace(query) ? "input.no_available_units" : "input.no_unit_matches"];
         count.Text = text().Format("input.unit_match_count", matches.Count);
     }
 
@@ -84,14 +106,19 @@ internal sealed class AdvisorUnitPicker
         if (GameTextInput.IsComposing) return;
         var current = ownUnits();
         if (!current.Any(u => u.Id == id)) { roster = current; Refresh(); return; }
-        Close(); choose(id);
+        var selected = inlineChoose ?? choose;
+        Close(); selected(id);
     }
 
-    private void KeyDown(KeyEventArgs e)
+    internal void HandleKey(KeyEventArgs e)
     {
         if (GameTextInput.IsComposing) return;
         if (e.Key == Key.Escape)
-        { e.Handled = true; Close(); restoreFocus(); }
+        {
+            e.Handled = true;
+            var restore = inlineInput?.IsKeyboardFocused != true;
+            Close(); if (restore) restoreFocus();
+        }
         else if (e.Key == Key.Return || e.OriginalKey == Key.Return)
         {
             e.Handled = true;
@@ -111,8 +138,9 @@ internal sealed class AdvisorUnitPicker
     internal void Tick()
     {
         if (!IsOpen) { focus.Cancel(); ResetConfirmation(); return; }
+        if (inlineInput != null && !inlineInput.IsKeyboardFocused && !pane.IsKeyboardFocusWithin) { Close(); return; }
         focus.Tick();
-        if (confirmation.TakeSubmission(Time.frameCount, pane.IsKeyboardFocusWithin, GameTextInput.IsComposing, false, EnterDown))
+        if (confirmation.TakeSubmission(Time.frameCount, pane.IsKeyboardFocusWithin || inlineInput?.IsKeyboardFocused == true, GameTextInput.IsComposing, false, EnterDown))
         {
             var id = pendingId; pendingId = null;
             if (id.HasValue) Pick(id.Value);
@@ -127,6 +155,9 @@ internal sealed class AdvisorUnitPicker
     {
         focus.Cancel(); ResetConfirmation(); typing.Release(pane);
         roster = matches = Array.Empty<(int, string)>(); excluded.Clear(); list.Items.Clear();
+        var closed = inlineClosed;
+        inlineInput = null; inlineChoose = null; inlineClosed = null; query = "";
+        closed?.Invoke();
     }
     private void ResetConfirmation() { confirmation.Reset(EnterDown); pendingId = null; }
 }

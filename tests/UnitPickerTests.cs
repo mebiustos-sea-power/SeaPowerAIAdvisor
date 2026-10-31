@@ -6,6 +6,32 @@ internal static class UnitPickerTests
 {
     internal static void Run(Action<string, Action> check)
     {
+        check("Mention completion finds the token at the caret and supports Japanese input", () =>
+        {
+            foreach (var value in new[] { "@", "@cal", "Move @Hob", "対象@カリ" })
+            {
+                var token = AdvisorMentionQuery.At(value, value.Length, 0);
+                Require(token.HasValue && token.Value.Query == value.Substring(token.Value.Start + 1), "The current mention was not found");
+            }
+            foreach (var value in new[] { "＠", "＠ダール", "ordinary message", "@Hobby move", "@Hobby\n", "@Hobby、" })
+                Require(!AdvisorMentionQuery.At(value, value.Length, 0).HasValue, "Completion remained active outside the mention");
+            Require(!AdvisorMentionQuery.At("@Hobby", 6, 1).HasValue && !AdvisorMentionQuery.At("@Hobby", 0, 0).HasValue,
+                "A selection or a caret before the marker opened completion");
+        });
+        check("Completing a mention replaces just its token and adds the selected unit identity", () =>
+        {
+            const string message = "Move (@Hobby) toward point A; keep @Scott.";
+            var caret = message.IndexOf("bb", StringComparison.Ordinal);
+            var token = AdvisorMentionQuery.At(message, caret, 0)!.Value;
+            var candidate = AdvisorUnitSearch.Find(new[] { (10, "Hobby 1"), (20, "Scott") }, token.Query, Array.Empty<int>()).Single();
+            var draft = new AdvisorDraft(); draft.Add(candidate.Id, candidate.Name);
+            var result = draft.Prepare(message.Remove(token.Start, token.Length));
+            Require(result.DisplayBody == "Move () toward point A; keep @Scott." && result.Units.Single().Id == 10,
+                "Completion removed unrelated text, left a partial token or chose the wrong unit");
+            var last = AdvisorMentionQuery.At(message, message.Length - 1, 0)!.Value;
+            Require(last.Query == "Scott" && message.Remove(last.Start, last.Length) == "Move (@Hobby) toward point A; keep .",
+                "Completing a later mention changed the earlier one or removed its surrounding punctuation");
+        });
         check("Unit search orders names, combines case-insensitive terms and excludes already inserted identities", () =>
         {
             var units = new[] { (3, "Scott DDG-995"), (2, "California CGN-36"), (1, "California CGN-36"), (4, "ダールグレン DDG-43") };

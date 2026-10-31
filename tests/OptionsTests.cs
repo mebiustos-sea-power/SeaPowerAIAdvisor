@@ -11,6 +11,30 @@ internal static class OptionsTests
 {
     internal static void Run(string campaignPath, Action<string, Action> check)
     {
+        check("Mention completion defaults on, saves per user and survives unrelated category saves", () => InTemp(directory =>
+        {
+            var store = new AdvisorOptionsStore(Path.Combine(directory, "options.json"));
+            Require(store.Current.UnitMentionCompletion && AdvisorOptions.Parse("{}").UnitMentionCompletion && !File.Exists(store.Path),
+                "Reading settings disabled completion or created a settings file");
+            foreach (var enabled in new[] { false, true })
+            {
+                store.SaveGeneral(AdvisorTextSize.Standard, "Commander", unitMentionCompletion: enabled);
+                store.EnsureUserName("Commander");
+                store.SaveConsultation(5, 2, "Keep this prompt");
+                store.SaveInformation(AdvisorInformation.Default);
+                store.SaveDeveloper(false); store.SaveCommands(Array.Empty<string>());
+                store.SaveTemplates(new AdvisorTemplateOptions()); store.SaveCrew(true); store.SaveWip(false, false);
+                store.SaveGeneral(AdvisorTextSize.Large, "Commander");
+                Require(new AdvisorOptionsStore(store.Path).Current.UnitMentionCompletion == enabled,
+                    "An unrelated save or restart changed the user's completion preference");
+            }
+            foreach (var invalid in new[] { "null", "1", "\"false\"" })
+            {
+                try { _ = AdvisorOptions.Parse("{\"unit_mention_completion\":" + invalid + "}"); }
+                catch (AdvisorOptionsException) { continue; }
+                throw new InvalidOperationException("An invalid completion setting was accepted");
+            }
+        }));
         check("Missing behavior settings opt out of campaign AI and malformed values remain visible errors", () => InTemp(directory =>
         {
             var path = Path.Combine(directory, "options.json");
