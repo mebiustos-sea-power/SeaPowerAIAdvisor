@@ -47,7 +47,8 @@ internal static class QueryDemo
             {
                 ["rounds_used"] = session.RoundsUsed,
                 ["initial_compact_utf8_bytes"] = JsonPayload.Bytes(initial),
-                ["successful_payload_compact_utf8_bytes"] = session.ReturnedBytes,
+                ["successful_payload_compact_utf8_bytes"] = JsonPayload.Bytes(initial) + steps.OfType<JObject>()
+                    .Select(step => (JObject)step["response"]!).Where(response => (string?)response["status"] == "ok").Sum(JsonPayload.Bytes),
                 ["full_diagnostic_compact_utf8_bytes"] = fullBytes
             }
         };

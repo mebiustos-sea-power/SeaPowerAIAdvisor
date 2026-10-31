@@ -111,7 +111,7 @@ internal sealed class AdvisorPrompts
     {
         "evidence_policy", "retrieval", "unit_links", "weapon_links", "coordinate_links", "error_round_limit", "error_wrong_consultation", "error_briefing_unavailable", "base_briefing_note",
         "error_request_too_large", "error_requests_invalid", "error_query_name_invalid", "error_response_too_large",
-        "error_payload_limit", "error_information_disabled", "error_contact_kind_invalid", "error_ids_invalid",
+        "error_information_disabled", "error_contact_kind_invalid", "error_ids_invalid",
         "error_unknown_id", "error_unknown_query", "error_sections_invalid", "error_sections_disabled",
         "error_pagination_invalid", "error_unsupported_argument", "catalog_friendly_units", "catalog_friendly_ground_units",
         "catalog_friendly_bases", "catalog_hosted_air_units", "catalog_aviation_tasks", "catalog_unit_capabilities",
@@ -128,7 +128,7 @@ internal sealed class AdvisorPrompts
         "evidence_policy", "retrieval", "aviation_semantics", "error_requests_count",
         "error_ids_count", "error_integer_type", "error_integer_range", "error_boolean_type",
         "error_string_type", "error_round_limit", "error_wrong_consultation", "error_request_too_large",
-        "error_query_object_invalid", "error_response_too_large", "error_payload_limit", "error_information_disabled",
+        "error_query_object_invalid", "error_response_too_large", "error_information_disabled",
         "error_ships_disabled", "error_unknown_ship", "error_force_filter_disabled", "error_air_filters_conflict",
         "error_unknown_base", "error_unknown_ground_unit", "error_report_kind_invalid", "error_unknown_query",
         "error_unknown_force", "error_unknown_id", "error_duplicate_ids", "error_unsupported_argument",

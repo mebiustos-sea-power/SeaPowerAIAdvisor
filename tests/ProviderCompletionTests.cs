@@ -58,33 +58,5 @@ internal static partial class ProviderTests
             }
             finally { Directory.Delete(directory, true); }
         }));
-        check("An information payload limit ends incomplete without converting it to a round limit", () => Async(async () =>
-        {
-            var knowledge = new PayloadLimitedKnowledge();
-            var provider = new FakeProvider("limited", (_, n, _, _) =>
-            {
-                Require(n == 1, "The engine requested another response after the payload limit");
-                return Task.FromResult(Reply(Call("query", "catalog")));
-            });
-            var result = await AdvisorConsultation.RunAsync(new AdvisorEngine(provider),
-                AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>()), CancellationToken.None);
-            Require(!result.Completed && result.CompletionReason == AdvisorCompletionReason.PayloadLimit && result.ApiRequests == 1 &&
-                result.QueryRounds == 1 && result.TotalTokens == 7, "The payload exhaustion was retried or labeled as another outcome");
-        }));
-    }
-
-    private sealed class PayloadLimitedKnowledge : IAdvisorQuerySession
-    {
-        private readonly Knowledge inner = new(5);
-        public string Id => inner.Id;
-        public int RoundsUsed { get; private set; }
-        public int MaxRounds => inner.MaxRounds;
-        public AdvisorPrompts Prompts => inner.Prompts;
-        public JObject InitialInput() => inner.InitialInput();
-        public JObject Execute(JObject request)
-        {
-            RoundsUsed++;
-            return new JObject { ["status"] = "error", ["error"] = new JObject { ["code"] = "payload_limit" } };
-        }
     }
 }

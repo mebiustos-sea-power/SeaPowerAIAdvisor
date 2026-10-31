@@ -194,29 +194,25 @@ internal static class QueryTests
             var f = new Fixture(assembly); var baseline = Capture(f);
             var session = new AdvisorQuerySession(Replace(baseline, reports: new[] {
                 new PublishedReport(f.Now, "Other", new string('報', 20_000)) }), "ja", "");
-            var before = session.ReturnedBytes;
             var response = session.Execute(Request(session, Q("get_reports", "ids", new JArray("report_1"))));
-            Require((string?)response["error"]!["code"] == "response_too_large" && response["results"] == null &&
-                session.ReturnedBytes == before, "A large UTF-8 report was partially sent or miscounted");
+            Require((string?)response["error"]!["code"] == "response_too_large" && response["results"] == null,
+                "A large UTF-8 report was partially sent");
             var huge = Q("get_reports", "ids", new JArray(new string('a', 17_000)));
             Require((string?)session.Execute(Request(session, huge))["error"]!["code"] == "request_too_large", "Oversized request accepted");
         });
-        check("Cumulative successful payload budget includes initial input and prevents oversized consultations", () =>
+        check("Repeated report reads exceed the former cumulative cap and still stop at the query-round limit", () =>
         {
-            var f = new Fixture(assembly);
+            var f = new Fixture(assembly); var report = new string('報', 12_000);
             var session = new AdvisorQuerySession(Replace(Capture(f), reports: new[] {
-                new PublishedReport(f.Now, "Other", new string('報', 12_000)) }), "ja", "");
-            var sawLimit = false;
+                new PublishedReport(f.Now, "Other", report) }), "ja", "");
             for (var i = 0; i < AdvisorQueryLimits.DefaultMaxRounds; i++)
             {
                 var response = session.Execute(Request(session, Q("get_reports", "ids", new JArray("report_1"))));
-                if ((string?)response["status"] == "error")
-                {
-                    Require((string?)response["error"]!["code"] == "payload_limit", "Wrong cumulative limit");
-                    sawLimit = true; break;
-                }
+                Require((string?)response["status"] == "ok" && response["results"]![0]!["data"]!.ToString().Contains(report, StringComparison.Ordinal),
+                    "Cumulative information size interrupted or truncated a valid report");
             }
-            Require(sawLimit && session.ReturnedBytes <= AdvisorQueryLimits.MaxTotalBytes, "Consultation payload cap was bypassed");
+            Require((string?)session.Execute(Request(session, Q("list_reports")))["error"]?["code"] == "round_limit" &&
+                session.RoundsUsed == AdvisorQueryLimits.DefaultMaxRounds, "Large cumulative reads bypassed the query-round limit");
         });
         check("Unexpected source classification errors are surfaced rather than disguised as unavailable information", () =>
         {

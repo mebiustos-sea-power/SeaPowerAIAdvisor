@@ -24,7 +24,6 @@ internal static class AdvisorQueryLimits
     internal const int MaxPageSize = 20;
     internal const int MaxRequestBytes = 16_000;
     internal const int MaxResponseBytes = 48_000;
-    internal const int MaxTotalBytes = 160_000;
 }
 
 internal sealed class AdvisorQueryException : Exception

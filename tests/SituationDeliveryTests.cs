@@ -105,18 +105,20 @@ internal static partial class ProviderTests
                 (string?)response["results"]?[2]?["status"] == "ok" && knowledge.RoundsUsed == 0 && operation.Writes == 0 && input.Tools.Any(t => (string?)t["name"] == "propose_operation_plans"),
                 "A duplicate read returned data, blocked operation lookup or executed an order");
         });
-        check("An oversized upfront snapshot fails before sending and remains available on demand", () => Async(async () =>
+        check("An upfront snapshot above the former cumulative cap is sent whole without consuming query rounds", () => Async(async () =>
         {
-            var knowledge = DeliveryKnowledge(referenceText: new string('x', AdvisorQueryLimits.MaxTotalBytes));
-            var provider = new FakeProvider("mock", (_, _, _, _) => throw new Exception("An oversized snapshot was sent"));
-            try { _ = await new AdvisorEngine(provider, delivery: AdvisorSituationDelivery.Upfront).ConsultAsync(
-                AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>()), CancellationToken.None); }
-            catch (AiConnectionException error) when (error.Code == "situation_payload_limit")
+            var reference = new string('x', 200_000);
+            var knowledge = DeliveryKnowledge(referenceText: reference); var original = knowledge.InitialInput();
+            var provider = new FakeProvider("mock", (session, _, _, _) =>
             {
-                Require(provider.Sessions.Count == 0 && knowledge.RoundsUsed == 0 && knowledge.InitialInput()["knowledge_catalog"] != null,
-                    "Oversize handling partially sent or mutated the source"); return;
-            }
-            throw new InvalidOperationException("Full data was silently truncated");
+                Require(session.Input.Data["situation_data"]!.ToString().Contains(reference, StringComparison.Ordinal),
+                    "The upfront snapshot was truncated before sending");
+                return Task.FromResult(new AiReply("Answer", Array.Empty<AiToolCall>(), 1));
+            });
+            var result = await new AdvisorEngine(provider, delivery: AdvisorSituationDelivery.Upfront).ConsultAsync(
+                AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>()), CancellationToken.None);
+            Require(result.Completed && result.ApiRequests == 1 && knowledge.RoundsUsed == 0 && JToken.DeepEquals(original, knowledge.InitialInput()),
+                "Full delivery changed the source or charged a partial read");
         }));
         check("Fallback changes delivery using the same frozen situation without resetting request or read accounting", () => Async(async () =>
         {

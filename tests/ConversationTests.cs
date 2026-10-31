@@ -98,13 +98,6 @@ internal static class ConversationTests
                 var view = XDocument.Parse(AdvisorTranscript.Render(chat, text, "Adviser", "empty"));
                 Require(turn.Progress?.MaxRounds == limit && view.Descendants().Attributes("Text").Any(a => a.Value == expected),
                     "History used a later request limit or displayed a recommendation for an equal or higher limit");
-                var payload = new AdvisorConversation();
-                var oversized = payload.Begin(new AdvisorQuestion("Payload"));
-                oversized.UpdateProgress(new AdvisorProgress(AdvisorStage.Waiting, 0, 0, 1));
-                oversized.Finish(new AdviceResult("", 1, 1, null, completionReason: AdvisorCompletionReason.PayloadLimit), null);
-                Require(!View(payload, text).Contains(text["transcript.round_limit"], StringComparison.Ordinal) &&
-                    View(payload, text).Contains(text["transcript.payload_limit"], StringComparison.Ordinal),
-                    "An information limit misleadingly advised raising the request limit");
                 var retry = new AdvisorConversation(); var retried = retry.Begin(new AdvisorQuestion("Retry"));
                 retried.UpdateProgress(new AdvisorProgress(AdvisorStage.Waiting, 0, 0, 5));
                 retried.Fail(AdvisorNotice.Connection(new AiConnectionException("request_timeout")));

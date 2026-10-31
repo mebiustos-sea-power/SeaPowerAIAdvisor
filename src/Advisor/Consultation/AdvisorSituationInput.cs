@@ -1,7 +1,5 @@
 using System.Linq;
 using Newtonsoft.Json.Linq;
-using static SeaPowerAIAdvisor.AdvisorQueryLimits;
-using static SeaPowerAIAdvisor.Shared.JsonPayload;
 
 namespace SeaPowerAIAdvisor;
 
@@ -12,11 +10,11 @@ internal static class AdvisorSituationInput
     private static readonly string[] controls = { "instructions", "query_tool", "knowledge_catalog", "query_limits", "interaction_mode" };
     internal static JObject Snapshot(IAdvisorQuerySession knowledge)
     {
-        var complete = Upfront(knowledge, new AiProviderInput(knowledge.InitialInput(), "", System.Array.Empty<JObject>()), out _).Data;
+        var complete = Upfront(knowledge, new AiProviderInput(knowledge.InitialInput(), "", System.Array.Empty<JObject>())).Data;
         foreach (var key in envelope.Concat(controls)) complete.Remove(key);
         return complete;
     }
-    internal static AiProviderInput OnRequest(IAdvisorQuerySession knowledge, AiProviderInput input, out int informationBytes)
+    internal static AiProviderInput OnRequest(IAdvisorQuerySession knowledge, AiProviderInput input)
     {
         JObject Minimal(JObject original)
         {
@@ -29,13 +27,10 @@ internal static class AdvisorSituationInput
         var instructions = (JObject)knowledge.InitialInput()["instructions"]!.DeepClone();
         instructions.Remove("retrieval");
         instructions["retrieval_policy"] = knowledge.Prompts.Text("common.json", "on_request_retrieval_policy");
-        var information = Minimal(knowledge.InitialInput()); information["instructions"] = instructions;
-        informationBytes = Bytes(information) + input.Tools.Sum(Bytes);
         return new AiProviderInput(Minimal(input.Data), knowledge.Prompts.SystemInstruction(instructions), input.Tools);
     }
 
-    internal static AiProviderInput Upfront(IAdvisorQuerySession knowledge, AiProviderInput input,
-        out int informationBytes)
+    internal static AiProviderInput Upfront(IAdvisorQuerySession knowledge, AiProviderInput input)
     {
         var snapshot = AdvisorSnapshotExport.From(knowledge);
         JObject Data(JObject original)
@@ -58,10 +53,6 @@ internal static class AdvisorSituationInput
         instructions.Remove("retrieval");
         instructions["retrieval_policy"] = knowledge.Prompts.Text("common.json", "upfront_retrieval_policy");
         var system = knowledge.Prompts.SystemInstruction(instructions);
-        var information = Data(knowledge.InitialInput());
-        // Match on-demand accounting: game input, instructions and tool definitions, excluding user preferences/history.
-        information["instructions"] = instructions;
-        informationBytes = Bytes(information) + input.Tools.Sum(Bytes);
         return new AiProviderInput(Data(input.Data), system, input.Tools);
     }
 }

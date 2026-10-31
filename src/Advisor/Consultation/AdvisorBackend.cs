@@ -13,7 +13,7 @@ internal interface IAdvisorBackend
     Task<AdviceResult> ConsultAsync(AdvisorContext context, CancellationToken cancellation);
 }
 
-internal enum AdvisorCompletionReason { Completed, RoundLimit, PayloadLimit }
+internal enum AdvisorCompletionReason { Completed, RoundLimit }
 
 internal sealed class AdviceResult
 {
@@ -23,7 +23,6 @@ internal sealed class AdviceResult
     {
         AdvisorCompletionReason.Completed => "completed",
         AdvisorCompletionReason.RoundLimit => "round_limit",
-        AdvisorCompletionReason.PayloadLimit => "payload_limit",
         _ => throw new InvalidOperationException("Unknown consultation completion reason.")
     };
     internal string Text { get; }

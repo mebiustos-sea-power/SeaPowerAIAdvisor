@@ -9,14 +9,13 @@ using static SeaPowerAIAdvisor.Shared.JsonPayload;
 
 namespace SeaPowerAIAdvisor;
 
-// Read execution and its shared data budget. Tool bindings normalize wire arguments before dispatch.
+// Read execution and per-response limits. Tool bindings normalize wire arguments before dispatch.
 internal sealed class AdvisorReadSession
 {
     private readonly IAdvisorQuerySession knowledge;
     private readonly IAdvisorOperationSession? operations;
     private readonly HashSet<string> knownQueries;
     private readonly AiProviderInput original;
-    private int returnedBytes, initialBytes;
     private JObject? snapshot;
     private bool snapshotSupplied;
     internal const string SnapshotQuery = "get_situation";
@@ -36,18 +35,8 @@ internal sealed class AdvisorReadSession
         if (mode is not (AdvisorSituationDelivery.OnDemand or AdvisorSituationDelivery.Upfront or AdvisorSituationDelivery.OnRequest))
             throw new AiConnectionException("settings_invalid");
         var input = new AiProviderInput(original.Data, original.SystemInstruction, tools);
-        int size;
-        if (mode == AdvisorSituationDelivery.Upfront) input = AdvisorSituationInput.Upfront(knowledge, input, out size);
-        else if (mode == AdvisorSituationDelivery.OnRequest) input = AdvisorSituationInput.OnRequest(knowledge, input, out size);
-        else
-        {
-            var initial = knowledge.InitialInput();
-            size = Bytes(initial) + Math.Max(0, tools.Sum(Bytes) - Bytes(initial["query_tool"]!));
-        }
-        // Initial information is charged once; a fallback can add a larger snapshot or tool set, never reset the budget.
-        var increase = Math.Max(0, size - initialBytes);
-        if (increase > MaxTotalBytes - returnedBytes) throw new AiConnectionException("situation_payload_limit");
-        returnedBytes += increase; initialBytes = Math.Max(initialBytes, size);
+        if (mode == AdvisorSituationDelivery.Upfront) input = AdvisorSituationInput.Upfront(knowledge, input);
+        else if (mode == AdvisorSituationDelivery.OnRequest) input = AdvisorSituationInput.OnRequest(knowledge, input);
         delivery = mode;
         return Input = input;
     }
@@ -71,7 +60,6 @@ internal sealed class AdvisorReadSession
         if (request.Properties().Any(p => p.Name != "requests") || request["requests"] is not JArray batch ||
             batch.Count < 1 || batch.Count > MaxQueriesPerRound) return Error("invalid_arguments");
         if (Bytes(request) > MaxRequestBytes) return Error("request_too_large");
-        if (returnedBytes >= MaxTotalBytes) return Error("payload_limit");
         var results = new JObject?[batch.Count];
         int? snapshotIndex = null;
         var queries = new JArray();
@@ -122,10 +110,8 @@ internal sealed class AdvisorReadSession
             // Reserve the exact cost of appending other rows before the snapshot commits first-delivery references.
             var overhead = otherRows.Count == 0 ? 0 : Bytes(otherRows) - 1;
             if (overhead >= MaxResponseBytes) return Error("response_too_large");
-            if (overhead >= MaxTotalBytes - returnedBytes) return Error("payload_limit");
             var queryRequest = new JObject { ["consultation_id"] = knowledge.Id, ["requests"] = queries,
-                ["partial_results"] = true, ["response_limit_bytes"] = MaxResponseBytes - overhead,
-                ["remaining_data_bytes"] = MaxTotalBytes - returnedBytes - overhead };
+                ["partial_results"] = true, ["response_limit_bytes"] = MaxResponseBytes - overhead };
             var read = knowledge.Execute(queryRequest);
             situationRead?.Invoke(queryRequest, read);
             cancellation.ThrowIfCancellationRequested();
@@ -142,14 +128,12 @@ internal sealed class AdvisorReadSession
         var bytes = Bytes(response);
         if (queries.Count == 0)
         {
-            // A full snapshot uses the existing total-data ceiling. Ordinary read responses retain their smaller ceiling.
-            if (bytes > (snapshotIndex.HasValue ? MaxTotalBytes : MaxResponseBytes)) return Error(snapshotIndex.HasValue ? "payload_limit" : "response_too_large");
-            if (bytes > MaxTotalBytes - returnedBytes) return Error("payload_limit");
+            // Full snapshots are delivered whole; ordinary read responses retain their per-response ceiling.
+            if (!snapshotIndex.HasValue && bytes > MaxResponseBytes) return Error("response_too_large");
         }
-        else if (bytes > MaxResponseBytes || bytes > MaxTotalBytes - returnedBytes)
+        else if (bytes > MaxResponseBytes)
             throw new InvalidOperationException("Read response exceeded its reserved budget.");
         cancellation.ThrowIfCancellationRequested();
-        returnedBytes += bytes;
         if (snapshotIndex.HasValue)
         {
             var readRequest = new JObject { ["consultation_id"] = knowledge.Id,

@@ -31,7 +31,6 @@ internal sealed partial class BattleQuerySession : IAdvisorQuerySession, IAdviso
     public AdvisorPrompts Prompts { get; }
     public AdvisorUnitReferences UnitReferences { get; }
     public AdvisorOperationReferences OperationReferences { get; }
-    private int returnedBytes;
     private readonly HashSet<string> deliveredWeaponReferences = new(StringComparer.Ordinal);
     private readonly HashSet<string> deliveredSensorReferences = new(StringComparer.Ordinal);
     private readonly HashSet<string> deliveredMovementRoutes = new(StringComparer.Ordinal);
@@ -106,7 +105,7 @@ internal sealed partial class BattleQuerySession : IAdvisorQuerySession, IAdviso
         {
             ["max_rounds"] = MaxRounds, ["max_queries_per_round"] = MaxQueriesPerRound, ["max_ids_per_query"] = MaxIdsPerQuery,
             ["default_page_size"] = DefaultPageSize, ["max_page_size"] = MaxPageSize,
-            ["max_request_utf8_bytes"] = MaxRequestBytes, ["max_response_utf8_bytes"] = MaxResponseBytes, ["max_total_data_utf8_bytes"] = MaxTotalBytes
+            ["max_request_utf8_bytes"] = MaxRequestBytes, ["max_response_utf8_bytes"] = MaxResponseBytes
         };
         var overview = (JObject)initial["situation"]!["overview"]!;
         if (!information.Allows(InformationKind.BattleUnits)) overview.Remove("friendly_unit_count");
@@ -122,8 +121,6 @@ internal sealed partial class BattleQuerySession : IAdvisorQuerySession, IAdviso
                 Prompts.Text("battle.json", "weapon_reference_delivery");
         if (information.Allows(InformationKind.BattleSensorPerformance))
             initial["situation"]!["coverage"]!["sensor_reference_delivery"] = Prompts.Text("battle.json", "sensor_reference_delivery");
-        returnedBytes = Bytes(initial);
-        if (returnedBytes > MaxTotalBytes) throw new InvalidOperationException("Mandatory battle input exceeds the consultation payload limit.");
     }
 
     public JObject InitialInput() => (JObject)initial.DeepClone();
@@ -134,10 +131,9 @@ internal sealed partial class BattleQuerySession : IAdvisorQuerySession, IAdviso
         {
             if (RoundsUsed >= MaxRounds) throw Error("round_limit", "round_limit");
             RoundsUsed++;
-            Allowed(request, "consultation_id", "requests", "partial_results", "response_limit_bytes", "remaining_data_bytes");
+            Allowed(request, "consultation_id", "requests", "partial_results", "response_limit_bytes");
             var partial = AdvisorQueryBatch.Partial(request);
             var responseLimit = AdvisorQueryBatch.Budget(request, "response_limit_bytes", MaxResponseBytes);
-            var remainingData = AdvisorQueryBatch.Budget(request, "remaining_data_bytes", MaxTotalBytes);
             if ((string?)request["consultation_id"] != Id) throw Error("wrong_consultation", "wrong_consultation");
             if (Bytes(request) > MaxRequestBytes) throw Error("request_too_large", "request_too_large");
             if (!(request["requests"] is JArray batch) || batch.Count < 1 || batch.Count > MaxQueriesPerRound)
@@ -155,8 +151,6 @@ internal sealed partial class BattleQuerySession : IAdvisorQuerySession, IAdviso
             response["results"] = results;
             var bytes = Bytes(response);
             if (bytes > responseLimit) throw Error("response_too_large", "response_too_large");
-            if (returnedBytes + bytes > MaxTotalBytes || bytes > remainingData) throw Error("payload_limit", "payload_limit");
-            returnedBytes += bytes;
             deliveredWeaponReferences.UnionWith(delivered);
             deliveredSensorReferences.UnionWith(sensorDelivered);
             deliveredMovementRoutes.UnionWith(movementDelivered);

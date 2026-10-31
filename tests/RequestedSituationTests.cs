@@ -14,7 +14,7 @@ internal static partial class ProviderTests
     {
         check("Requested delivery withholds automatic situation context and does not export data for a greeting", () => Async(async () =>
         {
-            var knowledge = new SnapshotSpy { AutomaticText = new string('x', AdvisorQueryLimits.MaxTotalBytes) };
+            var knowledge = new SnapshotSpy { AutomaticText = new string('x', 200_000) };
             var run = new AdvisorLocalRun();
             Task<AiReply> Send(FakeSession session, int _, bool __, CancellationToken ___)
             {
@@ -39,7 +39,7 @@ internal static partial class ProviderTests
         {
             var policy = AdvisorInformation.All.With(InformationKind.BattleFuel, false).With(InformationKind.BattleNeutralContacts, false)
                 .With(InformationKind.BattleDestroyedContacts, false).With(InformationKind.BattleBriefing, false);
-            var knowledge = new SnapshotSpy(DeliveryKnowledge(policy, new string('p', 55000)));
+            var knowledge = new SnapshotSpy(DeliveryKnowledge(policy, new string('p', 200_000)));
             var recording = new AdvisorLocalRun();
             var context = AdvisorContext.Create(recording.Observe(knowledge), Array.Empty<ChatExchange>());
             JObject? full = null;
@@ -89,7 +89,7 @@ internal static partial class ProviderTests
                 mixed.Results[2].Data["results"]?[0]?["data"]?["candidates"]?.Count() == 2 && knowledge.Exports == 1 && operation.Writes == 0,
                 "Mixed full/operation reads lost identity or executed an order");
         });
-        check("Invalid full reads, cancelled mixed reads and rejected payloads do not mark a snapshot as supplied", () =>
+        check("Invalid full reads and cancelled mixed reads do not mark a snapshot as supplied", () =>
         {
             var operation = new LookupOperation(); var registry = new AdvisorOperations(_ => true); registry.Register(operation);
             using var gateway = new AdvisorOperationGateway(registry);
@@ -113,15 +113,7 @@ internal static partial class ProviderTests
             var retry = OperationGatewayTests.Finish(gateway, context.Tools.ExecuteAsync(new[] { FullSituationCall("retry") }, CancellationToken.None, (_, _) => { }, (_, _) => { }));
             Require(retry.Results.Single().Data["results"]?[0]?["data"]?["situation_data"] != null && recording.Snapshot()["retrievals"]?.Count() == 1,
                 "Cancellation consumed the one full delivery");
-            var large = new SnapshotSpy(DeliveryKnowledge(referenceText: new string('x', AdvisorQueryLimits.MaxTotalBytes)));
-            var largeRun = new AdvisorLocalRun(); var largeContext = AdvisorContext.Create(largeRun.Observe(large), Array.Empty<ChatExchange>());
-            largeContext.PrepareStandardInput(AdvisorSituationDelivery.OnRequest);
-            for (var i = 0; i < 2; i++)
-            {
-                var refused = largeContext.Reads.ExecuteAsync(new JObject { ["requests"] = new JArray(new JObject { ["source"] = "situation", ["query"] = "get_situation" }) }, CancellationToken.None).GetAwaiter().GetResult();
-                Require((string?)refused["error"]?["code"] == "payload_limit" && largeRun.Snapshot()["retrievals"]?.Count() == 0,
-                    "Oversized data was truncated, sent or falsely marked as supplied");
-            }
+
         });
         check("Requested snapshots survive standard provider handoffs without replaying full data or leaking private state", () => Async(async () =>
         {

@@ -13,7 +13,6 @@
   "error_requests_invalid": "Supply a bounded, nonempty requests array.",
   "error_query_name_invalid": "Each query needs a query name.",
   "error_response_too_large": "Request smaller pages or fewer IDs.",
-  "error_payload_limit": "The consultation payload budget is exhausted.",
   "error_information_disabled": "This data category is disabled by the user. Do not request it through another query.",
   "error_contact_kind_invalid": "Use a displayed contact-kind code from the tool schema.",
   "error_ids_invalid": "Supply a bounded list of unique IDs.",

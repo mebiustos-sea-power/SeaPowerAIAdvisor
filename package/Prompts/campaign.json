@@ -14,7 +14,6 @@
   "error_request_too_large": "Reduce the number or size of query arguments.",
   "error_query_object_invalid": "Each query must be an object.",
   "error_response_too_large": "Use smaller pages, fewer IDs, or include_ships=false.",
-  "error_payload_limit": "The consultation payload budget is exhausted.",
   "error_information_disabled": "This data category is disabled by the user. Do not request it through another query.",
   "error_ships_disabled": "Ship details are disabled by the user.",
   "error_unknown_ship": "An ID does not name an own ship in this consultation.",
@@ -47,6 +46,6 @@
   "tool_limit": "List page size. Omit for the default page size.",
   "tool_include_ships": "get_forces: true includes individual ships; omitted/false returns force details only.",
   "tool_kind": "list_reports only: a report kind code.",
-  "byte_counting": "Compact JSON UTF-8 bytes for the initial input and successful query responses. Error envelopes are excluded.",
+  "byte_counting": "Compact JSON UTF-8 bytes per request or response.",
   "victory_description": "The first side to hold all of its objective bases wins. Its own bases must also be held."
 }

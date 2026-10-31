@@ -134,7 +134,6 @@ internal static class OperationApprovalTests
         check("Incomplete turns expire every unapproved operation without affecting earlier registrations or offering approval", () =>
         {
             foreach (var approval in new[] { true, false })
-            foreach (var reason in new[] { AdvisorCompletionReason.RoundLimit, AdvisorCompletionReason.PayloadLimit })
             {
                 var log = new List<string>(); var service = new AdvisorOperations(_ => true);
                 var operation = new Extension("custom.limit", approval, log); service.Register(operation);
@@ -144,7 +143,7 @@ internal static class OperationApprovalTests
                 var chat = new AdvisorConversation(); var turn = chat.Begin(new AdvisorQuestion("New plan"));
                 var run = new AdvisorLocalRun(); run.Attach(turn); service.BeginProposal(turn.OperationId);
                 OperationSubmissionFixture.Submit(service, turn.OperationId, Request(service, turn.OperationId, 1, operation.Id));
-                var result = new AdviceResult("", 3, 1, 42, model: "model", completionReason: reason);
+                var result = new AdviceResult("", 3, 1, 42, model: "model", completionReason: AdvisorCompletionReason.RoundLimit);
                 run.Complete(result, "Connection"); turn.Finish(result, service); run.Finish();
                 service.Approve(turn.Proposal!);
                 Require(turn.State == AdvisorTurnState.Incomplete && turn.Proposal!.State == AdvisorProposalState.Cancelled &&
@@ -154,7 +153,7 @@ internal static class OperationApprovalTests
                 foreach (var language in new[] { "en", "ja" })
                 {
                     var text = AdvisorText.Load(language); var markup = AdvisorTranscript.Render(chat, text, "Officer", "empty");
-                    Require(markup.Contains(text[reason == AdvisorCompletionReason.PayloadLimit ? "transcript.payload_limit" : "transcript.round_limit"], StringComparison.Ordinal) &&
+                    Require(markup.Contains(text["transcript.round_limit"], StringComparison.Ordinal) &&
                         markup.Contains(text["transcript.proposal_expired"], StringComparison.Ordinal) &&
                         !markup.Contains("ReviewProposal", StringComparison.Ordinal) && !markup.Contains("CopyAnswer", StringComparison.Ordinal),
                         "Incomplete history offered a partial plan or misreported its termination");

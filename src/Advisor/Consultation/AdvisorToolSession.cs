@@ -98,8 +98,7 @@ internal sealed class AdvisorToolSession
                 results.Add(readCalls[i].Id, new AiToolResult(readCalls[i], reply));
             }
             var error = (string?)response["error"]?["code"];
-            if (error == "payload_limit") limit = AdvisorCompletionReason.PayloadLimit;
-            else if (error == "round_limit") limit = AdvisorCompletionReason.RoundLimit;
+            if (error == "round_limit") limit = AdvisorCompletionReason.RoundLimit;
         }
         foreach (var call in calls.Where(c => bindings[c.Name].Execute != null))
         {

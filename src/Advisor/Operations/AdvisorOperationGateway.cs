@@ -249,7 +249,7 @@ internal sealed class AdvisorOperationGateway : IDisposable
         private readonly CancellationTokenSource lifetime = new();
         private readonly object gate = new();
         private readonly JArray history = new();
-        private int calls, bytes;
+        private int calls;
         public JObject Tool { get; }
         public JArray History { get { lock (gate) return (JArray)history.DeepClone(); } }
         internal Session(AdvisorOperationGateway gateway, string owner, AdvisorPrompts prompts, JArray prior, AdvisorOperationReferences references)
@@ -263,7 +263,7 @@ internal sealed class AdvisorOperationGateway : IDisposable
             linked.Token.ThrowIfCancellationRequested();
             lock (gate)
             {
-                if (++calls > 64 || bytes >= AdvisorQueryLimits.MaxTotalBytes) return Error("operation_budget_exhausted");
+                if (++calls > 64) return Error("operation_budget_exhausted");
             }
             if (JsonPayload.Bytes(request) > AdvisorQueryLimits.MaxRequestBytes) return Error("request_too_large");
             var detached = (JObject)request.DeepClone();
@@ -272,7 +272,6 @@ internal sealed class AdvisorOperationGateway : IDisposable
             if (JsonPayload.Bytes(result) > AdvisorQueryLimits.MaxResponseBytes) result = Error("operation_response_too_large");
             lock (gate)
             {
-                bytes += JsonPayload.Bytes(result);
                 history.Add(new JObject { ["request"] = detached.DeepClone(), ["response"] = result.DeepClone() });
             }
             return result;

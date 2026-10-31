@@ -22,7 +22,6 @@ internal sealed partial class AdvisorQuerySession : IAdvisorQuerySession, IAdvis
     public int RoundsUsed { get; private set; }
     public int MaxRounds { get; }
     public AdvisorPrompts Prompts { get; }
-    internal int ReturnedBytes { get; private set; }
 
     internal AdvisorQuerySession(SituationSnapshot snapshot, string language, string? question, int maxRounds = DefaultMaxRounds, AdvisorInformation? information = null, AdvisorPrompts? prompts = null)
     {
@@ -94,7 +93,7 @@ internal sealed partial class AdvisorQuerySession : IAdvisorQuerySession, IAdvis
             ["max_rounds"] = MaxRounds, ["max_queries_per_round"] = MaxQueriesPerRound,
             ["max_ids_per_query"] = MaxIdsPerQuery, ["default_page_size"] = DefaultPageSize,
             ["max_page_size"] = MaxPageSize, ["max_request_utf8_bytes"] = MaxRequestBytes,
-            ["max_response_utf8_bytes"] = MaxResponseBytes, ["max_total_data_utf8_bytes"] = MaxTotalBytes,
+            ["max_response_utf8_bytes"] = MaxResponseBytes,
             ["byte_counting"] = Prompts.Text("campaign.json", "byte_counting")
         };
         var overview = (JObject)initial["situation"]!["overview"]!;
@@ -112,9 +111,6 @@ internal sealed partial class AdvisorQuerySession : IAdvisorQuerySession, IAdvis
         initial["situation"]!["coverage"]!["available_on_request"] = new JArray(
             ((JArray)initial["knowledge_catalog"]!).OfType<JObject>().Select(r => (string)r["category"]!));
         information.AddCoverage(initial, false);
-        ReturnedBytes = Bytes(initial);
-        if (ReturnedBytes > MaxTotalBytes)
-            throw new InvalidOperationException("Mandatory initial input exceeds the consultation payload limit.");
     }
 
     public JObject InitialInput() => (JObject)initial.DeepClone();
@@ -127,10 +123,9 @@ internal sealed partial class AdvisorQuerySession : IAdvisorQuerySession, IAdvis
             if (RoundsUsed >= MaxRounds) throw Invalid("round_limit", "round_limit");
             // Every attempt consumes a round, including rejected requests.
             RoundsUsed++;
-            Allowed(request, "consultation_id", "requests", "partial_results", "response_limit_bytes", "remaining_data_bytes");
+            Allowed(request, "consultation_id", "requests", "partial_results", "response_limit_bytes");
             var partial = AdvisorQueryBatch.Partial(request);
             var responseLimit = AdvisorQueryBatch.Budget(request, "response_limit_bytes", MaxResponseBytes);
-            var remainingData = AdvisorQueryBatch.Budget(request, "remaining_data_bytes", MaxTotalBytes);
             if (String(request, "consultation_id") != Id) throw Invalid("wrong_consultation", "wrong_consultation");
             if (Bytes(request) > MaxRequestBytes) throw Invalid("request_too_large", "request_too_large");
             if (!(request["requests"] is JArray requests) || requests.Count < 1 || requests.Count > MaxQueriesPerRound)
@@ -144,8 +139,6 @@ internal sealed partial class AdvisorQuerySession : IAdvisorQuerySession, IAdvis
             response["results"] = results;
             var bytes = Bytes(response);
             if (bytes > responseLimit) throw Invalid("response_too_large", "response_too_large");
-            if (ReturnedBytes + bytes > MaxTotalBytes || bytes > remainingData) throw Invalid("payload_limit", "payload_limit");
-            ReturnedBytes += bytes;
             return response;
         }
         catch (AdvisorQueryException error)

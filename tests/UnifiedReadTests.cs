@@ -108,26 +108,25 @@ internal static partial class ProviderTests
                 repeated["results"]?[0]?["data"]?["weapon_references"]?.Count() == 0 && operation.Writes == 0,
                 "A rejected mixed response consumed a reference definition or retried native operations");
         });
-        check("Metadata-only reads share the total response budget and oversized batches dispatch no items", () =>
+        check("Repeated metadata reads exceed the former cumulative cap while oversized batches dispatch no items", () =>
         {
             var operation = new LookupOperation { Detail = new string('x', 30_000) };
             var registry = new AdvisorOperations(_ => true); registry.Register(operation);
             using var gateway = new AdvisorOperationGateway(registry);
-            using var operations = gateway.CreateSession("metadata-budget", AdvisorPrompts.Current)!;
+            using var operations = gateway.CreateSession("metadata-reads", AdvisorPrompts.Current)!;
             var knowledge = ReadKnowledge(); var reads = AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>(), operations: operations).Reads;
             var over = OperationGatewayTests.Finish(gateway, reads.ExecuteAsync(new JObject { ["requests"] = new JArray(
                 Enumerable.Range(0, 9).Select(_ => Lookup("candidates"))) }, CancellationToken.None));
             Require((string?)over["error"]?["code"] == "invalid_arguments" && operations.History.Count == 0 && knowledge.RoundsUsed == 0,
                 "A rejected read batch partially dispatched");
-            JObject result = new(); var successful = 0;
             for (var i = 0; i < 10; i++)
             {
-                result = OperationGatewayTests.Finish(gateway, reads.ExecuteAsync(new JObject { ["requests"] = new JArray(Lookup("candidates")) }, CancellationToken.None));
-                if ((string?)result["status"] == "error") break;
-                successful++;
+                var result = OperationGatewayTests.Finish(gateway, reads.ExecuteAsync(new JObject { ["requests"] = new JArray(Lookup("candidates")) }, CancellationToken.None));
+                Require((string?)result["status"] == "ok" && (string?)result["results"]?[0]?["status"] == "ok",
+                    "Cumulative metadata size interrupted a valid read");
             }
-            Require(successful > 0 && successful < 10 && (string?)result["error"]?["code"] == "payload_limit" &&
-                knowledge.RoundsUsed == 0 && operation.Writes == 0, "Metadata-only reads bypassed the common budget or consumed snapshot rounds");
+            Require(operations.History.Count == 10 && knowledge.RoundsUsed == 0 && operation.Writes == 0,
+                "Metadata reads consumed snapshot rounds, lost receipts or executed an order");
         });
         check("Cancellation during a live lookup stops the mixed read before subsequent snapshot work", () =>
         {
