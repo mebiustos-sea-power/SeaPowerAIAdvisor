@@ -267,6 +267,7 @@
   "information.mission_context": "Mission name and current time",
   "information.public_objectives": "Visible mission objectives and progress",
   "information.mission_map_areas": "Mission areas shown on the map",
+  "information.weather": "Weather and sea conditions",
   "information.campaign": "Campaign",
   "information.campaign_description": "Choose the information provided to the AI on the campaign screen of Bungalow's Dynamic Campaign Mod.",
   "information.mandatory": "Victory conditions and basic information about public bases are always provided.",

@@ -92,6 +92,7 @@ internal sealed partial class BattleQuerySession : IAdvisorQuerySession, IAdviso
                 ["report_limit"] = 10
             }
         };
+        if (information.Allows(InformationKind.BattleWeather)) initial["situation"]!["weather"] = snapshot["weather"]!.DeepClone();
         var attackOverview = Rows("observed_contacts").OfType<JObject>().Where(c => c["has_in_range_attack_option"] != null)
             .Select(c => new JObject { ["contact_ref"] = c["id"]!.DeepClone(), ["has_in_range_attack_option"] = c["has_in_range_attack_option"]!.DeepClone() }).ToArray();
         if (attackOverview.Length > 0) initial["situation"]!["attack_range_overview"] = new JArray(attackOverview);

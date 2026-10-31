@@ -267,6 +267,7 @@
   "information.mission_context": "ミッション名・現在時刻",
   "information.public_objectives": "公開中の作戦目標・達成状況",
   "information.mission_map_areas": "地図上のミッション範囲",
+  "information.weather": "天候・海況",
   "information.campaign": "キャンペーン",
   "information.campaign_description": "Bungalow's Dynamic Campaign Modのキャンペーン画面で、AIに渡す情報を設定します。",
   "information.mandatory": "勝利条件・公開基地の基本情報は常に提供します。",

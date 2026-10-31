@@ -121,6 +121,7 @@ internal static class ProgressTests
         });
     }
     private static BattleQuerySession Session(int maxRounds) => new(new BattleSnapshot(new JObject {
+        ["weather"] = new JObject { ["wind_force_beaufort"] = 3, ["precipitation"] = new JArray("rain"), ["fog"] = false, ["lightning"] = false },
         ["captured_at_utc"] = "1985-06-01T00:00:00Z", ["mission_display_name"] = "Mission", ["friendly_bases"] = new JArray(), ["hosted_air_units"] = new JArray(), ["aviation_hosts"] = new JArray(),
         ["public_objectives"] = new JArray(), ["mission_map_areas"] = new JArray(),
         ["friendly_units"] = new JArray(), ["observed_contacts"] = new JArray(), ["unit_capabilities"] = new JArray(),

@@ -226,7 +226,7 @@ internal sealed class BattleIntegration
         IReadOnlyDictionary<string, bool>? attackRanges = null;
         if (information.Allows(InformationKind.BattleUnits) && information.Allows(InformationKind.BattleWeapons) && information.Allows(InformationKind.BattleContacts))
             attackRanges = new BattleOperationSupport(OperationObjects, () => information, OperationKnownUnits).GetAttackRangeOverview();
-        return reader.Capture(map.MapKnownUnits.AllUnits, player!, MissionManager.Instance.Objectives, MissionManager.Instance.OnMapAreas, EventLog.Instance,
+        return reader.Capture(map.MapKnownUnits.AllUnits, player!, MissionManager.Instance.Objectives, MissionManager.Instance.OnMapAreas, EventLog.Instance, SeaPower.Environment.Instance,
             now, SceneCreator.Instance.CurrentMissionName,
             EnemyControlEnabled,
             new BattleCapabilityReader(references, Atmosphere.SpeedOfSound), xmlBriefing, briefingUnavailable, briefingFromBase, attackRanges);

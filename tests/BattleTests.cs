@@ -29,6 +29,47 @@ internal static partial class BattleTests
         RunUnitMentions(check);
         RunUnitDraft(check);
         RunAttackRangeOverview(check);
+        check("Weather is captured once and remains frozen across initial-input copies and native changes", () =>
+        {
+            var f = new Fixture();
+            f.Weather.SeaState = 5; f.Weather.IsRaining = true; f.Weather.IsFog = true;
+            var captured = f.Capture();
+            var expected = captured.Copy()["weather"]!.DeepClone();
+            f.Weather.SeaState = 0; f.Weather.IsRaining = false; f.Weather.IsFog = false;
+            var session = new BattleQuerySession(captured, "en", "Weather?");
+            var initial = session.InitialInput();
+            Require(JToken.DeepEquals(initial["situation"]!["weather"], expected), "Native weather changes affected a captured consultation");
+            initial["situation"]!["weather"]!["wind_force_beaufort"] = 12;
+            Require(JToken.DeepEquals(session.InitialInput()["situation"]!["weather"], expected) &&
+                (int?)f.Capture().Copy()["weather"]?["wind_force_beaufort"] == 0,
+                "An input copy changed the consultation or a new capture reused old weather");
+        });
+        check("Weather respects its independent selection in every delivery mode without a new retrieval", () =>
+        {
+            var captured = new Fixture().Capture();
+            foreach (var enabled in new[] { false, true })
+            foreach (var mode in new[] { AdvisorSituationDelivery.OnDemand, AdvisorSituationDelivery.Upfront, AdvisorSituationDelivery.OnRequest })
+            {
+                var policy = AdvisorInformation.Default.With(InformationKind.BattleUnits, false)
+                    .With(InformationKind.BattleContacts, false).With(InformationKind.BattleWeather, enabled);
+                var session = new BattleQuerySession(captured, "en", "Weather?", information: policy);
+                var context = AdvisorContext.Create(session, Array.Empty<ChatExchange>());
+                var input = context.PrepareStandardInput(mode);
+                var payload = input.Data;
+                if (mode == AdvisorSituationDelivery.OnRequest)
+                {
+                    Require(input.Data["situation"] == null, "On-request delivery sent automatic weather context early");
+                    payload = context.Reads.ExecuteAsync(new JObject { ["requests"] = new JArray(new JObject {
+                        ["source"] = "situation", ["query"] = "get_situation" }) }, CancellationToken.None)
+                        .GetAwaiter().GetResult();
+                }
+                var weather = payload.Descendants().OfType<JProperty>().Where(p => p.Name == "weather").ToArray();
+                Require(weather.Length == (enabled ? 1 : 0) && (!enabled || JToken.DeepEquals(weather[0].Value, captured.Copy()["weather"])) &&
+                    ((JArray)session.InitialInput()["situation"]!["coverage"]!["excluded_by_user"]!).Values<string>().Contains("battle_weather") != enabled &&
+                    session.RoundsUsed == 0,
+                    "Weather was duplicated, omitted, leaked, or required a partial-data request: " + mode);
+            }
+        });
         check("Battle capture excludes hidden objectives, future reports and actual enemy details", () =>
         {
             var f = new Fixture();
@@ -545,6 +586,7 @@ internal static partial class BattleTests
 
     private sealed class Fixture
     {
+        internal readonly Weather Weather = new();
         internal readonly OwnUnit Own = new();
         internal readonly SecretEnemy Secret = new();
         internal readonly Track Track;
@@ -578,8 +620,16 @@ internal static partial class BattleTests
                 MissionBriefing = new Reactive<string>("公開済みの任務説明"),
                 Intelligence = new object[] { new { Time = now.AddMinutes(-1), IntelligenceText = "接触の報告" }, Future },
                 AllIntelligence = new Forbidden()
-            }, now, "Test scenario", disclosure, new BattleCapabilityReader(
+            }, Weather, now, "Test scenario", disclosure, new BattleCapabilityReader(
                 new BattleReferenceCatalog(PublicClasses, PublicWeapons, now.Year, Ready), SpeedOfSound), xmlBriefing, briefingUnavailable, briefingFromBase);
+    }
+    private sealed class Weather
+    {
+        public int SeaState { get; set; }
+        public bool IsRaining { get; set; }
+        public bool IsSnowing { get; set; }
+        public bool IsFog { get; set; }
+        public bool IsLightning { get; set; }
     }
     private sealed class Reactive<T>
     {

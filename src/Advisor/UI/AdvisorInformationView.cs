@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Xml.Linq;
 using Noesis;
 using static SeaPowerAIAdvisor.Shared.UiMarkup;
@@ -18,6 +19,14 @@ internal sealed class AdvisorInformationView
         this.host = host;
         var ns = (XNamespace)"http://schemas.microsoft.com/winfx/2006/xaml";
         var root = Element("StackPanel", new XAttribute(XNamespace.Xmlns + "x", ns));
+        void AddItem(InformationItem item, int depth)
+        {
+            var box = Box("InformationItem" + item.Kind, item.TextKey, (20 * depth) + ",4,0,4", false);
+            if (text.Contains(item.TextKey + "_tip"))
+                box.SetAttributeValue("ToolTip", "{DynamicResource Advisor." + item.TextKey + "_tip}");
+            root.Add(box);
+        }
+        var grouped = AdvisorInformation.Groups.SelectMany(g => g.Items).ToHashSet();
         var index = 0;
         bool? section = null;
         foreach (var group in AdvisorInformation.Groups)
@@ -45,6 +54,9 @@ internal sealed class AdvisorInformationView
                         new XAttribute("Text", "{DynamicResource Advisor.information.mandatory}"),
                         new XAttribute("FontSize", "12"), new XAttribute("TextWrapping", "Wrap"),
                         new XAttribute("Opacity", "0.7"), new XAttribute("Margin", "0,6,0,0")));
+                foreach (var item in AdvisorInformation.Items.Where(i => !grouped.Contains(i.Kind) &&
+                    i.Id.StartsWith(group.Battle ? "battle_" : "campaign_", StringComparison.Ordinal)))
+                    AddItem(item, 0);
                 section = group.Battle;
             }
             root.Add(Box("InformationGroup" + index++, group.TextKey, "0,12,0,6", true));
@@ -53,11 +65,7 @@ internal sealed class AdvisorInformationView
                 var depth = 1;
                 var parent = AdvisorInformation.Item(kind).Requires;
                 while (parent.HasValue) { depth++; parent = AdvisorInformation.Item(parent.Value).Requires; }
-                var item = AdvisorInformation.Item(kind);
-                var box = Box("InformationItem" + kind, item.TextKey, (20 * depth) + ",4,0,4", false);
-                if (text.Contains(item.TextKey + "_tip"))
-                    box.SetAttributeValue("ToolTip", "{DynamicResource Advisor." + item.TextKey + "_tip}");
-                root.Add(box);
+                AddItem(AdvisorInformation.Item(kind), depth);
             }
         }
         var view = GUI.ParseXaml(root.ToString(SaveOptions.DisableFormatting)) as FrameworkElement
@@ -72,12 +80,13 @@ internal sealed class AdvisorInformationView
             var box = Find(view, "InformationGroup" + index++);
             groups.Add((group, box));
             box.Click += (_, _) => guard(() => { Value = Value.With(group, Value.State(group) != true); Refresh(); });
-            foreach (var kind in group.Items)
-            {
-                var item = Find(view, "InformationItem" + kind);
-                items.Add((kind, item));
-                item.Click += (_, _) => guard(() => { Value = Value.With(kind, item.IsChecked == true); Refresh(); });
-            }
+        }
+        foreach (var definition in AdvisorInformation.Items)
+        {
+            var kind = definition.Kind;
+            var item = Find(view, "InformationItem" + kind);
+            items.Add((kind, item));
+            item.Click += (_, _) => guard(() => { Value = Value.With(kind, item.IsChecked == true); Refresh(); });
         }
         Reset(null);
     }

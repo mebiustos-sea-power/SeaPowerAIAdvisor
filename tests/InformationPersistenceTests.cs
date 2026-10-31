@@ -11,6 +11,15 @@ internal static partial class InformationTests
 {
     private static void RunPersistence(Action<string, Action> check)
     {
+        check("Weather defaults on for existing settings and keeps its saved choice independently of units and contacts", () =>
+        {
+            var existing = AdvisorOptions.Parse("{\"information_selection\":{\"battle_units\":false,\"battle_contacts\":false}}").Information;
+            Require(existing.Allows(BattleWeather) && existing.CanEdit(BattleWeather), "Existing settings disabled new weather or tied it to unit/contact access");
+            var saved = new AdvisorOptions(information: existing.With(BattleWeather, false)).Data();
+            var restored = AdvisorOptions.Parse(Encoding.UTF8.GetString(saved)).Information;
+            Require(!restored.Allows(BattleWeather) && !restored.Allows(BattleUnits) && !restored.Allows(BattleContacts) &&
+                AdvisorInformation.Default.Allows(BattleWeather), "Saving lost the weather choice, affected other permissions, or changed defaults");
+        });
         check("Explicit data choices survive saving, legacy migration and disabled-parent round trips", () =>
         {
             var old = AdvisorOptions.Parse("{\"disabled_information\":[\"battle_weapons\",\"campaign_forces\"]}");

@@ -150,6 +150,7 @@ internal static class OperationAmmunitionTests
     {
         var data = new JObject
         {
+            ["weather"] = new JObject { ["wind_force_beaufort"] = 3, ["precipitation"] = new JArray("rain"), ["fog"] = false, ["lightning"] = false },
             ["captured_at_utc"] = "1985-06-01T00:00:00Z", ["mission_display_name"] = "Mission", ["mission_briefing"] = "Briefing",
             ["friendly_units"] = new JArray(new JObject { ["id"] = "own_unit_8", ["display_name"] = "Hobby 1", ["kind"] = "helicopter" },
                 new JObject { ["id"] = "own_unit_9", ["display_name"] = "Excluded unit", ["kind"] = "ground", ["unit_category"] = "ground_unit" }),

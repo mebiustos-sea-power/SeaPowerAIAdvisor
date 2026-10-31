@@ -91,7 +91,14 @@ internal static class CrewTests
             Require(read.Information.Key == information.Key && read.ConnectionId == "chatter-only" && read.IntervalMinutes == 5 && read.DisplaySeconds == 12 &&
                 read.NotificationPosition == CrewNotificationPosition.BottomCenter && !read.ShowHelpTab && read.ExchangeChancePercent == 72,
                 "Reloading Chatter or changing adviser coverage lost Chatter preferences");
-            Require(read.Information.Allows("sensors") && adviser.Current.Information.Allows(InformationKind.BattleFuel), "The features shared information selections");
+            Require(read.Information.Allows("sensors") && adviser.Current.Information.Allows(InformationKind.BattleFuel) &&
+                !read.Information.Allows("weather") && adviser.Current.Information.Allows(InformationKind.BattleWeather), "The features shared information selections");
+            adviser.SaveInformation(adviser.Current.Information.With(InformationKind.BattleWeather, false));
+            store.Save(new CrewSettings(information: CrewInformation.Default));
+            Require(new CrewSettingsStore(path).Current.Information.Allows("weather") &&
+                !new AdvisorOptionsStore(Path.Combine(directory, "options.json")).Current.Information.Allows(InformationKind.BattleWeather),
+                "Crew weather settings changed the adviser's weather selection");
+            store.Save(read);
             foreach (var invalid in new JToken[] { JValue.CreateNull(), new JArray(), new JObject { ["fuel"] = "false" }, new JObject { ["not_a_category"] = false } })
                 Throws<CrewException>(() => CrewSettings.Parse(new JObject { ["information_selection"] = invalid }.ToString()));
             File.Delete(path); Directory.CreateDirectory(path);

@@ -182,6 +182,7 @@ internal static partial class ProviderTests
     {
         var snapshot = new JObject
         {
+            ["weather"] = new JObject { ["wind_force_beaufort"] = 3, ["precipitation"] = new JArray("rain"), ["fog"] = false, ["lightning"] = false },
             ["captured_at_utc"] = "1985-06-01T00:00:00Z", ["mission_display_name"] = "Mission", ["mission_briefing"] = "Frozen briefing",
             ["friendly_units"] = new JArray(Enumerable.Range(1, 2).Select(i => new JObject { ["id"] = "own_unit_" + i, ["display_name"] = "Own " + i, ["kind"] = "surface" })),
             ["movement_plans"] = new JArray(Enumerable.Range(1, 2).Select(i => new JObject { ["id"] = "own_unit_" + i, ["route_unit_id"] = "own_unit_" + i })),

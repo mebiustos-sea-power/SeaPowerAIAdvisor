@@ -4,11 +4,12 @@ using Newtonsoft.Json.Linq;
 
 namespace SeaPowerAIAdvisor;
 
-// Apply unit and contact permissions once to the detached snapshot. All query routes use this projection.
+// Apply information permissions once to the detached snapshot. All query routes use this projection.
 internal static class BattleInformation
 {
     internal static void Apply(JObject snapshot, AdvisorInformation information)
     {
+        if (!information.Allows(InformationKind.BattleWeather)) snapshot.Remove("weather");
         var units = (JArray)snapshot["friendly_units"]!;
         foreach (var unit in units.OfType<JObject>().Where(u => !Permitted(u, information)).ToArray()) unit.Remove();
         var ids = units.OfType<JObject>().Select(u => (string)u["id"]!).ToHashSet(System.StringComparer.Ordinal);

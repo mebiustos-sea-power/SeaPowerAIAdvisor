@@ -11,7 +11,7 @@ internal enum InformationKind
     CampaignForces, CampaignShips, CampaignFuel, CampaignAmmunition, CampaignDamage, CampaignAviation,
     CampaignContacts, CampaignBases, CampaignOrders, CampaignReports,
     BattleGroundUnits, BattleBases, BattleAviation, CampaignOwnBases, CampaignGroundUnits, BattleNeutralContacts, BattleDestroyedContacts,
-    BattleLaunchedWeapons, BattleWeaponContacts, BattleSensors, BattleSensorPerformance, BattleMovementPlans
+    BattleLaunchedWeapons, BattleWeaponContacts, BattleSensors, BattleSensorPerformance, BattleMovementPlans, BattleWeather
 }
 
 internal sealed class InformationItem
@@ -39,6 +39,7 @@ internal sealed class AdvisorInformation
 {
     internal static readonly IReadOnlyList<InformationItem> Items = Array.AsReadOnly(new[]
     {
+        new InformationItem(InformationKind.BattleWeather, "battle_weather", "weather"),
         new InformationItem(InformationKind.BattleUnits, "battle_units", "basic"),
         new InformationItem(InformationKind.BattleMovementPlans, "battle_movement_plans", "movement_plans", InformationKind.BattleUnits),
         new InformationItem(InformationKind.BattleFuel, "battle_fuel", "fuel", InformationKind.BattleUnits),
