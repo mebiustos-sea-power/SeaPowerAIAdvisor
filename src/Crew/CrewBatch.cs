@@ -51,7 +51,8 @@ internal sealed class CrewBatch
             "Use one brief in-character sentence, occasionally two: a restrained feeling, concern, or impression rather than a status summary or tactical advice. " +
             "Let personality shape the remark; thoughts and feelings are fictional, but their factual basis must come from the supplied player-known situation. " +
             "Silence is preferable to filler or repetition; submit an empty reports array when no reporter has a worthwhile remark. Appoint the requested units even when they remain silent. " +
-            "Use recent_remarks to avoid repetition, not as current observations. Make this response self-contained. Shared fleet contacts do not prove personal detection. active_threat_alerts lists current game warnings, not hits or damage. " +
+            "Use recent_remarks to avoid repetition, not as current observations. Make this response self-contained. Shared fleet contacts do not prove personal detection. active_threat_alerts are current warnings, not hits or sensor failure; illumination alone does not establish a missile launch. " +
+            "air_operations flags include handling and waiting, not completed launches or recoveries. " +
             "posture states allegiance: enemy is confirmed hostile, unknown is undetermined. class_identified describes only class/type recognition. " +
             "Missing values are unknown; ammunition counts are inventory, not launch readiness, and launched_weapons counts are current weapons, not new launches or hits. Never invent events, damage, detections, or mission completion, or claim or announce actions or orders. " +
             "Report unit facts only for the speaker's own unit or, for leaders, its listed formation members; reacting to another speaker's remark is allowed. " +

@@ -2,6 +2,7 @@
   <PropertyGroup><TargetFramework>net10.0</TargetFramework><OutputType>Exe</OutputType><AssemblyName>SeaPowerAIAdvisor.Tests</AssemblyName></PropertyGroup>
   <ItemGroup>
     <Compile Include="..\src\Shared\Game\UnitStatusFacts.cs" />
+    <Compile Include="..\src\Shared\Game\BattleWeatherFacts.cs" />
     <Compile Include="..\src\Shared\Game\UnitThreatFacts.cs" />
     <Compile Include="..\src\Shared\Game\BattleWeaponFacts.cs" />
     <Compile Include="..\src\Crew\Game\CrewContactReader.cs" />

@@ -42,13 +42,18 @@ internal sealed class CrewBattleSource
         foreach (var pair in OwnUnits().Where(p => wanted.Contains(p.Id)))
         {
             var unit = pair.Unit; var parameters = Required(unit, "_obp"); var kind = Code(Required(unit, "_type"));
+            var damage = UnitStatusFacts.Damage(unit, parameters);
+            var fire = UnitStatusFacts.FireSeverity(unit);
+            if (fire != null) damage["fire_severity"] = fire;
             var row = new JObject { ["id"] = "unit:" + pair.Id, ["display_name"] = unit.Name.Value,
                 ["kind"] = kind, ["nation"] = unit.Nation.Value,
                 ["position"] = Position(Required(Required(unit, "Position"), "Value")),
                 ["heading_deg"] = Number(Required(Required(unit, "Heading"), "Value")), ["speed_knots"] = Number(Required(unit, "_velocityInKnots")),
                 ["acting_independently"] = unit.Formation != null && !unit.IsFormationLeader && !unit.FollowingFormation,
-                ["damage"] = UnitStatusFacts.Damage(unit, parameters), ["fuel"] = UnitStatusFacts.Fuel(unit, parameters),
+                ["damage"] = damage, ["fuel"] = UnitStatusFacts.Fuel(unit, parameters),
                 ["sensors"] = UnitStatusFacts.Sensors(parameters), ["active_threat_alerts"] = UnitThreatFacts.ActiveAlerts(unit) };
+            var airOperations = UnitStatusFacts.AirOperations(parameters);
+            if (airOperations != null) row["air_operations"] = airOperations;
             var verticalField = BattleVerticalPosition.FieldName(kind);
             if (verticalField != null) row[verticalField] = BattleVerticalPosition.Read(kind, Required(Required(unit, "Altitude"), "Value"));
             var names = Rows(Required(unit, "AmmunitionNameToAmmunitionDictionary")).ToDictionary(p => (string)Required(p, "Key"), p => Member(p, "Value"));
@@ -68,6 +73,7 @@ internal sealed class CrewBattleSource
         return new JObject
         {
             ["captured_at_utc"] = SeaPower.Environment.Instance.DateTime.ToString("o", CultureInfo.InvariantCulture),
+            ["weather"] = BattleWeatherFacts.Capture(SeaPower.Environment.Instance),
             ["units"] = units, ["contacts"] = observed.Contacts, ["launched_weapons"] = observed.LaunchedWeapons
         };
     }

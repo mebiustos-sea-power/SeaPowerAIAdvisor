@@ -82,7 +82,8 @@ internal static class CrewTests
         {
             var path = Path.Combine(directory, "crew.json"); var store = new CrewSettingsStore(path);
             Require(CrewInformation.Items.All(i => store.Current.Information.Allows(i.Id)) && !File.Exists(path), "Default coverage changed or opening saved settings");
-            var information = CrewInformation.Default.With("fuel", false).With("contacts", false).With("threat_alerts", false);
+            var information = CrewInformation.Default.With("fuel", false).With("contacts", false).With("threat_alerts", false)
+                .With("weather", false).With("air_operations", false);
             store.Save(new CrewSettings("reports-only", 5, 12, CrewNotificationPosition.BottomCenter, false, 72, information));
             var adviser = new AdvisorOptionsStore(Path.Combine(directory, "options.json"));
             adviser.SaveInformation(AdvisorInformation.Default.With(InformationKind.BattleSensors, false));
@@ -104,7 +105,7 @@ internal static class CrewTests
                 ("movement", new[] { "position", "heading_deg", "speed_knots", "altitude_ft", "depth_ft" }),
                 ("damage", new[] { "damage" }), ("fuel", new[] { "fuel" }),
                 ("weapons", new[] { "weapons" }), ("sensors", new[] { "sensors" }),
-                ("threat_alerts", new[] { "active_threat_alerts" })
+                ("threat_alerts", new[] { "active_threat_alerts" }), ("air_operations", new[] { "air_operations" })
             };
             var selections = new List<CrewInformation> { CrewInformation.Default };
             selections.AddRange(CrewInformation.Items.Select(i => CrewInformation.Default.With(i.Id, false)));
@@ -112,7 +113,9 @@ internal static class CrewTests
             foreach (var information in selections)
             {
                 using var rig = new Rig(settings: new CrewSettings("reports", information: information));
-                rig.Situation = ReportSituation(); var original = rig.Situation.DeepClone();
+                rig.Situation = ReportSituation();
+                rig.Situation["units"]![0]!["air_operations"] = new JObject { ["launch_handling"] = true, ["recovery_handling"] = false };
+                var original = rig.Situation.DeepClone();
                 rig.Reports.Refresh(new[] { Target(1, 1, 2) }); rig.Reports.ApplyTargets(new[] { "unit:1" }, 0); rig.Tick(1);
                 var call = rig.Take(); var data = call.Batch.Input("").Data;
                 var units = (JArray)data["units"]!;
@@ -130,6 +133,9 @@ internal static class CrewTests
                 Require((data["launched_weapons"] != null) == information.Allows("launched_weapons") &&
                     (!information.Allows("launched_weapons") || JToken.DeepEquals(data["launched_weapons"], original["launched_weapons"])),
                     "Weapon selection leaked excluded facts or changed other categories");
+                Require((data["weather"] != null) == information.Allows("weather") &&
+                    (!information.Allows("weather") || JToken.DeepEquals(data["weather"], original["weather"])),
+                    "Weather selection leaked excluded conditions or changed the shared weather snapshot");
                 Require(JToken.DeepEquals(rig.Situation, original), "Selecting input mutated the captured situation");
                 rig.Complete(call); rig.Pump(1);
             }
@@ -469,13 +475,13 @@ internal static class CrewTests
     }
     private static JObject Row(string id) => new() { ["id"] = id, ["text"] = "Maintaining station." };
     private static JObject ReportSituation() => JObject.Parse("""
-        {"captured_at_utc":"1985-06-26T20:57:00Z","units":[
+        {"captured_at_utc":"1985-06-26T20:57:00Z","weather":{"wind_force_beaufort":5,"precipitation":["rain"],"fog":false,"lightning":false},"units":[
           {"id":"unit:1","display_name":"Helicopter","nation":"US","kind":"helicopter","acting_independently":false,
            "position":{"latitude_deg":26.5,"longitude_deg":127.3},"heading_deg":90,"speed_knots":70,"altitude_ft":200,
            "damage":{"disabled":false},"fuel":{"remaining_mass_kg":600},"weapons":{"ammunition":[{"remaining_count":12}]},"sensors":[{"on":true}],"active_threat_alerts":["missile"]},
           {"id":"unit:2","display_name":"Submarine","nation":"US","kind":"submarine","acting_independently":true,
            "position":{"latitude_deg":26.6,"longitude_deg":127.4},"heading_deg":180,"speed_knots":10,"depth_ft":400,
-           "damage":{"disabled":false},"fuel":{"status":"not_displayed_for_unit_type"},"weapons":{"ammunition":[{"remaining_count":4}]},"sensors":[{"on":false}],"active_threat_alerts":["torpedo"]}
+           "damage":{"disabled":false,"fire_severity":"severe"},"fuel":{"status":"not_displayed_for_unit_type"},"weapons":{"ammunition":[{"remaining_count":4}]},"sensors":[{"on":false}],"active_threat_alerts":["torpedo","radar_illumination","jamming"]}
         ],"contacts":[{"track_number":7017,"posture":"enemy","position":{"latitude_deg":26.8,"longitude_deg":126.5}}],
         "launched_weapons":[{"posture":"enemy","kind":"missile","count":2,"launch_platform":null,"tracked_target":{"id":"unit:1","display_name":"Helicopter"}}]}
         """);

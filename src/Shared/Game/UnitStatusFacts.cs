@@ -52,6 +52,34 @@ internal static class UnitStatusFacts
         };
     }
 
+    internal static string? FireSeverity(object unit)
+    {
+        var compartments = Member(unit, "Compartments");
+        if (compartments == null) return null;
+        var severity = 0;
+        foreach (var compartment in Rows(Required(compartments, "_systemCompartments")))
+        {
+            var current = Code(Required(compartment, "FireState")) switch
+            {
+                "no" => 0, "selfextinguishing" => 1, "moderate" => 2, "severe" => 3,
+                _ => throw new InvalidOperationException("Unknown compartment fire state.")
+            };
+            severity = Math.Max(severity, current);
+        }
+        return severity switch { 0 => "none", 1 => "self_extinguishing", 2 => "moderate", _ => "severe" };
+    }
+
+    internal static JObject? AirOperations(object parameters)
+    {
+        var deck = Member(parameters, "_flightDeck");
+        if (deck == null) return null;
+        return new JObject
+        {
+            ["launch_handling"] = (bool)Required(deck, "LaunchInProgress"),
+            ["recovery_handling"] = (bool)Required(deck, "LandingInProgress")
+        };
+    }
+
     private static double Percent(object value)
     {
         var number = Nonnegative(value);

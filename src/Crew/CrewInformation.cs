@@ -10,9 +10,11 @@ internal sealed class CrewInformation
 {
     internal static readonly IReadOnlyList<(string Id, string[] UnitFields)> Items = Array.AsReadOnly(new[]
     {
+        ("weather", Array.Empty<string>()),
         ("movement", new[] { "position", "heading_deg", "speed_knots", "altitude_ft", "depth_ft" }),
         ("damage", new[] { "damage" }), ("fuel", new[] { "fuel" }),
         ("weapons", new[] { "weapons" }), ("sensors", new[] { "sensors" }),
+        ("air_operations", new[] { "air_operations" }),
         ("threat_alerts", new[] { "active_threat_alerts" }),
         ("contacts", Array.Empty<string>()), ("launched_weapons", Array.Empty<string>())
     });
@@ -49,6 +51,7 @@ internal sealed class CrewInformation
                     foreach (var field in item.UnitFields) unit.Remove(field);
         if (!Allows("contacts")) result.Remove("contacts");
         if (!Allows("launched_weapons")) result.Remove("launched_weapons");
+        if (!Allows("weather")) result.Remove("weather");
         if (excluded.Count > 0) result["excluded_information"] = new JArray(Items.Where(i => !Allows(i.Id)).Select(i => i.Id));
         return result;
     }
