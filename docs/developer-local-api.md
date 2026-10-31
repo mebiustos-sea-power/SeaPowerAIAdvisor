@@ -306,4 +306,6 @@ python3 tools/advisor_dev.py chatter stop --scope-id <scope>
 
 Chatter target API requests are explicit commits; they do not edit the window’s pending checkbox selection. `POST /v1/crew/chatter/pause` takes `{"scope_id":"...","paused":true}` or `false`. While paused, confirmed targets remain selected, but neither appointments nor remarks are generated. Resume validates the selected connection permission again. The global disable and `/stop` still turn all targets OFF.
 
+The `paused` status represents Chatter's own pause control. Game pause freezes only the automatic speech countdown, preserving its remaining time. While the game runs, this countdown uses real time regardless of playback speed. Explicitly requested appointments and in-flight replies still complete during game pause; response freshness and notification expiry continue to use real time.
+
 Chatter generation errors pause the whole Chatter session without changing the target selection, appointed people, history or usage totals. Read `paused` and `error` from the status. Explicit resume through `/pause` with `paused: false` validates the connection again, clears the error, and resumes with existing people; editing target selection alone does not resume. Global disable and `/stop` still turn targets OFF.

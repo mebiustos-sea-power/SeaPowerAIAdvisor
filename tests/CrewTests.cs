@@ -258,6 +258,71 @@ internal static class CrewTests
             Require(third.Batch.Input("").Data["recent_remarks"] is JArray { Count: 3 }, "Conversation context grew beyond its bounded recent history");
             rig.Complete(third); rig.Pump(252);
         });
+        check("Repeated game pauses preserve the remaining speech countdown without catch-up requests", () =>
+        {
+            using var rig = new Rig(new FixedRandom(0.5));
+            rig.Chatter.Refresh(new[] { Target(1) }); rig.SetEnabled("unit:1", true, 0);
+            rig.Tick(1); var first = rig.Take(); rig.Complete(first, "unit:1"); rig.Pump(1);
+            rig.Tick(21); rig.GamePaused = true; rig.Tick(21); rig.Tick(500);
+            Require(rig.Requests == 1 && !rig.Chatter.Paused, "Game pause started a generation or changed the manual pause state");
+            rig.GamePaused = false; rig.Tick(500); rig.Tick(520);
+            Require(rig.Requests == 1, "Resuming caught up requests or lost the remaining countdown");
+            rig.GamePaused = true; rig.Tick(520); rig.Tick(900);
+            rig.GamePaused = false; rig.Tick(900); rig.Tick(919);
+            Require(rig.Requests == 1, "A second pause consumed or reset the remaining time");
+            rig.Tick(920); var next = rig.Take();
+            Require(rig.Requests == 2 && rig.Captures == 2, "The remaining active real-time interval did not produce one generation");
+            rig.Complete(next); rig.Pump(920);
+        });
+        check("In-flight speech completes during game pause and its next countdown starts after game resume", () =>
+        {
+            using var rig = new Rig(new FixedRandom(0.5));
+            rig.Chatter.Refresh(new[] { Target(1) }); rig.SetEnabled("unit:1", true, 0);
+            rig.Tick(1); var first = rig.Take(); rig.GamePaused = true; rig.Tick(2);
+            Require(!first.Token.IsCancellationRequested, "Game pause cancelled an already sent request");
+            rig.Complete(first, "unit:1"); rig.Pump(100);
+            Require(rig.Chatter.History.Count == 1 && rig.Chatter.Person("unit:1") != null && rig.Requests == 1,
+                "Game pause discarded a valid response or started another generation");
+            rig.GamePaused = false; rig.Tick(100); rig.Tick(159);
+            Require(rig.Requests == 1, "Waiting for the response while paused consumed the next countdown");
+            rig.Tick(160); var next = rig.Take(); rig.Complete(next); rig.Pump(160);
+        });
+        check("Game pause keeps response freshness and queued notification expiry on real time", () =>
+        {
+            using (var rig = new Rig(new FixedRandom(0.5)))
+            {
+                rig.Chatter.Refresh(new[] { Target(1) }); rig.SetEnabled("unit:1", true, 0);
+                rig.Tick(1); var first = rig.Take(); rig.GamePaused = true; rig.Tick(2);
+                rig.Complete(first, "unit:1"); rig.Pump(182);
+                Require(rig.Chatter.History.Count == 0 && rig.Chatter.Person("unit:1") == null && rig.Requests == 1,
+                    "Game pause extended the lifetime of a stale response");
+            }
+            using (var rig = new Rig(new FixedRandom(0.5)))
+            {
+                rig.Chatter.Refresh(new[] { Target(1) }); rig.SetEnabled("unit:1", true, 0);
+                rig.Tick(1); var first = rig.Take(); rig.Complete(first, "unit:1"); rig.Pump(1);
+                rig.GamePaused = true; rig.Tick(2); rig.Tick(200);
+                Require(rig.Chatter.History.Count == 1 && rig.Chatter.NextNotification(200) == null && rig.Requests == 1,
+                    "Game pause extended a pending popup's lifetime or generated new speech");
+            }
+        });
+        check("Explicit appointments still run during game pause while initial speech waits for resume", () =>
+        {
+            using var rig = new Rig(new FixedRandom(0.5)); rig.GamePaused = true; rig.Tick(0);
+            rig.Chatter.Refresh(new[] { Target(1) }); rig.SetEnabled("unit:1", true, 0);
+            rig.Tick(1); var appointment = rig.Take(); var input = appointment.Batch.Input("").Data;
+            Require(input["speakers"] is JArray { Count: 0 } && input["appointments"] is JArray { Count: 1 } && rig.Captures == 0,
+                "A paused appointment generated speech or captured a situation");
+            rig.Complete(appointment); rig.Pump(1); rig.Tick(1000);
+            Require(rig.Requests == 1 && rig.Chatter.Person("unit:1") != null && rig.Chatter.History.Count == 0,
+                "Game pause prevented appointment or consumed the first speech countdown");
+            rig.GamePaused = false; rig.Tick(1000);
+            Require(rig.Requests == 1, "Speech started without waiting the remaining initial interval");
+            rig.Tick(1001); var speech = rig.Take();
+            Require(speech.Batch.Input("").Data["appointments"] is JArray { Count: 0 } && rig.Captures == 1,
+                "Game resume reappointed the crew or omitted speech");
+            rig.Complete(speech, "unit:1"); rig.Pump(1001);
+        });
         check("Silence is successful, does not trigger catch-up requests, and candidates rotate without enabling other targets", () =>
         {
             using var rig = new Rig(); var targets = Enumerable.Range(1, 6).Select(i => Target(i)).ToArray(); rig.Chatter.Refresh(targets);
@@ -467,7 +532,7 @@ internal static class CrewTests
         check("A missing Chatter connection pauses generation while retaining selected units", () =>
         {
             using var chatter = new CrewChatter(_ => { }); chatter.Refresh(new[] { Target(1), Target(2) }); chatter.ApplyTargets(new[] { "unit:1", "unit:2" }, 0);
-            chatter.Tick(1, new CrewSettings(), "en", _ => throw new InvalidOperationException("Unexpected capture"),
+            chatter.Tick(1, false, new CrewSettings(), "en", _ => throw new InvalidOperationException("Unexpected capture"),
                 (_, _, _, _) => throw new InvalidOperationException("Unexpected request"));
             Require(chatter.Paused && chatter.Error == "connection_required" && chatter.Enabled("unit:1") && chatter.Enabled("unit:2") && chatter.Usage.Snapshot.ApiRequests == 0,
                 "Missing configuration cleared user selection or sent a request");
@@ -514,10 +579,11 @@ internal static class CrewTests
         private readonly int mainThread = Environment.CurrentManagedThreadId;
         private readonly ConcurrentQueue<Call> calls = new();
         internal CrewSettings Settings;
+        internal bool GamePaused;
         internal JObject Situation = new();
         internal Rig(Random? random = null, CrewSettings? settings = null)
         { Chatter = new CrewChatter(Errors.Add, random ?? new Random(1)); Settings = settings ?? new CrewSettings("chatter", 1, 10); }
-        internal void Tick(double now) => Chatter.Tick(now, Settings, "en", _ =>
+        internal void Tick(double now) => Chatter.Tick(now, GamePaused, Settings, "en", _ =>
         { Require(Environment.CurrentManagedThreadId == mainThread, "Capture ran on a worker thread"); Captures++; return Situation; },
             async (batch, _, token, usage) =>
             {

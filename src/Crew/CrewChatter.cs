@@ -30,7 +30,7 @@ internal sealed class CrewRemark
     { Target = target; Submission = submission; ExpiresAt = expiresAt; Revision = revision; InformationRevision = informationRevision; }
 }
 
-// Session-owned scheduling uses only the caller's monotonic real-time clock, never simulation time or pause state.
+// Session-owned scheduling receives monotonic real time and game pause state, never simulation speed.
 internal sealed class CrewChatter : IDisposable
 {
     private sealed class State
@@ -52,6 +52,9 @@ internal sealed class CrewChatter : IDisposable
     private (State State, int Revision, CrewTarget Target)[] active = Array.Empty<(State, int, CrewTarget)>();
     private bool retired, speechInFlight;
     private double startedAt, nextOpportunity = double.PositiveInfinity, nextAppointments = double.PositiveInfinity;
+    private double gamePauseOffset;
+    private double? gamePauseObservedAt;
+    private bool gamePaused;
     private long selectionRound;
     private string informationKey = CrewInformation.Default.Key;
     private int informationRevision, activeInformationRevision;
@@ -98,7 +101,7 @@ internal sealed class CrewChatter : IDisposable
         if (!HasEnabledTargets) CancelGeneration();
         else
         {
-            if (!wasActive) nextOpportunity = now + 1;
+            if (!wasActive) nextOpportunity = OpportunityTime(now) + 1;
             if (NeedsAppointment) nextAppointments = Math.Min(nextAppointments, now + 1);
             else nextAppointments = double.PositiveInfinity;
         }
@@ -112,22 +115,28 @@ internal sealed class CrewChatter : IDisposable
         else
         {
             Error = null;
-            nextOpportunity = HasEnabledTargets ? now + 1 : double.PositiveInfinity;
+            nextOpportunity = HasEnabledTargets ? OpportunityTime(now) + 1 : double.PositiveInfinity;
             nextAppointments = NeedsAppointment ? now + 1 : double.PositiveInfinity;
         }
         Version++;
     }
-    internal void Tick(double now, CrewSettings settings, string language, Func<IReadOnlyList<CrewTarget>, JObject> capture,
+    private double OpportunityTime(double now) => now - gamePauseOffset -
+        (gamePaused && gamePauseObservedAt is double observed ? now - observed : 0);
+    internal void Tick(double now, bool simulationPaused, CrewSettings settings, string language, Func<IReadOnlyList<CrewTarget>, JObject> capture,
         Func<CrewBatch, string, CancellationToken, Action<long?>, Task<CrewGeneration>> generate)
     {
         if (retired) return;
+        // Exclude paused wall time only from speech scheduling; request freshness keeps using now.
+        if (gamePaused && gamePauseObservedAt is double previous) gamePauseOffset += now - previous;
+        gamePauseObservedAt = now; gamePaused = simulationPaused;
+        var opportunityNow = OpportunityTime(now);
         if (informationKey != settings.Information.Key)
         {
             informationKey = settings.Information.Key; informationRevision++;
         }
         if (Paused) return;
         if (!HasSpeakers) nextOpportunity = double.PositiveInfinity;
-        else if (double.IsPositiveInfinity(nextOpportunity) && !speechInFlight) nextOpportunity = now + 1;
+        else if (double.IsPositiveInfinity(nextOpportunity) && !speechInFlight) nextOpportunity = opportunityNow + 1;
         if (task?.IsCompleted == true)
         {
             var completed = task; task = null; var work = active; var hadSpeech = speechInFlight;
@@ -167,16 +176,16 @@ internal sealed class CrewChatter : IDisposable
                 else
                 {
                     if (hadSpeech && double.IsPositiveInfinity(nextOpportunity))
-                        nextOpportunity = now + 60 * settings.IntervalMinutes * (0.75 + random.NextDouble() * 0.5);
+                        nextOpportunity = opportunityNow + 60 * settings.IntervalMinutes * (0.75 + random.NextDouble() * 0.5);
                     if (!NeedsAppointment) nextAppointments = double.PositiveInfinity;
                     else if (double.IsPositiveInfinity(nextAppointments)) nextAppointments = now + 1;
                 }
                 cancellation?.Dispose(); cancellation = null; Version++;
             }
         }
-        if (Paused || task != null || now < Math.Min(nextOpportunity, nextAppointments)) return;
+        if (Paused || task != null || ((simulationPaused || opportunityNow < nextOpportunity) && now < nextAppointments)) return;
         var appointments = now < nextAppointments ? Array.Empty<State>() : states.Values.Where(s => s.Enabled && !people.ContainsKey(s.Target.Id)).Take(CrewBatch.MaximumAppointments).ToArray();
-        var candidates = now < nextOpportunity ? Array.Empty<State>() : states.Values.Where(s => s.Enabled && s.Target.CanSpeak && (people.ContainsKey(s.Target.Id) || appointments.Contains(s)))
+        var candidates = simulationPaused || opportunityNow < nextOpportunity ? Array.Empty<State>() : states.Values.Where(s => s.Enabled && s.Target.CanSpeak && (people.ContainsKey(s.Target.Id) || appointments.Contains(s)))
             .OrderBy(s => s.LastConsidered).ThenBy(_ => random.NextDouble()).Take(4).ToArray();
         if (appointments.Length == 0 && candidates.Length == 0) return;
         if (settings.ConnectionId == null) { Error = "connection_required"; SetPaused(true, now); return; }

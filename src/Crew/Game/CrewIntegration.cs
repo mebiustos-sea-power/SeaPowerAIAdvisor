@@ -33,6 +33,7 @@ internal sealed class CrewIntegration
     private CrewWindow? window;
     private CrewPresentation? presentation;
     private HudButton? launcher;
+    private string launcherTooltip = "";
     private double nextRefresh;
     private bool active, failed;
     internal CrewIntegration(string settingsPath, Func<bool> enabled, Action<bool> saveEnabled, Action<string> checkLocalConnection, Func<CrewSettingsStore, ICrewConnections> connect, Func<string, string> common, Action<Exception> log)
@@ -67,7 +68,8 @@ internal sealed class CrewIntegration
             chatter.Refresh(source.Targets()); nextRefresh = clock.Elapsed.TotalSeconds + 1;
             var grid = view.FindName("DisplayAreaGrid") as Grid ?? throw new InvalidOperationException("The battle HUD grid is unavailable.");
             var reference = view.FindName("UnitStatusWindow") as ToggleButton ?? throw new InvalidOperationException("The battle HUD toggle is unavailable.");
-            launcher = new HudButton(grid, reference, "CREW", "AI Crew", 11, before: hudAnchor);
+            launcherTooltip = new CrewText(GameLanguage.Read())["launcher.tooltip"];
+            launcher = new HudButton(grid, reference, "CREW", launcherTooltip, 11, before: hudAnchor);
             var button = launcher;
             button.Control.Loaded += (_, _) => Guard(() => button.FitLabel("CRW"));
             presentation = new CrewPresentation(GameUi.FindVisual<Grid>(view) ?? throw new InvalidOperationException("The battle content layout is unavailable."));
@@ -76,11 +78,11 @@ internal sealed class CrewIntegration
         }
         var now = clock.Elapsed.TotalSeconds;
         if (now >= nextRefresh) { chatter!.Refresh(source!.Targets()); nextRefresh = now + 1; }
-        chatter!.Tick(now, settings!.Current, GameLanguage.Read(), source!.Capture, connections!.GenerateAsync);
+        chatter!.Tick(now, GameTime.IsPaused(), settings!.Current, GameLanguage.Read(), source!.Capture, connections!.GenerateAsync);
         window?.Tick(); presentation!.Tick(chatter, now, settings.Current.DisplaySeconds, settings.Current.NotificationPosition, current.IsHudVisible);
         launcher!.Control.Visibility = current.IsHudVisible ? Visibility.Visible : Visibility.Collapsed;
         launcher.Control.IsChecked = window?.IsOpen == true;
-        launcher.Control.ToolTip = chatter.Error == null ? "AI Crew" : "AI Crew / " + chatter.Error;
+        launcher.Control.ToolTip = chatter.Error == null ? launcherTooltip : launcherTooltip + " / " + chatter.Error;
     }
     private void ToggleWindow()
     {
@@ -135,7 +137,7 @@ internal sealed class CrewIntegration
     {
         log(error); failed = true;
         Cleanup(() => chatter?.SetPaused(true, clock.Elapsed.TotalSeconds), () => presentation?.Clear(), () => window?.Stop());
-        if (launcher != null) launcher.Control.ToolTip = "AI Crew / " + error.GetType().Name;
+        if (launcher != null) launcher.Control.ToolTip = launcherTooltip + " / " + error.GetType().Name;
     }
     private void Cleanup(params Action[] actions)
     {
