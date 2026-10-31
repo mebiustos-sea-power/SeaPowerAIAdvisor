@@ -50,7 +50,7 @@
   "exchange_chance": "Chance to encourage an exchange (%, 0-100)",
   "exchange_chance_hint": "Applies when multiple speakers are eligible. Even at 100%, independent remarks or silence are possible.",
   "information": "Data for AI",
-  "information.hint": "Provides weather and sea conditions, reporting candidates and their formation members, plus player-known contacts and launched weapons. These choices apply only to AI Crew.",
+  "information.hint": "These choices apply only to AI Crew. Saved changes take effect from the next generation.",
   "information.always": "Always provided",
   "information.identity": "Crew and unit basics (names, personality, nation, role and type)",
   "information.formation": "Formation membership and independent-action status",
@@ -77,6 +77,5 @@
   "information.contacts_hint": "Allegiance, identification, known type, position and motion. Missiles and torpedoes have a separate option.",
   "information.launched_weapons": "Missile and torpedo situation",
   "information.launched_weapons_hint": "Allegiance, types and counts of active launched weapons, with known launch platforms and tracked targets.",
-  "information.apply_hint": "Applies to the next generation after saving. Remarks from before a selection change are not resent to the AI. Briefing, objectives, queued routes and performance references are not provided.",
   "error.information_invalid": "The Data for AI settings are invalid."
 }

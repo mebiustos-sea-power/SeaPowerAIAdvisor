@@ -97,7 +97,6 @@
                   </StackPanel>
                   <TextBlock Text="{DynamicResource Crew.information.optional}" FontSize="14" FontWeight="Bold" Margin="0,20,0,8" />
                   <StackPanel x:Name="InformationChoices" />
-                  <TextBlock Text="{DynamicResource Crew.information.apply_hint}" FontSize="12" TextWrapping="Wrap" Opacity="0.7" Margin="0,8,0,0" />
                 </StackPanel>
               </ScrollViewer>
               <Grid Grid.Row="1" Margin="0,10,0,0">
