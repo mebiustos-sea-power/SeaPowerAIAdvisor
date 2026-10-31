@@ -8,7 +8,7 @@ using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
 
-namespace SeaPowerAIAdvisor;
+namespace SeaPowerAIAdvisor.Shared;
 
 // Resolves only the public left briefing pane, using the game's language and file-selection rules.
 internal static class BattleBriefingReader

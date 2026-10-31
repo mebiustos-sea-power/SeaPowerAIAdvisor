@@ -78,6 +78,182 @@ internal static class CrewTests
                 Throws<CrewException>(() => CrewSettings.Parse(new JObject { ["notification_position"] = invalid }.ToString()));
             Throws<CrewException>(() => new CrewSettings(notificationPosition: (CrewNotificationPosition)99));
         }));
+        check("Rank display defaults on, persists independently and rejects malformed flags", () => Temp(directory =>
+        {
+            var path = Path.Combine(directory, "crew.json"); var store = new CrewSettingsStore(path);
+            Require(store.Current.ShowRanks && CrewSettings.Parse("{}").ShowRanks, "Rank display did not default on");
+            var selected = CrewInformation.Default.With("fuel", false);
+            store.Save(new CrewSettings("chatter", 7, 14, CrewNotificationPosition.BottomLeft, false, 60, selected, showRanks: false));
+            var saved = new CrewSettingsStore(path).Current;
+            Require(!saved.ShowRanks && saved.ConnectionId == "chatter" && saved.IntervalMinutes == 7 && saved.DisplaySeconds == 14 &&
+                saved.NotificationPosition == CrewNotificationPosition.BottomLeft && !saved.ShowHelpTab && saved.ExchangeChancePercent == 60 && saved.Information.Key == selected.Key,
+                "Saving the display flag changed unrelated preferences");
+            foreach (var invalid in new JToken[] { JValue.CreateNull(), new JValue("false"), new JValue(0) })
+                Throws<CrewException>(() => CrewSettings.Parse(new JObject { ["show_ranks"] = invalid }.ToString()));
+        }));
+        check("Rank display combines the unchanged full name and rank with one space in the requested order", () =>
+        {
+            foreach (var sample in new[] { ("Angus MacGregor", "Cmdr.", "before", "Cmdr. Angus MacGregor"), ("アンガス・マクレガー", "中佐", "after", "アンガス・マクレガー 中佐") })
+            {
+                var batch = new CrewBatch(new JObject(), new Dictionary<string, CrewPerson?> { ["unit:1"] = null }, new[] { "unit:1" });
+                var row = AppointmentRow("unit:1", sample.Item1); row["rank"] = sample.Item2; row["name_with_rank"] = sample.Item4;
+                var appointment = batch.Read(Reply(new JArray(), new JArray(row))).Appointments["unit:1"]; var person = appointment.Person;
+                var vote = appointment.RankBeforeName ?? throw new InvalidOperationException("Expected a valid rank vote");
+                Require(person.DisplayName(false, vote) == sample.Item1 && person.DisplayName(true, vote) == sample.Item4 && person.Name == sample.Item1 &&
+                    person.Rank == sample.Item2 && appointment.RankBeforeName == (sample.Item3 == "before"),
+                    "Rank display abbreviated the name, lost the separator or changed the requested order");
+                var exported = person.Json();
+                Require((string?)exported["name"] == sample.Item1 && (string?)exported["rank"] == sample.Item2 && exported["rank_position"] == null && exported["name_with_rank"] == null,
+                    "Person export changed the name, rank or display order");
+                var lower = (JObject)row.DeepClone(); lower["name_with_rank"] = sample.Item4.ToLowerInvariant();
+                var lowerResult = batch.Read(Reply(new JArray(), new JArray(lower))).Appointments["unit:1"];
+                Require(lowerResult.RankBeforeName == appointment.RankBeforeName && lowerResult.Person.Name == sample.Item1,
+                    "Case differences in the hint changed the vote or the stored personal name");
+                foreach (var invalid in new JToken[] { JValue.CreateNull(), new JValue(1), new JValue("  "), new JValue(new string('a', 81)) })
+                { var bad = (JObject)row.DeepClone(); bad["rank"] = invalid; Throws<CrewException>(() => batch.Read(Reply(new JArray(), new JArray(bad)))); }
+            }
+        });
+        check("Captured name forms produce one before and four after votes without abbreviating displayed people", () =>
+        {
+            using var rig = new Rig(); rig.GamePaused = true; var targets = Enumerable.Range(1, 5).Select(i => Target(i)).ToArray();
+            rig.Chatter.Refresh(targets); rig.SetEnabled("unit:1", true, 0); rig.Tick(1); var first = rig.Take();
+            JObject Captured(string id, string name, string rank, string form) => new() { ["id"] = id, ["person_name"] = name, ["rank"] = rank, ["name_with_rank"] = form, ["personality"] = "Calm" };
+            first.Completion.SetResult(first.Batch.Read(Reply(new JArray(), new JArray(Captured("unit:1", "佐伯 健一郎", "大尉", "大尉 佐伯 健一郎"))))); rig.Pump(1);
+            Require(rig.Chatter.RankBeforeVotes == 1 && rig.Chatter.RankPosition == "before", "The initial prefix was not counted");
+            rig.Chatter.ApplyTargets(targets.Select(x => x.Id).ToArray(), 1); rig.Tick(2); var next = rig.Take();
+            var rows = new JArray(Captured("unit:2", "ジェームズ・A・ハリントン", "大佐", "ハリントン大佐"), Captured("unit:3", "佐伯 光", "一等海尉", "佐伯一等海尉"),
+                Captured("unit:4", "真壁 涼子", "三等海佐", "真壁三等海佐"), Captured("unit:5", "イアン・マクレガー", "少佐", "マクレガー少佐"));
+            next.Completion.SetResult(next.Batch.Read(Reply(new JArray(), rows))); rig.Pump(2);
+            Require(rig.Chatter.RankBeforeVotes == 1 && rig.Chatter.RankAfterVotes == 4 && rig.Chatter.RankInvalidVotes == 0 && rig.Chatter.RankPosition == "after" &&
+                rig.Chatter.Person("unit:1")!.DisplayName(true, rig.Chatter.RankBeforeName) == "佐伯 健一郎 大尉" &&
+                rig.Chatter.Person("unit:2")!.DisplayName(true, rig.Chatter.RankBeforeName) == "ジェームズ・A・ハリントン 大佐",
+                "The captured suffixes were miscounted or shortened hints abbreviated the displayed full name");
+        });
+        check("Invalid or missing rank hints do not reject valid people, while essential appointment fields stay strict", () =>
+        {
+            var batch = new CrewBatch(new JObject(), new Dictionary<string, CrewPerson?> { ["unit:1"] = null }, new[] { "unit:1" });
+            foreach (var invalid in new JToken[] { JValue.CreateNull(), new JValue(true), new JValue(123), new JValue(""), new JValue("   "), new JValue("left"), new JValue("Cmdr. Fictional Cmdr."), new JValue("Cmdr."), new JValue(new string('x', 300)), new JArray(), new JObject() })
+            {
+                var row = AppointmentRow("unit:1"); row["name_with_rank"] = invalid;
+                var result = batch.Read(Reply(new JArray(Row("unit:1")), new JArray(row)));
+                Require(result.Appointments["unit:1"].Person.Name == "Fictional" && result.Appointments["unit:1"].RankBeforeName == null && result.Remarks.Count == 1,
+                    "An auxiliary invalid vote rejected the person or their valid remark");
+            }
+            var missing = AppointmentRow("unit:1"); missing.Remove("name_with_rank");
+            Require(batch.Read(Reply(new JArray(), new JArray(missing))).Appointments["unit:1"].RankBeforeName == null,
+                "Absent display hints prevented appointment");
+            foreach (var field in new[] { "id", "person_name", "rank", "personality" })
+            {
+                var bad = AppointmentRow("unit:1"); bad.Remove(field); Throws<CrewException>(() => batch.Read(Reply(new JArray(), new JArray(bad))));
+                bad = AppointmentRow("unit:1"); bad[field] = JValue.CreateNull(); Throws<CrewException>(() => batch.Read(Reply(new JArray(), new JArray(bad))));
+            }
+            var unknown = AppointmentRow("unit:99"); Throws<CrewException>(() => batch.Read(Reply(new JArray(), new JArray(unknown))));
+        });
+        check("Invalid rank votes never pause Chatter and valid cumulative votes alone determine the shared order", () =>
+        {
+            using var rig = new Rig(); var targets = Enumerable.Range(1, 10).Select(i => Target(i)).ToArray();
+            rig.Chatter.Refresh(targets); rig.SetEnabled("unit:1", true, 0); rig.Tick(1); var first = rig.Take();
+            var row = AppointmentRow("unit:1"); row["name_with_rank"] = JValue.CreateNull();
+            first.Completion.SetResult(first.Batch.Read(Reply(new JArray(Row("unit:1")), new JArray(row)))); rig.Pump(1);
+            var person = rig.Chatter.Person("unit:1")!;
+            Require(!rig.Chatter.Paused && rig.Chatter.Error == null && person != null && rig.Chatter.History.Count == 1 &&
+                rig.Chatter.RankBeforeVotes == 0 && rig.Chatter.RankAfterVotes == 0 && rig.Chatter.RankInvalidVotes == 1 && rig.Chatter.RankPosition == "before",
+                "An invalid-only appointment stopped Chatter, lost its remark or did not use provisional before");
+            rig.GamePaused = true;
+            rig.Chatter.ApplyTargets(targets.Take(5).Select(x => x.Id).ToArray(), 1); rig.Tick(2); var four = rig.Take();
+            var invalid = AppointmentRow("unit:4"); invalid["name_with_rank"] = JValue.CreateNull();
+            four.Completion.SetResult(four.Batch.Read(Reply(new JArray(), new JArray(AppointmentRow("unit:2", position: "after"), AppointmentRow("unit:3", position: "after"), invalid, AppointmentRow("unit:5", position: "left"))))); rig.Pump(2);
+            Require(rig.Chatter.RankPosition == "after" && rig.Chatter.RankAfterVotes == 2 && rig.Chatter.RankBeforeVotes == 0 && rig.Chatter.RankInvalidVotes == 3,
+                "More invalid than valid votes prevented a valid majority");
+            rig.Chatter.ApplyTargets(targets.Take(8).Select(x => x.Id).ToArray(), 2); rig.Tick(3); var three = rig.Take();
+            three.Completion.SetResult(three.Batch.Read(Reply(new JArray(), new JArray(AppointmentRow("unit:6"), AppointmentRow("unit:7"), AppointmentRow("unit:8", position: ""))))); rig.Pump(3);
+            Require(rig.Chatter.RankPosition == "after" && rig.Chatter.RankAfterVotes == 2 && rig.Chatter.RankBeforeVotes == 2 && rig.Chatter.RankInvalidVotes == 4,
+                "A valid tie did not retain the previous shared order");
+            rig.Chatter.ApplyTargets(targets.Select(x => x.Id).ToArray(), 3); rig.Tick(4); var last = rig.Take(); rig.CompleteWithVote(last, "invalid"); rig.Pump(4);
+            var status = new CrewLocalApi(rig.Chatter, () => 4, () => { }).Status();
+            Require(!rig.Chatter.Paused && rig.Chatter.Error == null && rig.Errors.Count == 0 && rig.Chatter.RankPosition == "after" &&
+                rig.Chatter.RankAfterVotes == 2 && rig.Chatter.RankBeforeVotes == 2 && (int?)status["rank_position_votes"]?["invalid"] == 6 &&
+                targets.All(x => rig.Chatter.Person(x.Id) != null) && ReferenceEquals(person, rig.Chatter.Person("unit:1")),
+                "An invalid-only later batch reset the established order or lost accepted people");
+        });
+        check("Shared rank order follows cumulative accepted appointments, preserves ties and reformats existing names", () =>
+        {
+            using var rig = new Rig(); var targets = Enumerable.Range(1, 9).Select(i => Target(i)).ToArray();
+            rig.Chatter.Refresh(targets); rig.SetEnabled("unit:1", true, 0); rig.Tick(1); var first = rig.Take();
+            rig.CompleteWithVote(first, "after", "unit:1"); rig.Pump(1);
+            var person = rig.Chatter.Person("unit:1")!;
+            Require(rig.Chatter.RankAfterVotes == 1 && rig.Chatter.RankBeforeVotes == 0 && rig.Chatter.RankPosition == "after" &&
+                rig.Chatter.History.Single().Submission.Person.DisplayName(true, rig.Chatter.RankBeforeName) == "Fictional Cmdr.",
+                "The first single appointment did not establish its displayed order");
+            rig.GamePaused = true;
+            rig.Chatter.ApplyTargets(targets.Take(5).Select(x => x.Id).ToArray(), 1); rig.Tick(2); var four = rig.Take();
+            rig.CompleteWithVote(four, "before"); rig.Pump(2);
+            Require(rig.Chatter.RankBeforeVotes == 4 && rig.Chatter.RankAfterVotes == 1 && rig.Chatter.RankPosition == "before" &&
+                ReferenceEquals(person, rig.Chatter.Person("unit:1")) && rig.Chatter.History.Single().Submission.Person.DisplayName(true, rig.Chatter.RankBeforeName) == "Cmdr. Fictional",
+                "Four later appointments did not replace the first vote's order for the existing person and history");
+            rig.Chatter.ApplyTargets(targets.Take(8).Select(x => x.Id).ToArray(), 2); rig.Tick(3); var three = rig.Take();
+            rig.CompleteWithVote(three, "after"); rig.Pump(3);
+            Require(rig.Chatter.RankBeforeVotes == 4 && rig.Chatter.RankAfterVotes == 4 && rig.Chatter.RankPosition == "before",
+                "A tied cumulative batch followed its newest votes instead of retaining the previous shared order");
+            rig.Chatter.ApplyTargets(targets.Select(x => x.Id).ToArray(), 3); rig.Tick(4); var last = rig.Take();
+            rig.CompleteWithVote(last, "after"); rig.Pump(4);
+            Require(rig.Chatter.RankPosition == "after" && rig.Chatter.RankBeforeVotes == 4 && rig.Chatter.RankAfterVotes == 5 &&
+                person.DisplayName(false, rig.Chatter.RankBeforeName) == "Fictional", "A new majority failed to update the common order or affected unranked display");
+            rig.Language = "ja"; rig.Tick(5); rig.SetEnabled("unit:1", false, 5); rig.SetEnabled("unit:1", true, 5);
+            rig.Chatter.SetPaused(true, 5); rig.Chatter.SetPaused(false, 5); rig.Tick(6);
+            Require(rig.Requests == 4 && rig.Chatter.RankBeforeVotes == 4 && rig.Chatter.RankAfterVotes == 5 && rig.Chatter.RankPosition == "after",
+                "Changing language, re-enabling a person or resuming Chatter reset or duplicated appointment votes");
+            var status = new CrewLocalApi(rig.Chatter, () => 6, () => { }).Status();
+            Require((string?)status["rank_position"] == "after" && (int?)status["rank_position_votes"]?["before"] == 4 &&
+                (int?)status["rank_position_votes"]?["after"] == 5 && ((JArray)status["targets"]!).All(x => x["person"]?["rank_position"] == null) &&
+                ((JArray)status["history"]!).All(x => x["rank_position"] == null), "The local API lost shared vote totals or exported per-person order");
+        });
+        check("Rank votes count only appointments still eligible when the batch is accepted", () =>
+        {
+            using var rig = new Rig(); rig.GamePaused = true; rig.Chatter.Refresh(new[] { Target(1), Target(2), Target(3) });
+            Require(rig.Chatter.RankPosition == null, "A session without appointments already had a decided rank order");
+            rig.Chatter.ApplyTargets(new[] { "unit:1", "unit:2", "unit:3" }, 0); rig.Tick(1); var call = rig.Take();
+            rig.SetEnabled("unit:1", false, 1);
+            var rows = new JArray(AppointmentRow("unit:1", position: "before"), AppointmentRow("unit:2", position: "after"), AppointmentRow("unit:3", position: "after"));
+            call.Completion.SetResult(call.Batch.Read(Reply(new JArray(), rows))); rig.Pump(1);
+            Require(rig.Chatter.Person("unit:1") == null && rig.Chatter.RankBeforeVotes == 0 && rig.Chatter.RankAfterVotes == 2 && rig.Chatter.RankPosition == "after",
+                "A disabled in-flight appointment cast a vote or discarded the still-valid appointments");
+            rig.SetEnabled("unit:1", true, 1); rig.Tick(2); var fresh = rig.Take(); rig.CompleteWithVote(fresh, "before"); rig.Pump(2);
+            Require(rig.Chatter.Person("unit:1") != null && rig.Chatter.RankBeforeVotes == 1 && rig.Chatter.RankAfterVotes == 2 && rig.Chatter.RankPosition == "after",
+                "Accepting the fresh appointment did not add exactly one vote to the existing total");
+        });
+        check("An initially tied valid rank vote retains the provisional before order", () =>
+        {
+            using var rig = new Rig(); rig.GamePaused = true; rig.Chatter.Refresh(new[] { Target(1), Target(2) });
+            rig.Chatter.ApplyTargets(new[] { "unit:1", "unit:2" }, 0); rig.Tick(1); var call = rig.Take();
+            call.Completion.SetResult(call.Batch.Read(Reply(new JArray(), new JArray(AppointmentRow("unit:2", position: "after"), AppointmentRow("unit:1", position: "before")))));
+            rig.Pump(1);
+            Require(rig.Chatter.RankBeforeVotes == 1 && rig.Chatter.RankAfterVotes == 1 && rig.Chatter.RankPosition == "before",
+                "The first tied batch did not retain its provisional order");
+        });
+        check("Appointments alone receive detached mission context once per batch and retain ranked people across later speech", () =>
+        {
+            using var rig = new Rig(); rig.GamePaused = true;
+            rig.Chatter.Refresh(new[] { Target(1, 1, 2), Follower(2) }); rig.Chatter.ApplyTargets(new[] { "unit:1", "unit:2" }, 0);
+            rig.Tick(1); var first = rig.Take(); var initial = first.Batch.Input("").Data;
+            Require(rig.AppointmentCaptures == 1 && rig.Captures == 0 && (string?)initial["appointment_context"]?["mission_briefing"] == "Protect the convoy." &&
+                initial["appointments"]!.Count() == 2 && (string?)initial["appointments"]![0]?["class_name"] == "Destroyer" &&
+                (bool?)initial["appointments"]![0]?["formation_leader"] == true && (bool?)initial["appointments"]![1]?["formation_leader"] == false,
+                "Appointment input omitted unit context, repeated a briefing, or captured periodic situation unnecessarily");
+            rig.AppointmentContext["mission_briefing"] = "Changed";
+            Require((string?)first.Batch.Input("").Data["appointment_context"]?["mission_briefing"] == "Protect the convoy.", "A later source mutation changed a queued appointment");
+            rig.Complete(first); rig.Pump(1); var person = rig.Chatter.Person("unit:1")!;
+            rig.Settings = new CrewSettings("chatter", 1, showRanks: false); rig.GamePaused = false; rig.Tick(100); rig.Tick(101);
+            var speech = rig.Take(); var next = speech.Batch.Input("").Data;
+            Require(rig.AppointmentCaptures == 1 && next["appointment_context"] == null && next["appointments"]!.Count() == 0 &&
+                (string?)next["speakers"]![0]?["person"]?["name"] == person.Name && (string?)next["speakers"]![0]?["person"]?["rank"] == person.Rank &&
+                next["speakers"]![0]?["person"]?["rank_position"] == null && ReferenceEquals(person, rig.Chatter.Person("unit:1")),
+                "Later speech resent the briefing or display OFF reappointed or lost the rank");
+            rig.Complete(speech, "unit:1"); rig.Pump(101);
+            rig.Chatter.Suspend(); rig.SetEnabled("unit:1", true, 102); rig.Tick(103); var resumed = rig.Take();
+            Require(resumed.Batch.Input("").Data["appointments"]!.Count() == 0 && ReferenceEquals(person, rig.Chatter.Person("unit:1")), "Re-enabling reappointed a session person");
+            rig.Complete(resumed); rig.Pump(103);
+        });
         check("Chatter information defaults to the existing coverage and persists independently of adviser choices", () => Temp(directory =>
         {
             var path = Path.Combine(directory, "crew.json"); var store = new CrewSettingsStore(path);
@@ -218,7 +394,7 @@ internal static class CrewTests
         });
         check("Exchange preference accepts silence and a single speaker and preserves the submitted reply order", () =>
         {
-            var person = new CrewPerson("Crew", "calm");
+            var person = new CrewPerson("Crew", "Lt.", "calm");
             var batch = new CrewBatch(new JObject(), new Dictionary<string, CrewPerson?> { ["unit:1"] = person, ["unit:2"] = person },
                 Array.Empty<string>(), preferExchange: true);
             Require(batch.Read(Reply(new JArray())).Remarks.Count == 0 && batch.Read(Reply(new JArray(Row("unit:1")))).Remarks.Count == 1,
@@ -228,13 +404,13 @@ internal static class CrewTests
         });
         check("A generation appoints silent crew independently, preserves people and rejects incomplete or unknown results", () =>
         {
-            var person = new CrewPerson("Existing", "Calm"); var input = new JObject { ["units"] = new JArray("snapshot") };
+            var person = new CrewPerson("Existing", "Cmdr.", "Calm"); var input = new JObject { ["units"] = new JArray("snapshot") };
             var batch = new CrewBatch(input, new Dictionary<string, CrewPerson?> { ["unit:1"] = person, ["unit:2"] = null, ["unit:3"] = null }, new[] { "unit:2", "unit:3" });
             input["units"] = new JArray("changed"); var providerInput = batch.Input("connection instruction");
             Require((string?)providerInput.Data["units"]![0] == "snapshot" && providerInput.Tools.Count == 1, "Live input or game tools leaked into a batch");
             var names = new JArray(AppointmentRow("unit:3"), AppointmentRow("unit:2", "New"));
             var result = batch.Read(Reply(new JArray(Row("unit:2"), Row("unit:1")), names));
-            Require(result.Remarks.Count == 2 && result.Remarks.Single(x => x.Id == "unit:1").Person == person && result.Appointments["unit:2"].Name == "New", "Identity or appointment was corrupted");
+            Require(result.Remarks.Count == 2 && result.Remarks.Single(x => x.Id == "unit:1").Person == person && result.Appointments["unit:2"].Person.Name == "New", "Identity or appointment was corrupted");
             var silent = batch.Read(Reply(new JArray(), names));
             Require(silent.Remarks.Count == 0 && silent.Appointments.Count == 2, "Silence prevented appointment");
             foreach (var invalid in new[] { new JArray(AppointmentRow("unit:2")), new JArray(AppointmentRow("unit:2"), AppointmentRow("unit:2")), new JArray(AppointmentRow("unit:2"), AppointmentRow("unit:99")) })
@@ -354,7 +530,7 @@ internal static class CrewTests
             using var rig = new Rig(); rig.Chatter.Refresh(new[] { Target(1) }); rig.SetEnabled("unit:1", true, 0);
             rig.Tick(1); var old = rig.Take(); rig.SetEnabled("unit:1", false, 1); rig.SetEnabled("unit:1", true, 1);
             rig.Complete(old, "unit:1"); rig.Pump(1);
-            Require(rig.Chatter.History.Count == 0 && rig.Chatter.Person("unit:1") == null, "A stale response appointed a disabled target");
+            Require(rig.Chatter.History.Count == 0 && rig.Chatter.Person("unit:1") == null && rig.Chatter.RankBeforeVotes == 0 && rig.Chatter.RankAfterVotes == 0, "A stale response appointed or counted a disabled target");
             rig.Tick(2); var fresh = rig.Take(); rig.Complete(fresh, "unit:1"); rig.Pump(2);
             Require(rig.Chatter.History.Count == 1, "A fresh enabled response was lost");
             rig.SetEnabled("unit:1", false, 2); rig.SetEnabled("unit:1", true, 2);
@@ -539,7 +715,7 @@ internal static class CrewTests
         check("A missing Chatter connection pauses generation while retaining selected units", () =>
         {
             using var chatter = new CrewChatter(_ => { }); chatter.Refresh(new[] { Target(1), Target(2) }); chatter.ApplyTargets(new[] { "unit:1", "unit:2" }, 0);
-            chatter.Tick(1, false, new CrewSettings(), "en", _ => throw new InvalidOperationException("Unexpected capture"),
+            chatter.Tick(1, false, new CrewSettings(), "en", _ => throw new InvalidOperationException("Unexpected capture"), _ => throw new InvalidOperationException("Unexpected appointment capture"),
                 (_, _, _, _) => throw new InvalidOperationException("Unexpected request"));
             Require(chatter.Paused && chatter.Error == "connection_required" && chatter.Enabled("unit:1") && chatter.Enabled("unit:2") && chatter.Usage.Snapshot.ApiRequests == 0,
                 "Missing configuration cleared user selection or sent a request");
@@ -557,10 +733,10 @@ internal static class CrewTests
         ],"contacts":[{"track_number":7017,"posture":"enemy","position":{"latitude_deg":26.8,"longitude_deg":126.5}}],
         "launched_weapons":[{"posture":"enemy","kind":"missile","count":2,"launch_platform":null,"tracked_target":{"id":"unit:1","display_name":"Helicopter"}}]}
         """);
-    private static JObject AppointmentRow(string id, string name = "Fictional") => new() { ["id"] = id, ["person_name"] = name, ["personality"] = "Calm" };
+    private static JObject AppointmentRow(string id, string name = "Fictional", string position = "before") => new() { ["id"] = id, ["person_name"] = name, ["rank"] = "Cmdr.", ["name_with_rank"] = position switch { "before" => "Cmdr. " + name, "after" => name + " Cmdr.", _ => name }, ["personality"] = "Calm" };
     private static AiReply Reply(JArray rows, JArray? appointments = null) => new("", new[] { new AiToolCall("chatter", CrewBatch.ToolName, new JObject { ["appointments"] = appointments ?? new JArray(), ["remarks"] = rows }) }, 12);
-    private static CrewTarget Target(int id, params int[] members) => new("unit:" + id, "Unit " + id, "US", "captain", members.Length == 0 ? new[] { id } : members, true);
-    private static CrewTarget Follower(int id) => new("unit:" + id, "Unit " + id, "US", "captain", new[] { id }, false);
+    private static CrewTarget Target(int id, params int[] members) => new("unit:" + id, "Unit " + id, "US", "captain", "vessel", "Destroyer", members.Length > 1, members.Length == 0 ? new[] { id } : members, true);
+    private static CrewTarget Follower(int id) => new("unit:" + id, "Unit " + id, "US", "captain", "vessel", "Destroyer", false, new[] { id }, false);
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
     private static void Throws<T>(Action action) where T : Exception
     { try { action(); } catch (T) { return; } throw new InvalidOperationException("Expected rejection: " + typeof(T).Name); }
@@ -582,16 +758,19 @@ internal static class CrewTests
     {
         internal readonly List<Exception> Errors = new();
         internal readonly CrewChatter Chatter;
-        internal int Captures, Requests;
+        internal int Captures, AppointmentCaptures, Requests;
         private readonly int mainThread = Environment.CurrentManagedThreadId;
         private readonly ConcurrentQueue<Call> calls = new();
         internal CrewSettings Settings;
         internal bool GamePaused;
+        internal string Language = "en";
         internal JObject Situation = new();
+        internal JObject AppointmentContext = new() { ["mission_briefing"] = "Protect the convoy." };
         internal Rig(Random? random = null, CrewSettings? settings = null)
         { Chatter = new CrewChatter(Errors.Add, random ?? new Random(1)); Settings = settings ?? new CrewSettings("chatter", 1, 10); }
-        internal void Tick(double now) => Chatter.Tick(now, GamePaused, Settings, "en", _ =>
+        internal void Tick(double now) => Chatter.Tick(now, GamePaused, Settings, Language, _ =>
         { Require(Environment.CurrentManagedThreadId == mainThread, "Capture ran on a worker thread"); Captures++; return Situation; },
+            _ => { Require(Environment.CurrentManagedThreadId == mainThread, "Appointment capture ran on a worker thread"); AppointmentCaptures++; return AppointmentContext; },
             async (batch, _, token, usage) =>
             {
                 Interlocked.Increment(ref Requests); var call = new Call(batch, token); calls.Enqueue(call); long? tokens = null;
@@ -607,9 +786,10 @@ internal static class CrewTests
             var selected = new HashSet<string>(Chatter.Targets.Where(t => Chatter.Enabled(t.Id)).Select(t => t.Id));
             if (enabled) selected.Add(id); else selected.Remove(id); Chatter.ApplyTargets(selected, now);
         }
-        internal void Complete(Call call, params string[] ids)
+        internal void Complete(Call call, params string[] ids) => CompleteWithVote(call, "before", ids);
+        internal void CompleteWithVote(Call call, string position, params string[] ids)
         {
-            var appointments = new JArray(((JArray)call.Batch.Input("").Data["appointments"]!).Select(t => AppointmentRow((string)t["id"]!)));
+            var appointments = new JArray(((JArray)call.Batch.Input("").Data["appointments"]!).Select(t => AppointmentRow((string)t["id"]!, position: position)));
             call.Completion.SetResult(call.Batch.Read(Reply(new JArray(ids.Select(Row)), appointments)));
         }
         internal void Pump(double now) => TickUntil(now, () => !Chatter.Busy);

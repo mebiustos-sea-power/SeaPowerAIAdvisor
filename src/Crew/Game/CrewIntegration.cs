@@ -59,7 +59,7 @@ internal sealed class CrewIntegration
         if (!active)
         {
             settings ??= new CrewSettingsStore(settingsPath); connections ??= connect(settings);
-            source ??= new CrewBattleSource(current); chatter ??= new CrewChatter(log);
+            source ??= new CrewBattleSource(current, log); chatter ??= new CrewChatter(log);
             local ??= new CrewLocalApi(chatter, () => clock.Elapsed.TotalSeconds, () =>
             {
                 connections.ValidateSelection(settings.Current.ConnectionId);
@@ -76,8 +76,8 @@ internal sealed class CrewIntegration
         }
         var now = clock.Elapsed.TotalSeconds;
         if (now >= nextRefresh) { chatter!.Refresh(source!.Targets()); nextRefresh = now + 1; }
-        chatter!.Tick(now, GameTime.IsPaused(), settings!.Current, GameLanguage.Read(), source!.Capture, connections!.GenerateAsync);
-        window?.Tick(); presentation!.Tick(chatter, now, settings.Current.DisplaySeconds, settings.Current.NotificationPosition, current.IsHudVisible);
+        chatter!.Tick(now, GameTime.IsPaused(), settings!.Current, GameLanguage.Read(), source!.Capture, source!.CaptureAppointments, connections!.GenerateAsync);
+        window?.Tick(); presentation!.Tick(chatter, now, settings.Current.DisplaySeconds, settings.Current.NotificationPosition, settings.Current.ShowRanks, current.IsHudVisible);
         launcher!.Control.Visibility = current.IsHudVisible ? Visibility.Visible : Visibility.Collapsed;
         launcher.Control.IsChecked = window?.IsOpen == true;
         launcher.Control.ToolTip = chatter.Error == null ? launcherTooltip : launcherTooltip + " / " + chatter.Error;

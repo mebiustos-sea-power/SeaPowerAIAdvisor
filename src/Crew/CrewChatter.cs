@@ -13,10 +13,13 @@ internal sealed class CrewTarget
     internal string Name { get; }
     internal string Nation { get; }
     internal string Role { get; }
+    internal string Kind { get; }
+    internal string ClassName { get; }
+    internal bool FormationLeader { get; }
     internal IReadOnlyList<int> Members { get; }
     internal bool CanSpeak { get; }
-    internal CrewTarget(string id, string name, string nation, string role, IReadOnlyList<int> members, bool canSpeak)
-    { Id = id; Name = name; Nation = nation; Role = role; Members = members; CanSpeak = canSpeak; }
+    internal CrewTarget(string id, string name, string nation, string role, string kind, string className, bool formationLeader, IReadOnlyList<int> members, bool canSpeak)
+    { Id = id; Name = name; Nation = nation; Role = role; Kind = kind; ClassName = className; FormationLeader = formationLeader; Members = members; CanSpeak = canSpeak; }
 }
 internal sealed class CrewRemark
 {
@@ -61,6 +64,11 @@ internal sealed class CrewChatter : IDisposable
     internal string? Error { get; private set; }
     internal bool Busy => task != null;
     internal CrewUsage Usage { get; } = new();
+    internal int RankBeforeVotes { get; private set; }
+    internal int RankAfterVotes { get; private set; }
+    internal int RankInvalidVotes { get; private set; }
+    internal bool RankBeforeName { get; private set; } = true;
+    internal string? RankPosition => people.Count == 0 ? null : RankBeforeName ? "before" : "after";
     internal bool Paused { get; private set; }
     internal bool HasEnabledTargets => states.Values.Any(s => s.Enabled);
     private bool HasSpeakers => states.Values.Any(s => s.Enabled && s.Target.CanSpeak);
@@ -122,7 +130,7 @@ internal sealed class CrewChatter : IDisposable
     }
     private double OpportunityTime(double now) => now - gamePauseOffset -
         (gamePaused && gamePauseObservedAt is double observed ? now - observed : 0);
-    internal void Tick(double now, bool simulationPaused, CrewSettings settings, string language, Func<IReadOnlyList<CrewTarget>, JObject> capture,
+    internal void Tick(double now, bool simulationPaused, CrewSettings settings, string language, Func<IReadOnlyList<CrewTarget>, JObject> capture, Func<string, JObject> captureAppointments,
         Func<CrewBatch, string, CancellationToken, Action<long?>, Task<CrewGeneration>> generate)
     {
         if (retired) return;
@@ -150,8 +158,14 @@ internal sealed class CrewChatter : IDisposable
                 foreach (var appointment in result.Appointments)
                 {
                     var entry = work.Single(w => w.Target.Id == appointment.Key);
-                    if (Valid(entry) && !people.ContainsKey(appointment.Key)) people.Add(appointment.Key, appointment.Value);
+                    if (!Valid(entry) || people.ContainsKey(appointment.Key)) continue;
+                    people.Add(appointment.Key, appointment.Value.Person);
+                    if (appointment.Value.RankBeforeName is bool before)
+                    { if (before) RankBeforeVotes++; else RankAfterVotes++; }
+                    else RankInvalidVotes++;
                 }
+                // Evaluate once after accepting the batch, so a tie preserves the previous shared order.
+                if (RankBeforeVotes != RankAfterVotes) RankBeforeName = RankBeforeVotes > RankAfterVotes;
                 foreach (var submission in result.Remarks)
                 {
                     var entry = work.Single(w => w.Target.Id == submission.Id);
@@ -198,12 +212,17 @@ internal sealed class CrewChatter : IDisposable
         var data = candidates.Length == 0 ? new JObject() : settings.Information.Filter(capture(candidates.Select(s => s.Target).ToArray()));
         data["reply_language"] = language;
         JObject Identity(State state) => new() { ["id"] = state.Target.Id, ["display_name"] = state.Target.Name, ["nation"] = state.Target.Nation, ["role"] = state.Target.Role };
-        data["appointments"] = new JArray(appointments.Select(Identity));
+        if (appointments.Length > 0) data["appointment_context"] = captureAppointments(language).DeepClone();
+        data["appointments"] = new JArray(appointments.Select(s =>
+        {
+            var row = Identity(s); row["kind"] = s.Target.Kind; row["class_name"] = s.Target.ClassName;
+            row["formation_leader"] = s.Target.FormationLeader; return row;
+        }));
         data["speakers"] = new JArray(candidates.Select(s =>
         {
             var row = Identity(s); var person = Person(s.Target.Id);
             row["member_unit_ids"] = new JArray(s.Target.Members.Select(id => "unit:" + id));
-            row["person"] = person == null ? JValue.CreateNull() : new JObject { ["name"] = person.Name, ["personality"] = person.Personality };
+            row["person"] = person == null ? JValue.CreateNull() : person.Json();
             return row;
         }));
         if (candidates.Length > 0) data["recent_remarks"] = new JArray(history.Where(r => r.InformationRevision == informationRevision).TakeLast(3).Select(r => new JObject { ["id"] = r.Target.Id, ["text"] = r.Submission.Text }));

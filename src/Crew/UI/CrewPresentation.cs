@@ -18,6 +18,8 @@ internal sealed class CrewPresentation : IDisposable
     private readonly Border notice;
     private readonly TextBlock heading, body;
     private double until;
+    private CrewRemark? current;
+    private bool showRanks, rankBeforeName;
     private CrewNotificationPosition? position;
     internal CrewPresentation(Grid host)
     {
@@ -65,18 +67,24 @@ internal sealed class CrewPresentation : IDisposable
         notice.Margin = top ? new Thickness(18, 60, 18, 0) : new Thickness(18, 0, 18, 90);
         position = value;
     }
-    internal void Tick(CrewChatter chatter, double now, int seconds, CrewNotificationPosition notificationPosition, bool hudVisible)
+    internal void Tick(CrewChatter chatter, double now, int seconds, CrewNotificationPosition notificationPosition, bool showRanks, bool hudVisible)
     {
         Place(notificationPosition);
         layer.Visibility = hudVisible ? Visibility.Visible : Visibility.Collapsed;
         notice.MaxWidth = Math.Max(1, host.ActualWidth - 36);
         if (chatter.Paused || !chatter.HasEnabledTargets) { Clear(); return; }
+        if (current != null && (this.showRanks != showRanks || rankBeforeName != chatter.RankBeforeName)) SetHeading(current, showRanks, chatter.RankBeforeName);
         if (now < until) return;
-        notice.Visibility = Visibility.Collapsed;
+        notice.Visibility = Visibility.Collapsed; current = null;
         if (!hudVisible) return;
         var remark = chatter.NextNotification(now); if (remark == null) return;
-        heading.Text = remark.Target.Name + " / " + remark.Submission.Person.Name; body.Text = remark.Submission.Text;
+        current = remark; SetHeading(remark, showRanks, chatter.RankBeforeName); body.Text = remark.Submission.Text;
         notice.Visibility = Visibility.Visible; until = now + seconds;
+    }
+    private void SetHeading(CrewRemark remark, bool showRanks, bool rankBeforeName)
+    {
+        this.showRanks = showRanks; this.rankBeforeName = rankBeforeName;
+        heading.Text = remark.Target.Name + " / " + remark.Submission.Person.DisplayName(showRanks, rankBeforeName);
     }
     internal JObject Status()
     {
@@ -85,6 +93,6 @@ internal sealed class CrewPresentation : IDisposable
             ["heading"] = heading.Text, ["text"] = body.Text, ["position"] = position.HasValue ? CrewSettings.PositionCode(position.Value) : null,
             ["bounds"] = new JObject { ["x"] = bounds.X, ["y"] = bounds.Y, ["width"] = bounds.Width, ["height"] = bounds.Height } };
     }
-    internal void Clear() { until = 0; notice.Visibility = Visibility.Collapsed; }
+    internal void Clear() { until = 0; current = null; notice.Visibility = Visibility.Collapsed; }
     public void Dispose() { host.Children.Remove(layer); Portrait.Dispose(); UnityEngine.Object.Destroy(texture); }
 }

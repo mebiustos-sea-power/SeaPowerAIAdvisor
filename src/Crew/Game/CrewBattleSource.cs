@@ -14,7 +14,8 @@ namespace SeaPowerAIAdvisor.Crew;
 internal sealed class CrewBattleSource
 {
     private readonly MainGameViewModel model;
-    internal CrewBattleSource(MainGameViewModel model) => this.model = model;
+    private readonly Action<Exception> log;
+    internal CrewBattleSource(MainGameViewModel model, Action<Exception> log) { this.model = model; this.log = log; }
     private (int Id, ObjectBase Unit)[] OwnUnits()
     {
         var own = Globals._playerTaskforce?.TaskforceObjects;
@@ -32,9 +33,21 @@ internal sealed class CrewBattleSource
             var members = unit.Unit.Formation == null || !canSpeak ? new[] { unit.Id } : own.Where(m => ReferenceEquals(m.Unit.Formation, unit.Unit.Formation)).Select(m => m.Id).OrderBy(id => id).ToArray();
             var kind = Code(Required(unit.Unit, "_type"));
             result.Add(new CrewTarget("unit:" + unit.Id.ToString(CultureInfo.InvariantCulture), unit.Unit.Name.Value, unit.Unit.Nation.Value,
-                kind is "aircraft" or "helicopter" ? "pilot" : "captain", members, canSpeak));
+                kind is "aircraft" or "helicopter" ? "pilot" : "captain", kind, unit.Unit.ClassName,
+                unit.Unit.Formation != null && unit.Unit.IsFormationLeader, members, canSpeak));
         }
         return result;
+    }
+    internal JObject CaptureAppointments(string language)
+    {
+        var briefing = BattleBriefingSource.ReadXml(language, log);
+        return new JObject
+        {
+            ["captured_at_utc"] = SeaPower.Environment.Instance.DateTime.ToString("o", CultureInfo.InvariantCulture),
+            ["mission_display_name"] = SceneCreator.Instance.CurrentMissionName,
+            ["mission_briefing"] = BattleBriefingReader.Combine(EventLog.Instance.MissionBriefing.Value, briefing.Text),
+            ["mission_briefing_unavailable"] = briefing.Unavailable
+        };
     }
     internal JObject Capture(IReadOnlyList<CrewTarget> targets)
     {

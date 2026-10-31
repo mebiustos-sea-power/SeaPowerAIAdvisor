@@ -30,6 +30,16 @@ internal static class CrewConnectionTests
             var result = connections.GenerateAsync(Batch(), "chatter", CancellationToken.None, usage.Record).GetAwaiter().GetResult();
             Require(sends == 1 && result.Remarks.Single().Id == "unit:1" && usage.Snapshot.KnownTokens == 10 && usage.Snapshot.ApiRequests == 1, "The terminal remark submission caused extra exchanges or lost usage");
         }));
+        check("An invalid auxiliary rank vote preserves a successful generation, its remark and single-request usage", () => InTemp(directory =>
+        {
+            var path = Path.Combine(directory, "api.json"); AdvisorSettings.WriteBytes(path, Settings().Data()); var usage = new CrewUsage(); var sends = 0;
+            var connections = new ChatterConnections(path, directory, new CrewSettingsStore(Path.Combine(directory, "crew.json")), () => AdvisorText.Load("en"), transportFactory: trace =>
+                new AiHttpTransport(new Handler((_, _) => { sends++; return Task.FromResult(Response(HttpStatusCode.OK, invalidRankForm: true)); }), trace));
+            var result = connections.GenerateAsync(Batch(), "chatter", CancellationToken.None, usage.Record).GetAwaiter().GetResult();
+            Require(result.Appointments["unit:1"].Person.Name == "Fictional" && result.Appointments["unit:1"].RankBeforeName == null && result.Remarks.Count == 1 &&
+                sends == 1 && usage.Snapshot.ApiRequests == 1 && usage.Snapshot.KnownTokens == 10,
+                "An invalid display vote failed or retried the generation or lost its successful usage");
+        }));
         check("Missing Chatter connections fail before transport creation and server failure never uses the adviser's fallback", () => InTemp(directory =>
         {
             var path = Path.Combine(directory, "api.json"); AdvisorSettings.WriteBytes(path, Settings().Data()); var created = 0; var sends = 0; var usage = new CrewUsage();
@@ -96,10 +106,10 @@ internal static class CrewConnectionTests
             saved.Put(new AdvisorApiConfigurationDraft(new AdvisorApiConfiguration(id, id, "nanogpt", new JObject { ["api_key"] = "mock_" + id, ["model"] = "deepseek/" + id }, prompt: id.ToUpperInvariant() + "_SUPPLEMENT")));
         saved.MainId = "advisor"; saved.SubId = "fallback"; return saved;
     }
-    private static HttpResponseMessage Response(HttpStatusCode status, long? tokens = 10, bool silent = false, bool invalid = false)
+    private static HttpResponseMessage Response(HttpStatusCode status, long? tokens = 10, bool silent = false, bool invalid = false, bool invalidRankForm = false)
     {
         var rows = silent ? new JArray() : new JArray(new JObject { ["id"] = invalid ? "unit:99" : "unit:1", ["text"] = "Maintaining station." });
-        var appointments = new JArray(new JObject { ["id"] = "unit:1", ["person_name"] = "Fictional", ["personality"] = "Calm" });
+        var appointments = new JArray(new JObject { ["id"] = "unit:1", ["person_name"] = "Fictional", ["rank"] = "Cmdr.", ["name_with_rank"] = invalidRankForm ? JValue.CreateNull() : new JValue("Cmdr. Fictional"), ["personality"] = "Calm" });
         var result = new JObject { ["choices"] = new JArray(new JObject { ["finish_reason"] = "tool_calls", ["message"] = new JObject { ["role"] = "assistant", ["tool_calls"] = new JArray(new JObject { ["id"] = "chatter", ["type"] = "function", ["function"] = new JObject { ["name"] = CrewBatch.ToolName, ["arguments"] = new JObject { ["appointments"] = appointments, ["remarks"] = rows }.ToString(Newtonsoft.Json.Formatting.None) } }) } }), ["usage"] = tokens.HasValue ? new JObject { ["total_tokens"] = tokens.Value } : JValue.CreateNull() };
         return new HttpResponseMessage(status) { Content = new StringContent(result.ToString(), Encoding.UTF8, "application/json") };
     }

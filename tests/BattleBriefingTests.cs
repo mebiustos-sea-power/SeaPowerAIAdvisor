@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Xml;
-using SeaPowerAIAdvisor;
+using SeaPowerAIAdvisor.Shared;
 
 internal static class BattleBriefingTests
 {

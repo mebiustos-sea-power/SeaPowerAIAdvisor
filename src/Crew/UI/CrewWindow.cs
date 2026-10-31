@@ -32,7 +32,7 @@ internal sealed class CrewWindow : IDisposable
     private readonly SettingsTabNavigation tabs, apiTabs;
     private readonly ComboBox selection, notificationPosition;
     private readonly TextBox interval, duration, exchangeChance;
-    private readonly CheckBox showHelpTab;
+    private readonly CheckBox showHelpTab, showRanks;
     private readonly ImageSource portrait;
     private readonly UiNotice settingsNotice, chatterNotice;
     private readonly CrewTargetSelection targetSelection = new();
@@ -51,7 +51,7 @@ internal sealed class CrewWindow : IDisposable
     private string? SelectedId => selection.SelectedIndex <= 0 ? null : ids[selection.SelectedIndex - 1];
     private string Values => page switch
     {
-        "chatter" => interval.Text + ":" + duration.Text + ":" + notificationPosition.SelectedIndex + ":" + showHelpTab.IsChecked + ":" + exchangeChance.Text,
+        "chatter" => interval.Text + ":" + duration.Text + ":" + notificationPosition.SelectedIndex + ":" + showHelpTab.IsChecked + ":" + exchangeChance.Text + ":" + showRanks.IsChecked,
         "information" => information.Key,
         _ => SelectedId ?? ""
     };
@@ -79,7 +79,7 @@ internal sealed class CrewWindow : IDisposable
         selection = Find<ComboBox>("Connection"); notificationPosition = Find<ComboBox>("NotificationPosition");
         foreach (CrewNotificationPosition position in Enum.GetValues(typeof(CrewNotificationPosition)))
             notificationPosition.Items.Add(new ComboBoxItem { Content = text["position." + CrewSettings.PositionCode(position)] });
-        interval = Find<TextBox>("Interval"); duration = Find<TextBox>("Duration"); exchangeChance = Find<TextBox>("ExchangeChance"); showHelpTab = Find<CheckBox>("ShowHelpTab");
+        interval = Find<TextBox>("Interval"); duration = Find<TextBox>("Duration"); exchangeChance = Find<TextBox>("ExchangeChance"); showHelpTab = Find<CheckBox>("ShowHelpTab"); showRanks = Find<CheckBox>("ShowRanks");
         var fixedInformation = Find<FrameworkElement>("InformationFixed");
         fixedInformation.Loaded += (_, _) => Run(() => UiResources.ApplyDisabledCheckBoxBrushes(fixedInformation));
         foreach (var item in CrewInformation.Items)
@@ -121,22 +121,22 @@ internal sealed class CrewWindow : IDisposable
         Bind("SaveConnection", () =>
         {
             if (!CanCommit()) return;
-            var saved = settings.Current; settings.Save(new CrewSettings(SelectedId, saved.IntervalMinutes, saved.DisplaySeconds, saved.NotificationPosition, saved.ShowHelpTab, saved.ExchangeChancePercent, saved.Information));
+            var saved = settings.Current; settings.Save(new CrewSettings(SelectedId, saved.IntervalMinutes, saved.DisplaySeconds, saved.NotificationPosition, saved.ShowHelpTab, saved.ExchangeChancePercent, saved.Information, saved.ShowRanks));
             baseline = Values; editor.UpdateCards(); Saved();
         });
         Bind("SaveChatter", () =>
         {
             if (!CanCommit()) return;
             int Read(TextBox input) => int.TryParse(input.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : throw new CrewException("settings_invalid");
-            settings.Save(new CrewSettings(settings.Current.ConnectionId, Read(interval), Read(duration), (CrewNotificationPosition)notificationPosition.SelectedIndex, showHelpTab.IsChecked == true, Read(exchangeChance), settings.Current.Information));
-            UpdateHelpTab();
+            settings.Save(new CrewSettings(settings.Current.ConnectionId, Read(interval), Read(duration), (CrewNotificationPosition)notificationPosition.SelectedIndex, showHelpTab.IsChecked == true, Read(exchangeChance), settings.Current.Information, showRanks.IsChecked == true));
+            UpdateHelpTab(); revision = -1;
             baseline = Values; Saved();
         });
         Bind("SaveInformation", () =>
         {
             if (!CanCommit()) return;
             var saved = settings.Current;
-            settings.Save(new CrewSettings(saved.ConnectionId, saved.IntervalMinutes, saved.DisplaySeconds, saved.NotificationPosition, saved.ShowHelpTab, saved.ExchangeChancePercent, information));
+            settings.Save(new CrewSettings(saved.ConnectionId, saved.IntervalMinutes, saved.DisplaySeconds, saved.NotificationPosition, saved.ShowHelpTab, saved.ExchangeChancePercent, information, saved.ShowRanks));
             baseline = Values; Saved();
         });
         Bind("CancelConfirmation", HideConfirmation);
@@ -211,7 +211,7 @@ internal sealed class CrewWindow : IDisposable
             interval.Text = saved.IntervalMinutes.ToString(CultureInfo.InvariantCulture);
             exchangeChance.Text = saved.ExchangeChancePercent.ToString(CultureInfo.InvariantCulture);
             duration.Text = saved.DisplaySeconds.ToString(CultureInfo.InvariantCulture); notificationPosition.SelectedIndex = (int)saved.NotificationPosition;
-            showHelpTab.IsChecked = saved.ShowHelpTab;
+            showHelpTab.IsChecked = saved.ShowHelpTab; showRanks.IsChecked = saved.ShowRanks;
         }
         else SetInformation(settings.Current.Information);
         baseline = Values;
@@ -312,7 +312,7 @@ internal sealed class CrewWindow : IDisposable
         var panel = Find<StackPanel>("History"); panel.Children.Clear();
         if (chatter.History.Count == 0) panel.Children.Add(new TextBlock { Text = text["empty_history"], TextWrapping = TextWrapping.Wrap });
         foreach (var remark in chatter.History.Reverse())
-            panel.Children.Add(Card(remark.Target.Name + " / " + remark.Submission.Person.Name + " / " + remark.ReceivedAt.ToString("HH:mm:ss"), remark.Submission.Text));
+            panel.Children.Add(Card(remark.Target.Name + " / " + remark.Submission.Person.DisplayName(settings.Current.ShowRanks, chatter.RankBeforeName) + " / " + remark.ReceivedAt.ToString("HH:mm:ss"), remark.Submission.Text));
     }
     private void SyncSelection() => targetSelection.Sync(chatter.Targets, chatter.Enabled);
     private void DrawTargets()
@@ -326,7 +326,7 @@ internal sealed class CrewWindow : IDisposable
             var person = chatter.Person(target.Id);
             var label = target.Name + " / " + target.Nation + " / " + string.Format(CultureInfo.InvariantCulture, text["members"], target.Members.Count);
             if (!target.CanSpeak) label += " / " + text["leader_speaks"];
-            var check = new CheckBox { Content = Card(label, person == null ? text[chatter.Enabled(target.Id) ? "appointment_pending" : "not_appointed"] : person.Name + " / " + person.Personality),
+            var check = new CheckBox { Content = Card(label, person == null ? text[chatter.Enabled(target.Id) ? "appointment_pending" : "not_appointed"] : person.DisplayName(settings.Current.ShowRanks, chatter.RankBeforeName) + " / " + person.Personality),
                 IsChecked = targetSelection.Checked(target.Id), HorizontalContentAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 0, 0, 8) };
             check.Click += (_, _) => Run(() =>
             {

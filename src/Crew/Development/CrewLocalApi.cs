@@ -24,16 +24,18 @@ internal sealed class CrewLocalApi
             ["usage"] = new JObject { ["api_requests"] = usage.ApiRequests, ["known_total_tokens"] = usage.KnownTokens,
                 ["unknown_requests"] = usage.UnknownRequests, ["last_total_tokens"] = usage.LastTokens },
             ["scope_id"] = ScopeId, ["busy"] = chatter.Busy, ["paused"] = chatter.Paused, ["error"] = chatter.Error,
+            ["rank_position"] = chatter.RankPosition,
+            ["rank_position_votes"] = new JObject { ["before"] = chatter.RankBeforeVotes, ["after"] = chatter.RankAfterVotes, ["invalid"] = chatter.RankInvalidVotes },
             ["targets"] = new JArray(chatter.Targets.Select(t => new JObject
             {
                 ["id"] = t.Id, ["display_name"] = t.Name, ["nation"] = t.Nation, ["role"] = t.Role,
                 ["member_unit_ids"] = new JArray(t.Members), ["enabled"] = chatter.Enabled(t.Id), ["can_speak"] = t.CanSpeak,
-                ["person"] = chatter.Person(t.Id) is CrewPerson person ? new JObject { ["name"] = person.Name, ["personality"] = person.Personality } : JValue.CreateNull()
+                ["person"] = chatter.Person(t.Id) is CrewPerson person ? person.Json() : JValue.CreateNull()
             })),
             ["history"] = new JArray(chatter.History.Select(r => new JObject
             {
                 ["target_id"] = r.Target.Id, ["display_name"] = r.Target.Name, ["person_name"] = r.Submission.Person.Name,
-                ["personality"] = r.Submission.Person.Personality, ["text"] = r.Submission.Text,
+                ["rank"] = r.Submission.Person.Rank, ["personality"] = r.Submission.Person.Personality, ["text"] = r.Submission.Text,
                 ["received_at"] = r.ReceivedAt.ToString("o", CultureInfo.InvariantCulture)
             }))
         };

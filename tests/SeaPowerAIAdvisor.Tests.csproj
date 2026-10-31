@@ -95,7 +95,7 @@
     <Compile Include="..\src\Advisor\UI\AdvisorMarkdown.cs" Link="AdvisorMarkdown.cs" />
     <Compile Include="..\src\Advisor\Consultation\IAdvisorQuerySession.cs" Link="IAdvisorQuerySession.cs" />
     <Compile Include="..\src\Advisor\Game\AdvisorSource.cs" Link="AdvisorSource.cs" />
-    <Compile Include="..\src\Advisor\Game\Battle\BattleBriefingReader.cs" Link="BattleBriefingReader.cs" />
+    <Compile Include="..\src\Shared\Game\BattleBriefingReader.cs" Link="BattleBriefingReader.cs" />
     <Compile Include="..\src\Advisor\Game\Battle\BattleMissionAreaReader.cs" Link="BattleMissionAreaReader.cs" />
     <Compile Include="..\src\Shared\Game\BattleValue.cs" Link="BattleValue.cs" />
     <Compile Include="..\src\Advisor\Game\Battle\BattleWeaponReader.cs" Link="BattleWeaponReader.cs" />

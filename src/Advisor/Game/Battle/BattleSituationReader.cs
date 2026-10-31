@@ -162,7 +162,7 @@ internal sealed class BattleSituationReader
             ["public_objectives"] = visibleObjectives,
             ["mission_map_areas"] = BattleMissionAreaReader.Capture(missionAreas),
             ["weather"] = Shared.BattleWeatherFacts.Capture(environment),
-            ["mission_briefing"] = BattleBriefingReader.Combine(Reactive<string>(eventLog, "MissionBriefing"), xmlBriefing),
+            ["mission_briefing"] = Shared.BattleBriefingReader.Combine(Reactive<string>(eventLog, "MissionBriefing"), xmlBriefing),
             ["mission_briefing_unavailable"] = briefingUnavailable,
             ["mission_briefing_source"] = string.IsNullOrWhiteSpace(xmlBriefing) ? "event_log" :
                 briefingFromBase ? "base_mission_xml" : "mission_xml",

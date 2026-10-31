@@ -56,7 +56,8 @@ internal sealed class ChatterConnections : ICrewConnections
             cancellation.ThrowIfCancellationRequested();
             var result = batch.Read(reply);
             trace?.FinishOperation(new JObject { ["outcome"] = "completed", ["api_requests"] = connection.ApiRequests,
-                ["model"] = connection.Model, ["total_tokens"] = reply.TotalTokens });
+                ["model"] = connection.Model, ["total_tokens"] = reply.TotalTokens,
+                ["invalid_rank_votes"] = result.Appointments.Values.Count(a => !a.RankBeforeName.HasValue) });
             return result;
         }
         catch (OperationCanceledException) { trace?.FinishOperation(new JObject { ["outcome"] = "cancelled" }); throw; }
