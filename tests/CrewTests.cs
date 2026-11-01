@@ -43,7 +43,7 @@ internal static class CrewTests
             store.Save(new CrewSettings("chatter-only", 15, 9, showHelpTab: true));
             Require(new CrewSettingsStore(path).Current.ShowHelpTab && store.Current.IntervalMinutes == 15 && store.Current.DisplaySeconds == 9,
                 "Re-enabling guidance changed other Chatter preferences or did not persist");
-            Require(new CrewSettings().ExchangeChancePercent == 33 && CrewSettings.Parse("{}").ExchangeChancePercent == 33,
+            Require(new CrewSettings().ExchangeChancePercent == 50 && CrewSettings.Parse("{}").ExchangeChancePercent == 50,
                 "Unset exchange preference did not use its requested default");
             foreach (var percent in new[] { 0, 33, 100 })
             {
@@ -424,19 +424,22 @@ internal static class CrewTests
         });
         check("Repeated game pauses preserve the remaining speech countdown without catch-up requests", () =>
         {
-            using var rig = new Rig(new FixedRandom(0.5));
-            rig.Chatter.Refresh(new[] { Target(1) }); rig.PreparePeople(); rig.SetEnabled("unit:1", true, 0);
-            rig.Tick(1); var first = rig.Take(); rig.Complete(first, "unit:1"); rig.Pump(1);
-            rig.Tick(21); rig.GamePaused = true; rig.Tick(21); rig.Tick(500);
-            Require(rig.Requests - rig.SetupRequests == 1 && !rig.Chatter.Paused, "Game pause started a generation or changed the manual pause state");
-            rig.GamePaused = false; rig.Tick(500); rig.Tick(520);
-            Require(rig.Requests - rig.SetupRequests == 1, "Resuming caught up requests or lost the remaining countdown");
-            rig.GamePaused = true; rig.Tick(520); rig.Tick(900);
-            rig.GamePaused = false; rig.Tick(900); rig.Tick(919);
-            Require(rig.Requests - rig.SetupRequests == 1, "A second pause consumed or reset the remaining time");
-            rig.Tick(920); var next = rig.Take();
-            Require(rig.Requests - rig.SetupRequests == 2 && rig.Captures == 2, "The remaining active real-time interval did not produce one generation");
-            rig.Complete(next); rig.Pump(920);
+            foreach (var draw in new[] { 0.0, 0.5, 0.999999 })
+            {
+                using var rig = new Rig(new FixedRandom(draw));
+                rig.Chatter.Refresh(new[] { Target(1) }); rig.PreparePeople(); rig.SetEnabled("unit:1", true, 0);
+                rig.Tick(1); var first = rig.Take(); rig.Complete(first, "unit:1"); rig.Pump(1);
+                rig.Tick(21); rig.GamePaused = true; rig.Tick(21); rig.Tick(500);
+                Require(rig.Requests - rig.SetupRequests == 1 && !rig.Chatter.Paused, "Game pause started a generation or changed the manual pause state");
+                rig.GamePaused = false; rig.Tick(500); rig.Tick(520);
+                Require(rig.Requests - rig.SetupRequests == 1, "Resuming caught up requests or lost the remaining countdown");
+                rig.GamePaused = true; rig.Tick(520); rig.Tick(900);
+                rig.GamePaused = false; rig.Tick(900); rig.Tick(919);
+                Require(rig.Requests - rig.SetupRequests == 1, "A second pause consumed or reset the remaining time");
+                rig.Tick(920); var next = rig.Take();
+                Require(rig.Requests - rig.SetupRequests == 2 && rig.Captures == 2, "The remaining active real-time interval did not produce one generation");
+                rig.Complete(next); rig.Pump(920);
+            }
         });
         check("In-flight speech completes during game pause and its next countdown starts after game resume", () =>
         {
@@ -491,15 +494,15 @@ internal static class CrewTests
             Require(rig.Captures == 1, "A second request overlapped the first");
             var ids = ((JArray)first.Batch.Input("").Data["speakers"]!).Select(x => (string)x["id"]!).ToArray();
             Require(ids.Length == 4, "The batch bound was ignored");
-            rig.Complete(first); rig.Pump(20); rig.Tick(64.9);
+            rig.Complete(first); rig.Pump(20); rig.Tick(79.999);
             Require(rig.Captures == 1 && rig.Chatter.History.Count == 0 && rig.Chatter.Error == null && targets.Take(5).All(t => rig.Chatter.Person(t.Id) != null),
                 "Silence caused an error, lost appointments, or triggered an immediate speech request");
-            rig.Tick(96); var second = rig.Take();
+            rig.Tick(80); var second = rig.Take();
             var last = ((JArray)second.Batch.Input("").Data["speakers"]!).Select(x => (string)x["id"]!).ToArray();
             var omitted = targets.Take(5).Single(t => !ids.Contains(t.Id)).Id;
             Require(last.Length == 4 && last.Contains(omitted) && !last.Contains("unit:6") && !rig.Chatter.Enabled("unit:6"),
                 "Candidate selection starved a previously omitted unit or included a disabled one");
-            rig.Complete(second, last[0]); rig.Pump(96);
+            rig.Complete(second, last[0]); rig.Pump(80);
             Require(rig.Chatter.History.Count == 1 && last.All(id => rig.Chatter.Person(id) != null), "A silent candidate lost its appointment or was forced to speak");
         });
         check("Disabling and re-enabling a target rejects its old response and pending notification", () =>

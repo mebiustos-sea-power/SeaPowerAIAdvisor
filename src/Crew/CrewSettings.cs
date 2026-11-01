@@ -13,7 +13,7 @@ internal enum CrewNotificationPosition { TopLeft, TopCenter, TopRight, BottomLef
 internal sealed class CrewSettings
 {
     internal const int DefaultIntervalMinutes = 3;
-    internal const int DefaultExchangeChancePercent = 33;
+    internal const int DefaultExchangeChancePercent = 50;
     internal const CrewNotificationPosition DefaultNotificationPosition = CrewNotificationPosition.TopRight;
     internal string? ConnectionId { get; }
     internal int IntervalMinutes { get; }

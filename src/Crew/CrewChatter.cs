@@ -201,7 +201,7 @@ internal sealed class CrewChatter : IDisposable
                 {
                     if (!HasSpeakers) nextOpportunity = double.PositiveInfinity;
                     else if (hadSpeech && double.IsPositiveInfinity(nextOpportunity))
-                        nextOpportunity = opportunityNow + 60 * settings.IntervalMinutes * (0.75 + random.NextDouble() * 0.5);
+                        nextOpportunity = opportunityNow + 60 * settings.IntervalMinutes;
                     if (!HasPendingAppointments) nextAppointments = double.PositiveInfinity;
                     else if (double.IsPositiveInfinity(nextAppointments)) nextAppointments = now + 1;
                 }
