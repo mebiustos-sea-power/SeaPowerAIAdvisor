@@ -32,7 +32,7 @@ internal sealed class AdvisorOptions
     internal bool LinkContacts { get; }
     internal bool UnitMentionCompletion { get; }
     internal AdvisorTemplateOptions Templates { get; }
-    internal AdvisorOptions(int maxQueryRounds = AdvisorQueryLimits.DefaultMaxRounds, bool campaignEnabled = false, AdvisorInformation? information = null, string commonPrompt = "", AdvisorTextSize textSize = AdvisorTypography.DefaultSize, int historyExchanges = DefaultHistoryExchanges, string? userName = null, bool developerApiEnabled = false, AdvisorLocalConnections? localConnections = null, bool linkOwnUnits = true, bool linkContacts = true, IEnumerable<string>? disabledCommands = null, AdvisorTemplateOptions? templates = null, bool crewEnabled = false, bool unitMentionCompletion = true, bool summarizeMissionText = false)
+    internal AdvisorOptions(int maxQueryRounds = AdvisorQueryLimits.DefaultMaxRounds, bool campaignEnabled = false, AdvisorInformation? information = null, string commonPrompt = "", AdvisorTextSize textSize = AdvisorTypography.DefaultSize, int historyExchanges = DefaultHistoryExchanges, string? userName = null, bool developerApiEnabled = false, AdvisorLocalConnections? localConnections = null, bool linkOwnUnits = true, bool linkContacts = true, IEnumerable<string>? disabledCommands = null, AdvisorTemplateOptions? templates = null, bool crewEnabled = false, bool unitMentionCompletion = false, bool summarizeMissionText = false)
     {
         if (maxQueryRounds < 1 || maxQueryRounds > AdvisorQueryLimits.MaximumRounds)
             throw new AdvisorOptionsException("query_rounds_invalid");
@@ -124,7 +124,7 @@ internal sealed class AdvisorOptions
                 throw new AdvisorOptionsException("information_invalid");
             var information = value["information_selection"] == null ? AdvisorInformation.Parse(value["disabled_information"])
                 : AdvisorInformation.ParseSelections(value["information_selection"]);
-            return new AdvisorOptions(rounds, (bool?)value["campaign_advisor_enabled"] ?? false, information, (string?)value["common_prompt"] ?? "", ParseTextSize(value["conversation_text_size"]), historyExchanges, (string?)value["user_name"], (bool?)value["developer_local_api_enabled"] ?? false, AdvisorLocalConnections.Parse(value["developer_local_api_connections"]), (bool?)value["link_own_units"] ?? true, (bool?)value["link_contacts"] ?? true, ReadDisabledCommands(value["disabled_commands"]), AdvisorTemplateOptions.Parse(value["template_options"]), (bool?)value["crew_enabled"] ?? false, (bool?)value["unit_mention_completion"] ?? true, (bool?)value["summarize_mission_text"] ?? false);
+            return new AdvisorOptions(rounds, (bool?)value["campaign_advisor_enabled"] ?? false, information, (string?)value["common_prompt"] ?? "", ParseTextSize(value["conversation_text_size"]), historyExchanges, (string?)value["user_name"], (bool?)value["developer_local_api_enabled"] ?? false, AdvisorLocalConnections.Parse(value["developer_local_api_connections"]), (bool?)value["link_own_units"] ?? true, (bool?)value["link_contacts"] ?? true, ReadDisabledCommands(value["disabled_commands"]), AdvisorTemplateOptions.Parse(value["template_options"]), (bool?)value["crew_enabled"] ?? false, (bool?)value["unit_mention_completion"] ?? false, (bool?)value["summarize_mission_text"] ?? false);
         }
         catch (JsonException) { throw new AdvisorOptionsException("options_invalid"); }
     }

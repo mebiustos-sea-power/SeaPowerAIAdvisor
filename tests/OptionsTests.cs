@@ -11,11 +11,11 @@ internal static class OptionsTests
 {
     internal static void Run(string campaignPath, Action<string, Action> check)
     {
-        check("Mention completion defaults on, saves per user and survives unrelated category saves", () => InTemp(directory =>
+        check("Mention completion defaults off, saves per user and survives unrelated category saves", () => InTemp(directory =>
         {
             var store = new AdvisorOptionsStore(Path.Combine(directory, "options.json"));
-            Require(store.Current.UnitMentionCompletion && AdvisorOptions.Parse("{}").UnitMentionCompletion && !File.Exists(store.Path),
-                "Reading settings disabled completion or created a settings file");
+            Require(!store.Current.UnitMentionCompletion && !AdvisorOptions.Parse("{}").UnitMentionCompletion && !File.Exists(store.Path),
+                "Reading settings enabled completion or created a settings file");
             foreach (var enabled in new[] { false, true })
             {
                 store.SaveGeneral(AdvisorTextSize.Standard, "Commander", unitMentionCompletion: enabled);
