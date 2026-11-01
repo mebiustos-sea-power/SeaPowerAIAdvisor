@@ -10,6 +10,7 @@ internal static class SensorOperationTests
 {
     internal static void Run(Action<string, Action> check)
     {
+        BattleOperationUnitTests.Run(check);
         SensorUiControlTests.Run(check);
         SensorConditionTests.Run(check);
         check("Sensor candidates expose the target's live control options without executing, while EMCON does not require enumeration by the AI", () =>
