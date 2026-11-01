@@ -23,7 +23,8 @@ internal static class CommandSdkTests
                 Require(Api.AdvisorApi.RegisterOperation(extension) && Api.AdvisorApi.Register(new Client.StandardExtension()) && providers == 1,
                     "The command endpoint intercepted or broke provider registration");
                 Throws<InvalidOperationException>(() => Api.AdvisorApi.RegisterOperation(extension));
-                Throws<NotSupportedException>(() => Api.AdvisorApi.RegisterOperation(new Client.CommandExtension { ApiVersion = 99 }));
+                foreach (var version in new[] { 3, Api.AdvisorApi.ContractVersion + 1 })
+                    Throws<NotSupportedException>(() => Api.AdvisorApi.RegisterOperation(new Client.CommandExtension { ApiVersion = version }));
             }
             finally { Api.AdvisorApi.Detach(); }
             Throws<InvalidOperationException>(() => Api.AdvisorApi.RegisterOperation(extension));

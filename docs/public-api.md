@@ -1,6 +1,6 @@
 # AI Advisor extension API
 
-AI Advisor v0.19.0 uses experimental public contract version 3. Public extensions were introduced in AI Advisor v0.14.0. This revision requires explicit command execution modes and splits plan submissions into immediate and reservation phases. Rebuild command and adapter extensions against the matching shipped API DLL; update command definitions and plan-producing integrations as described below. No compatibility overload or old-plan conversion is provided.
+The development SDK uses experimental public contract version 4 and API DLL version 4.0.0.0. AI Advisor v0.19.0 shipped contract 3. Contract 4 adds contact-scoped attack-range queries and updates public combat types. Rebuild command and adapter extensions against the matching shipped API DLL; implementations of `IAdvisorCombatSupport` must supply `GetInRangeAttackUnits`. Explicit command execution modes and separate immediate/reservation plan arrays remain required. No compatibility overload or old-plan conversion is provided.
 
 **The SDK and public API are under active development and may undergo breaking changes without prior notice. External extensions may require source changes or rebuilding after an update.** Use the API DLL shipped with the host version you are targeting.
 

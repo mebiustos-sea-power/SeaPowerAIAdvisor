@@ -40,7 +40,8 @@ internal static partial class ProviderTests
             var count = AdvisorServiceCatalog.BuiltIn.Services.Count;
             ThrowsPublic<ArgumentException>(() => new Api.AdvisorException("raw service response with credentials"));
             ThrowsPublic<InvalidOperationException>(() => Api.AdvisorApi.Register(external));
-            ThrowsPublic<NotSupportedException>(() => Api.AdvisorApi.Register(new Client.StandardExtension { ApiVersion = Api.AdvisorApi.ContractVersion + 1 }));
+            foreach (var version in new[] { 3, Api.AdvisorApi.ContractVersion + 1 })
+                ThrowsPublic<NotSupportedException>(() => Api.AdvisorApi.Register(new Client.StandardExtension { ApiVersion = version }));
             ThrowsPublic<ArgumentException>(() => Api.AdvisorApi.Register(new Client.StandardExtension
             { Fields = new[] { new Api.ConnectionField("duplicate", "First"), new Api.ConnectionField("duplicate", "Second") } }));
             Require(AdvisorServiceCatalog.BuiltIn.Services.Count == count, "Invalid registration partially replaced providers");
