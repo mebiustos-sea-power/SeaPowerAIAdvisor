@@ -32,6 +32,7 @@ internal sealed class AdvisorExtensionBackend : IAdvisorBackend
         async Task<AdviceResult> Run(AdvisorService service, AdvisorApiConfiguration configuration, bool fallback)
         {
             cancellation.ThrowIfCancellationRequested();
+            if (service.Independent) detached.TextSummaries?.UseStandardEngine(false);
             var continuation = knowledge.Continuation(context.Operations?.History);
             var backend = service.Independent
                 ? service.OpenIndependent(configuration, options, fallback, transport, continuation)
@@ -73,7 +74,7 @@ internal sealed class AdvisorExtensionBackend : IAdvisorBackend
                 ? (fallback ? subService!.Model(sub!) : mainService.Model(main)) : answer.Model, answer.CompletionReason);
     }
 
-    private sealed class KnowledgeLedger : IAdvisorSnapshotSource, IAdvisorSnapshotReadObserver, IAdvisorQuerySession, IDisposable
+    private sealed class KnowledgeLedger : IAdvisorSnapshotSource, IAdvisorSnapshotReadObserver, IAdvisorQuerySession, IAdvisorTextSummarySource, IDisposable
     {
         private readonly IAdvisorQuerySession inner;
         private readonly object sync = new();
@@ -84,6 +85,7 @@ internal sealed class AdvisorExtensionBackend : IAdvisorBackend
         public int RoundsUsed => inner.RoundsUsed;
         public int MaxRounds => inner.MaxRounds;
         public AdvisorPrompts Prompts => inner.Prompts;
+        public AdvisorTextSummarySession? TextSummaries => (inner as IAdvisorTextSummarySource)?.TextSummaries;
         public JObject InitialInput() => inner.InitialInput();
         public JArray ExportSituation() => AdvisorSnapshotExport.From(inner);
         public void RecordSnapshotRead(JObject request, JObject response)

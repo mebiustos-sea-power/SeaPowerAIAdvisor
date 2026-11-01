@@ -16,6 +16,7 @@ internal sealed class BattleIntegration
     private readonly AdvisorOptionsStore options;
     private readonly AdvisorBackendRegistry backends;
     private readonly BattleSituationReader reader = new();
+    private readonly AdvisorTextSummaryCache textSummaries = new();
     private MainGameViewModel? model;
     private MainGameView? view;
     private FrameworkElement? uiRoot;
@@ -129,7 +130,7 @@ internal sealed class BattleIntegration
         EnsureOperations();
         if (advisor == null)
         {
-            advisor = new AdvisorWindow(view, host, guard, new BattleAdvisorSource(CaptureWithInformation, () => operationGateway), GameLanguage.Read, warn, options, backends,
+            advisor = new AdvisorWindow(view, host, guard, new BattleAdvisorSource(CaptureWithInformation, () => operationGateway, textSummaries, () => options.Current.SummarizeMissionText, warn), GameLanguage.Read, warn, options, backends,
                 new BattleUnitNavigation(() => model?.Map, () => this.view), new BattleWeaponNavigation(() => this.view, guard), mapNavigation);
         }
         return advisor;
@@ -230,6 +231,7 @@ internal sealed class BattleIntegration
 
     internal void Reset()
     {
+        textSummaries.Clear();
         try { Stop(); }
         finally
         {

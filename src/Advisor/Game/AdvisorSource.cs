@@ -32,11 +32,16 @@ internal sealed class BattleAdvisorSource : IAdvisorSource, IAdvisorOperationSou
 {
     private readonly Func<AdvisorInformation?, BattleSnapshot> capture;
     private readonly Func<AdvisorOperationGateway?>? operations;
-    internal BattleAdvisorSource(Func<AdvisorInformation?, BattleSnapshot> capture, Func<AdvisorOperationGateway?>? operations = null)
-    { this.capture = capture; this.operations = operations; }
+    private readonly AdvisorTextSummaryCache summaries;
+    private readonly Func<bool> summarizeText;
+    private readonly Action<string> warn;
+    internal BattleAdvisorSource(Func<AdvisorInformation?, BattleSnapshot> capture, Func<AdvisorOperationGateway?>? operations = null,
+        AdvisorTextSummaryCache? summaries = null, Func<bool>? summarizeText = null, Action<string>? warn = null)
+    { this.capture = capture; this.operations = operations; this.summaries = summaries ?? new AdvisorTextSummaryCache();
+        this.summarizeText = summarizeText ?? (() => false); this.warn = warn ?? (_ => { }); }
     public IAdvisorOperationSession? CreateOperations(string owner, AdvisorPrompts prompts, AdvisorOperationReferences references) =>
         operations?.Invoke()?.CreateSession(owner, prompts, references);
     public AdvisorOperations? Operations => operations?.Invoke()?.Operations;
-    public IAdvisorQuerySession CreateSession(string language, string? question, int maxRounds = AdvisorQueryLimits.DefaultMaxRounds, AdvisorInformation? information = null, JObject? context = null) => new BattleQuerySession(capture(information), language, question, maxRounds, information, context: context);
+    public IAdvisorQuerySession CreateSession(string language, string? question, int maxRounds = AdvisorQueryLimits.DefaultMaxRounds, AdvisorInformation? information = null, JObject? context = null) => new BattleQuerySession(capture(information), language, question, maxRounds, information, context: context, summaryCache: summaries, summarizeText: summarizeText(), summaryWarning: warn);
     public string Preview(AdvisorText text) => text["battle.diagnostic"] + "\n\n" + capture(null).Copy().ToString(Newtonsoft.Json.Formatting.Indented);
 }

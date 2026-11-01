@@ -102,7 +102,7 @@ internal sealed class AdvisorLocalRun
         public void Dispose() => inner.Dispose();
     }
 
-    private sealed class RecordingSession : IAdvisorSnapshotSource, IAdvisorSnapshotReadObserver, IAdvisorQuerySession
+    private sealed class RecordingSession : IAdvisorSnapshotSource, IAdvisorSnapshotReadObserver, IAdvisorQuerySession, IAdvisorTextSummarySource
     {
         private readonly IAdvisorQuerySession inner;
         private readonly AdvisorLocalRun run;
@@ -111,6 +111,7 @@ internal sealed class AdvisorLocalRun
         public int RoundsUsed => inner.RoundsUsed;
         public int MaxRounds => inner.MaxRounds;
         public AdvisorPrompts Prompts => inner.Prompts;
+        public AdvisorTextSummarySession? TextSummaries => (inner as IAdvisorTextSummarySource)?.TextSummaries;
         public JObject InitialInput() => inner.InitialInput();
         public JArray ExportSituation() => AdvisorSnapshotExport.From(inner);
         public void RecordSnapshotRead(JObject request, JObject response)

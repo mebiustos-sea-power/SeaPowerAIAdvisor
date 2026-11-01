@@ -260,6 +260,7 @@
   "settings.error.options_unreadable": "Cannot read options.json.",
   "settings.error.options_write_failed": "Cannot save general and AI settings. Check the options.json location.",
   "information.tab": "Data for AI",
+  "information.summarize_mission_text": "Use compressed briefings and intelligence reports",
   "information.restore_defaults": "Restore defaults",
   "information.mission": "Mission",
   "information.mission_description": "Choose the information provided to the AI on the battle screen.",

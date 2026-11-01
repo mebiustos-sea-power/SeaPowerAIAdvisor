@@ -9,7 +9,7 @@ using static SeaPowerAIAdvisor.Shared.JsonPayload;
 namespace SeaPowerAIAdvisor;
 
 // Queries operate exclusively on the detached player view captured at consultation start.
-internal sealed partial class BattleQuerySession : IAdvisorQuerySession, IAdvisorUnitReferenceSource, IAdvisorOperationReferenceSource, IAdvisorSnapshotSource
+internal sealed partial class BattleQuerySession : IAdvisorQuerySession, IAdvisorUnitReferenceSource, IAdvisorOperationReferenceSource, IAdvisorSnapshotSource, IAdvisorTextSummarySource
 {
     private static readonly AdvisorRequestShape[] requestShapes = {
         new(new[] { "catalog", "get_briefing" }, Array.Empty<string>()),
@@ -21,6 +21,7 @@ internal sealed partial class BattleQuerySession : IAdvisorQuerySession, IAdviso
         new(new[] { "list_air_tasks" }, Array.Empty<string>(), "offset", "limit", "host_ids", "air_unit_ids")
     };
     private readonly JObject snapshot;
+    public AdvisorTextSummarySession TextSummaries { get; }
     private readonly AdvisorInformation information;
     private readonly JObject initial;
     private readonly BattleContactAssessment? assessment;
@@ -35,7 +36,7 @@ internal sealed partial class BattleQuerySession : IAdvisorQuerySession, IAdviso
     private readonly HashSet<string> deliveredSensorReferences = new(StringComparer.Ordinal);
     private readonly HashSet<string> deliveredMovementRoutes = new(StringComparer.Ordinal);
 
-    internal BattleQuerySession(BattleSnapshot situation, string language, string? question, int maxRounds = DefaultMaxRounds, AdvisorInformation? information = null, AdvisorPrompts? prompts = null, JObject? context = null)
+    internal BattleQuerySession(BattleSnapshot situation, string language, string? question, int maxRounds = DefaultMaxRounds, AdvisorInformation? information = null, AdvisorPrompts? prompts = null, JObject? context = null, AdvisorTextSummaryCache? summaryCache = null, bool summarizeText = false, Action<string>? summaryWarning = null)
     {
         if (maxRounds < 1 || maxRounds > MaximumRounds) throw new ArgumentOutOfRangeException(nameof(maxRounds));
         MaxRounds = maxRounds;
@@ -48,6 +49,7 @@ internal sealed partial class BattleQuerySession : IAdvisorQuerySession, IAdviso
         snapshot["movement_plans"] ??= new JArray();
         snapshot["movement_routes"] ??= new JArray();
         BattleInformation.Apply(snapshot, information);
+        TextSummaries = (summaryCache ?? new AdvisorTextSummaryCache()).Open(snapshot, information, summarizeText, summaryWarning ?? (_ => { }));
         UnitReferences = situation.UnitReferences.Only(Rows("friendly_units").Select(row => (string)row["id"]!));
         var weaponReferences = information.Allows(InformationKind.BattleWeapons)
             ? new AdvisorWeaponReferences(Rows("unit_capabilities").SelectMany(row => row["weapons"]?["ammunition"] as JArray ?? new JArray())
@@ -180,7 +182,7 @@ internal sealed partial class BattleQuerySession : IAdvisorQuerySession, IAdviso
             case "get_briefing":
                 if ((bool?)snapshot["mission_briefing_unavailable"] == true)
                     throw Error("briefing_unavailable", "briefing_unavailable");
-                var briefing = new JObject { ["text"] = snapshot["mission_briefing"]!.DeepClone() };
+                var briefing = TextSummaries.Present("briefing", (string)snapshot["mission_briefing"]!);
                 if (snapshot["mission_briefing_source"] is JValue source)
                 {
                     briefing["source"] = "mission_briefing";
@@ -263,7 +265,11 @@ internal sealed partial class BattleQuerySession : IAdvisorQuerySession, IAdviso
                 {
                     var row = rows.OfType<JObject>().SingleOrDefault(r => (string?)r["id"] == (string?)id)
                         ?? throw Error("unknown_id", "unknown_id");
-                    found.Add(row.DeepClone());
+                    var detail = (JObject)row.DeepClone();
+                    if (name == "get_reports")
+                        foreach (var property in TextSummaries.Present((string)row["id"]!, (string)row["text"]!).Properties())
+                            detail[property.Name] = property.Value.DeepClone();
+                    found.Add(detail);
                 }
                 return found;
             default: throw Error("unknown_query", "unknown_query");

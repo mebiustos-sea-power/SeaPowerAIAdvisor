@@ -10,6 +10,7 @@ internal sealed class AdvisorContext
 {
     internal IAdvisorQuerySession Knowledge { get; }
     internal AiProviderInput Input { get; }
+    internal AdvisorTextSummarySession? TextSummaries => (Knowledge as IAdvisorTextSummarySource)?.TextSummaries;
     internal Action<AdvisorProgress>? Progress { get; }
     internal IAdvisorOperationSession? Operations { get; }
     private AdvisorToolSession? tools;
@@ -20,7 +21,12 @@ internal sealed class AdvisorContext
     }
     private readonly Action<AiProviderInput>? preparedInput;
     internal AiProviderInput PrepareStandardInput(AdvisorSituationDelivery mode = AdvisorSituationDelivery.OnDemand, string connectionPrompt = "")
-    { var input = WithConnectionPrompt(Tools.Prepare(mode), connectionPrompt); preparedInput?.Invoke(input); return input; }
+    {
+        TextSummaries?.UseStandardEngine(true);
+        var input = Tools.Prepare(mode);
+        if (TextSummaries != null) input = TextSummaries.Prepare(input, Knowledge.Prompts);
+        input = WithConnectionPrompt(input, connectionPrompt); preparedInput?.Invoke(input); return input;
+    }
     internal static AiProviderInput WithConnectionPrompt(AiProviderInput input, string prompt)
     {
         var data = (JObject)input.Data.DeepClone();

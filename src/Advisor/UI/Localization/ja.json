@@ -260,6 +260,7 @@
   "settings.error.options_unreadable": "options.jsonを読み込めません。",
   "settings.error.options_write_failed": "一般・AI設定を保存できません。options.jsonの保存先を確認してください。",
   "information.tab": "AIに渡す情報",
+  "information.summarize_mission_text": "ブリーフィング・情報報告の要約を利用する",
   "information.restore_defaults": "初期値に戻す",
   "information.mission": "ミッション",
   "information.mission_description": "戦闘画面で、AIに渡す情報を設定します。",

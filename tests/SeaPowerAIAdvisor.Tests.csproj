@@ -172,6 +172,7 @@
     <Compile Include="..\src\Shared\AI\OpenRouter\OpenRouterProvider.cs" Link="OpenRouterProvider.cs" />
     <Compile Include="..\src\Advisor\Consultation\AdvisorBackend.cs" Link="AdvisorBackend.cs" />
     <Compile Include="..\src\Advisor\Consultation\AdvisorBackendRegistry.cs" Link="AdvisorBackendRegistry.cs" />
+    <Compile Include="..\src\Advisor\Consultation\AdvisorTextSummaries.cs" />
     <Compile Include="..\src\Advisor\Consultation\AdvisorContext.cs" Link="AdvisorContext.cs" />
     <Compile Include="..\src\Advisor\Consultation\AdvisorRequestShape.cs" Link="AdvisorRequestShape.cs" />
     <Compile Include="..\src\Advisor\Consultation\AdvisorReadSession.cs" Link="AdvisorReadSession.cs" />

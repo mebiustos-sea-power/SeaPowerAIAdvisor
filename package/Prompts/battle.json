@@ -1,4 +1,5 @@
 {
+  "text_summaries": "Use complete_advice for your final answer. For each received text with summary_required:true, return its summary_ref and compact English notes in summaries. Fragments, abbreviations and key:value notation are acceptable; preserve objectives, restrictions, deadlines, significant names, numbers, units and uncertainty. Do not add facts. Keep the answer in reply_language. Do not include already summarized or unseen texts.",
   "schema_version": 1,
   "unit_links": "Link own-unit names as [name](unit:id), using IDs from this consultation.",
   "weapon_links": "Link weapon names as [name](weapon:reference_key), using supplied weapon reference_key values.",

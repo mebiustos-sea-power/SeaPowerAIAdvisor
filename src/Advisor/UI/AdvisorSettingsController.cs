@@ -86,7 +86,7 @@ internal sealed class AdvisorSettingsController
         Bind("SaveGeneral", () => Save(() => options.SaveGeneral((AdvisorTextSize)size.SelectedIndex, userName.Text ?? "", linkOwnUnits.IsChecked == true, linkContacts.IsChecked == true, unitMentionCompletion.IsChecked == true)));
         Bind("SaveConsultation", () => Save(() => options.SaveConsultation(Number(rounds, "query_rounds_invalid"), Number(history, "history_exchanges_invalid"), prompt.Text ?? "")));
         Bind("ResetInformation", () => { if (available) { information.Reset(AdvisorInformation.Default); Notice(""); } });
-        Bind("SaveInformation", () => Save(() => options.SaveInformation(information.Value)));
+        Bind("SaveInformation", () => Save(() => options.SaveInformation(information.Value, information.SummarizeMissionText)));
         Bind("SaveCommands", () => Save(() => options.SaveCommands(commands.DisabledCommands)));
         Bind("SaveTemplateOptions", () => Save(() => options.SaveTemplates(new AdvisorTemplateOptions(showSystemTemplates.IsChecked == true, (AdvisorTemplateInsertion)templateInsertion.SelectedIndex))));
         Bind("SaveWip", () => Save(() => options.SaveWip(campaign.IsChecked == true, crewEnabled.IsChecked == true)));
@@ -169,7 +169,7 @@ internal sealed class AdvisorSettingsController
                 var saved = options.Read();
                 if (category == Category.General) { userName.Text = saved.UserName ?? text()["general.default_user_name"]; size.SelectedIndex = (int)saved.TextSize; linkOwnUnits.IsChecked = saved.LinkOwnUnits; linkContacts.IsChecked = saved.LinkContacts; unitMentionCompletion.IsChecked = saved.UnitMentionCompletion; userName.Focus(); }
                 if (category == Category.Consultation) { rounds.Text = saved.MaxQueryRounds.ToString(CultureInfo.InvariantCulture); history.Text = saved.HistoryExchanges.ToString(CultureInfo.InvariantCulture); prompt.Text = saved.CommonPrompt; prompt.Focus(); }
-                if (category == Category.Information) { information.Reset(saved.Information); information.Focus(); }
+                if (category == Category.Information) { information.Reset(saved.Information, saved.SummarizeMissionText); information.Focus(); }
             }
             available = true; baseline = Snapshot(); UpdateBusy();
         }
@@ -193,7 +193,7 @@ internal sealed class AdvisorSettingsController
     {
         Category.General => userName.Text + "\0" + size.SelectedIndex + ":" + linkOwnUnits.IsChecked + ":" + linkContacts.IsChecked + ":" + unitMentionCompletion.IsChecked,
         Category.Consultation => rounds.Text + "\0" + history.Text + "\0" + prompt.Text,
-        Category.Information => information.Value.Key,
+        Category.Information => information.Value.Key + ":" + information.SummarizeMissionText,
         Category.Templates when ActiveTab == 0 => showSystemTemplates.IsChecked + ":" + templateInsertion.SelectedIndex,
         Category.Extensions when ActiveTab == 0 => string.Join("\0", commands.DisabledCommands),
         Category.Wip => campaign.IsChecked + ":" + crewEnabled.IsChecked,

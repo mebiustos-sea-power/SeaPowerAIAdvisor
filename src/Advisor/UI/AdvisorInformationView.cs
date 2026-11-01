@@ -11,6 +11,8 @@ namespace SeaPowerAIAdvisor;
 internal sealed class AdvisorInformationView
 {
     private readonly StackPanel host;
+    private readonly CheckBox textSummaries;
+    internal bool SummarizeMissionText => textSummaries.IsChecked == true;
     private readonly List<(InformationGroup Group, CheckBox Box)> groups = new();
     private readonly List<(InformationKind Kind, CheckBox Box)> items = new();
     internal AdvisorInformation Value { get; private set; } = AdvisorInformation.Default;
@@ -19,6 +21,7 @@ internal sealed class AdvisorInformationView
         this.host = host;
         var ns = (XNamespace)"http://schemas.microsoft.com/winfx/2006/xaml";
         var root = Element("StackPanel", new XAttribute(XNamespace.Xmlns + "x", ns));
+        root.Add(Box("SummarizeMissionText", "information.summarize_mission_text", "0,0,0,8", false));
         void AddItem(InformationItem item, int depth)
         {
             var box = Box("InformationItem" + item.Kind, item.TextKey, (20 * depth) + ",4,0,4", false);
@@ -74,6 +77,7 @@ internal sealed class AdvisorInformationView
         var fixedView = view.FindName("InformationFixed") as FrameworkElement
             ?? throw new InvalidOperationException("The fixed information group is missing.");
         fixedView.Loaded += (_, _) => guard(() => UiResources.ApplyDisabledCheckBoxBrushes(fixedView));
+        textSummaries = Find(view, "SummarizeMissionText");
         index = 0;
         foreach (var group in AdvisorInformation.Groups)
         {
@@ -90,13 +94,13 @@ internal sealed class AdvisorInformationView
         }
         Reset(null);
     }
-    internal void Reset(AdvisorInformation? value)
+    internal void Reset(AdvisorInformation? value, bool summarizeMissionText = false)
     {
-        Value = value ?? AdvisorInformation.Default;
+        Value = value ?? AdvisorInformation.Default; textSummaries.IsChecked = summarizeMissionText;
         host.IsEnabled = value != null;
         Refresh();
     }
-    internal void Focus() => items[0].Box.Focus();
+    internal void Focus() => textSummaries.Focus();
     private void Refresh()
     {
         foreach (var entry in groups) entry.Box.IsChecked = Value.State(entry.Group);

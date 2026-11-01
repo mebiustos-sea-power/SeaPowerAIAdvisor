@@ -59,6 +59,7 @@ internal sealed class AdvisorEngine : IAdvisorBackend
             cancellation.ThrowIfCancellationRequested();
             if (reply.TotalTokens.HasValue) totalTokens += reply.TotalTokens.Value;
             else usageKnown = false;
+            reply = context.TextSummaries?.ReadReply(reply) ?? reply;
             var calls = reply.Calls;
             if (calls.Count == 0)
             {
@@ -73,6 +74,7 @@ internal sealed class AdvisorEngine : IAdvisorBackend
             if (dispatch.CompletedQueries.Length > 0) lastQueries = dispatch.CompletedQueries;
             queriesUsed.AddRange(dispatch.Queries);
             limit = dispatch.Limit;
+            foreach (var result in dispatch.Results) context.TextSummaries?.Observe(result.Data);
             connection.AcceptResults(dispatch.Results);
         }
         cancellation.ThrowIfCancellationRequested();
