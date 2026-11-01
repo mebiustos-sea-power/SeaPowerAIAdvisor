@@ -514,7 +514,7 @@
   "commands.definition": "定義JSON",
   "commands.back": "一覧に戻る",
   "update_notice.title": "(お知らせ) v{0}",
-  "update_notice.current.body": "### 画面翻訳\n\nアドバイザーウィンドウを開かずに、メニューやブリーフィングなどの文字を翻訳できるようになりました。\n\n設定で翻訳用のAPI接続を選ぶと、画面上に翻訳ボタンが表示されます。初期状態では無効です。\n\n[画面翻訳の使い方（5枚のスクリーンショット）](https://imgur.com/a/8j2AfaL)\n\n[その他の変更はGitHubの更新履歴をご覧ください](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/releases)",
+  "update_notice.current.body": "### AI Crew（WIP）\n\n艦長やパイロットが、戦況に応じた短い発言や感想を届けます。ときには、クルー同士の掛け合いも生まれます。\n\n**設定 → WIP**でAI Crewを有効にすると、画面下部に**CRW**ボタンが表示されます。利用開始の手順は、CRW内の**「使い方」**をご覧ください。\n\n利用中は定期的にAI通信が発生します。発言には、実際の戦況と異なる内容が含まれる場合があります。\n\n### 攻撃提案の射程情報を改善\n\nゲーム側の計算に基づく射程情報をAIへ提供し、現在の状況を踏まえて兵器や攻撃対象を検討できるようにしました。\n\n### 続けて相談するときの文脈理解を改善\n\n「もう少し弾薬を節約した案にして」など、以前の提案を踏まえた相談で、対象ユニットや指定条件を引き継ぎやすくしました。\n\n[その他の変更はGitHubの更新履歴をご覧ください](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/releases)",
   "update_notice.error.notice_state_invalid": "お知らせの既読情報が不正です。次回も表示される場合があります。",
   "update_notice.error.notice_state_unreadable": "お知らせの既読情報を読み取れませんでした。次回も表示される場合があります。",
   "update_notice.error.notice_state_write_failed": "お知らせを既読として保存できませんでした。次回も表示される場合があります。",
