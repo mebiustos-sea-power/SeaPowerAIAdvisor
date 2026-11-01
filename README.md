@@ -2,29 +2,28 @@
 
 **This is a prototype with limited real-play testing. Advice may be inaccurate, incomplete or unhelpful.**
 
-An in-game operations adviser and screen-translation tool for **Sea Power: Naval Combat in the Missile Age**. Ask what to do next, discuss tactical risks, or request a more detailed assessment while playing. The adviser uses player-known game information and can propose supported game commands for you to review and approve. It does not offer unsolicited advice.
+An in-game operations adviser and screen-translation tool for **Sea Power: Naval Combat in the Missile Age**, with optional **AI Crew** chatter. Ask what to do next, discuss tactical risks, or request a more detailed assessment while playing. The adviser uses player-known game information and can propose supported game commands for you to review and approve. Tactical advice is requested by the player; the separately enabled AI Crew feature adds periodic character remarks.
 
 [Download releases](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/releases) · [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3821064016) · [Report an issue](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/issues)
 
-## What's new in v0.19.0
+## What's new in v0.20.0
 
-Translate text directly in menus and briefings, and request plans combining repeating movement routes with sensor control, EMCON and attack orders. Review and approve game-operation proposals before adoption.
+Meet fictional captains and pilots through **AI Crew (WIP)**, and get better-supported attack proposals and follow-up consultations.
 
-- **Screen translation:** select a UI region, translate its text into the game's selected language, and restore the original text from the translation button's right-click menu. This feature works independently of consultations and is disabled by default. See [Screen translation](#screen-translation) for setup and the screenshot guide.
-- **Sensor control and EMCON:** request changes to sensor controls available through the standard game UI or apply EMCON to specified units.
-- **Attack and cancellation commands:** specify targets, weapons, shot counts and add/switch behavior, or separately cancel attacks and reservations.
-- **Repeating movement routes:** use a one-time approach followed by a repeating patrol section, without repeating existing reservations.
-- **Other improvements:** maximize and restore the adviser window, view the basic information always provided to the AI, and use fixed-wing aircraft cruise altitude/speed references in assessments.
+- **AI Crew:** short situation-based remarks and occasional exchanges, with automatic crew appointments, a dedicated connection choice, configurable notifications, history and token usage. Disabled by default; see [AI Crew](#ai-crew-wip) to get started.
+- **Attack range information:** game-calculated range information helps the AI compare weapons and targets. Follow-up consultations also retain the intended units and constraints more reliably.
+- **Quick consultations:** added **Attack proposal** and enabled command proposals in action-oriented quick consultations.
+- **Easier unit badges:** search the friendly-unit list or enable optional `@` completion. Adding a map location badge opens the adviser if needed.
+- **More useful situation data:** current weather and sea conditions, plus optional reuse of compact briefings and reports across consultations.
 
-**External extension developers:** v0.19.0 uses public API **contract version 3**. Extensions built for contract 2 need rebuilding against the bundled API DLL; commands and plan-producing integrations also need the documented source changes. See the [public API guide](docs/public-api.md).
-
-See the [v0.19.0 release notes](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/releases/tag/v0.19.0) for all changes.
+See the [v0.20.0 release notes](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/releases/tag/v0.20.0) for all changes.
 
 ## Features
 
 - **Gemini, Ollama, OpenRouter and NanoGPT connections.** Register named connections and assign Advisor, Translation and an optional shared Fallback connection. Duplicate a connection to reuse its settings with another model.
 - **On-demand tactical advice.** Ask your own question or use **Next steps**, **Key risks**, **Attack proposal** and **Radar operations**, then request **More detail** on previous advice.
 - **Independent screen translation.** Translate text in menus, briefings and other supported UI regions without keeping the adviser window open. Restore original text from the translation button's right-click menu. Enable it by selecting a Translation connection in settings; it is disabled by default.
+- **AI Crew (WIP).** Fictional captains and pilots share situation-based remarks and occasional exchanges through pop-up notifications and dedicated history. Opt in under WIP settings; see [AI Crew](#ai-crew-wip).
 - **AI-assisted game commands.** Request movement, sonobuoy deployment, formation return, sensor control, EMCON, attacks or cancellation, including combined plans for one or more units. Review and approve a proposal before it changes the game.
 - **Repeating movement routes.** Propose a one-time approach followed by a repeating patrol route, without repeating existing reservations. Review the loop start and map preview before adoption.
 - **Map location badges.** Ctrl+left-click empty map space to attach destinations or drop locations to your question. The adviser opens automatically if closed. Click draft badges to locate their units or points on the map.
@@ -35,7 +34,7 @@ See the [v0.19.0 release notes](https://github.com/mebiustos-sea-power/SeaPowerA
 - **Player-known information only.** Friendly capabilities (including fixed-wing economic cruise altitude and speed), sensor operating states and specifications, launched missiles and torpedoes with player-visible target information, aircraft and bases, applicable altitude/depth, movement plans, observed contacts and detection methods, mission briefing, objectives and published reports are available as needed. Currently displayed mission circles are included with basic mission information, using their labels, center coordinates and radii. Hidden enemy state is not supplied.
 - **Custom advisers.** Register portraits, names and personality/tone preferences. The displayed title is cosmetic. Shared preferences and your name can also be configured.
 - **Readable conversations.** A maximizable adviser window that restores its previous position and size, Markdown replies, configurable conversation text size, approximate response times in seconds, progress updates that reflect operation lookups and proposal receipt, and copying of messages. Mouse-wheel scrolling also works over tables in conversation history.
-- **Unit-specific questions.** Use **Insert selected unit** or **Ctrl+left-click** a unit link in conversation history to add a removable target badge to your message. Copied questions include the unit references.
+- **Unit-specific questions.** Use **Insert selected unit**, its **▼** friendly-unit search, or **Ctrl+left-click** a unit link in conversation history to add a removable target badge. Optional half-width `@` completion is disabled by default; enable **Complete unit badges with @** under **Settings → General → Input**. Copied questions include the unit references.
 - **Unit navigation.** Left-click a linked unit name or contact number to select and center it on the map; right-click to open the game's standard menu for that unit. Friendly-unit and contact links can be enabled separately in settings.
 - **Weapon references.** Right-click a weapon link in an answer and choose **Weapon Reference** from the menu to open the game's reference window.
 - **Coordinate links.** Left-click a position link to center the map on that location and display a marker for approximately three seconds.
@@ -78,7 +77,7 @@ Choose a model that supports **tool calling**. These are examples, not a guarant
 
 For NanoGPT, we strongly recommend **DeepSeek V4.1 Flash 1017 (non-thinking)**, the primary model used for prompt tuning and evaluation of adviser responses. Other supported services and models remain available, but response quality and information retrieval behavior may vary by model.
 
-Each connection can also have an optional **Connection prompt** (up to 2000 characters), passed unchanged to consultations and screen translations using that connection. In consultations, it supplements the common prompt and takes precedence when the two conflict. Screen translation uses its own translation instructions plus the connection prompt; the adviser’s common prompt and personality settings are not sent. A switch to the Fallback connection uses that connection’s prompt. Connection tests use their dedicated test instructions.
+Each connection can also have an optional **Connection prompt** (up to 2000 characters), passed unchanged to consultations, screen translations and AI Crew using that connection. In consultations, it supplements the common prompt and takes precedence when the two conflict. Screen translation uses its own translation instructions plus the connection prompt; the adviser’s common prompt and personality settings are not sent. A switch to the Fallback connection uses that connection’s prompt. AI Crew uses its own Chatter instructions plus the connection prompt; adviser common instructions, personality settings and conversation history are not sent. Connection tests use their dedicated test instructions.
 
 Duplicating a connection immediately saves a separate copy of its saved settings and returns to the card list. Pending edits require confirmation before being discarded. The original connection keeps its existing role assignments; copies are unassigned. Duplicate names are allowed.
 
@@ -113,11 +112,30 @@ On adoption, all selected reservations are registered first, followed by immedia
 
 For example, ask “Build an effective antisubmarine screen along California's route.” Attach unit and location badges to specify the units and points to use, or let the adviser find suitable candidates. One proposal can combine different commands and units; the same unit can move, deploy sonobuoys and then return to formation. Action-oriented quick consultations can also submit supported command proposals.
 
+For attack planning, the AI receives a per-contact overview of whether any permitted friendly unit has a weapon within the game's current range conditions. It can request matching firing units, ammunition and range estimates for several contacts together. These estimates do not guarantee immediate firing. Attacks requiring an approach remain available, with movement and actual firing handled by the game.
+
 Before any orders are added, open the proposal review window. Compare planned locations and travel routes on the map, and switch between proposals when alternatives are available. Commands specify their proposal-count policies; sonobuoy plans aim for two alternatives and accept one valid proposal when a meaningful alternative is unavailable. Choose one proposal and select **Adopt** to approve it. Its number and title remain in conversation history. During a consultation, the AI can revise its submitted proposal set before the consultation finishes.
 
 For each unit, the adviser chooses whether to append its plan to existing reservations or replace that unit's entire existing reservation queue, following any explicit constraints in your request. The approval window shows `Append` / `Replace` badges, and the map preview starts at the corresponding route origin. The game handles queued movement and deployment; these features do not continuously monitor or replan execution.
 
 Hiding the adviser does not cancel an active consultation. While the window is hidden, a yellow dot on the AI button indicates an ongoing consultation and green indicates a result is ready. Reopen the adviser to read it, or use the consultation's stop button to cancel an active request.
+
+## AI Crew (WIP)
+
+AI Crew adds immersion through short remarks from fictional captains and pilots on friendly surface ships, submarines, fixed-wing aircraft and helicopters. They react to the supplied situation and may exchange remarks with one another; units are not controlled by this feature.
+
+1. In the adviser, enable **Settings → WIP → Enable AI Crew**. It is disabled by default. A **CRW** button appears at the bottom of the screen.
+2. Open **CRW → Settings → API connections**, choose a Chatter connection and save. Registered connections are shared with the adviser, while the Chatter assignment is separate. Editing a shared connection affects other features using it. Chatter has no Fallback assignment; independent-workflow adapters are not supported.
+3. Under **Participating units**, press **Appoint crew**. This creates names, ranks and personalities for all currently unappointed units, including formation members. Successful appointments join Chatter. Uncheck unwanted units and press **Apply**; switching participation off retains their appointed people. Newly appearing units need another explicit appointment.
+4. Read pop-up notifications or open **Chatter history**. Only current formation leaders and standalone units speak; a leader's supplied situation also includes its formation members. Not everyone speaks on every occasion, and a generation may be silent.
+
+**Settings → Chatter** controls the generation interval, exchange preference, notification position/duration, rank visibility and Getting started tab. The interval is **1–15 minutes**, default **3**: after one generation completes, Chatter waits that fixed amount of real time before starting the next. Pausing the game freezes the remaining countdown; game speed does not affect it. The exchange preference defaults to **50%** and selects opportunities that encourage an exchange; it does not guarantee an exchange, even at 100%. Notifications support six positions and default to the top right.
+
+**Settings → Data for AI** selects Chatter's situation information independently of the adviser's choices. It can include unit condition, ammunition and sensors, known contacts, launched missiles/torpedoes, current alerts, weather and air-operation states. Crew appointments can also use the public briefing. The Getting started tab is shown initially and can be hidden in Chatter settings.
+
+**Chatter history** shows reported token usage and API request counts and provides **Pause / Resume**. Closing the window does not stop requests. A generation error pauses Chatter while retaining people, participation and history; resume explicitly after addressing the error. Provider-reported usage can be incomplete and is not a billing statement.
+
+Chatter makes periodic AI requests while in use and may consume paid API allowance. Remarks can contain incorrect situation claims. **Crew identities, participation and history are not stored in saved games**; they last only for the current battle session.
 
 ## Screen translation
 
@@ -139,9 +157,13 @@ Choosing **Disabled** hides the button and disables screen translation. The **Sa
 
 By default, the adviser first receives objectives, a situation overview and a catalog of information it can request. It then chooses which details to retrieve, can combine requests, and may ask for further details before answering. **One question can therefore generate several API requests.** Settings let you choose information categories, the API request limit per consultation (**15 by default**) and how many previous exchanges are included. Existing saved request limits are preserved. If a consultation reaches the limit, a message explains how to increase it in settings. Data for AI includes a button to restore its default selections. Movement-plan retrieval, sensor operating states, detailed sensor specifications and weather/sea conditions are enabled by default. Weather is captured once per consultation: Beaufort wind force, rain/snow, fog and lightning; no detection-range adjustments are estimated. Movement plans include formation leaders’ routes, formation-following relationships and routes for independently operating units. Existing saved information selections are preserved.
 
+The mod no longer ends a consultation based on cumulative request bytes or retrieved-data bytes. API request-count limits and per-retrieval size limits still apply, as do the selected provider's limits.
+
 Each registered connection can select **Send all at the start**, **Retrieve as needed**, or **Send all when requested** for situation data. The last option waits for the adviser to request situation data before supplying the full enabled snapshot. Upfront sends all situation data enabled under **Data for AI** from the same captured snapshot. It removes situation-retrieval tools to avoid requesting the same data again; operation lookups and approval remain available. Existing connections default to on-demand delivery. Built-in quick consultations use **Send all at the start** regardless of the connection setting, while typed questions follow the connection setting. **Data for AI** selections still apply. Text templates follow the same connection settings as a typed message.
 
 **Text templates** switches the conversation area to a selection screen. Press it again to return to the conversation. The built-in Mission objectives and background template asks about the current mission's objectives and background. User templates are messages you add, edit or remove under **Settings → Text templates**. The same settings page lets you hide system templates and choose whether selection replaces the message or appends it after a line break. System templates are shown by default, and selection defaults to replacement. Both types keep attached unit and location badges and do not send a consultation when selected. Edit the text and send normally, using the same operation permissions and situation-delivery setting as a typed question.
+
+An optional **Use compressed briefings and intelligence reports** setting under **Data for AI** is **off by default**. The standard consultation engine can receive compact English briefing/report memories alongside an ordinary final answer and reuse them in later consultations in the same battle. It adds no separate summary-only API request. The first use adds instructions and summary output; subsequent savings depend on the text and model. Summaries can lose details, are discarded on load and do not change the game's displayed briefing. Independent consultation workflows continue receiving original text.
 
 Gemini continues with the previous Interaction ID. Ollama, OpenRouter and NanoGPT resend the conversation history with each API request. Neither continuation method guarantees lower input-token usage.
 
@@ -161,7 +183,7 @@ Bug reports are welcome through [GitHub issues](https://github.com/mebiustos-sea
 
 ## For developers
 
-The host ships `SeaPowerAIAdvisor.Api.dll` for external Anchor Chain mods. The current development SDK uses contract version 4. Rebuild command and adapter extensions against the matching API DLL; combat integrations may also need source changes for the new attack-range queries and public types. Plans require explicit command execution modes and separate `immediate_operations` / `reservation_operations` arrays. The old plan format is not accepted. Adapter inputs continue to use the `ToolsJson` list exclusively. Extensions can use the standard retrieval engine or implement an independent consultation workflow. Register custom commands without rebuilding the host; built-in commands use the same public command contract. See the [public API guide](docs/public-api.md), [external command example and build guide](examples/ExternalCommand/README.md), and [offline connection adapter example](examples/ExternalAdapter/Examples.cs). The SDK and public API are experimental and may undergo breaking changes without prior notice; external extensions may require updates or rebuilding. See the [SDK stability notice](docs/public-api.md). Developer-authored update announcements are configured as described in the [update notice guide](docs/update-notices.md).
+The host ships `SeaPowerAIAdvisor.Api.dll` for external Anchor Chain mods. AI Advisor v0.20.0 uses SDK contract version 4 and API DLL version 4.0.0.0. Rebuild command and adapter extensions against the matching API DLL; combat integrations may also need source changes for the new attack-range queries and public types. Plans require explicit command execution modes and separate `immediate_operations` / `reservation_operations` arrays. The old plan format is not accepted. Adapter inputs continue to use the `ToolsJson` list exclusively. Extensions can use the standard retrieval engine or implement an independent consultation workflow. Register custom commands without rebuilding the host; built-in commands use the same public command contract. See the [public API guide](docs/public-api.md), [external command example and build guide](examples/ExternalCommand/README.md), and [offline connection adapter example](examples/ExternalAdapter/Examples.cs). The SDK and public API are experimental and may undergo breaking changes without prior notice; external extensions may require updates or rebuilding. See the [SDK stability notice](docs/public-api.md). Developer-authored update announcements are configured as described in the [update notice guide](docs/update-notices.md).
 
 To build on Windows, install Python 3 and the .NET SDK specified by `global.json`. Copy `Directory.Build.local.props.example` to `Directory.Build.local.props` and set your Sea Power and Anchor Chain directories. The full test script also expects Bungalow's Dynamic Campaign Mod's Workshop files for campaign tests; it remains optional at runtime.
 
