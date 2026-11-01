@@ -12,7 +12,7 @@ internal sealed class AttackExtension : IAdvisorOperationExtension, IAdvisorOper
 {
     internal const string OperationId = "seapower.attack";
     public int ApiVersion => AdvisorApi.ContractVersion;
-    public string Version => "1.0.0";
+    public string Version => "1.1.0";
     public string GetInstructions() => AdvisorPrompts.Current.Text("battle.json", "operation_attack");
     public OperationDefinition GetDefinition() => new(OperationId, OperationExecutionMode.Immediate, "Issue attacks with selected ammunition and shot counts.", new JObject
     {
