@@ -101,6 +101,7 @@
     <Compile Include="..\src\Advisor\Game\Battle\BattleWeaponReader.cs" Link="BattleWeaponReader.cs" />
     <Compile Include="..\src\Advisor\Game\Battle\BattleSensorReader.cs" Link="BattleSensorReader.cs" />
     <Compile Include="..\src\Advisor\Game\Battle\BattleSensorUiControls.cs" Link="BattleSensorUiControls.cs" />
+    <Compile Include="..\src\Advisor\Game\Battle\BattleOperationUnits.cs" Link="BattleOperationUnits.cs" />
     <Compile Include="..\src\Advisor\Game\Battle\BattleSensorSupport.cs" Link="BattleSensorSupport.cs" />
     <Compile Include="..\src\Advisor\Game\Battle\BattleSensorActions.cs" Link="BattleSensorActions.cs" />
     <Compile Include="..\src\Advisor\Game\Battle\BattleCapabilityReader.cs" Link="BattleCapabilityReader.cs" />

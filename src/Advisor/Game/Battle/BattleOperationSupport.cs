@@ -32,19 +32,6 @@ internal sealed partial class BattleOperationSupport : IAdvisorGameSupport
             unit is Helicopter helicopter ? helicopter._isInFlight : unit is Aircraft aircraft && aircraft._isInFlight,
             OrderUnavailableReason(unit))).ToArray();
     }
-    private IEnumerable<ObjectBase> VisibleUnits() => units().Where(unit =>
-    {
-        var kind = BattleValue.Code(BattleValue.Required(unit, "_type"));
-        if (unit.isWeapon()) return false;
-        var subtype = kind == "landunit" ? BattleValue.Code(BattleValue.Required(unit._obp, "_landUnitSubType")) : null;
-        return BattleInformation.Permitted(BattleInformation.UnitCategory(subtype), information());
-    });
-    private ObjectBase Unit(string target)
-    {
-        Require("battle_units");
-        return VisibleUnits().FirstOrDefault(u => "unit:" + u.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) == target)
-            ?? throw new OperationException(409, "target_unavailable");
-    }
     private static string? OrderUnavailableReason(ObjectBase unit) => unit.IsDestroyed || unit.Disabled ? "target_unavailable"
         : !unit.AcceptsOrdersFromPlayer ? "target_not_controllable"
         : unit._userRoot == null ? "target_not_ready"

@@ -128,6 +128,8 @@ namespace SeaPower
     internal class ObjectBase
     {
         public int Id = 42;
+        public string _type = "vessel";
+        public bool isWeapon() => this is WeaponBase;
         public NativeValue<string> Name = new("Unit");
         public bool IsDestroyed { get; set; }
         public bool Disabled { get; set; }
@@ -144,6 +146,7 @@ namespace SeaPower
         public int EmconRequests;
         public void setEMCON(bool enabled, bool formation) { EmconRequests++; Emcon.Value = enabled; }
     }
+    internal sealed class WeaponBase : ObjectBase { }
     internal sealed class Submarine : ObjectBase
     {
         public NativeValue<bool> IsSubmerged = new(false);
@@ -155,6 +158,7 @@ namespace SeaPower
     internal sealed class Helicopter : ObjectBase { public bool _isInFlight = true; }
     internal sealed class ObjectBaseParameters
     {
+        public string _landUnitSubType = "infantry";
         public readonly List<SensorSystem> _sensorSystems = new();
         public readonly List<SensorSystemRadar> _searchRadarSystems = new();
         public readonly List<SensorSystemSonar> _activeSonarSystems = new(), _towedSonarSystems = new();
@@ -228,10 +232,10 @@ namespace SeaPowerAIAdvisor
         public ReservationRoute? GetReservationRoute(string target) => throw new NotSupportedException();
         public string GetSonobuoyDepth(string target) => throw new NotSupportedException();
         public void AppendSonobuoyDrop(string target, string ammunition, AdvisorMapCoordinate position) => throw new NotSupportedException();
-        private readonly IReadOnlyList<SeaPower.ObjectBase> testUnits;
-        internal BattleOperationSupport(IReadOnlyList<SeaPower.ObjectBase> units) { testUnits = units; }
+        private readonly Func<IReadOnlyList<SeaPower.ObjectBase>> units;
+        private readonly Func<AdvisorInformation> information;
+        internal BattleOperationSupport(IReadOnlyList<SeaPower.ObjectBase> testUnits, AdvisorInformation? allowedInformation = null)
+        { units = () => testUnits; information = () => allowedInformation ?? AdvisorInformation.All; }
         private void Require(string category) { }
-        private IEnumerable<SeaPower.ObjectBase> VisibleUnits() => testUnits;
-        private SeaPower.ObjectBase Unit(string target) => testUnits.Single(u => "unit:" + u.Id == target);
     }
 }
