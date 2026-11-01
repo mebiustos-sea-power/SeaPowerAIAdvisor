@@ -86,7 +86,12 @@ internal static partial class ReservationCompositionTests
             var game = new Game { Following = true }; var service = Service(game, "follower");
             service.SubmitPlans("follower", Batch(Plan(new[] { Policy(42, "append") }, Move(42, 1), Drop(42, 2), Return(42))));
             var proposal = service.FinishProposal("follower", true)!;
-            Require(game.Following && service.DescribeProposal(proposal, "en").Contains("independently", StringComparison.Ordinal) && game.Log.Count == 0, "Review switched formation control");
+            foreach (var language in new[] { "en", "ja" })
+            {
+                var independentNote = new AdvisorOperationText(new MovementExtension().GetDefinition().Localizations).For(language)["proposal_independent"];
+                Require(game.Following && service.DescribeProposal(proposal, language).Contains(independentNote, StringComparison.Ordinal) && game.Log.Count == 0,
+                    "Review omitted the control change or switched formation control before approval");
+            }
             service.Approve(proposal);
             Require(!game.Following && game.Log.SequenceEqual(new[] { "clear:42", "independent:42", "move:42:1", "drop:42:2", "return:42" }) && game.Returns == 1,
                 "A follower was not prepared once or formation return executed before preceding reservations");

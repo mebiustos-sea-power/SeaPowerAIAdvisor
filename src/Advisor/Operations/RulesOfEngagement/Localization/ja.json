@@ -6,5 +6,5 @@
   "mode_tight": "自衛のみ（Weapons Tight）",
   "mode_hold": "武器使用禁止（Weapons Hold）",
   "proposal_summary": "{0}: {1} → {2}",
-  "execution_note": "指定ユニットの交戦規定だけを変更し、既存の攻撃指示と全予約は維持します。Holdでも明示的な攻撃指示は取り消されず、CIWSの自衛動作が停止するとは限りません。攻撃を中止する場合は「攻撃中止」も使用します。"
+  "execution_note": "既存の攻撃指示は中止しません。"
 }

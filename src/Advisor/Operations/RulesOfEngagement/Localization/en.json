@@ -6,5 +6,5 @@
   "mode_tight": "Weapons Tight",
   "mode_hold": "Weapons Hold",
   "proposal_summary": "{0}: {1} → {2}",
-  "execution_note": "Changes only the named unit's rules of engagement. Existing attack orders and all waypoint reservations remain. Hold does not cancel explicit attacks or guarantee that CIWS self-defense stops. Use Cancel attack as well when attack cancellation is needed."
+  "execution_note": "Existing attack orders are not cancelled."
 }

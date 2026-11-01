@@ -125,7 +125,7 @@ internal sealed class MovementOperation : MovementOperationBase, IAdvisorLoopabl
                 p.Position.Latitude.ToString("F5", CultureInfo.InvariantCulture) + ", " + p.Position.Longitude.ToString("F5", CultureInfo.InvariantCulture) +
                 (p.Speed == null ? "" : " / " + Context.Text.Format(language, "setting_speed", Context.Text.Get(language, "speed_" + p.Speed))) +
                 (p.Altitude == null ? "" : " / " + Context.Text.Format(language, "setting_altitude", data.Unit.Altitudes.Single(a => a.Id == p.Altitude).Value)) +
-                (p.Depth == null ? "" : " / " + Context.Text.Format(language, "setting_depth", Context.Text.Get(language, "depth_" + p.Depth))))) + "\n" + Context.Text.Get(language, "proposal_settings");
+                (p.Depth == null ? "" : " / " + Context.Text.Format(language, "setting_depth", Context.Text.Get(language, "depth_" + p.Depth)))));
     }
     public override ReservationPreview PreviewReservation(ReservationOrder order, string language)
     {

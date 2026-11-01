@@ -57,13 +57,13 @@ internal sealed class RulesOfEngagementOperation : IAdvisorOperationHandler, IAd
         return (unit, mode);
     }
     public void Validate(IReadOnlyList<OperationOrder> orders) { foreach (var order in orders) Read(order); }
-    public string DescribeProposal(IReadOnlyList<OperationOrder> orders, string language) =>
-        string.Join("\n", orders.Select(order =>
-        {
-            var item = Read(order);
-            return context.Text.Format(language, "proposal_summary", item.Unit.Unit.Name,
-                context.Text.Get(language, "mode_" + Code(item.Unit.Mode)), context.Text.Get(language, "mode_" + Code(item.Mode)));
-        })) + "\n\n" + context.Text.Get(language, "execution_note");
+    public string DescribeProposal(IReadOnlyList<OperationOrder> orders, string language)
+    {
+        var items = orders.Select(Read).ToArray();
+        var description = string.Join("\n", items.Select(item => context.Text.Format(language, "proposal_summary", item.Unit.Unit.Name,
+            context.Text.Get(language, "mode_" + Code(item.Unit.Mode)), context.Text.Get(language, "mode_" + Code(item.Mode)))));
+        return description + (items.Any(item => item.Mode == RulesOfEngagement.Hold) ? "\n\n" + context.Text.Get(language, "execution_note") : "");
+    }
     public string Execute(OperationOrder order)
     {
         var item = Read(order);

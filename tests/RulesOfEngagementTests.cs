@@ -31,6 +31,9 @@ internal static partial class CombatOperationTests
                     Require(review.Contains("Unit 42", StringComparison.Ordinal) && review.Contains("Weapons Free", StringComparison.Ordinal) &&
                         review.Contains("Weapons " + mode, StringComparison.Ordinal) && review.Contains('→') && game.Log.Count == 0,
                         "Review omitted the current/requested mode or changed policy before approval");
+                    var holdNote = new AdvisorOperationText(new RulesOfEngagementExtension().GetDefinition().Localizations).For(language)["execution_note"];
+                    Require(review.Contains(holdNote, StringComparison.Ordinal) == (mode == RulesOfEngagement.Hold),
+                        "Review omitted the Hold consequence or added it to a different requested mode");
                 }
                 service.Approve(proposal); service.Approve(proposal);
                 Require(proposal.State == AdvisorProposalState.Registered && game.Engagement["unit:42"] == mode &&

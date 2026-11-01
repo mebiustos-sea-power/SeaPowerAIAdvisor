@@ -44,8 +44,7 @@ internal sealed class FormationReturnOperation : MovementOperationBase
     public override string DescribeReservation(ReservationOrder order, string language)
     {
         var unit = Read(order);
-        return Context.Text.Format(language, "proposal_summary", unit.Unit.Name, unit.LeaderName ?? unit.LeaderTarget!) +
-            FormationDescription(order, language) + "\n" + Context.Text.Get(language, "proposal_timing");
+        return Context.Text.Format(language, "proposal_summary", unit.Unit.Name, unit.LeaderName ?? unit.LeaderTarget!);
     }
     public override ReservationPreview PreviewReservation(ReservationOrder order, string language)
     {

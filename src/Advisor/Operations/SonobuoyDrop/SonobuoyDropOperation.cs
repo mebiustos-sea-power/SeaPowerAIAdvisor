@@ -164,7 +164,7 @@ internal sealed class SonobuoyDropOperation : IAdvisorOperationHandler,
         var plan = Parse(JObject.Parse(order.Order.ArgumentsJson)); var unit = ReservationUnit(order); var text = context.Text;
         var summary = text.Format(language, "proposal_summary", unit.Info.Name, plan.Drops.Count);
         if (order.Index == 0 && order.Queue.BecomesIndependent) summary += "\n" + text.Get(language, "proposal_independent");
-        return summary + "\n" + text.Get(language, "proposal_depth") + "\n\n" + string.Join("\n", plan.Drops.Select((drop, i) =>
+        return summary + "\n\n" + string.Join("\n", plan.Drops.Select((drop, i) =>
             (i + 1).ToString(CultureInfo.InvariantCulture) + ". " + (unit.Ammunition.FirstOrDefault(a => a.Id == drop.Ammunition)?.Name ?? drop.Ammunition) +
             " — " + drop.Position.Latitude.ToString("F5", CultureInfo.InvariantCulture) + ", " + drop.Position.Longitude.ToString("F5", CultureInfo.InvariantCulture)));
     }
