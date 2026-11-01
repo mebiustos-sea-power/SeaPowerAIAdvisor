@@ -5,7 +5,7 @@ using SeaPowerAIAdvisor.Api;
 namespace SeaPowerAIAdvisor;
 
 // Revokes retained SDK services on battle retirement; never exports native objects or permits worker-thread game access.
-internal sealed class AdvisorOperationContext : IAdvisorOperationContext, IAdvisorGameSupport, IAdvisorReservationSupport, IAdvisorReservationSequenceSupport, IAdvisorMovementSupport, IAdvisorSensorSupport, IAdvisorCombatSupport, IAdvisorMap, IAdvisorOperationText, IDisposable
+internal sealed class AdvisorOperationContext : IAdvisorOperationContext, IAdvisorGameSupport, IAdvisorReservationSupport, IAdvisorReservationSequenceSupport, IAdvisorMovementSupport, IAdvisorSensorSupport, IAdvisorCombatSupport, IAdvisorRulesOfEngagementSupport, IAdvisorMap, IAdvisorOperationText, IDisposable
 {
     private readonly IAdvisorGameSupport game;
     private readonly IAdvisorMap map;
@@ -35,6 +35,10 @@ internal sealed class AdvisorOperationContext : IAdvisorOperationContext, IAdvis
         ?? throw new InvalidOperationException("The game adapter does not provide sensor support.");
     private IAdvisorCombatSupport Combat => game as IAdvisorCombatSupport
         ?? throw new InvalidOperationException("The game adapter does not provide combat support.");
+    private IAdvisorRulesOfEngagementSupport Engagement => game as IAdvisorRulesOfEngagementSupport
+        ?? throw new InvalidOperationException("The game adapter does not provide rules-of-engagement support.");
+    public IReadOnlyList<RulesOfEngagementUnitInfo> GetRulesOfEngagementUnits() { Check(); return Engagement.GetRulesOfEngagementUnits(); }
+    public void SetRulesOfEngagement(string target, RulesOfEngagement mode) { Check(); Engagement.SetRulesOfEngagement(target, mode); }
     public IReadOnlyList<GameUnitInfo> GetCombatUnits() { Check(); return Combat.GetCombatUnits(); }
     public IReadOnlyList<CombatTargetInfo> GetAttackTargets() { Check(); return Combat.GetAttackTargets(); }
     public IReadOnlyList<AttackUnitInfo> GetAttackUnits() { Check(); return Combat.GetAttackUnits(); }

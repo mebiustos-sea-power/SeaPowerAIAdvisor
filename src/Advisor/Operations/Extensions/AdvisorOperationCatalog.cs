@@ -22,6 +22,7 @@ internal sealed class AdvisorOperationCatalog
         catalog.Register(new EmconExtension());
         catalog.Register(new AttackExtension());
         catalog.Register(new CancelAttackExtension());
+        catalog.Register(new RulesOfEngagementExtension());
         catalog.Register(new CancelReservationsExtension());
         return catalog;
     }

@@ -11,6 +11,7 @@ internal static partial class CombatOperationTests
     internal static void Run(Action<string, Action> check)
     {
         RunRangeTests(check);
+        RunRulesOfEngagementTests(check);
         check("Attack discovery keeps actor/observed target identities and per-ammunition compatibility without issuing attacks", () =>
         {
             var game = new Game(); var s = Service(game);
@@ -173,7 +174,7 @@ internal static partial class CombatOperationTests
     }
     private static AdvisorOperations Service(Game game, bool movement = false)
     {
-        var catalog = new AdvisorOperationCatalog(); catalog.Register(new AttackExtension()); catalog.Register(new CancelAttackExtension()); catalog.Register(new CancelReservationsExtension());
+        var catalog = new AdvisorOperationCatalog(); catalog.Register(new AttackExtension()); catalog.Register(new CancelAttackExtension()); catalog.Register(new CancelReservationsExtension()); catalog.Register(new RulesOfEngagementExtension());
         if (movement) catalog.Register(new MovementExtension());
         var s = new AdvisorOperations(_ => true); foreach (var op in catalog.CreateOperations(game, new Map())) s.Register(op);
         s.BeginProposal("test"); return s;
@@ -186,7 +187,7 @@ internal static partial class CombatOperationTests
     private static void Require(bool value, string message) { if (!value) throw new InvalidOperationException(message); }
     private static void Expect(string code, Action action)
     { try { action(); } catch (AdvisorOperationException e) when (e.Code == code) { return; } throw new InvalidOperationException("Expected " + code); }
-    private sealed class Game : IAdvisorGameSupport, IAdvisorCombatSupport, IAdvisorMovementSupport, IAdvisorReservationSequenceSupport, IAdvisorReservationSupport
+    private sealed class Game : IAdvisorGameSupport, IAdvisorCombatSupport, IAdvisorMovementSupport, IAdvisorReservationSequenceSupport, IAdvisorReservationSupport, IAdvisorRulesOfEngagementSupport
     {
         internal bool Information = true, Weapons = true, Contacts = true, NoInRangeOptions;
         internal string[] RangeContacts = Array.Empty<string>();
@@ -196,6 +197,12 @@ internal static partial class CombatOperationTests
         internal readonly List<string> Log = new();
         private readonly Dictionary<string, int> Used = new();
         private readonly HashSet<string> Switched = new();
+        internal readonly Dictionary<string, RulesOfEngagement> Engagement = new()
+        { ["unit:42"] = RulesOfEngagement.Free, ["unit:43"] = RulesOfEngagement.Tight };
+        public IReadOnlyList<RulesOfEngagementUnitInfo> GetRulesOfEngagementUnits() => GetCombatUnits()
+            .Select(unit => new RulesOfEngagementUnitInfo(unit, Engagement[unit.Target])).ToArray();
+        public void SetRulesOfEngagement(string target, RulesOfEngagement mode)
+        { Engagement[target] = mode; Log.Add("roe:" + target + ":" + mode); }
         public bool IsInformationEnabled(string category) => Information && Fault != "permission" &&
             (category != "battle_weapons" || Weapons) && (category != "battle_contacts" || Contacts);
         public IReadOnlyList<GameUnitInfo> GetCombatUnits() => new[] { 42, 43 }.Select(id => new GameUnitInfo(id, "Unit " + id, null, false, false,

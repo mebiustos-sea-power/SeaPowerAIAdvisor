@@ -36,6 +36,8 @@
     <Compile Include="..\src\Advisor\Operations\Combat\CombatOperationBase.cs" Link="CombatOperationBase.cs" />
     <Compile Include="..\src\Advisor\Operations\Attack\AttackOperation.cs" Link="AttackOperation.cs" />
     <EmbeddedResource Include="..\src\Advisor\Operations\Attack\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.Attack.Localization.%(Filename).json" />
+    <Compile Include="..\src\Advisor\Operations\RulesOfEngagement\RulesOfEngagementOperation.cs" Link="RulesOfEngagementOperation.cs" />
+    <EmbeddedResource Include="..\src\Advisor\Operations\RulesOfEngagement\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.RulesOfEngagement.Localization.%(Filename).json" />
     <Compile Include="..\src\Advisor\Operations\CancelAttack\CancelAttackOperation.cs" Link="CancelAttackOperation.cs" />
     <Compile Include="..\src\Advisor\Operations\CancelReservations\CancelReservationsOperation.cs" Link="CancelReservationsOperation.cs" />
     <EmbeddedResource Include="..\src\Advisor\Operations\CancelAttack\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.CancelAttack.Localization.%(Filename).json" />

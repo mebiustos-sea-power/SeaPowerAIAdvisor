@@ -1,0 +1,10 @@
+{
+  "name": "Set rules of engagement",
+  "summary": "Change the named unit's automatic-engagement policy to Weapons Free, Tight or Hold.",
+  "requirements": "Requires own-unit information and a unit accepting player orders. Does not propagate to formation members.",
+  "mode_free": "Weapons Free",
+  "mode_tight": "Weapons Tight",
+  "mode_hold": "Weapons Hold",
+  "proposal_summary": "{0}: {1} → {2}",
+  "execution_note": "Changes only the named unit's rules of engagement. Existing attack orders and all waypoint reservations remain. Hold does not cancel explicit attacks or guarantee that CIWS self-defense stops. Use Cancel attack as well when attack cancellation is needed."
+}

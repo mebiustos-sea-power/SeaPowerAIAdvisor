@@ -105,6 +105,7 @@ The built-in commands support:
 - **Sensor control:** change supported radar, sonar and other controls exposed by the game's standard sensor UI. Available settings depend on the unit, equipment and current conditions. Equipment startup or deployment may require game time after adoption.
 - **EMCON:** apply the game's one-off EMCON action to specified units. It does not restore earlier sensor settings or toggle EMCON off.
 - **Attack:** specify observed targets, carried ammunition, shot counts and whether to add to existing attack orders or switch them. The game handles any approach movement and actual firing.
+- **Rules of engagement:** change only the specified unit to Weapons Free, Tight or Hold. Existing attacks and all reservations remain; combine with Cancel attack when needed. Hold does not guarantee that CIWS self-defense stops.
 - **Cancel attack:** stop attack orders while retaining reservations. This can also affect guidance for launched weapons and offensive jamming.
 - **Cancel reservations:** remove queued waypoint reservations, including movement, sonobuoy drops and loops, while retaining current attack orders. Clearing reservations does not issue a stop order.
 

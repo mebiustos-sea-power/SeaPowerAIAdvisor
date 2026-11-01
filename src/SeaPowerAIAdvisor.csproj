@@ -13,6 +13,7 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Advisor\Operations\Attack\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.Attack.Localization.%(Filename).json" />
+    <EmbeddedResource Include="Advisor\Operations\RulesOfEngagement\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.RulesOfEngagement.Localization.%(Filename).json" />
     <EmbeddedResource Include="Advisor\Operations\CancelAttack\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.CancelAttack.Localization.%(Filename).json" />
     <EmbeddedResource Include="Advisor\Operations\CancelReservations\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.CancelReservations.Localization.%(Filename).json" />
     <EmbeddedResource Include="Advisor\Operations\Sensors\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Commands.Sensors.Localization.%(Filename).json" />
