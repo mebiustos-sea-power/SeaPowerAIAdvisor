@@ -6,17 +6,11 @@ An in-game operations adviser and screen-translation tool for **Sea Power: Naval
 
 [Download releases](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/releases) · [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3821064016) · [Report an issue](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/issues)
 
-## What's new in v0.20.0
+## What's new in v0.20.1
 
-Meet fictional captains and pilots through **AI Crew (WIP)**, and get better-supported attack proposals and follow-up consultations.
+Fixed an error that could stop tactical consultations after missile launches (`unit:-1` duplicate-key error). Objects without a player-map identity are now excluded from command targets.
 
-- **AI Crew:** short situation-based remarks and occasional exchanges, with automatic crew appointments, a dedicated connection choice, configurable notifications, history and token usage. Disabled by default; see [AI Crew](#ai-crew-wip) to get started.
-- **Attack range information:** game-calculated range information helps the AI compare weapons and targets. Follow-up consultations also retain the intended units and constraints more reliably.
-- **Quick consultations:** added **Attack proposal** and enabled command proposals in action-oriented quick consultations.
-- **Easier unit badges:** search the friendly-unit list or enable optional `@` completion. Adding a map location badge opens the adviser if needed.
-- **More useful situation data:** current weather and sea conditions, plus optional reuse of compact briefings and reports across consultations.
-
-See the [v0.20.0 release notes](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/releases/tag/v0.20.0) for all changes.
+See the [v0.20.1 release notes](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/releases/tag/v0.20.1) for details.
 
 ## Features
 
@@ -183,7 +177,7 @@ Bug reports are welcome through [GitHub issues](https://github.com/mebiustos-sea
 
 ## For developers
 
-The host ships `SeaPowerAIAdvisor.Api.dll` for external Anchor Chain mods. AI Advisor v0.20.0 uses SDK contract version 4 and API DLL version 4.0.0.0. Rebuild command and adapter extensions against the matching API DLL; combat integrations may also need source changes for the new attack-range queries and public types. Plans require explicit command execution modes and separate `immediate_operations` / `reservation_operations` arrays. The old plan format is not accepted. Adapter inputs continue to use the `ToolsJson` list exclusively. Extensions can use the standard retrieval engine or implement an independent consultation workflow. Register custom commands without rebuilding the host; built-in commands use the same public command contract. See the [public API guide](docs/public-api.md), [external command example and build guide](examples/ExternalCommand/README.md), and [offline connection adapter example](examples/ExternalAdapter/Examples.cs). The SDK and public API are experimental and may undergo breaking changes without prior notice; external extensions may require updates or rebuilding. See the [SDK stability notice](docs/public-api.md). Developer-authored update announcements are configured as described in the [update notice guide](docs/update-notices.md).
+The host ships `SeaPowerAIAdvisor.Api.dll` for external Anchor Chain mods. AI Advisor v0.20.x uses SDK contract version 4 and API DLL version 4.0.0.0. Rebuild command and adapter extensions against the matching API DLL; combat integrations may also need source changes for the new attack-range queries and public types. Plans require explicit command execution modes and separate `immediate_operations` / `reservation_operations` arrays. The old plan format is not accepted. Adapter inputs continue to use the `ToolsJson` list exclusively. Extensions can use the standard retrieval engine or implement an independent consultation workflow. Register custom commands without rebuilding the host; built-in commands use the same public command contract. See the [public API guide](docs/public-api.md), [external command example and build guide](examples/ExternalCommand/README.md), and [offline connection adapter example](examples/ExternalAdapter/Examples.cs). The SDK and public API are experimental and may undergo breaking changes without prior notice; external extensions may require updates or rebuilding. See the [SDK stability notice](docs/public-api.md). Developer-authored update announcements are configured as described in the [update notice guide](docs/update-notices.md).
 
 To build on Windows, install Python 3 and the .NET SDK specified by `global.json`. Copy `Directory.Build.local.props.example` to `Directory.Build.local.props` and set your Sea Power and Anchor Chain directories. The full test script also expects Bungalow's Dynamic Campaign Mod's Workshop files for campaign tests; it remains optional at runtime.
 
