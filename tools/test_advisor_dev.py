@@ -167,6 +167,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(api.calls[-1][:3], ("POST", "/v1/crew/chatter/window", {"scope_id": "loaded-game", "open": True}))
             self.assertEqual(api.run("chatter", "pause", "--scope-id", "loaded-game", "--value", "true")[0], 0)
             self.assertEqual(api.calls[-1][:3], ("POST", "/v1/crew/chatter/pause", {"scope_id": "loaded-game", "paused": True}))
+            self.assertEqual(api.run("chatter", "appoint", "--scope-id", "loaded-game")[0], 0)
+            self.assertEqual(api.calls[-1][:3], ("POST", "/v1/crew/chatter/appointments", {"scope_id": "loaded-game"}))
             self.assertEqual(api.run("chatter", "stop", "--scope-id", "loaded-game")[0], 0)
             self.assertEqual(api.calls[-1][:3], ("POST", "/v1/crew/chatter/stop", {"scope_id": "loaded-game"}))
 

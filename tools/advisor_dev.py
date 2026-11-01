@@ -365,6 +365,7 @@ def parser():
     targets.add_argument("--target-id", action="append", required=True); targets.add_argument("--enabled", choices=("true", "false"), required=True); add_output(targets)
     window = chatter.add_parser("window"); window.add_argument("--scope-id", required=True); window.add_argument("--open", choices=("true", "false"), required=True); add_output(window)
     pause = chatter.add_parser("pause"); pause.add_argument("--scope-id", required=True); pause.add_argument("--value", choices=("true", "false"), required=True); add_output(pause)
+    appoint = chatter.add_parser("appoint"); appoint.add_argument("--scope-id", required=True); add_output(appoint)
     stop = chatter.add_parser("stop"); stop.add_argument("--scope-id", required=True); add_output(stop)
     notices = commands.add_parser("notices").add_subparsers(dest="notice_command", required=True)
     add_output(notices.add_parser("preview"))
@@ -452,6 +453,8 @@ def main(argv=None):
                 value = client.request("GET", path if args.chatter_command == "status" else path + "/situation")
             elif args.chatter_command == "enabled":
                 value = client.request("PATCH", path, {"enabled": args.value == "true"})
+            elif args.chatter_command == "appoint":
+                value = client.request("POST", path + "/appointments", {"scope_id": args.scope_id})
             elif args.chatter_command == "window":
                 value = client.request("POST", path + "/window", {"scope_id": args.scope_id, "open": args.open == "true"})
             elif args.chatter_command == "pause":

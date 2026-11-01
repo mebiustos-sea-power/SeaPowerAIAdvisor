@@ -11,9 +11,9 @@ internal sealed class CrewTargetSelection
     private readonly Dictionary<string, bool> edits = new(StringComparer.Ordinal);
     internal bool Dirty => edits.Count > 0;
     internal IReadOnlyCollection<string> Selected => current.Keys.Where(Checked).ToArray();
-    internal void Sync(IReadOnlyList<CrewTarget> targets, Func<string, bool> enabled)
+    internal void Sync(IReadOnlyList<CrewTarget> targets, Func<string, bool> enabled, Func<string, bool> appointed)
     {
-        current.Clear(); foreach (var target in targets) current.Add(target.Id, enabled(target.Id));
+        current.Clear(); foreach (var target in targets.Where(t => appointed(t.Id))) current.Add(target.Id, enabled(target.Id));
         foreach (var id in edits.Keys.ToArray())
             if (!current.TryGetValue(id, out var value) || value == edits[id]) edits.Remove(id);
     }

@@ -30,6 +30,7 @@ internal sealed class CrewLocalApi
             {
                 ["id"] = t.Id, ["display_name"] = t.Name, ["nation"] = t.Nation, ["role"] = t.Role,
                 ["member_unit_ids"] = new JArray(t.Members), ["enabled"] = chatter.Enabled(t.Id), ["can_speak"] = t.CanSpeak,
+                ["appointment_pending"] = chatter.AppointmentRequested(t.Id),
                 ["person"] = chatter.Person(t.Id) is CrewPerson person ? person.Json() : JValue.CreateNull()
             })),
             ["history"] = new JArray(chatter.History.Select(r => new JObject
@@ -42,6 +43,14 @@ internal sealed class CrewLocalApi
     }
     internal LocalApiResponse Dispatch(string method, string path, JObject body)
     {
+        if (method == "POST" && path == Path + "/appointments")
+        {
+            RequireScope(body);
+            if (chatter.Paused) throw new LocalApiException(409, "chatter_paused");
+            if (chatter.Busy) throw new LocalApiException(409, "chatter_busy");
+            validateConnection(); chatter.RequestAppointments(now());
+            return new LocalApiResponse(200, Status());
+        }
         if (method == "PATCH" && path == Path + "/targets")
         {
             RequireScope(body, "target_ids", "enabled");
@@ -51,6 +60,7 @@ internal sealed class CrewLocalApi
             if (selected.Distinct(StringComparer.Ordinal).Count() != selected.Length || selected.Any(id => !chatter.Targets.Any(t => t.Id == id)))
                 throw new LocalApiException(400, "unknown_chatter_target");
             var enabled = (bool)body["enabled"]!;
+            if (enabled && selected.Any(id => chatter.Person(id!) == null)) throw new LocalApiException(409, "chatter_target_unappointed");
             if (enabled) validateConnection();
             var committed = new System.Collections.Generic.HashSet<string>(chatter.Targets.Where(t => chatter.Enabled(t.Id)).Select(t => t.Id), StringComparer.Ordinal);
             foreach (var id in selected) { if (enabled) committed.Add(id!); else committed.Remove(id!); }
@@ -62,7 +72,7 @@ internal sealed class CrewLocalApi
             RequireScope(body, "paused");
             if (body["paused"]?.Type != JTokenType.Boolean) throw new LocalApiException(400, "invalid_request");
             var paused = (bool)body["paused"]!;
-            if (!paused && chatter.HasEnabledTargets) validateConnection();
+            if (!paused && (chatter.HasEnabledTargets || chatter.HasPendingAppointments)) validateConnection();
             chatter.SetPaused(paused, now()); return new LocalApiResponse(200, Status());
         }
         if (method == "POST" && path == Path + "/stop")

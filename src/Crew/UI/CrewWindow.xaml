@@ -25,6 +25,7 @@
         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
         <TextBlock Text="{DynamicResource Crew.targets_hint}" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,10" />
         <WrapPanel Grid.Row="1" Margin="0,0,0,10">
+          <Button x:Name="AppointAll" Content="{DynamicResource Crew.appoint_all}" Height="30" Padding="12,0" Margin="0,0,8,0" />
           <Button x:Name="AllTargetsOn" Content="{DynamicResource Crew.all_on}" Height="30" Padding="12,0" />
           <Button x:Name="AllTargetsOff" Content="{DynamicResource Crew.all_off}" Height="30" Padding="12,0" Margin="8,0,0,0" />
         </WrapPanel>

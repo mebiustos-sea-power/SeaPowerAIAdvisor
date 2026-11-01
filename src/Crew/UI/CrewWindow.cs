@@ -104,6 +104,12 @@ internal sealed class CrewWindow : IDisposable
         Bind("OpenInformation", () => OpenPage("information"));
         Bind("ResetInformation", () => { SetInformation(CrewInformation.Default); settingsNotice.Show(""); });
         Bind("Back", () => Navigate(Home));
+        Bind("AppointAll", () =>
+        {
+            if (!CanCommit() || chatter.Paused || chatter.Busy) return;
+            connections.ValidateSelection(settings.Current.ConnectionId);
+            chatter.RequestAppointments(now()); DrawTargets(); Notice("");
+        });
         Bind("AllTargetsOn", () => { SyncSelection(); targetSelection.SetAll(true); DrawTargets(); });
         Bind("AllTargetsOff", () => { SyncSelection(); targetSelection.SetAll(false); DrawTargets(); });
         Bind("ApplyTargets", () =>
@@ -115,7 +121,7 @@ internal sealed class CrewWindow : IDisposable
         });
         Bind("PauseChatter", () =>
         {
-            if (chatter.Paused && chatter.HasEnabledTargets) connections.ValidateSelection(settings.Current.ConnectionId);
+            if (chatter.Paused && (chatter.HasEnabledTargets || chatter.HasPendingAppointments)) connections.ValidateSelection(settings.Current.ConnectionId);
             chatter.SetPaused(!chatter.Paused, now());
         });
         Bind("SaveConnection", () =>
@@ -314,10 +320,14 @@ internal sealed class CrewWindow : IDisposable
         foreach (var remark in chatter.History.Reverse())
             panel.Children.Add(Card(remark.Target.Name + " / " + remark.Submission.Person.DisplayName(settings.Current.ShowRanks, chatter.RankBeforeName) + " / " + remark.ReceivedAt.ToString("HH:mm:ss"), remark.Submission.Text));
     }
-    private void SyncSelection() => targetSelection.Sync(chatter.Targets, chatter.Enabled);
+    private void SyncSelection() => targetSelection.Sync(chatter.Targets, chatter.Enabled, id => chatter.Person(id) != null);
     private void DrawTargets()
     {
         SyncSelection();
+        Find<Button>("AppointAll").IsEnabled = !chatter.Paused && !chatter.Busy && chatter.HasUnappointedTargets;
+        var hasAppointedTargets = chatter.Targets.Any(target => chatter.Person(target.Id) != null);
+        Find<Button>("AllTargetsOn").IsEnabled = hasAppointedTargets;
+        Find<Button>("AllTargetsOff").IsEnabled = hasAppointedTargets;
         Find<Button>("ApplyTargets").IsEnabled = targetSelection.Dirty;
         var panel = Find<StackPanel>("Targets"); panel.Children.Clear();
         if (chatter.Targets.Count == 0) panel.Children.Add(new TextBlock { Text = text["empty_targets"], TextWrapping = TextWrapping.Wrap });
@@ -326,8 +336,8 @@ internal sealed class CrewWindow : IDisposable
             var person = chatter.Person(target.Id);
             var label = target.Name + " / " + target.Nation + " / " + string.Format(CultureInfo.InvariantCulture, text["members"], target.Members.Count);
             if (!target.CanSpeak) label += " / " + text["leader_speaks"];
-            var check = new CheckBox { Content = Card(label, person == null ? text[chatter.Enabled(target.Id) ? "appointment_pending" : "not_appointed"] : person.DisplayName(settings.Current.ShowRanks, chatter.RankBeforeName) + " / " + person.Personality),
-                IsChecked = targetSelection.Checked(target.Id), HorizontalContentAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 0, 0, 8) };
+            var check = new CheckBox { Content = Card(label, person == null ? text[chatter.AppointmentRequested(target.Id) ? "appointment_pending" : "not_appointed"] : person.DisplayName(settings.Current.ShowRanks, chatter.RankBeforeName) + " / " + person.Personality),
+                IsChecked = targetSelection.Checked(target.Id), IsEnabled = person != null, HorizontalContentAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 0, 0, 8) };
             check.Click += (_, _) => Run(() =>
             {
                 targetSelection.Set(target.Id, check.IsChecked == true);

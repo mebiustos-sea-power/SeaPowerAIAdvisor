@@ -116,11 +116,11 @@ internal static class CrewTests
         check("Captured name forms produce one before and four after votes without abbreviating displayed people", () =>
         {
             using var rig = new Rig(); rig.GamePaused = true; var targets = Enumerable.Range(1, 5).Select(i => Target(i)).ToArray();
-            rig.Chatter.Refresh(targets); rig.SetEnabled("unit:1", true, 0); rig.Tick(1); var first = rig.Take();
+            rig.Chatter.Refresh(targets.Take(1).ToArray()); rig.Chatter.RequestAppointments(0); rig.Tick(1); var first = rig.Take();
             JObject Captured(string id, string name, string rank, string form) => new() { ["id"] = id, ["person_name"] = name, ["rank"] = rank, ["name_with_rank"] = form, ["personality"] = "Calm" };
             first.Completion.SetResult(first.Batch.Read(Reply(new JArray(), new JArray(Captured("unit:1", "佐伯 健一郎", "大尉", "大尉 佐伯 健一郎"))))); rig.Pump(1);
             Require(rig.Chatter.RankBeforeVotes == 1 && rig.Chatter.RankPosition == "before", "The initial prefix was not counted");
-            rig.Chatter.ApplyTargets(targets.Select(x => x.Id).ToArray(), 1); rig.Tick(2); var next = rig.Take();
+            rig.Chatter.Refresh(targets); rig.Chatter.RequestAppointments(1); rig.Tick(2); var next = rig.Take();
             var rows = new JArray(Captured("unit:2", "ジェームズ・A・ハリントン", "大佐", "ハリントン大佐"), Captured("unit:3", "佐伯 光", "一等海尉", "佐伯一等海尉"),
                 Captured("unit:4", "真壁 涼子", "三等海佐", "真壁三等海佐"), Captured("unit:5", "イアン・マクレガー", "少佐", "マクレガー少佐"));
             next.Completion.SetResult(next.Batch.Read(Reply(new JArray(), rows))); rig.Pump(2);
@@ -151,81 +151,72 @@ internal static class CrewTests
         });
         check("Invalid rank votes never pause Chatter and valid cumulative votes alone determine the shared order", () =>
         {
-            using var rig = new Rig(); var targets = Enumerable.Range(1, 10).Select(i => Target(i)).ToArray();
-            rig.Chatter.Refresh(targets); rig.SetEnabled("unit:1", true, 0); rig.Tick(1); var first = rig.Take();
+            using var rig = new Rig(); rig.GamePaused = true; var targets = Enumerable.Range(1, 10).Select(i => Target(i)).ToArray();
+            rig.Chatter.Refresh(targets.Take(1).ToArray()); rig.Chatter.RequestAppointments(0); rig.Tick(1); var first = rig.Take();
             var row = AppointmentRow("unit:1"); row["name_with_rank"] = JValue.CreateNull();
-            first.Completion.SetResult(first.Batch.Read(Reply(new JArray(Row("unit:1")), new JArray(row)))); rig.Pump(1);
+            first.Completion.SetResult(first.Batch.Read(Reply(new JArray(), new JArray(row)))); rig.Pump(1);
             var person = rig.Chatter.Person("unit:1")!;
-            Require(!rig.Chatter.Paused && rig.Chatter.Error == null && person != null && rig.Chatter.History.Count == 1 &&
+            Require(!rig.Chatter.Paused && rig.Chatter.Error == null && person != null && rig.Chatter.History.Count == 0 &&
                 rig.Chatter.RankBeforeVotes == 0 && rig.Chatter.RankAfterVotes == 0 && rig.Chatter.RankInvalidVotes == 1 && rig.Chatter.RankPosition == "before",
                 "An invalid-only appointment stopped Chatter, lost its remark or did not use provisional before");
             rig.GamePaused = true;
-            rig.Chatter.ApplyTargets(targets.Take(5).Select(x => x.Id).ToArray(), 1); rig.Tick(2); var four = rig.Take();
+            rig.Chatter.Refresh(targets.Take(5).ToArray()); rig.Chatter.RequestAppointments(1); rig.Tick(2); var four = rig.Take();
             var invalid = AppointmentRow("unit:4"); invalid["name_with_rank"] = JValue.CreateNull();
             four.Completion.SetResult(four.Batch.Read(Reply(new JArray(), new JArray(AppointmentRow("unit:2", position: "after"), AppointmentRow("unit:3", position: "after"), invalid, AppointmentRow("unit:5", position: "left"))))); rig.Pump(2);
             Require(rig.Chatter.RankPosition == "after" && rig.Chatter.RankAfterVotes == 2 && rig.Chatter.RankBeforeVotes == 0 && rig.Chatter.RankInvalidVotes == 3,
                 "More invalid than valid votes prevented a valid majority");
-            rig.Chatter.ApplyTargets(targets.Take(8).Select(x => x.Id).ToArray(), 2); rig.Tick(3); var three = rig.Take();
+            rig.Chatter.Refresh(targets.Take(8).ToArray()); rig.Chatter.RequestAppointments(2); rig.Tick(3); var three = rig.Take();
             three.Completion.SetResult(three.Batch.Read(Reply(new JArray(), new JArray(AppointmentRow("unit:6"), AppointmentRow("unit:7"), AppointmentRow("unit:8", position: ""))))); rig.Pump(3);
             Require(rig.Chatter.RankPosition == "after" && rig.Chatter.RankAfterVotes == 2 && rig.Chatter.RankBeforeVotes == 2 && rig.Chatter.RankInvalidVotes == 4,
                 "A valid tie did not retain the previous shared order");
-            rig.Chatter.ApplyTargets(targets.Select(x => x.Id).ToArray(), 3); rig.Tick(4); var last = rig.Take(); rig.CompleteWithVote(last, "invalid"); rig.Pump(4);
+            rig.Chatter.Refresh(targets); rig.Chatter.RequestAppointments(3); rig.Tick(4); var last = rig.Take(); rig.CompleteWithVote(last, "invalid"); rig.Pump(4);
             var status = new CrewLocalApi(rig.Chatter, () => 4, () => { }).Status();
             Require(!rig.Chatter.Paused && rig.Chatter.Error == null && rig.Errors.Count == 0 && rig.Chatter.RankPosition == "after" &&
                 rig.Chatter.RankAfterVotes == 2 && rig.Chatter.RankBeforeVotes == 2 && (int?)status["rank_position_votes"]?["invalid"] == 6 &&
                 targets.All(x => rig.Chatter.Person(x.Id) != null) && ReferenceEquals(person, rig.Chatter.Person("unit:1")),
                 "An invalid-only later batch reset the established order or lost accepted people");
         });
-        check("Shared rank order follows cumulative accepted appointments, preserves ties and reformats existing names", () =>
+        check("Shared rank order follows cumulative appointments and reformats existing history without replacing people", () =>
         {
             using var rig = new Rig(); var targets = Enumerable.Range(1, 9).Select(i => Target(i)).ToArray();
-            rig.Chatter.Refresh(targets); rig.SetEnabled("unit:1", true, 0); rig.Tick(1); var first = rig.Take();
-            rig.CompleteWithVote(first, "after", "unit:1"); rig.Pump(1);
-            var person = rig.Chatter.Person("unit:1")!;
-            Require(rig.Chatter.RankAfterVotes == 1 && rig.Chatter.RankBeforeVotes == 0 && rig.Chatter.RankPosition == "after" &&
-                rig.Chatter.History.Single().Submission.Person.DisplayName(true, rig.Chatter.RankBeforeName) == "Fictional Cmdr.",
-                "The first single appointment did not establish its displayed order");
-            rig.GamePaused = true;
-            rig.Chatter.ApplyTargets(targets.Take(5).Select(x => x.Id).ToArray(), 1); rig.Tick(2); var four = rig.Take();
-            rig.CompleteWithVote(four, "before"); rig.Pump(2);
+            rig.Chatter.Refresh(targets.Take(1).ToArray()); rig.Chatter.RequestAppointments(0); rig.Tick(1);
+            var first = rig.Take(); rig.CompleteWithVote(first, "after"); rig.Pump(1); var person = rig.Chatter.Person("unit:1")!;
+            rig.Tick(2); var speech = rig.Take(); rig.Complete(speech, "unit:1"); rig.Pump(2);
+            Require(rig.Chatter.History.Single().Submission.Person.DisplayName(true, rig.Chatter.RankBeforeName) == "Fictional Cmdr.", "Initial order lost");
+            rig.GamePaused = true; rig.Chatter.Refresh(targets.Take(5).ToArray()); rig.Chatter.RequestAppointments(2); rig.Tick(3);
+            var four = rig.Take(); rig.CompleteWithVote(four, "before"); rig.Pump(3);
             Require(rig.Chatter.RankBeforeVotes == 4 && rig.Chatter.RankAfterVotes == 1 && rig.Chatter.RankPosition == "before" &&
-                ReferenceEquals(person, rig.Chatter.Person("unit:1")) && rig.Chatter.History.Single().Submission.Person.DisplayName(true, rig.Chatter.RankBeforeName) == "Cmdr. Fictional",
-                "Four later appointments did not replace the first vote's order for the existing person and history");
-            rig.Chatter.ApplyTargets(targets.Take(8).Select(x => x.Id).ToArray(), 2); rig.Tick(3); var three = rig.Take();
-            rig.CompleteWithVote(three, "after"); rig.Pump(3);
-            Require(rig.Chatter.RankBeforeVotes == 4 && rig.Chatter.RankAfterVotes == 4 && rig.Chatter.RankPosition == "before",
-                "A tied cumulative batch followed its newest votes instead of retaining the previous shared order");
-            rig.Chatter.ApplyTargets(targets.Select(x => x.Id).ToArray(), 3); rig.Tick(4); var last = rig.Take();
-            rig.CompleteWithVote(last, "after"); rig.Pump(4);
-            Require(rig.Chatter.RankPosition == "after" && rig.Chatter.RankBeforeVotes == 4 && rig.Chatter.RankAfterVotes == 5 &&
-                person.DisplayName(false, rig.Chatter.RankBeforeName) == "Fictional", "A new majority failed to update the common order or affected unranked display");
-            rig.Language = "ja"; rig.Tick(5); rig.SetEnabled("unit:1", false, 5); rig.SetEnabled("unit:1", true, 5);
+                ReferenceEquals(person, rig.Chatter.Person("unit:1")) && rig.Chatter.History.Single().Submission.Person.DisplayName(true, rig.Chatter.RankBeforeName) == "Cmdr. Fictional", "Later appointments did not reformat existing history");
+            rig.Chatter.Refresh(targets.Take(8).ToArray()); rig.Chatter.RequestAppointments(3); rig.Tick(4);
+            var three = rig.Take(); rig.CompleteWithVote(three, "after"); rig.Pump(4);
+            Require(rig.Chatter.RankPosition == "before" && rig.Chatter.RankAfterVotes == 4, "A tie lost the existing order");
+            rig.Chatter.Refresh(targets); rig.Chatter.RequestAppointments(4); rig.Tick(5);
+            var last = rig.Take(); rig.CompleteWithVote(last, "after"); rig.Pump(5);
+            rig.Language = "ja"; rig.SetEnabled("unit:1", false, 5); rig.SetEnabled("unit:1", true, 5);
             rig.Chatter.SetPaused(true, 5); rig.Chatter.SetPaused(false, 5); rig.Tick(6);
-            Require(rig.Requests == 4 && rig.Chatter.RankBeforeVotes == 4 && rig.Chatter.RankAfterVotes == 5 && rig.Chatter.RankPosition == "after",
-                "Changing language, re-enabling a person or resuming Chatter reset or duplicated appointment votes");
+            Require(rig.Requests == 5 && rig.Chatter.RankBeforeVotes == 4 && rig.Chatter.RankAfterVotes == 5 && rig.Chatter.RankPosition == "after" && person.DisplayName(false, true) == "Fictional", "Language or participation changes recounted people");
             var status = new CrewLocalApi(rig.Chatter, () => 6, () => { }).Status();
-            Require((string?)status["rank_position"] == "after" && (int?)status["rank_position_votes"]?["before"] == 4 &&
-                (int?)status["rank_position_votes"]?["after"] == 5 && ((JArray)status["targets"]!).All(x => x["person"]?["rank_position"] == null) &&
-                ((JArray)status["history"]!).All(x => x["rank_position"] == null), "The local API lost shared vote totals or exported per-person order");
+            Require((string?)status["rank_position"] == "after" && (int?)status["rank_position_votes"]?["after"] == 5 &&
+                ((JArray)status["targets"]!).All(x => x["person"]?["rank_position"] == null), "Per-person ordering leaked into status");
         });
         check("Rank votes count only appointments still eligible when the batch is accepted", () =>
         {
             using var rig = new Rig(); rig.GamePaused = true; rig.Chatter.Refresh(new[] { Target(1), Target(2), Target(3) });
             Require(rig.Chatter.RankPosition == null, "A session without appointments already had a decided rank order");
-            rig.Chatter.ApplyTargets(new[] { "unit:1", "unit:2", "unit:3" }, 0); rig.Tick(1); var call = rig.Take();
-            rig.SetEnabled("unit:1", false, 1);
+            rig.Chatter.RequestAppointments(0); rig.Tick(1); var call = rig.Take();
+            rig.Chatter.Refresh(new[] { Target(2), Target(3) });
             var rows = new JArray(AppointmentRow("unit:1", position: "before"), AppointmentRow("unit:2", position: "after"), AppointmentRow("unit:3", position: "after"));
             call.Completion.SetResult(call.Batch.Read(Reply(new JArray(), rows))); rig.Pump(1);
             Require(rig.Chatter.Person("unit:1") == null && rig.Chatter.RankBeforeVotes == 0 && rig.Chatter.RankAfterVotes == 2 && rig.Chatter.RankPosition == "after",
                 "A disabled in-flight appointment cast a vote or discarded the still-valid appointments");
-            rig.SetEnabled("unit:1", true, 1); rig.Tick(2); var fresh = rig.Take(); rig.CompleteWithVote(fresh, "before"); rig.Pump(2);
+            rig.Chatter.Refresh(new[] { Target(1), Target(2), Target(3) }); rig.Chatter.RequestAppointments(1); rig.Tick(2); var fresh = rig.Take(); rig.CompleteWithVote(fresh, "before"); rig.Pump(2);
             Require(rig.Chatter.Person("unit:1") != null && rig.Chatter.RankBeforeVotes == 1 && rig.Chatter.RankAfterVotes == 2 && rig.Chatter.RankPosition == "after",
                 "Accepting the fresh appointment did not add exactly one vote to the existing total");
         });
         check("An initially tied valid rank vote retains the provisional before order", () =>
         {
             using var rig = new Rig(); rig.GamePaused = true; rig.Chatter.Refresh(new[] { Target(1), Target(2) });
-            rig.Chatter.ApplyTargets(new[] { "unit:1", "unit:2" }, 0); rig.Tick(1); var call = rig.Take();
+            rig.Chatter.RequestAppointments(0); rig.Tick(1); var call = rig.Take();
             call.Completion.SetResult(call.Batch.Read(Reply(new JArray(), new JArray(AppointmentRow("unit:2", position: "after"), AppointmentRow("unit:1", position: "before")))));
             rig.Pump(1);
             Require(rig.Chatter.RankBeforeVotes == 1 && rig.Chatter.RankAfterVotes == 1 && rig.Chatter.RankPosition == "before",
@@ -234,7 +225,7 @@ internal static class CrewTests
         check("Appointments alone receive detached mission context once per batch and retain ranked people across later speech", () =>
         {
             using var rig = new Rig(); rig.GamePaused = true;
-            rig.Chatter.Refresh(new[] { Target(1, 1, 2), Follower(2) }); rig.Chatter.ApplyTargets(new[] { "unit:1", "unit:2" }, 0);
+            rig.Chatter.Refresh(new[] { Target(1, 1, 2), Follower(2) }); rig.Chatter.RequestAppointments(0);
             rig.Tick(1); var first = rig.Take(); var initial = first.Batch.Input("").Data;
             Require(rig.AppointmentCaptures == 1 && rig.Captures == 0 && (string?)initial["appointment_context"]?["mission_briefing"] == "Protect the convoy." &&
                 initial["appointments"]!.Count() == 2 && (string?)initial["appointments"]![0]?["class_name"] == "Destroyer" &&
@@ -299,7 +290,7 @@ internal static class CrewTests
                 rig.Situation = ChatterSituation();
                 rig.Situation["units"]![0]!["air_operations"] = new JObject { ["launch_handling"] = true, ["recovery_handling"] = false };
                 var original = rig.Situation.DeepClone();
-                rig.Chatter.Refresh(new[] { Target(1, 1, 2) }); rig.Chatter.ApplyTargets(new[] { "unit:1" }, 0); rig.Tick(1);
+                rig.Chatter.Refresh(new[] { Target(1, 1, 2) }); rig.PreparePeople(); rig.Chatter.ApplyTargets(new[] { "unit:1" }, 0); rig.Tick(1);
                 var call = rig.Take(); var data = call.Batch.Input("").Data;
                 var units = (JArray)data["units"]!;
                 Require((string?)units[0]["id"] == "unit:1" && (string?)units[1]["id"] == "unit:2" &&
@@ -326,7 +317,7 @@ internal static class CrewTests
         check("Chatter information changes retain visible history but exclude old and late-arriving remarks from later input", () =>
         {
             using var rig = new Rig(new FixedRandom(0));
-            rig.Chatter.Refresh(new[] { Target(1) }); rig.Chatter.ApplyTargets(new[] { "unit:1" }, 0); rig.Tick(1);
+            rig.Chatter.Refresh(new[] { Target(1) }); rig.PreparePeople(); rig.Chatter.ApplyTargets(new[] { "unit:1" }, 0); rig.Tick(1);
             var first = rig.Take(); rig.Complete(first, "unit:1"); rig.Pump(1);
             rig.Settings = new CrewSettings("chatter", 1, information: CrewInformation.Default.With("fuel", false));
             rig.Tick(100); var reduced = rig.Take();
@@ -346,31 +337,27 @@ internal static class CrewTests
                 rig.Chatter.Person("unit:1") != null && rig.Chatter.Enabled("unit:1"), "A late response leaked old facts or lost history, crew or selection");
             rig.Complete(next); rig.Pump(400);
         });
-        check("Chatter API changes targets only after scope, complete target set and connection permission validation", () =>
+        check("Chatter API separates appointments from participation and validates scopes, permission and appointment state", () =>
         {
-            using var rig = new Rig(); rig.Chatter.Refresh(new[] { Target(1, 1, 2), Target(3) }); var denied = false; var checkedConnection = 0;
+            using var rig = new Rig(); rig.GamePaused = true; rig.Chatter.Refresh(new[] { Target(1), Target(3) }); var denied = true; var checkedConnection = 0;
             var api = new CrewLocalApi(rig.Chatter, () => 0, () => { checkedConnection++; if (denied) throw new LocalApiException(403, "connection_not_allowed"); });
-            JObject Request(string scope, params string[] ids) => new() { ["scope_id"] = scope, ["enabled"] = true, ["target_ids"] = new JArray(ids) };
-            Throws<LocalApiException>(() => api.Dispatch("PATCH", CrewLocalApi.Path + "/targets", Request("previous battle", "unit:1")));
-            Throws<LocalApiException>(() => api.Dispatch("PATCH", CrewLocalApi.Path + "/targets", Request(api.ScopeId, "unit:1", "unit:2")));
-            Throws<LocalApiException>(() => api.Dispatch("PATCH", CrewLocalApi.Path + "/targets", Request(api.ScopeId, "unit:1", "unit:1")));
-            Require(!rig.Chatter.Enabled("unit:1") && checkedConnection == 0, "An invalid batch partially applied or used a connection");
-            denied = true; Throws<LocalApiException>(() => api.Dispatch("PATCH", CrewLocalApi.Path + "/targets", Request(api.ScopeId, "unit:1")));
-            Require(!rig.Chatter.Enabled("unit:1") && rig.Captures == 0, "Denied connection enabled automatic speaking");
-            denied = false; var result = api.Dispatch("PATCH", CrewLocalApi.Path + "/targets", Request(api.ScopeId, "unit:1", "unit:3"));
-            Require(result.Status == 200 && rig.Chatter.Enabled("unit:1") && rig.Chatter.Enabled("unit:3") && rig.Captures == 0, "Target changes bypassed normal tick scheduling");
-            var view = api.Status(); ((JObject)view["targets"]![0]!)["display_name"] = "mutated";
-            Require(rig.Chatter.Targets.All(t => t.Name != "mutated"), "A status response exposed mutable session state");
-            api.Dispatch("POST", CrewLocalApi.Path + "/pause", new JObject { ["scope_id"] = api.ScopeId, ["paused"] = true });
-            Require(rig.Chatter.Paused && rig.Chatter.Enabled("unit:1"), "API pause disabled selection");
-            denied = true;
-            Throws<LocalApiException>(() => api.Dispatch("POST", CrewLocalApi.Path + "/pause", new JObject { ["scope_id"] = api.ScopeId, ["paused"] = false }));
-            Require(rig.Chatter.Paused && rig.Requests == 0, "A forbidden connection resumed speaking");
-            denied = false; api.Dispatch("POST", CrewLocalApi.Path + "/pause", new JObject { ["scope_id"] = api.ScopeId, ["paused"] = false });
-            api.Dispatch("POST", CrewLocalApi.Path + "/stop", new JObject { ["scope_id"] = api.ScopeId });
-            Require(!rig.Chatter.Enabled("unit:1") && !rig.Chatter.Enabled("unit:3"), "Chatter stop retained active targets");
-            using var newSession = new CrewChatter(_ => { }); var nextApi = new CrewLocalApi(newSession, () => 0, () => { });
-            Require(nextApi.ScopeId != api.ScopeId, "Separate battle lifetimes reused the API scope");
+            JObject Scope(string id) => new() { ["scope_id"] = id };
+            JObject Selection(params string[] ids) => new() { ["scope_id"] = api.ScopeId, ["enabled"] = true, ["target_ids"] = new JArray(ids) };
+            Throws<LocalApiException>(() => api.Dispatch("POST", CrewLocalApi.Path + "/appointments", Scope("old")));
+            Throws<LocalApiException>(() => api.Dispatch("PATCH", CrewLocalApi.Path + "/targets", Selection("unit:99")));
+            Throws<LocalApiException>(() => api.Dispatch("PATCH", CrewLocalApi.Path + "/targets", Selection("unit:1")));
+            Require(checkedConnection == 0 && !rig.Chatter.AppointmentRequested("unit:1"), "Selection started appointment or invalid scope checked credentials");
+            Throws<LocalApiException>(() => api.Dispatch("POST", CrewLocalApi.Path + "/appointments", Scope(api.ScopeId)));
+            Require(!rig.Chatter.AppointmentRequested("unit:1"), "Denied connection queued work");
+            denied = false; var accepted = api.Dispatch("POST", CrewLocalApi.Path + "/appointments", Scope(api.ScopeId));
+            Require(accepted.Status == 200 && rig.Chatter.AppointmentRequested("unit:1") && !rig.Chatter.Enabled("unit:1") && rig.Requests == 0, "Appointment bypassed scheduling or enrolled before success");
+            rig.Tick(1); var call = rig.Take(); rig.Complete(call); rig.Pump(1);
+            var off = Selection("unit:1"); off["enabled"] = false;
+            api.Dispatch("PATCH", CrewLocalApi.Path + "/targets", off);
+            api.Dispatch("PATCH", CrewLocalApi.Path + "/targets", Selection("unit:1")); rig.Tick(2);
+            Require(rig.Requests == 1 && rig.Chatter.Enabled("unit:1") && rig.Chatter.Person("unit:1") != null, "Participation recreated a person");
+            var stopped = Scope(api.ScopeId); api.Dispatch("POST", CrewLocalApi.Path + "/stop", stopped);
+            Require(!rig.Chatter.HasEnabledTargets && !rig.Chatter.HasPendingAppointments, "Stop retained automatic work");
         });
         check("Exchange preference is sampled only for multi-speaker opportunities and never creates catch-up requests", () =>
         {
@@ -383,12 +370,13 @@ internal static class CrewTests
             {
                 using var rig = new Rig(new FixedRandom(draw), new CrewSettings("chatter", 1, 10, exchangeChancePercent: percent));
                 var targets = count == 0 ? new[] { Follower(1) } : Enumerable.Range(1, count).Select(i => Target(i)).ToArray();
-                rig.Chatter.Refresh(targets); rig.Chatter.ApplyTargets(targets.Select(t => t.Id).ToArray(), 0); rig.Tick(1);
+                rig.Chatter.Refresh(targets); rig.PreparePeople(); rig.Chatter.ApplyTargets(targets.Select(t => t.Id).ToArray(), 0); rig.Tick(1);
+                if (count == 0) { Require(rig.Requests == rig.SetupRequests && rig.Captures == 0, "An ineligible follower generated speech"); continue; }
                 var call = rig.Take();
-                Require((bool?)call.Batch.Input("").Data["prefer_exchange"] == expected && rig.Requests == 1,
+                Require((bool?)call.Batch.Input("").Data["prefer_exchange"] == expected && rig.Requests - rig.SetupRequests == 1,
                     "The wrong opportunity style was sent, or multiple requests were made");
                 rig.Complete(call); rig.Pump(1); rig.Tick(2);
-                Require(rig.Requests == 1 && rig.Chatter.History.Count == 0 && !rig.Chatter.Paused,
+                Require(rig.Requests - rig.SetupRequests == 1 && rig.Chatter.History.Count == 0 && !rig.Chatter.Paused,
                     "A preferred exchange forced speech, retried silence or paused Chatter");
             }
         });
@@ -419,96 +407,85 @@ internal static class CrewTests
                 Throws<CrewException>(() => batch.Read(Reply(invalid, names)));
             Throws<CrewException>(() => batch.Read(new AiReply("plain text", Array.Empty<AiToolCall>(), null)));
         });
-        check("Enabled candidates share a bounded random real-time interval and receive recent remarks as context", () =>
+        check("Additional appointments preserve existing OFF choices and existing people's identities", () =>
         {
-            using var rig = new Rig(); var targets = new[] { Target(1), Target(2), Target(3) }; rig.Chatter.Refresh(targets);
-            rig.Tick(100); Require(rig.Captures == 0 && !rig.Chatter.Busy, "Eligible units automatically started sending");
-            foreach (var t in targets.Take(2)) rig.SetEnabled(t.Id, true, 100);
-            rig.Tick(100.5); Require(rig.Captures == 0, "The initial coalescing interval was skipped");
-            rig.Tick(101); var call = rig.Take();
-            Require(call.Batch.Input("").Data["speakers"] is JArray { Count: 2 } && rig.Captures == 1, "One enabled group produced separate captures or requests");
-            rig.Complete(call, "unit:1", "unit:2"); rig.Pump(101);
-            Require(rig.Chatter.History.Count == 2 && rig.Chatter.Person("unit:1") != null, "One batched result did not appoint both speakers");
-            rig.SetEnabled("unit:3", true, 102); rig.Tick(103); var appointment = rig.Take();
-            Require(rig.Captures == 1 && appointment.Batch.Input("").Data["speakers"] is JArray { Count: 0 }, "Adding a candidate accelerated the whole-Crew interval");
-            rig.Complete(appointment); rig.Pump(103); Require(rig.Chatter.Person("unit:3") != null, "A quiet new member was not appointed");
-            rig.Tick(145.9); Require(rig.Captures == 1, "Remarks ignored the earliest whole-Crew opportunity");
-            rig.Tick(176); var next = rig.Take(); Require(rig.Captures == 2, "Elapsed real time did not trigger the next remark");
-            Require(((JArray)next.Batch.Input("").Data["speakers"]!).Where(r => (string?)r["id"] != "unit:3").All(r => r["person"] is JObject), "A subsequent request lost the appointment");
-            Require(next.Batch.Input("").Data["recent_remarks"] is JArray { Count: 2 }, "Recent speech was lost between opportunities");
-            rig.Complete(next, "unit:1", "unit:2"); rig.Pump(176);
-            rig.Tick(252); var third = rig.Take();
-            Require(third.Batch.Input("").Data["recent_remarks"] is JArray { Count: 3 }, "Conversation context grew beyond its bounded recent history");
-            rig.Complete(third); rig.Pump(252);
+            using var rig = new Rig(); rig.GamePaused = true; var first = Target(1); var second = Target(2);
+            rig.Chatter.Refresh(new[] { first, second }); rig.Chatter.RequestAppointments(0); rig.Tick(1);
+            var initial = rig.Take(); rig.Complete(initial); rig.Pump(1); var person = rig.Chatter.Person("unit:1");
+            rig.SetEnabled("unit:1", false, 1); rig.Chatter.Refresh(new[] { first, second, Target(3) }); rig.Tick(100);
+            Require(rig.Requests == 1 && rig.Chatter.Person("unit:3") == null && !rig.Chatter.Enabled("unit:3"), "A new unit appointed itself");
+            rig.Chatter.RequestAppointments(100); rig.Tick(101); var next = rig.Take();
+            Require(next.Batch.Input("").Data["appointments"] is JArray { Count: 1 } && (string?)next.Batch.Input("").Data["appointments"]![0]!["id"] == "unit:3", "Existing people were regenerated");
+            rig.Chatter.ApplyTargets(Array.Empty<string>(), 101);
+            Require(!next.Token.IsCancellationRequested, "Participation OFF cancelled an independent appointment");
+            rig.Complete(next); rig.Pump(101);
+            Require(!rig.Chatter.Enabled("unit:1") && !rig.Chatter.Enabled("unit:2") && rig.Chatter.Enabled("unit:3") && ReferenceEquals(person, rig.Chatter.Person("unit:1")), "Additional appointment reset an existing OFF choice or person");
+            rig.Chatter.RequestAppointments(200); rig.Tick(201); Require(rig.Requests == 2, "Already appointed units sent another appointment request");
         });
         check("Repeated game pauses preserve the remaining speech countdown without catch-up requests", () =>
         {
             using var rig = new Rig(new FixedRandom(0.5));
-            rig.Chatter.Refresh(new[] { Target(1) }); rig.SetEnabled("unit:1", true, 0);
+            rig.Chatter.Refresh(new[] { Target(1) }); rig.PreparePeople(); rig.SetEnabled("unit:1", true, 0);
             rig.Tick(1); var first = rig.Take(); rig.Complete(first, "unit:1"); rig.Pump(1);
             rig.Tick(21); rig.GamePaused = true; rig.Tick(21); rig.Tick(500);
-            Require(rig.Requests == 1 && !rig.Chatter.Paused, "Game pause started a generation or changed the manual pause state");
+            Require(rig.Requests - rig.SetupRequests == 1 && !rig.Chatter.Paused, "Game pause started a generation or changed the manual pause state");
             rig.GamePaused = false; rig.Tick(500); rig.Tick(520);
-            Require(rig.Requests == 1, "Resuming caught up requests or lost the remaining countdown");
+            Require(rig.Requests - rig.SetupRequests == 1, "Resuming caught up requests or lost the remaining countdown");
             rig.GamePaused = true; rig.Tick(520); rig.Tick(900);
             rig.GamePaused = false; rig.Tick(900); rig.Tick(919);
-            Require(rig.Requests == 1, "A second pause consumed or reset the remaining time");
+            Require(rig.Requests - rig.SetupRequests == 1, "A second pause consumed or reset the remaining time");
             rig.Tick(920); var next = rig.Take();
-            Require(rig.Requests == 2 && rig.Captures == 2, "The remaining active real-time interval did not produce one generation");
+            Require(rig.Requests - rig.SetupRequests == 2 && rig.Captures == 2, "The remaining active real-time interval did not produce one generation");
             rig.Complete(next); rig.Pump(920);
         });
         check("In-flight speech completes during game pause and its next countdown starts after game resume", () =>
         {
             using var rig = new Rig(new FixedRandom(0.5));
-            rig.Chatter.Refresh(new[] { Target(1) }); rig.SetEnabled("unit:1", true, 0);
+            rig.Chatter.Refresh(new[] { Target(1) }); rig.PreparePeople(); rig.SetEnabled("unit:1", true, 0);
             rig.Tick(1); var first = rig.Take(); rig.GamePaused = true; rig.Tick(2);
             Require(!first.Token.IsCancellationRequested, "Game pause cancelled an already sent request");
             rig.Complete(first, "unit:1"); rig.Pump(100);
-            Require(rig.Chatter.History.Count == 1 && rig.Chatter.Person("unit:1") != null && rig.Requests == 1,
+            Require(rig.Chatter.History.Count == 1 && rig.Chatter.Person("unit:1") != null && rig.Requests - rig.SetupRequests == 1,
                 "Game pause discarded a valid response or started another generation");
             rig.GamePaused = false; rig.Tick(100); rig.Tick(159);
-            Require(rig.Requests == 1, "Waiting for the response while paused consumed the next countdown");
+            Require(rig.Requests - rig.SetupRequests == 1, "Waiting for the response while paused consumed the next countdown");
             rig.Tick(160); var next = rig.Take(); rig.Complete(next); rig.Pump(160);
         });
         check("Game pause keeps response freshness and queued notification expiry on real time", () =>
         {
             using (var rig = new Rig(new FixedRandom(0.5)))
             {
-                rig.Chatter.Refresh(new[] { Target(1) }); rig.SetEnabled("unit:1", true, 0);
+                rig.Chatter.Refresh(new[] { Target(1) }); rig.PreparePeople(); rig.SetEnabled("unit:1", true, 0);
                 rig.Tick(1); var first = rig.Take(); rig.GamePaused = true; rig.Tick(2);
                 rig.Complete(first, "unit:1"); rig.Pump(182);
-                Require(rig.Chatter.History.Count == 0 && rig.Chatter.Person("unit:1") == null && rig.Requests == 1,
+                Require(rig.Chatter.History.Count == 0 && rig.Chatter.Person("unit:1") != null && rig.Requests - rig.SetupRequests == 1,
                     "Game pause extended the lifetime of a stale response");
             }
             using (var rig = new Rig(new FixedRandom(0.5)))
             {
-                rig.Chatter.Refresh(new[] { Target(1) }); rig.SetEnabled("unit:1", true, 0);
+                rig.Chatter.Refresh(new[] { Target(1) }); rig.PreparePeople(); rig.SetEnabled("unit:1", true, 0);
                 rig.Tick(1); var first = rig.Take(); rig.Complete(first, "unit:1"); rig.Pump(1);
                 rig.GamePaused = true; rig.Tick(2); rig.Tick(200);
-                Require(rig.Chatter.History.Count == 1 && rig.Chatter.NextNotification(200) == null && rig.Requests == 1,
+                Require(rig.Chatter.History.Count == 1 && rig.Chatter.NextNotification(200) == null && rig.Requests - rig.SetupRequests == 1,
                     "Game pause extended a pending popup's lifetime or generated new speech");
             }
         });
-        check("Explicit appointments still run during game pause while initial speech waits for resume", () =>
+        check("Explicit appointments run during game pause and enroll all units only after successful generation", () =>
         {
-            using var rig = new Rig(new FixedRandom(0.5)); rig.GamePaused = true; rig.Tick(0);
-            rig.Chatter.Refresh(new[] { Target(1) }); rig.SetEnabled("unit:1", true, 0);
-            rig.Tick(1); var appointment = rig.Take(); var input = appointment.Batch.Input("").Data;
-            Require(input["speakers"] is JArray { Count: 0 } && input["appointments"] is JArray { Count: 1 } && rig.Captures == 0,
-                "A paused appointment generated speech or captured a situation");
-            rig.Complete(appointment); rig.Pump(1); rig.Tick(1000);
-            Require(rig.Requests == 1 && rig.Chatter.Person("unit:1") != null && rig.Chatter.History.Count == 0,
-                "Game pause prevented appointment or consumed the first speech countdown");
-            rig.GamePaused = false; rig.Tick(1000);
-            Require(rig.Requests == 1, "Speech started without waiting the remaining initial interval");
-            rig.Tick(1001); var speech = rig.Take();
-            Require(speech.Batch.Input("").Data["appointments"] is JArray { Count: 0 } && rig.Captures == 1,
-                "Game resume reappointed the crew or omitted speech");
+            using var rig = new Rig(); rig.GamePaused = true; rig.Chatter.Refresh(new[] { Target(1), Follower(2) });
+            Throws<ArgumentException>(() => rig.Chatter.ApplyTargets(new[] { "unit:1" }, 0)); rig.Tick(10);
+            Require(rig.Requests == 0 && !rig.Chatter.HasEnabledTargets, "An unappointed checkbox started work");
+            rig.Chatter.RequestAppointments(10); rig.Tick(11); var call = rig.Take();
+            Require(call.Batch.Input("").Data["appointments"] is JArray { Count: 2 } && call.Batch.Input("").Data["speakers"] is JArray { Count: 0 } && rig.Captures == 0 && !rig.Chatter.HasEnabledTargets, "Appointment selection used participation or captured speech data");
+            rig.Complete(call); rig.Pump(11); rig.Tick(1000);
+            Require(rig.Requests == 1 && rig.Chatter.Enabled("unit:1") && rig.Chatter.Enabled("unit:2") && rig.Chatter.History.Count == 0, "Paused appointments did not enroll everyone or forced speech");
+            rig.GamePaused = false; rig.Tick(1000); rig.Tick(1001); var speech = rig.Take();
+            Require(speech.Batch.Input("").Data["appointments"] is JArray { Count: 0 } && speech.Batch.Input("").Data["speakers"] is JArray { Count: 1 }, "Speech ignored formation eligibility or reappointed people");
             rig.Complete(speech, "unit:1"); rig.Pump(1001);
         });
         check("Silence is successful, does not trigger catch-up requests, and candidates rotate without enabling other targets", () =>
         {
-            using var rig = new Rig(); var targets = Enumerable.Range(1, 6).Select(i => Target(i)).ToArray(); rig.Chatter.Refresh(targets);
+            using var rig = new Rig(); var targets = Enumerable.Range(1, 6).Select(i => Target(i)).ToArray(); rig.Chatter.Refresh(targets); rig.PreparePeople();
             foreach (var t in targets.Take(5)) rig.SetEnabled(t.Id, true, 0);
             rig.Tick(1); var first = rig.Take(); rig.Tick(20);
             Require(rig.Captures == 1, "A second request overlapped the first");
@@ -527,10 +504,10 @@ internal static class CrewTests
         });
         check("Disabling and re-enabling a target rejects its old response and pending notification", () =>
         {
-            using var rig = new Rig(); rig.Chatter.Refresh(new[] { Target(1) }); rig.SetEnabled("unit:1", true, 0);
+            using var rig = new Rig(); rig.Chatter.Refresh(new[] { Target(1) }); rig.PreparePeople(); rig.SetEnabled("unit:1", true, 0);
             rig.Tick(1); var old = rig.Take(); rig.SetEnabled("unit:1", false, 1); rig.SetEnabled("unit:1", true, 1);
             rig.Complete(old, "unit:1"); rig.Pump(1);
-            Require(rig.Chatter.History.Count == 0 && rig.Chatter.Person("unit:1") == null && rig.Chatter.RankBeforeVotes == 0 && rig.Chatter.RankAfterVotes == 0, "A stale response appointed or counted a disabled target");
+            Require(rig.Chatter.History.Count == 0 && rig.Chatter.Person("unit:1") != null && rig.Chatter.RankBeforeVotes == 1 && rig.Chatter.RankAfterVotes == 0, "A stale response lost an existing person or recounted its rank vote");
             rig.Tick(2); var fresh = rig.Take(); rig.Complete(fresh, "unit:1"); rig.Pump(2);
             Require(rig.Chatter.History.Count == 1, "A fresh enabled response was lost");
             rig.SetEnabled("unit:1", false, 2); rig.SetEnabled("unit:1", true, 2);
@@ -538,7 +515,7 @@ internal static class CrewTests
         });
         check("Global suspension cancels in-flight work, turns targets off, preserves session people and rejects late results", () =>
         {
-            using var rig = new Rig(); rig.Chatter.Refresh(new[] { Target(1) }); rig.SetEnabled("unit:1", true, 0);
+            using var rig = new Rig(); rig.Chatter.Refresh(new[] { Target(1) }); rig.PreparePeople(); rig.SetEnabled("unit:1", true, 0);
             rig.Tick(1); var first = rig.Take(); rig.Complete(first, "unit:1"); rig.Pump(1);
             var person = rig.Chatter.Person("unit:1"); rig.Tick(77); var late = rig.Take(); rig.Chatter.Suspend();
             Require(late.Token.IsCancellationRequested && !rig.Chatter.Enabled("unit:1") && rig.Chatter.NextNotification(77) == null, "Suspension retained work or pending notifications");
@@ -548,153 +525,121 @@ internal static class CrewTests
         });
         check("Formation changes invalidate a captured remark while a returning reporter retains its appointed person", () =>
         {
-            using var rig = new Rig(); rig.Chatter.Refresh(new[] { Target(1, 1, 2) }); rig.SetEnabled("unit:1", true, 0);
+            using var rig = new Rig(); rig.Chatter.Refresh(new[] { Target(1, 1, 2) }); rig.PreparePeople(); rig.SetEnabled("unit:1", true, 0);
             rig.Tick(1); var old = rig.Take(); rig.Chatter.Refresh(new[] { Target(1, 1, 3) }); rig.Complete(old, "unit:1"); rig.Pump(1);
             Require(rig.Chatter.History.Count == 0, "A remark about the former formation was applied");
             rig.Tick(77); var current = rig.Take(); rig.Complete(current, "unit:1"); rig.Pump(77); var person = rig.Chatter.Person("unit:1");
             rig.Chatter.Refresh(Array.Empty<CrewTarget>()); rig.Chatter.Refresh(new[] { Target(1) });
             Require(rig.Chatter.Person("unit:1") == person && person != null && !rig.Chatter.Enabled("unit:1"), "Returning to eligibility lost the person or silently resumed speaking");
         });
-        check("All selected units are appointed but only current leaders and standalone units can remark", () =>
+        check("All units including followers are appointed while current formation controls speech", () =>
         {
             using var rig = new Rig(); rig.Chatter.Refresh(new[] { Target(1, 1, 2, 3), Follower(2), Follower(3) });
-            rig.Chatter.ApplyTargets(new[] { "unit:1", "unit:2", "unit:3" }, 0);
-            rig.Tick(1); var initial = rig.Take(); var data = initial.Batch.Input("").Data;
-            Require(data["appointments"] is JArray { Count: 3 } && data["speakers"] is JArray { Count: 1 } &&
-                (string?)data["speakers"]![0]!["id"] == "unit:1", "Followers were omitted from appointment or selected to speak");
-            rig.Complete(initial); rig.Pump(1); var person = rig.Chatter.Person("unit:2");
-            Require(person != null && rig.Chatter.Targets.All(t => rig.Chatter.Person(t.Id) != null), "Silent followers did not receive crew");
-            var draft = new CrewTargetSelection(); draft.Sync(rig.Chatter.Targets, rig.Chatter.Enabled);
-            rig.Chatter.Refresh(new[] { Follower(1), Target(2, 1, 2, 3), Follower(3) });
-            draft.Sync(rig.Chatter.Targets, rig.Chatter.Enabled);
-            Require(draft.Selected.Count == 3 && !draft.Dirty && rig.Chatter.Enabled("unit:2") && rig.Chatter.Person("unit:2") == person,
-                "Changing leader reset the confirmed selection, pending edits or crew identity");
-            rig.Tick(77); var next = rig.Take(); data = next.Batch.Input("").Data;
-            Require(data["appointments"] is JArray { Count: 0 } && data["speakers"] is JArray { Count: 1 } &&
-                (string?)data["speakers"]![0]!["id"] == "unit:2", "A leader change required reappointment or retained the previous speaker");
-            rig.Complete(next, "unit:2"); rig.Pump(77);
-            Require(rig.Chatter.History.Single().Submission.Person == person, "The new leader spoke as a different person");
-            var api = new CrewLocalApi(rig.Chatter, () => 77, () => { }); var status = api.Status();
-            Require(status["targets"] is JArray { Count: 3 } && (bool)status["targets"]![1]!["can_speak"]! &&
-                !(bool)status["targets"]![0]!["can_speak"]!, "The API hid followers or reported stale eligibility");
+            rig.Chatter.RequestAppointments(0); rig.Tick(1); var call = rig.Take();
+            Require(call.Batch.Input("").Data["appointments"] is JArray { Count: 3 } && call.Batch.Input("").Data["speakers"] is JArray { Count: 0 }, "Initial appointment depended on speech eligibility");
+            rig.Complete(call); rig.Pump(1); var person = rig.Chatter.Person("unit:2");
+            rig.Chatter.Refresh(new[] { Follower(1), Target(2, 1, 2, 3), Follower(3) }); rig.Tick(2); var speech = rig.Take();
+            Require(speech.Batch.Input("").Data["speakers"] is JArray { Count: 1 } && (string?)speech.Batch.Input("").Data["speakers"]![0]!["id"] == "unit:2" && speech.Batch.Input("").Data["appointments"] is JArray { Count: 0 }, "Promotion required reappointment or retained an old leader");
+            rig.Complete(speech, "unit:2"); rig.Pump(2);
+            Require(ReferenceEquals(person, rig.Chatter.Person("unit:2")), "Promotion replaced the crew");
         });
-        check("An enabled follower is appointed without speech requests and resumes automatically after becoming eligible", () =>
+        check("A follower can be appointed and opted out before promotion without losing its person", () =>
         {
-            using var rig = new Rig(); rig.Chatter.Refresh(new[] { Target(1, 1, 2), Follower(2) }); rig.SetEnabled("unit:2", true, 0);
-            rig.Tick(1); var appointment = rig.Take(); var data = appointment.Batch.Input("").Data;
-            Require(rig.Captures == 0 && data["speakers"] is JArray { Count: 0 } && data["appointments"] is JArray { Count: 1 },
-                "A follower-only appointment captured battle data or requested speech");
-            rig.Complete(appointment); rig.Pump(1); var person = rig.Chatter.Person("unit:2");
-            rig.Tick(1000); Require(rig.Requests == 1 && rig.Chatter.Enabled("unit:2"), "A follower kept sending or lost its ON setting");
-            rig.Chatter.Refresh(new[] { Follower(1), Target(2, 1, 2) }); rig.Tick(1000); rig.Tick(1001); var remark = rig.Take();
-            Require(remark.Batch.Input("").Data["appointments"] is JArray { Count: 0 }, "Promotion regenerated an existing appointment");
-            rig.Complete(remark, "unit:2"); rig.Pump(1001);
-            Require(rig.Chatter.History.Single().Submission.Person == person, "Promotion did not resume with the same person");
-            rig.Chatter.Refresh(new[] { Target(1, 1, 2), Follower(2) });
-            Require(rig.Chatter.NextNotification(1001) == null && rig.Chatter.Enabled("unit:2"), "A demoted unit retained a queued remark or lost its ON setting");
-            rig.SetEnabled("unit:2", false, 1001); rig.Chatter.Refresh(new[] { Follower(1), Target(2) }); rig.Tick(2000);
-            Require(!rig.Chatter.Enabled("unit:2") && rig.Requests == 2 && rig.Chatter.Person("unit:2") == person,
-                "A disabled unit resumed on promotion or lost its person");
+            using var rig = new Rig(); rig.Chatter.Refresh(new[] { Follower(2) }); rig.Chatter.RequestAppointments(0); rig.Tick(1);
+            var call = rig.Take(); rig.Complete(call); rig.Pump(1); var person = rig.Chatter.Person("unit:2");
+            rig.SetEnabled("unit:2", false, 1); rig.Chatter.Refresh(new[] { Target(2) }); rig.Tick(100);
+            Require(rig.Requests == 1 && !rig.Chatter.Enabled("unit:2") && rig.Chatter.Person("unit:2") == person, "Promotion changed an explicit OFF selection");
+            rig.SetEnabled("unit:2", true, 100); rig.Tick(101); var speech = rig.Take();
+            Require(speech.Batch.Input("").Data["appointments"] is JArray { Count: 0 }, "Re-enabling recreated a person");
+            rig.Complete(speech); rig.Pump(101);
         });
-        check("Formation changes during generation preserve appointments but discard speeches about the former formation", () =>
+        check("Formation changes during appointment retain identities while removed units discard late appointments", () =>
         {
-            using var rig = new Rig(); rig.Chatter.Refresh(new[] { Target(1, 1, 2), Follower(2) });
-            rig.Chatter.ApplyTargets(new[] { "unit:1", "unit:2" }, 0); rig.Tick(1); var old = rig.Take();
-            rig.Chatter.Refresh(new[] { Follower(1), Target(2, 1, 2) }); rig.Complete(old, "unit:1"); rig.Pump(1);
-            Require(rig.Chatter.History.Count == 0 && rig.Chatter.Person("unit:1") != null && rig.Chatter.Person("unit:2") != null &&
-                rig.Chatter.Enabled("unit:1") && rig.Chatter.Enabled("unit:2"), "A leader change lost appointments/settings or applied stale speech");
-            rig.Tick(77); var current = rig.Take(); rig.Complete(current, "unit:2"); rig.Pump(77);
-            rig.Chatter.Refresh(new[] { Follower(1), Target(2, 2) });
-            Require(rig.Chatter.NextNotification(77) == null, "A queued remark about a former membership was displayed");
+            using var rig = new Rig(); rig.GamePaused = true; rig.Chatter.Refresh(new[] { Target(1, 1, 2), Follower(2), Target(3) });
+            rig.Chatter.RequestAppointments(0); rig.Tick(1); var call = rig.Take();
+            rig.Chatter.Refresh(new[] { Follower(1), Target(2, 1, 2) }); rig.Complete(call); rig.Pump(1);
+            Require(rig.Chatter.Person("unit:1") != null && rig.Chatter.Person("unit:2") != null && rig.Chatter.Person("unit:3") == null && rig.Chatter.History.Count == 0 && rig.Chatter.RankBeforeVotes == 2, "Formation change lost people or a removed unit cast a vote");
         });
         check("Target edits, bulk selection and discard remain UI-only until a complete selection is applied", () =>
         {
-            using var rig = new Rig(); var targets = new[] { Target(1), Target(2), Target(3) }; rig.Chatter.Refresh(targets);
-            var draft = new CrewTargetSelection(); draft.Sync(rig.Chatter.Targets, rig.Chatter.Enabled);
+            using var rig = new Rig(); var targets = new[] { Target(1), Target(2), Target(3) }; rig.Chatter.Refresh(targets); rig.PreparePeople();
+            var draft = new CrewTargetSelection(); draft.Sync(rig.Chatter.Targets, rig.Chatter.Enabled, id => rig.Chatter.Person(id) != null);
             draft.SetAll(true); rig.Tick(100);
-            Require(draft.Dirty && draft.Selected.Count == 3 && rig.Requests == 0 && !rig.Chatter.HasEnabledTargets, "Editing checkboxes changed the running selection");
-            draft.Sync(rig.Chatter.Targets, rig.Chatter.Enabled);
+            Require(draft.Dirty && draft.Selected.Count == 3 && rig.Requests - rig.SetupRequests == 0 && !rig.Chatter.HasEnabledTargets, "Editing checkboxes changed the running selection");
+            draft.Sync(rig.Chatter.Targets, rig.Chatter.Enabled, id => rig.Chatter.Person(id) != null);
             Require(draft.Dirty && draft.Selected.Count == 3, "A background refresh erased pending edits");
             draft.Discard(); Require(!draft.Dirty && draft.Selected.Count == 0, "Discard retained staged targets");
-            draft.SetAll(true); rig.Chatter.ApplyTargets(draft.Selected, 100); draft.Sync(rig.Chatter.Targets, rig.Chatter.Enabled);
-            Require(!draft.Dirty && rig.Chatter.HasEnabledTargets && rig.Requests == 0, "Apply did not commit atomically or sent outside the scheduler");
-            rig.Chatter.Refresh(targets.Concat(new[] { Target(4) }).ToArray()); draft.Sync(rig.Chatter.Targets, rig.Chatter.Enabled);
+            draft.SetAll(true); rig.Chatter.ApplyTargets(draft.Selected, 100); draft.Sync(rig.Chatter.Targets, rig.Chatter.Enabled, id => rig.Chatter.Person(id) != null);
+            Require(!draft.Dirty && rig.Chatter.HasEnabledTargets && rig.Requests - rig.SetupRequests == 0, "Apply did not commit atomically or sent outside the scheduler");
+            rig.Chatter.Refresh(targets.Concat(new[] { Target(4) }).ToArray()); draft.Sync(rig.Chatter.Targets, rig.Chatter.Enabled, id => rig.Chatter.Person(id) != null);
             Require(!draft.Checked("unit:4") && !rig.Chatter.Enabled("unit:4"), "A previous bulk selection automatically enabled a new arrival");
-            draft.Set("unit:2", false); rig.Chatter.ApplyTargets(new[] { "unit:2", "unit:3" }, 100); draft.Sync(rig.Chatter.Targets, rig.Chatter.Enabled);
+            draft.SetAll(true); Require(!draft.Selected.Contains("unit:4"), "Bulk Chatter selection included an unappointed unit");
+            draft.Set("unit:2", false); rig.Chatter.ApplyTargets(new[] { "unit:2", "unit:3" }, 100); draft.Sync(rig.Chatter.Targets, rig.Chatter.Enabled, id => rig.Chatter.Person(id) != null);
             Require(draft.Selected.SequenceEqual(new[] { "unit:3" }), "A draft restored a background-disabled target");
-            draft.Discard(); draft.Set("unit:3", false); rig.Chatter.Refresh(targets.Take(2).ToArray()); draft.Sync(rig.Chatter.Targets, rig.Chatter.Enabled);
+            draft.Discard(); draft.Set("unit:3", false); rig.Chatter.Refresh(targets.Take(2).ToArray()); draft.Sync(rig.Chatter.Targets, rig.Chatter.Enabled, id => rig.Chatter.Person(id) != null);
             Require(!draft.Dirty, "A vanished target left unresolvable pending edits");
             Throws<ArgumentException>(() => rig.Chatter.ApplyTargets(new[] { "unit:1", "unit:99" }, 100));
             Require(!rig.Chatter.Enabled("unit:1") && rig.Chatter.Enabled("unit:2"), "An invalid complete selection partly applied");
         });
-        check("Pausing retains selection and blocks both appointments and remarks until resume", () =>
+        check("Pause retains pending explicit appointments and blocks communication until resume", () =>
         {
-            using var rig = new Rig(); var targets = Enumerable.Range(1, 5).Select(i => Target(i)).ToArray(); rig.Chatter.Refresh(targets);
-            rig.Chatter.SetPaused(true, 0); rig.Chatter.ApplyTargets(targets.Select(t => t.Id).ToArray(), 0); rig.Tick(1000);
-            Require(rig.Requests == 0 && rig.Chatter.Paused && targets.All(t => rig.Chatter.Enabled(t.Id)), "Applying targets while paused sent a request or lost selection");
+            using var rig = new Rig(); rig.GamePaused = true; rig.Chatter.Refresh(new[] { Target(1), Target(2) });
+            rig.Chatter.SetPaused(true, 0); rig.Chatter.RequestAppointments(0); rig.Tick(1000);
+            Require(rig.Requests == 0 && rig.Chatter.HasPendingAppointments && !rig.Chatter.HasEnabledTargets, "A paused appointment communicated or enrolled early");
             rig.Chatter.SetPaused(false, 1000); rig.Tick(1001); var first = rig.Take(); rig.Complete(first); rig.Pump(1001);
-            Require(targets.All(t => rig.Chatter.Person(t.Id) != null) && rig.Chatter.History.Count == 0, "Silent participants were not appointed together");
-            var person = rig.Chatter.Person("unit:1"); rig.Chatter.SetPaused(true, 1002); rig.Tick(2000); Require(rig.Requests == 1, "A paused session continued generating");
-            rig.Chatter.SetPaused(false, 2000); rig.Tick(2001); var next = rig.Take();
-            Require(next.Batch.Input("").Data["appointments"] is JArray { Count: 0 }, "Resume regenerated existing people");
-            var id = (string)next.Batch.Input("").Data["speakers"]![0]!["id"]!; rig.Complete(next, id); rig.Pump(2001);
-            rig.Chatter.SetPaused(true, 2002);
-            Require(rig.Chatter.NextNotification(2002) == null && rig.Chatter.History.Count == 1 && rig.Chatter.Person("unit:1") == person,
-                "Pause retained a notification or erased people/history");
+            var person = rig.Chatter.Person("unit:1"); rig.Chatter.SetPaused(true, 1002); rig.Tick(2000);
+            Require(rig.Requests == 1 && rig.Chatter.Enabled("unit:1") && rig.Chatter.Person("unit:1") == person, "Pause lost selection or continued communicating");
         });
-        check("Pausing cancels an in-flight appointment and rejects its late result without disabling targets", () =>
+        check("Pausing cancels an in-flight appointment and its late result cannot enroll a unit", () =>
         {
-            using var rig = new Rig(); rig.Chatter.Refresh(new[] { Target(1) }); rig.SetEnabled("unit:1", true, 0); rig.Tick(1); var old = rig.Take();
-            rig.Chatter.SetPaused(true, 1); rig.Complete(old, "unit:1"); rig.Tick(100);
-            Require(old.Token.IsCancellationRequested && !rig.Chatter.Busy && rig.Chatter.Enabled("unit:1") && rig.Chatter.Person("unit:1") == null && rig.Chatter.History.Count == 0,
-                "A late result survived pause or the target was disabled");
+            using var rig = new Rig(); rig.Chatter.Refresh(new[] { Target(1) }); rig.Chatter.RequestAppointments(0); rig.Tick(1); var old = rig.Take();
+            rig.Chatter.SetPaused(true, 1); rig.Complete(old); rig.Tick(100);
+            Require(old.Token.IsCancellationRequested && !rig.Chatter.Enabled("unit:1") && rig.Chatter.Person("unit:1") == null && rig.Chatter.HasPendingAppointments, "Cancelled appointment enrolled a person or lost the pending user request");
             rig.Chatter.SetPaused(false, 100); rig.Tick(101); var fresh = rig.Take(); rig.Complete(fresh); rig.Pump(101);
-            Require(rig.Chatter.Person("unit:1") != null && rig.Chatter.History.Count == 0, "Resume failed to appoint a silent participant");
+            Require(rig.Chatter.Enabled("unit:1") && rig.Chatter.Person("unit:1") != null, "Resume did not finish explicit appointment");
         });
-        check("Large appointment batches complete without capturing situation data or forcing extra speech", () =>
+        check("Large explicit appointment batches enroll successful units and never capture speech data", () =>
         {
-            using var rig = new Rig(); var targets = Enumerable.Range(1, CrewBatch.MaximumAppointments + 1).Select(i => Target(i)).ToArray(); rig.Chatter.Refresh(targets);
-            rig.Chatter.ApplyTargets(targets.Select(t => t.Id).ToArray(), 0); rig.Tick(1); var first = rig.Take(); rig.Complete(first); rig.Pump(1);
-            Require(targets.Count(t => rig.Chatter.Person(t.Id) != null) == CrewBatch.MaximumAppointments, "Appointment batching ignored its bound");
+            using var rig = new Rig(); rig.GamePaused = true; var targets = Enumerable.Range(1, CrewBatch.MaximumAppointments + 1).Select(i => Target(i)).ToArray();
+            rig.Chatter.Refresh(targets); rig.Chatter.RequestAppointments(0); rig.Tick(1); var first = rig.Take(); rig.Complete(first); rig.Pump(1);
+            Require(targets.Count(t => rig.Chatter.Enabled(t.Id)) == CrewBatch.MaximumAppointments && rig.Chatter.HasPendingAppointments, "A partial batch enrolled missing people or lost remaining appointments");
             rig.Tick(2); var second = rig.Take(); var data = second.Batch.Input("").Data;
-            Require(rig.Captures == 1 && data["units"] == null && data["speakers"] is JArray { Count: 0 } && data["appointments"] is JArray { Count: 1 },
-                "Appointment-only work captured a situation or forced speech");
+            Require(rig.Captures == 0 && data["units"] == null && data["speakers"] is JArray { Count: 0 } && data["appointments"] is JArray { Count: 1 }, "Appointment-only work forced a speech request");
             rig.Complete(second); rig.Pump(2);
-            Require(targets.All(t => rig.Chatter.Person(t.Id) != null) && rig.Chatter.History.Count == 0, "Some silent appointments were lost");
+            Require(targets.All(t => rig.Chatter.Person(t.Id) != null && rig.Chatter.Enabled(t.Id)) && !rig.Chatter.HasPendingAppointments, "Some appointments failed to enroll");
         });
         check("Mission usage survives history trimming, selection changes, pause and global suspension but resets for a new mission", () =>
         {
-            using var rig = new Rig(); rig.Chatter.Refresh(new[] { Target(1) }); rig.SetEnabled("unit:1", true, 0);
+            using var rig = new Rig(); rig.Chatter.Refresh(new[] { Target(1) }); rig.PreparePeople(); rig.SetEnabled("unit:1", true, 0);
             for (var i = 0; i < 201; i++)
             {
                 var now = 1 + i * 80; rig.Tick(now); var request = rig.Take(); rig.Complete(request, "unit:1"); rig.Pump(now);
             }
             var usage = rig.Chatter.Usage.Snapshot;
-            Require(rig.Chatter.History.Count == 200 && usage.ApiRequests == 201 && usage.KnownTokens == 201 * 12 && usage.UnknownRequests == 0 && usage.LastTokens == 12,
+            Require(rig.Chatter.History.Count == 200 && usage.ApiRequests == 201 + rig.SetupRequests && usage.KnownTokens == (201 + rig.SetupRequests) * 12 && usage.UnknownRequests == 0 && usage.LastTokens == 12,
                 "Usage followed retained history instead of all completed requests");
             rig.Chatter.SetPaused(true, 20000); rig.Chatter.SetPaused(false, 20000); rig.SetEnabled("unit:1", false, 20000);
             rig.SetEnabled("unit:1", true, 20000); rig.Chatter.Suspend();
             var api = new CrewLocalApi(rig.Chatter, () => 20000, () => { }); var status = api.Status();
-            Require(ReferenceEquals(rig.Chatter.Usage.Snapshot, usage) && (int?)status["usage"]!["api_requests"] == 201 && (long?)status["usage"]!["known_total_tokens"] == 201 * 12,
+            Require(ReferenceEquals(rig.Chatter.Usage.Snapshot, usage) && (int?)status["usage"]!["api_requests"] == 201 + rig.SetupRequests && (long?)status["usage"]!["known_total_tokens"] == (201 + rig.SetupRequests) * 12,
                 "A lifecycle operation reset usage or the developer API reported different totals");
             using var nextMission = new CrewChatter(_ => { });
             Require(nextMission.Usage.Snapshot.ApiRequests == 0 && nextMission.Usage.Snapshot.KnownTokens == 0 && nextMission.Usage.Snapshot.LastTokens == null,
                 "A new mission inherited the previous mission's usage");
         });
-        check("Late usage is counted while paused even though the cancelled remark and appointment are discarded", () =>
+        check("Cancelled appointments retain consumed usage without enrolling a person", () =>
         {
-            using var rig = new Rig(); rig.Chatter.Refresh(new[] { Target(1) }); rig.SetEnabled("unit:1", true, 0);
-            rig.Tick(1); var pending = rig.Take(); rig.Chatter.SetPaused(true, 1); rig.Complete(pending, "unit:1");
-            Require(SpinWait.SpinUntil(() => rig.Chatter.Usage.Snapshot.ApiRequests == 1, 3000), "Late usage was lost when the generation task was detached");
+            using var rig = new Rig(); rig.Chatter.Refresh(new[] { Target(1) }); rig.Chatter.RequestAppointments(0);
+            rig.Tick(1); var pending = rig.Take(); rig.Chatter.SetPaused(true, 1); rig.Complete(pending);
+            Require(SpinWait.SpinUntil(() => rig.Chatter.Usage.Snapshot.ApiRequests == 1, 3000), "Late usage was lost");
             rig.Tick(100);
-            Require(rig.Chatter.Paused && rig.Chatter.Usage.Snapshot.KnownTokens == 12 && rig.Chatter.History.Count == 0 && rig.Chatter.Person("unit:1") == null,
-                "Late usage resumed speaking or allowed a stale remark or appointment");
+            Require(rig.Chatter.Paused && rig.Chatter.Usage.Snapshot.KnownTokens == 12 && rig.Chatter.Person("unit:1") == null && !rig.Chatter.Enabled("unit:1"), "Late result enrolled or lost usage");
         });
         check("A failed generation pauses all Chatter without changing selection, people or history and resumes only explicitly", () =>
         {
             foreach (var failure in new Exception[] { new CrewException("invalid_response"), new AiConnectionException("api_error", 503) })
             {
-                using var rig = new Rig(); var targets = Enumerable.Range(1, 6).Select(i => Target(i)).ToArray(); rig.Chatter.Refresh(targets);
+                using var rig = new Rig(); var targets = Enumerable.Range(1, 6).Select(i => Target(i)).ToArray(); rig.Chatter.Refresh(targets); rig.PreparePeople();
                 rig.Chatter.ApplyTargets(targets.Select(t => t.Id).ToArray(), 0); rig.Tick(1); var initial = rig.Take();
                 var first = (string)initial.Batch.Input("").Data["speakers"]![0]!["id"]!; rig.Complete(initial, first); rig.Pump(1);
                 var people = targets.ToDictionary(t => t.Id, t => rig.Chatter.Person(t.Id));
@@ -702,24 +647,32 @@ internal static class CrewTests
                 Require(rig.Chatter.Paused && rig.Chatter.Error != null && rig.Errors.Count == 1 && targets.All(t => rig.Chatter.Enabled(t.Id)) &&
                     targets.All(t => rig.Chatter.Person(t.Id) == people[t.Id]) && rig.Chatter.History.Count == 1 && rig.Chatter.NextNotification(77) == null,
                     "An error lost selection, people or history, or did not pause the whole session");
-                rig.Tick(1000); Require(rig.Requests == 2 && !rig.Chatter.Busy && rig.Chatter.Usage.Snapshot.ApiRequests == 2,
+                rig.Tick(1000); Require(rig.Requests - rig.SetupRequests == 2 && !rig.Chatter.Busy && rig.Chatter.Usage.Snapshot.ApiRequests == 2 + rig.SetupRequests,
                     "An error automatically retried or lost request accounting");
                 var selected = rig.Chatter.Targets.Select(t => t.Id).ToArray(); rig.Chatter.ApplyTargets(selected.Take(5).ToArray(), 1000); rig.Tick(1000);
-                Require(rig.Chatter.Paused && rig.Requests == 2, "Editing selection silently resumed an error pause");
+                Require(rig.Chatter.Paused && rig.Requests - rig.SetupRequests == 2, "Editing selection silently resumed an error pause");
                 rig.Chatter.SetPaused(false, 1000); Require(rig.Chatter.Error == null && !rig.Chatter.Paused, "Explicit resume retained an error or paused state");
                 rig.Tick(1001); var resumed = rig.Take();
                 Require(resumed.Batch.Input("").Data["appointments"] is JArray { Count: 0 }, "Resume reappointed existing people");
                 rig.Complete(resumed); rig.Pump(1001); Require(!rig.Chatter.Paused && rig.Chatter.Error == null, "A successful resumed request retained an error");
             }
         });
-        check("A missing Chatter connection pauses generation while retaining selected units", () =>
+        check("Failed explicit appointments pause without enrolling units and retry only on explicit resume", () =>
         {
-            using var chatter = new CrewChatter(_ => { }); chatter.Refresh(new[] { Target(1), Target(2) }); chatter.ApplyTargets(new[] { "unit:1", "unit:2" }, 0);
-            chatter.Tick(1, false, new CrewSettings(), "en", _ => throw new InvalidOperationException("Unexpected capture"), _ => throw new InvalidOperationException("Unexpected appointment capture"),
-                (_, _, _, _) => throw new InvalidOperationException("Unexpected request"));
-            Require(chatter.Paused && chatter.Error == "connection_required" && chatter.Enabled("unit:1") && chatter.Enabled("unit:2") && chatter.Usage.Snapshot.ApiRequests == 0,
-                "Missing configuration cleared user selection or sent a request");
+            using var rig = new Rig(); rig.GamePaused = true; rig.Chatter.Refresh(new[] { Target(1) }); rig.Chatter.RequestAppointments(0);
+            rig.Tick(1); var failed = rig.Take(); failed.Completion.SetException(new CrewException("invalid_response")); rig.Pump(1);
+            Require(rig.Chatter.Paused && rig.Chatter.Error == "invalid_response" && !rig.Chatter.HasEnabledTargets && rig.Chatter.Person("unit:1") == null && rig.Chatter.HasPendingAppointments, "Failed appointment enrolled a unit or discarded the user request");
+            rig.Tick(1000); Require(rig.Requests == 1 && !rig.Chatter.Busy, "A failed appointment automatically retried");
+            rig.Chatter.SetPaused(false, 1000); rig.Tick(1001); var next = rig.Take(); rig.Complete(next); rig.Pump(1001);
+            Require(rig.Chatter.Person("unit:1") != null && rig.Chatter.Enabled("unit:1") && !rig.Chatter.Paused, "Explicit resume did not finish appointment");
         });
+        check("A missing appointment connection pauses without enrolling any units or sending a request", () =>
+        {
+            using var chatter = new CrewChatter(_ => { }); chatter.Refresh(new[] { Target(1), Target(2) }); chatter.RequestAppointments(0);
+            chatter.Tick(1, false, new CrewSettings(), "en", _ => throw new InvalidOperationException("Unexpected capture"), _ => throw new InvalidOperationException("Unexpected appointment capture"), (_, _, _, _) => throw new InvalidOperationException("Unexpected request"));
+            Require(chatter.Paused && chatter.Error == "connection_required" && !chatter.HasEnabledTargets && chatter.HasPendingAppointments && chatter.Usage.Snapshot.ApiRequests == 0, "Missing configuration enrolled units, lost the user request, or communicated");
+        });
+
     }
     private static JObject Row(string id) => new() { ["id"] = id, ["text"] = "Maintaining station." };
     private static JObject ChatterSituation() => JObject.Parse("""
@@ -780,6 +733,12 @@ internal static class CrewTests
         internal Call Take()
         {
             Call? call = null; Require(SpinWait.SpinUntil(() => calls.TryDequeue(out call), 3000), "Chatter generation did not start"); return call!;
+        }
+        internal int SetupRequests;
+        internal void PreparePeople()
+        {
+            Chatter.RequestAppointments(-2); Tick(-1); var appointment = Take(); Complete(appointment); Pump(-1);
+            Chatter.ApplyTargets(Array.Empty<string>(), 0); SetupRequests++;
         }
         internal void SetEnabled(string id, bool enabled, double now)
         {

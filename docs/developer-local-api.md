@@ -283,13 +283,15 @@ For `on_request`, initial `input.data` excludes automatically attached situation
 
 Chatter uses the same opt-in listener and main-thread queue. Its generation is independent of a tactical adviser conversation. The saved Chatter connection must also be in the developer API's allowed connection list before the API can turn a target ON. Chatter does not use the adviser's fallback assignment.
 
-First read `GET /v1/crew/chatter` and use its `scope_id` and `targets[].id`. For example:
+First read `GET /v1/crew/chatter`. Send `POST /v1/crew/chatter/appointments` with `{"scope_id":"<current scope>"}` to request every currently unappointed unit, including followers. This uses the same explicit appointment action as the UI and checks connection permission before queuing. Busy or paused sessions reject the action. Successful appointments automatically turn participation ON for those units; existing people and OFF choices are unchanged. `targets[].appointment_pending` reports outstanding appointment requests.
+
+Use the same `scope_id` and `targets[].id` when changing participation. For example:
 
 ```json
 {"scope_id":"<current Chatter scope>","target_ids":["unit:1001","unit:1029"],"enabled":true}
 ```
 
-Send this to `PATCH /v1/crew/chatter/targets`. IDs may include formation followers. Every selected unit retains its crew and ON/OFF state when formations change; `targets[].can_speak` identifies current formation leaders and standalone units. Followers can be appointed but cannot speak until they become eligible. The entire requested set is validated before any target changes. Old scope IDs are rejected after a battle session changes. Requests do not bypass the normal coalescing, batching, appointment or notification pipeline. Stop automatic reporting after a bounded test with `POST /v1/crew/chatter/stop` and the same scope ID.
+Send this to `PATCH /v1/crew/chatter/targets`. IDs may include formation followers. Every selected unit retains its crew and ON/OFF state when formations change; `targets[].can_speak` identifies current formation leaders and standalone units. Followers can be appointed but cannot speak until they become eligible. The entire requested set is validated before any target changes. Old scope IDs are rejected after a battle session changes. Participation changes do not request or cancel appointments. Enabling an unappointed unit returns `chatter_target_unappointed`; disabling a unit retains its person. Appointment requests use the normal batching and receipt validation. Stop automatic reporting after a bounded test with `POST /v1/crew/chatter/stop` and the same scope ID.
 
 A generation considers at most four speech candidates and may return remarks for zero to two of them. New appointments are returned independently, so silent crew still receive plain names, ranks and personalities, and each accepted new appointment contributes one rank-order vote. Appointment-only requests include public mission context and unit identity data, omit periodic battle-status collections, and do not accelerate the speech interval. Silence is a successful result and does not necessarily append history. Candidates left silent are not immediately retried; the next opportunity follows the whole-Crew interval. Use the busy state and communication trace when verifying a bounded generation rather than waiting only for history growth.
 
@@ -298,6 +300,7 @@ CLI examples:
 ```sh
 python3 tools/advisor_dev.py chatter status
 python3 tools/advisor_dev.py chatter situation
+python3 tools/advisor_dev.py chatter appoint --scope-id <scope>
 python3 tools/advisor_dev.py chatter targets --scope-id <scope> --target-id unit:1001 --enabled true
 python3 tools/advisor_dev.py chatter pause --scope-id <scope> --value true
 python3 tools/advisor_dev.py chatter pause --scope-id <scope> --value false
