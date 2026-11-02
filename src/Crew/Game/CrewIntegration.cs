@@ -18,7 +18,7 @@ internal sealed class CrewIntegration
     private readonly Action<string> checkLocalConnection;
     private readonly Func<CrewSettingsStore, ICrewConnections> connect;
     private readonly Func<string, string> common;
-    private readonly Action<Exception> log;
+    private readonly DiagnosticLog log;
     private readonly string settingsPath;
     private readonly Stopwatch clock = Stopwatch.StartNew();
     private MainGameViewModel? model;
@@ -36,7 +36,7 @@ internal sealed class CrewIntegration
     private string launcherTooltip = "";
     private double nextRefresh;
     private bool active, failed;
-    internal CrewIntegration(string settingsPath, Func<bool> enabled, Action<bool> saveEnabled, Action<string> checkLocalConnection, Func<CrewSettingsStore, ICrewConnections> connect, Func<string, string> common, Action<Exception> log)
+    internal CrewIntegration(string settingsPath, Func<bool> enabled, Action<bool> saveEnabled, Action<string> checkLocalConnection, Func<CrewSettingsStore, ICrewConnections> connect, Func<string, string> common, DiagnosticLog log)
     { this.settingsPath = settingsPath; this.enabled = enabled; this.saveEnabled = saveEnabled; this.checkLocalConnection = checkLocalConnection; this.connect = connect; this.common = common; this.log = log; }
     internal void Tick(MainGameViewModel current, ToggleButton? hudAnchor) => Guard(() => Update(current, hudAnchor));
     private void Update(MainGameViewModel current, ToggleButton? hudAnchor)
@@ -59,7 +59,7 @@ internal sealed class CrewIntegration
         if (!active)
         {
             settings ??= new CrewSettingsStore(settingsPath); connections ??= connect(settings);
-            source ??= new CrewBattleSource(current, log); chatter ??= new CrewChatter(log);
+            source ??= new CrewBattleSource(current, error => log.Warning("AI Crew mission briefing unavailable: " + error)); chatter ??= new CrewChatter(error => log.Error("AI Crew Chatter failed: " + error));
             local ??= new CrewLocalApi(chatter, () => clock.Elapsed.TotalSeconds, () =>
             {
                 connections.ValidateSelection(settings.Current.ConnectionId);
@@ -87,7 +87,7 @@ internal sealed class CrewIntegration
         var current = model ?? throw new InvalidOperationException("The battle model is unavailable.");
         var host = GameUi.FindWindowHost(current.RootControl) ?? throw new InvalidOperationException("The battle window host is unavailable.");
         window ??= new CrewWindow(view!, host, chatter!, settings!, connections!, common, new CrewText(GameLanguage.Read()), presentation!.Portrait,
-            () => clock.Elapsed.TotalSeconds, Guard, log);
+            () => clock.Elapsed.TotalSeconds, Guard, error => log.Error("AI Crew UI failed: " + error));
         window.Toggle(); if (failed) window.Stop(); launcher!.Control.IsChecked = window.IsOpen;
     }
     internal LocalApiResponse? LocalRequest(string method, string path, JObject body)
@@ -124,7 +124,7 @@ internal sealed class CrewIntegration
                 return new LocalApiResponse(200, settings!.Current.Information.Filter(source!.Capture(chatter!.Targets)));
             return local.Dispatch(method, path, body);
         }
-        catch (CrewException error) { log(error); return LocalApiResponse.Error(400, error.Code); }
+        catch (CrewException error) { log.Error("AI Crew developer request failed: " + error); return LocalApiResponse.Error(400, error.Code); }
     }
     private void Guard(Action action)
     {
@@ -133,13 +133,13 @@ internal sealed class CrewIntegration
     }
     private void Fail(Exception error)
     {
-        log(error); failed = true;
+        log.Error("AI Crew failed: " + error); failed = true;
         Cleanup(() => chatter?.SetPaused(true, clock.Elapsed.TotalSeconds), () => presentation?.Clear(), () => window?.Stop());
         if (launcher != null) launcher.Control.ToolTip = launcherTooltip + " / " + error.GetType().Name;
     }
     private void Cleanup(params Action[] actions)
     {
-        foreach (var action in actions) try { action(); } catch (Exception error) { log(error); }
+        foreach (var action in actions) try { action(); } catch (Exception error) { log.Error("AI Crew cleanup failed: " + error); }
     }
     private void Suspend()
     {

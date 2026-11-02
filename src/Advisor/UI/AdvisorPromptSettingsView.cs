@@ -17,16 +17,16 @@ internal sealed class AdvisorPromptSettingsView
     private readonly FrameworkElement content;
     private readonly Func<AdvisorText> text;
     private readonly Action changed;
-    private readonly Action<string> warn;
+    private readonly DiagnosticLog log;
     private readonly TypingScope typing;
     private readonly Action<Action> guard;
     private readonly List<(AdvisorPromptField Field, TextBox Input)> fields = new();
     private AdvisorPromptOverrides? runtime;
     private bool updating;
     internal bool HasChanges => fields.Any(f => (f.Input.Text ?? "") != f.Field.Value);
-    internal AdvisorPromptSettingsView(FrameworkElement content, Func<AdvisorText> text, Action<Action> guard, TypingScope typing, Action changed, Action<string> warn)
+    internal AdvisorPromptSettingsView(FrameworkElement content, Func<AdvisorText> text, Action<Action> guard, TypingScope typing, Action changed, DiagnosticLog log)
     {
-        this.content = content; this.text = text; this.guard = guard; this.typing = typing; this.changed = changed; this.warn = warn;
+        this.content = content; this.text = text; this.guard = guard; this.typing = typing; this.changed = changed; this.log = log;
         T Named<T>(string name) where T : class => content.FindName(name) as T ?? throw new InvalidOperationException("Missing prompt control: " + name);
         host = Named<StackPanel>("PromptFields"); status = Named<TextBlock>("PromptStatus");
         apply = Named<Button>("ApplyPrompts"); reset = Named<Button>("ResetPrompts");
@@ -50,7 +50,7 @@ internal sealed class AdvisorPromptSettingsView
         catch (AdvisorPromptException error)
         {
             Message(AdvisorNotice.Prompts(error).Message(text()), true);
-            warn("Prompt editor unavailable: " + error.Code + ": " + error.FileName);
+            log.Error("Prompt editor unavailable: " + error.Code + ": " + error.FileName);
         }
     }
     internal void Close()
@@ -162,7 +162,7 @@ internal sealed class AdvisorPromptSettingsView
         catch (AdvisorPromptException error)
         {
             Message(text().Format("developer.prompts.invalid", error.FileName), true);
-            warn("Temporary prompt edits rejected: " + error.Code + ": " + error.FileName);
+            log.Info("Temporary prompt edits rejected: " + error.Code + ": " + error.FileName);
         }
     }
     private void Reset()

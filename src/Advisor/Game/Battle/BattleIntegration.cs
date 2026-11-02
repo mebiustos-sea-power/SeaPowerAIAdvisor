@@ -12,7 +12,7 @@ internal sealed class BattleIntegration
 {
     private readonly Action<Action> guard;
     private readonly AdvisorRuntime runtime;
-    private readonly Action<string> warn;
+    private readonly DiagnosticLog log;
     private readonly AdvisorOptionsStore options;
     private readonly AdvisorBackendRegistry backends;
     private readonly BattleSituationReader reader = new();
@@ -34,8 +34,8 @@ internal sealed class BattleIntegration
     private AdvisorErrorWindow? errorWindow;
     private Action? showError;
 
-    internal BattleIntegration(AdvisorRuntime runtime, Action<string> warn, AdvisorOptionsStore options, AdvisorBackendRegistry backends)
-    { this.runtime = runtime; guard = runtime.Guard; this.warn = warn; this.options = options; this.backends = backends; }
+    internal BattleIntegration(AdvisorRuntime runtime, DiagnosticLog log, AdvisorOptionsStore options, AdvisorBackendRegistry backends)
+    { this.runtime = runtime; guard = runtime.Guard; this.log = log; this.options = options; this.backends = backends; }
 
     internal void Tick(MainGameViewModel current)
     {
@@ -130,7 +130,7 @@ internal sealed class BattleIntegration
         EnsureOperations();
         if (advisor == null)
         {
-            advisor = new AdvisorWindow(view, host, guard, new BattleAdvisorSource(CaptureWithInformation, () => operationGateway, textSummaries, () => options.Current.SummarizeMissionText, warn), GameLanguage.Read, warn, options, backends,
+            advisor = new AdvisorWindow(view, host, guard, new BattleAdvisorSource(CaptureWithInformation, () => operationGateway, textSummaries, () => options.Current.SummarizeMissionText, log), GameLanguage.Read, log, options, backends,
                 new BattleUnitNavigation(() => model?.Map, () => this.view), new BattleWeaponNavigation(() => this.view, guard), mapNavigation);
         }
         return advisor;
@@ -187,7 +187,7 @@ internal sealed class BattleIntegration
         var map = model.Map ?? throw new InvalidOperationException("The player's battle map is unavailable.");
         var now = SeaPower.Environment.Instance.DateTime;
         var references = ReadReferenceCatalog(now.Year);
-        var briefing = Shared.BattleBriefingSource.ReadXml(GameLanguage.Read(), error => warn("Public mission briefing unavailable: " + error));
+        var briefing = Shared.BattleBriefingSource.ReadXml(GameLanguage.Read(), error => log.Warning("Public mission briefing unavailable: " + error));
         IReadOnlyDictionary<string, bool>? attackRanges = null;
         if (information.Allows(InformationKind.BattleUnits) && information.Allows(InformationKind.BattleWeapons) && information.Allows(InformationKind.BattleContacts))
             attackRanges = new BattleOperationSupport(OperationObjects, () => information, OperationKnownUnits).GetAttackRangeOverview();

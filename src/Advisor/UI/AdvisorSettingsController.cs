@@ -27,7 +27,7 @@ internal sealed class AdvisorSettingsController
     private readonly Action<Action> guard;
     private readonly Action releaseInput, changed, back;
     private readonly Func<bool> consultationBusy;
-    private readonly Action<string> warn;
+    private readonly DiagnosticLog diagnostics;
     private readonly TextBox rounds, history, prompt, userName;
     private readonly ComboBox size, templateInsertion;
     private readonly CheckBox campaign, log, localApi, linkOwnUnits, linkContacts, showSystemTemplates, crewEnabled, unitMentionCompletion;
@@ -45,10 +45,10 @@ internal sealed class AdvisorSettingsController
     internal AdvisorSettingsController(FrameworkElement content, Func<AdvisorText> text, AdvisorOptionsStore options,
         string profileDirectory, string settingsPath, AdvisorTextTemplateStore templateStore, Func<byte[]> defaultPortrait, Action<Action> guard, TypingScope typing,
         Action releaseInput, Func<bool> consultationBusy, Action<AdvisorProfile> profileSaved, Action changed,
-        Action back, Action<string> warn, Func<AdvisorOperations?> operations)
+        Action back, DiagnosticLog diagnostics, Func<AdvisorOperations?> operations)
     {
         this.content = content; this.text = text; this.options = options; this.guard = guard;
-        this.releaseInput = releaseInput; this.consultationBusy = consultationBusy; this.changed = changed; this.back = back; this.warn = warn;
+        this.releaseInput = releaseInput; this.consultationBusy = consultationBusy; this.changed = changed; this.back = back; this.diagnostics = diagnostics;
         pane = Named<FrameworkElement>("SettingsPane"); home = Named<FrameworkElement>("SettingsHome");
         page = Named<FrameworkElement>("SettingsCategoryPage"); chat = Named<FrameworkElement>("ConversationPane");
         confirmation = Named<FrameworkElement>("SettingsConfirmation"); confirmationText = Named<TextBlock>("SettingsConfirmationText");
@@ -65,7 +65,7 @@ internal sealed class AdvisorSettingsController
         localConnections = new AdvisorLocalConnectionsView(Named<StackPanel>("LocalApiConnections"), Named<ComboBox>("LocalApiDefaultConnection"), Named<CheckBox>("AllowLocalApiModelOverride"), text, guard);
         information = new AdvisorInformationView(Named<StackPanel>("InformationChoices"), text(), guard);
         throwException = Named<Button>("ThrowTestException");
-        promptEditor = new AdvisorPromptSettingsView(content, text, guard, typing, changed, warn);
+        promptEditor = new AdvisorPromptSettingsView(content, text, guard, typing, changed, diagnostics);
         errorHistory = new AdvisorErrorHistoryView(content, text, guard, typing);
         commands = new AdvisorCommandSettingsView(content, operations, text, typing, guard);
         adapters = new AdvisorAdapterSettingsView(Named<StackPanel>("AdapterEntries"), AdvisorServiceCatalog.BuiltIn, text);
@@ -73,7 +73,7 @@ internal sealed class AdvisorSettingsController
         api = new AdvisorApiSettingsView(content, apiStore, text, guard, typing, ApiChanged, Saved, () => Notice(text()["profile.ime"], true), ApiError, ConfirmDelete, ConfirmDuplicate);
         test = api.Find<Button>("TestConnection"); testStatus = api.Find<TextBlock>("ConnectionTestStatus"); testError = api.Find<TextBlock>("ConnectionTestError");
         profiles = new AdvisorProfileSettingsView(content, profileDirectory, text, defaultPortrait, guard, typing,
-            profile => { profileSaved(profile); Saved(); }, () => Notice(""), ProfileError, ConfirmDelete, warn);
+            profile => { profileSaved(profile); Saved(); }, () => Notice(""), ProfileError, ConfirmDelete, diagnostics.Warning);
         templates = new AdvisorTemplateSettingsView(content, templateStore, text, guard, typing,
             Saved, () => Notice(""), () => Notice(text()["profile.ime"], true), TemplateError, ConfirmDelete);
         pages = new[] { "GeneralCategory", "ProfileCategory", "TemplatesCategory", "ApiCategory", "ConsultationCategory", "InformationCategory", "DeveloperCategory", "WipCategory", "ExtensionsCategory" }
@@ -283,19 +283,19 @@ internal sealed class AdvisorSettingsController
     {
         var key = "settings.error." + error.Code;
         Notice(text().Contains(key) ? text()[key] + text().Format("settings.error_suffix", error.Code) : AdvisorNotice.Connection(error).Message(text()), true);
-        warn("Advisor API settings failed: " + error.Code);
+        diagnostics.Warning("Advisor API settings failed: " + error.Code);
     }
     private void ProfileError(AdvisorProfileException error)
     {
         var key = text().Contains("profile.error." + error.Code) ? error.Code : "profile_invalid";
-        Notice(text()["profile.error." + key] + text().Format("profile.error_suffix", error.Code), true); warn("Advisor profile settings failed: " + error.Code);
+        Notice(text()["profile.error." + key] + text().Format("profile.error_suffix", error.Code), true); diagnostics.Warning("Advisor profile settings failed: " + error.Code);
     }
     private void TemplateError(AdvisorTemplateException error)
     {
         Notice(text()["settings.error." + error.Code] + text().Format("settings.error_suffix", error.Code), true);
-        warn("Advisor text templates failed: " + error.Code);
+        diagnostics.Warning("Advisor text templates failed: " + error.Code);
     }
-    private void OptionsError(AdvisorOptionsException error) { Notice(text()["settings.error." + error.Code] + text().Format("settings.error_suffix", error.Code), true); warn("Advisor options failed: " + error.Code); }
+    private void OptionsError(AdvisorOptionsException error) { Notice(text()["settings.error." + error.Code] + text().Format("settings.error_suffix", error.Code), true); diagnostics.Warning("Advisor options failed: " + error.Code); }
     private void ApiChanged() { if (!api.Editing) CancelTest(); ClearTest(); Notice(""); UpdateBusy(); }
     internal void UpdateBusy()
     {
@@ -314,11 +314,11 @@ internal sealed class AdvisorSettingsController
             var configuration = api.TestConfiguration(); var connectionOptions = api.TestOptions();
             var requestText = AdvisorPrompts.ConnectionTestRequest(); ClearTest();
             var directory = AdvisorTrace.DirectoryIn(UnityEngine.Application.persistentDataPath);
-            testing = new AdvisorJob(cancellation => AdvisorServices.TestAsync(directory, configuration, connectionOptions, requestText, cancellation), warn);
+            testing = new AdvisorJob(cancellation => AdvisorServices.TestAsync(directory, configuration, connectionOptions, requestText, cancellation), diagnostics.Error);
             testStatus.Text = TestMessage(text()["connection.test_running"]); UpdateBusy();
         }
         catch (AiConnectionException error) { TestError(AdvisorNotice.Connection(error).Message(text(), true)); }
-        catch (AdvisorPromptException error) { TestError(AdvisorNotice.Prompts(error).Message(text())); warn("Connection test prompt unavailable: " + error.Message); }
+        catch (AdvisorPromptException error) { TestError(AdvisorNotice.Prompts(error).Message(text())); diagnostics.Error("Connection test prompt unavailable: " + error.Message); }
     }
     private string TestMessage(string message) => text().Format("connection.test_result", testingName, message);
     private void ClearTest() { if (testing != null) return; testStatus.Text = testError.Text = ""; testError.Visibility = Visibility.Collapsed; }
@@ -341,7 +341,7 @@ internal sealed class AdvisorSettingsController
         testing = null; var result = job.TakeCompleted(); UpdateBusy();
         if (result.UnexpectedError != null) { TestError(AdvisorNotice.Unexpected().Message(text())); throw result.UnexpectedError; }
         if (result.IsCancelled) testStatus.Text = TestMessage(text()["connection.test_cancelled"]);
-        else if (result.Error != null) { TestError(AdvisorNotice.Connection(result.Error).Message(text(), true)); warn("Advisor connection test failed: " + result.Error.Code); }
+        else if (result.Error != null) { TestError(AdvisorNotice.Connection(result.Error).Message(text(), true)); diagnostics.Error("Advisor connection test failed: " + result.Error.Code); }
         else { _ = result.Result ?? throw new InvalidOperationException("The connection test has no result."); testStatus.Text = TestMessage(text()["connection.test_succeeded"]); }
     }
 }

@@ -15,11 +15,11 @@ internal sealed class AdvisorConsultationMenu
     private readonly Func<AdvisorText> text;
     private readonly Action<AdvisorTextTemplate> choose;
     private readonly Action<Action> guard;
-    private readonly Action<string> warn;
+    private readonly Action<string> logError;
     internal AdvisorConsultationMenu(FrameworkElement content, AdvisorTextTemplateStore templates, Func<AdvisorText> text,
-        Action<AdvisorTextTemplate> choose, Action<Action> guard, Action<string> warn, Func<AdvisorTemplateOptions> options)
+        Action<AdvisorTextTemplate> choose, Action<Action> guard, Action<string> logError, Func<AdvisorTemplateOptions> options)
     {
-        this.options = options; this.content = content; this.templates = templates; this.text = text; this.choose = choose; this.guard = guard; this.warn = warn;
+        this.options = options; this.content = content; this.templates = templates; this.text = text; this.choose = choose; this.guard = guard; this.logError = logError;
         T Named<T>(string id) where T : class => content.FindName(id) as T ?? throw new InvalidOperationException("Missing consultation menu control: " + id);
         pane = Named<FrameworkElement>("OtherConsultationsPane"); history = Named<FrameworkElement>("ConversationHistory");
         groups = Named<StackPanel>("OtherConsultationGroups");
@@ -42,7 +42,7 @@ internal sealed class AdvisorConsultationMenu
         {
             groups.Children.Add(new TextBlock { Text = text()["settings.error." + error.Code] + text().Format("settings.error_suffix", error.Code),
                 TextWrapping = TextWrapping.Wrap, Foreground = (Brush)content.FindResource("AdvisorErrorBrush") });
-            warn("Advisor text templates failed: " + error.Code);
+            logError("Advisor text templates failed: " + error.Code);
         }
     }
     private TextBlock Heading(string title) => new() { Text = title, FontSize = 14, FontWeight = FontWeights.Bold,

@@ -15,17 +15,17 @@ internal sealed class LocalApiServer : IDisposable
     private readonly string requestHeader;
     private readonly HttpListener listener = new();
     private readonly Func<string, string, JObject, Task<LocalApiResponse>> dispatch;
-    private readonly Action<string> warn;
+    private readonly Action<string> logError;
     private readonly CancellationTokenSource stopping = new();
     private int active;
     private string? failure;
     internal string? Failure => Volatile.Read(ref failure);
-    internal LocalApiServer(Func<string, string, JObject, Task<LocalApiResponse>> dispatch, Action<string> warn, string endpoint, string requestHeader)
+    internal LocalApiServer(Func<string, string, JObject, Task<LocalApiResponse>> dispatch, Action<string> logError, string endpoint, string requestHeader)
     {
         var uri = new Uri(endpoint);
         if (uri.Scheme != "http" || uri.Host != "127.0.0.1" || uri.AbsolutePath != "/") throw new ArgumentException("A loopback HTTP endpoint is required.");
         if (string.IsNullOrWhiteSpace(requestHeader)) throw new ArgumentException("A developer request header is required.");
-        this.dispatch = dispatch; this.warn = warn; this.requestHeader = requestHeader;
+        this.dispatch = dispatch; this.logError = logError; this.requestHeader = requestHeader;
         listener.Prefixes.Add(endpoint.TrimEnd('/') + "/");
     }
     internal void Start() { listener.Start(); _ = Accept(); }
@@ -42,7 +42,7 @@ internal sealed class LocalApiServer : IDisposable
             }
         }
         catch (Exception error) when (stopping.IsCancellationRequested && (error is HttpListenerException || error is ObjectDisposedException)) { }
-        catch (Exception error) { Volatile.Write(ref failure, error.Message); warn("Developer local API listener failed: " + error); }
+        catch (Exception error) { Volatile.Write(ref failure, error.Message); logError("Developer local API listener failed: " + error); }
     }
     private async Task Serve(HttpListenerContext context)
     {
@@ -86,7 +86,7 @@ internal sealed class LocalApiServer : IDisposable
         catch (OperationCanceledException) { await TryError(context, 408, "request_timeout").ConfigureAwait(false); }
         catch (Exception error)
         {
-            if (!stopping.IsCancellationRequested) warn("Developer local API request failed: " + error);
+            if (!stopping.IsCancellationRequested) logError("Developer local API request failed: " + error);
             await TryError(context, 500, "local_request_failed").ConfigureAwait(false);
         }
         finally

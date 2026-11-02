@@ -36,7 +36,7 @@ internal sealed partial class BattleQuerySession : IAdvisorQuerySession, IAdviso
     private readonly HashSet<string> deliveredSensorReferences = new(StringComparer.Ordinal);
     private readonly HashSet<string> deliveredMovementRoutes = new(StringComparer.Ordinal);
 
-    internal BattleQuerySession(BattleSnapshot situation, string language, string? question, int maxRounds = DefaultMaxRounds, AdvisorInformation? information = null, AdvisorPrompts? prompts = null, JObject? context = null, AdvisorTextSummaryCache? summaryCache = null, bool summarizeText = false, Action<string>? summaryWarning = null)
+    internal BattleQuerySession(BattleSnapshot situation, string language, string? question, int maxRounds = DefaultMaxRounds, AdvisorInformation? information = null, AdvisorPrompts? prompts = null, JObject? context = null, AdvisorTextSummaryCache? summaryCache = null, bool summarizeText = false, DiagnosticLog? summaryLog = null)
     {
         if (maxRounds < 1 || maxRounds > MaximumRounds) throw new ArgumentOutOfRangeException(nameof(maxRounds));
         MaxRounds = maxRounds;
@@ -49,7 +49,7 @@ internal sealed partial class BattleQuerySession : IAdvisorQuerySession, IAdviso
         snapshot["movement_plans"] ??= new JArray();
         snapshot["movement_routes"] ??= new JArray();
         BattleInformation.Apply(snapshot, information);
-        TextSummaries = (summaryCache ?? new AdvisorTextSummaryCache()).Open(snapshot, information, summarizeText, summaryWarning ?? (_ => { }));
+        TextSummaries = (summaryCache ?? new AdvisorTextSummaryCache()).Open(snapshot, information, summarizeText, summaryLog);
         UnitReferences = situation.UnitReferences.Only(Rows("friendly_units").Select(row => (string)row["id"]!));
         var weaponReferences = information.Allows(InformationKind.BattleWeapons)
             ? new AdvisorWeaponReferences(Rows("unit_capabilities").SelectMany(row => row["weapons"]?["ammunition"] as JArray ?? new JArray())

@@ -13,7 +13,7 @@ internal sealed class CampaignIntegration
     private readonly int campaignScene;
     private readonly Action<Action> guard;
     private readonly AdvisorRuntime runtime;
-    private readonly Action<string> warn;
+    private readonly DiagnosticLog log;
     private readonly AdvisorOptionsStore options;
     private readonly AdvisorBackendRegistry backends;
     private readonly CampaignSituationReader reader = new();
@@ -24,10 +24,10 @@ internal sealed class CampaignIntegration
     private AdvisorErrorWindow? errorWindow;
     private Action? showError;
 
-    internal CampaignIntegration(Assembly campaign, AdvisorRuntime runtime, Action<string> warn, AdvisorOptionsStore options, AdvisorBackendRegistry backends)
+    internal CampaignIntegration(Assembly campaign, AdvisorRuntime runtime, DiagnosticLog log, AdvisorOptionsStore options, AdvisorBackendRegistry backends)
     {
         this.runtime = runtime; guard = runtime.Guard;
-        this.warn = warn;
+        this.log = log;
         this.options = options;
         this.backends = backends;
         var type = campaign.GetType("DynamicCampaignMod.Game.Session.CampaignSession", true)!;
@@ -121,7 +121,7 @@ internal sealed class CampaignIntegration
         var view = CampaignView.Instance ?? throw new InvalidOperationException("The campaign view is unavailable.");
         var host = view.FindName("WindowHost") as WindowHost
             ?? throw new InvalidOperationException("The campaign's own WindowHost is unavailable.");
-        return advisor ??= new AdvisorWindow(view, host, guard, new CampaignAdvisorSource(Capture), GameLanguage.Read, warn, options, backends);
+        return advisor ??= new AdvisorWindow(view, host, guard, new CampaignAdvisorSource(Capture), GameLanguage.Read, log, options, backends);
     }
 
     private bool InCampaign() => (bool)active.Invoke(null, null)! && SceneManager.GetActiveScene().buildIndex == campaignScene;

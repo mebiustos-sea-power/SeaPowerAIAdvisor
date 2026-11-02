@@ -18,7 +18,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     private readonly AdvisorOptionsStore options;
     private readonly AdvisorBackendRegistry backends;
     private readonly Func<string> replyLanguage;
-    private readonly Action<string> warn;
+    private readonly DiagnosticLog log;
     private readonly AdvisorConversation conversation = new();
     private readonly TypingScope typing = new();
     private readonly QuestionInputController questionInput;
@@ -57,7 +57,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     private Action? pendingScroll;
     private bool diagnosticScrollPending;
 
-    internal AdvisorWindow(FrameworkElement view, WindowHost host, Action<Action> guard, IAdvisorSource source, Func<string> replyLanguage, Action<string> warn, AdvisorOptionsStore options, AdvisorBackendRegistry backends,
+    internal AdvisorWindow(FrameworkElement view, WindowHost host, Action<Action> guard, IAdvisorSource source, Func<string> replyLanguage, DiagnosticLog log, AdvisorOptionsStore options, AdvisorBackendRegistry backends,
         IAdvisorUnitNavigation? navigation = null, IAdvisorWeaponNavigation? weapons = null, IAdvisorMapNavigation? map = null)
     {
         this.view = view;
@@ -67,7 +67,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         this.options = options;
         this.backends = backends;
         this.replyLanguage = replyLanguage;
-        this.warn = warn;
+        this.log = log;
         uiLanguage = replyLanguage();
         text = AdvisorText.Load(uiLanguage);
         speakerName = text["speaker.advisor"];
@@ -132,7 +132,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
 
         questionInput = new QuestionInputController(question, typing, () => active != null, StartConsultation, guard);
         var templates = new AdvisorTextTemplateStore(profileDirectory);
-        consultationMenu = new AdvisorConsultationMenu(content, templates, () => text, ChooseTemplate, guard, warn, () => options.Current.Templates);
+        consultationMenu = new AdvisorConsultationMenu(content, templates, () => text, ChooseTemplate, guard, log.Error, () => options.Current.Templates);
         otherConsultations = Named<ToggleButton>(content, "OtherConsultations");
         otherConsultations.Click += (_, _) => guard(() =>
         {
@@ -170,14 +170,14 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
             {
                 conversation.UseInformationPolicy(options.Current.Information.Key);
                 RefreshConfigurationNotice(); ShowConversation(false);
-            }, ReturnToConversation, warn, () => OperationService);
+            }, ReturnToConversation, log, () => OperationService);
         operationReview = new AdvisorOperationReview(content, conversationPane, () => OperationService,
             () => text, guard, () => ShowConversation(false), map, navigation);
         updateNotice = new AdvisorUpdateNoticeWindow(view, host, window, new AdvisorUpdateNoticeStore(profileDirectory),
             () => text, guard, ReleaseInput, questionInput.RequestFocus, error =>
             {
                 status.Text = text["update_notice.error." + error.Code];
-                warn("Update notice read receipts failed: " + error);
+                log.Warning("Update notice read receipts failed: " + error);
             });
         if (navigation != null)
         {
@@ -225,7 +225,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         catch (AdvisorPromptException error)
         {
             configurationNotice = AdvisorNotice.Prompts(error); ShowConversation(false);
-            warn("Contextual consultation prompt unavailable: " + error.Message);
+            log.Error("Contextual consultation prompt unavailable: " + error.Message);
         }
     }
 
@@ -437,7 +437,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         catch (AdvisorPromptException error)
         {
             configurationNotice = AdvisorNotice.Prompts(error); ShowConversation(false);
-            warn("Shortcut prompt unavailable: " + error.Message);
+            log.Error("Shortcut prompt unavailable: " + error.Message);
         }
     }
 
@@ -515,7 +515,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         catch (AdvisorPromptException error)
         {
             configurationNotice = AdvisorNotice.Prompts(error); ShowConversation(false);
-            warn("Contact reassessment prompt unavailable: " + error.Message);
+            log.Error("Contact reassessment prompt unavailable: " + error.Message);
         }
     }
 
@@ -577,29 +577,29 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
                 }, historyLimit, userName, operationScope, recording == null ? null : recording.CaptureInput);
                 recording?.CaptureInput(context.Input);
                 return await AdvisorConsultation.RunAsync(execution, context, logDirectory, request, cancellation).ConfigureAwait(false);
-            }, warn);
+            }, log.Error);
             SetBusy(true);
             status.Text = text["status.consulting"];
         }
         catch (AdvisorOptionsException failure)
         {
             FailTurn(turn, AdvisorNotice.Options(failure));
-            warn("Advisor options unavailable: " + failure.Code);
+            log.Error("Advisor options unavailable: " + failure.Code);
         }
         catch (AiConnectionException failure)
         {
             FailTurn(turn, AdvisorNotice.Connection(failure));
-            warn("Advisor consultation failed: " + failure.Message);
+            log.Error("Advisor consultation failed: " + failure.Message);
         }
         catch (AdvisorPromptException failure)
         {
             FailTurn(turn, AdvisorNotice.Prompts(failure));
-            warn("System prompts unavailable: " + failure.Message);
+            log.Error("System prompts unavailable: " + failure.Message);
         }
         catch (SituationUnavailableException failure)
         {
             FailTurn(turn, AdvisorNotice.Situation(failure.Code));
-            warn("Consultation refused: " + failure.Message);
+            log.Info("Consultation refused: " + failure.Message);
         }
         catch
         {
@@ -649,7 +649,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         else if (completion.Error != null)
         {
             FailTurn(turn, AdvisorNotice.Connection(completion.Error));
-            warn("Advisor consultation failed: " + completion.Error.Message);
+            log.Error("Advisor consultation failed: " + completion.Error.Message);
         }
         else
         {
@@ -772,25 +772,25 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         {
             diagnosticOutput.Text = AdvisorNotice.Options(error).Message(text);
             diagnosticStatus.Text = text["status.failed"];
-            warn("Advisor options unavailable: " + error.Code);
+            log.Error("Advisor options unavailable: " + error.Code);
         }
         catch (AiConnectionException error)
         {
             diagnosticOutput.Text = AdvisorNotice.Connection(error).Message(text);
             diagnosticStatus.Text = text["status.failed"];
-            warn("API settings unavailable: " + error.Code);
+            log.Error("API settings unavailable: " + error.Code);
         }
         catch (AdvisorPromptException error)
         {
             diagnosticOutput.Text = AdvisorNotice.Prompts(error).Message(text);
             diagnosticStatus.Text = text["diagnostics.prompt_failed"];
-            warn("System prompts unavailable: " + error.Message);
+            log.Error("System prompts unavailable: " + error.Message);
         }
         catch (SituationUnavailableException error)
         {
             diagnosticOutput.Text = text["situation.error." + error.Code];
             diagnosticStatus.Text = text["diagnostics.situation_refused"];
-            warn("Situation preview refused: " + error.Message);
+            log.Info("Situation preview refused: " + error.Message);
         }
     }
 
@@ -869,7 +869,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         ReleasePortrait();
         if (!profileLoaded) advisorName.Text = text["speaker.advisor"];
         portraitError.Visibility = Visibility.Visible; portraitError.Text = text["portrait.settings_error"];
-        warn("Advisor profile failed: " + failure.Code);
+        log.Warning("Advisor profile failed: " + failure.Code);
     }
 
     private string ValidationMessage(string code) => code == "validation.question_too_long"

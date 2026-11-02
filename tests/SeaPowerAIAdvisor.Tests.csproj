@@ -159,6 +159,7 @@
     <Compile Include="..\src\Advisor\Configuration\PortraitImage.cs" Link="PortraitImage.cs" />
     <Compile Include="..\src\Shared\AI\Gemini\GeminiTransport.cs" Link="GeminiTransport.cs" />
     <Compile Include="..\src\Advisor\Diagnostics\AdvisorTrace.cs" Link="AdvisorTrace.cs" />
+    <Compile Include="..\src\Shared\Diagnostics\DiagnosticLog.cs" />
     <Compile Include="..\src\Shared\Diagnostics\SecretRedactor.cs" Link="SecretRedactor.cs" />
     <Compile Include="..\src\Advisor\Diagnostics\AdvisorErrorHistory.cs" Link="AdvisorErrorHistory.cs" />
     <Compile Include="..\src\Advisor\Diagnostics\AdvisorErrorCapture.cs" Link="AdvisorErrorCapture.cs" />

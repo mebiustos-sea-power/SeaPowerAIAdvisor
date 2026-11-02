@@ -10,14 +10,14 @@ internal sealed class AdvisorLocalApiDriver : MonoBehaviour
     private AdvisorOptionsStore? options;
     private AdvisorLocalApi? api;
     private LocalApiServer? server;
-    private Action<string>? warn;
+    private DiagnosticLog? log;
     private bool attempted;
     private AdvisorOptions? publishedOptions;
     private int publishedRevision = -1;
     private readonly AdvisorLocalDiscovery discovery = new();
     internal static string Status { get; private set; } = "";
-    internal void Initialize(AdvisorOptionsStore options, AdvisorLocalApi api, Action<string> warn)
-    { this.options = options; this.api = api; this.warn = warn; RemoveDiscovery(); }
+    internal void Initialize(AdvisorOptionsStore options, AdvisorLocalApi api, DiagnosticLog log)
+    { this.options = options; this.api = api; this.log = log; RemoveDiscovery(); }
     private void Update()
     {
         if (options == null || api == null) return;
@@ -33,8 +33,8 @@ internal sealed class AdvisorLocalApiDriver : MonoBehaviour
         if (!attempted)
         {
             attempted = true;
-            try { server = new LocalApiServer(api.Enqueue, message => warn?.Invoke(message), AdvisorLocalDiscovery.Endpoint, "X-Advisor-Developer"); server.Start(); api.Enable(); Status = AdvisorLocalDiscovery.Endpoint; }
-            catch (Exception error) { server?.Dispose(); server = null; Status = error.Message; warn?.Invoke("Developer local API could not start: " + error); }
+            try { server = new LocalApiServer(api.Enqueue, message => log?.Error(message), AdvisorLocalDiscovery.Endpoint, "X-Advisor-Developer"); server.Start(); api.Enable(); Status = AdvisorLocalDiscovery.Endpoint; }
+            catch (Exception error) { server?.Dispose(); server = null; Status = error.Message; log?.Error("Developer local API could not start: " + error); }
         }
         if (server?.Failure is string failure)
         {
@@ -50,7 +50,7 @@ internal sealed class AdvisorLocalApiDriver : MonoBehaviour
             }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException or AdvisorOptionsException or AiConnectionException)
             {
-                Status = error.Message; warn?.Invoke("Developer API discovery failed: " + error); RemoveDiscovery();
+                Status = error.Message; log?.Warning("Developer API discovery failed: " + error); RemoveDiscovery();
             }
         }
         api.Pump();
@@ -59,7 +59,7 @@ internal sealed class AdvisorLocalApiDriver : MonoBehaviour
     {
         try { discovery.Remove(); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        { Status = error.Message; warn?.Invoke("Developer API discovery cleanup failed: " + error); }
+        { Status = error.Message; log?.Warning("Developer API discovery cleanup failed: " + error); }
     }
     private void OnApplicationQuit() => Stop();
     private void OnDestroy() => Stop();

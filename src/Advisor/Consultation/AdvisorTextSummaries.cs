@@ -23,7 +23,7 @@ internal sealed class AdvisorTextSummaryCache
     private readonly object gate = new();
     private Dictionary<string, Entry> current = new(StringComparer.Ordinal);
     private int sequence;
-    internal AdvisorTextSummarySession Open(JObject snapshot, AdvisorInformation information, bool enabled, Action<string> warn)
+    internal AdvisorTextSummarySession Open(JObject snapshot, AdvisorInformation information, bool enabled, DiagnosticLog? log)
     {
         lock (gate)
         {
@@ -43,7 +43,7 @@ internal sealed class AdvisorTextSummaryCache
                 foreach (var report in (snapshot["published_reports"] as JArray ?? new JArray()).OfType<JObject>())
                     Add((string)report["id"]!, "report", (string)report["published_at_utc"]!, (string)report["text"]!);
             current = next;
-            return new AdvisorTextSummarySession(this, bindings, enabled, warn);
+            return new AdvisorTextSummarySession(this, bindings, enabled, log);
         }
     }
     internal string? Read(Entry entry) { lock (gate) return entry.Summary; }
@@ -66,10 +66,10 @@ internal sealed class AdvisorTextSummarySession
     private readonly IReadOnlyDictionary<string, AdvisorTextSummaryCache.Entry> bindings;
     private readonly Dictionary<string, AdvisorTextSummaryCache.Entry> received = new(StringComparer.Ordinal);
     private readonly bool enabled;
-    private readonly Action<string> warn;
+    private readonly DiagnosticLog? log;
     private bool active, completionAvailable;
-    internal AdvisorTextSummarySession(AdvisorTextSummaryCache cache, IReadOnlyDictionary<string, AdvisorTextSummaryCache.Entry> bindings, bool enabled, Action<string> warn)
-    { this.cache = cache; this.bindings = bindings; this.enabled = enabled; this.warn = warn; }
+    internal AdvisorTextSummarySession(AdvisorTextSummaryCache cache, IReadOnlyDictionary<string, AdvisorTextSummaryCache.Entry> bindings, bool enabled, DiagnosticLog? log)
+    { this.cache = cache; this.bindings = bindings; this.enabled = enabled; this.log = log; }
     internal void UseStandardEngine(bool standard) => active = standard && enabled;
     internal JObject Present(string local, string original)
     {
@@ -144,18 +144,18 @@ internal sealed class AdvisorTextSummarySession
             foreach (var item in rows)
             {
                 if (item is not JObject row || row["summary_ref"]?.Type != JTokenType.String || row["text"]?.Type != JTokenType.String ||
-                    row.Properties().Any(p => p.Name is not ("summary_ref" or "text"))) { Warn("invalid_entry"); continue; }
+                    row.Properties().Any(p => p.Name is not ("summary_ref" or "text"))) { Record("invalid_entry"); continue; }
                 var reference = (string)row["summary_ref"]!; var text = ((string)row["text"]!).Trim();
                 if (!received.TryGetValue(reference, out var entry) || duplicates.Contains(reference) || text.Length == 0 ||
-                    text.Any(c => char.IsControl(c) && c != '\n' && c != '\r' && c != '\t')) { Warn("invalid_entry"); continue; }
-                if (cache.Store(entry, text)) accepted.Add(reference); else Warn("source_changed");
+                    text.Any(c => char.IsControl(c) && c != '\n' && c != '\r' && c != '\t')) { Record("invalid_entry"); continue; }
+                if (cache.Store(entry, text)) accepted.Add(reference); else Record("source_changed");
             }
         }
-        else Warn("missing_entries");
+        else Record("missing_entries");
         Missing(accepted);
         return new AiReply((string)args["answer"]!, Array.Empty<AiToolCall>(), reply.TotalTokens);
     }
     private void Missing(HashSet<string> accepted)
-    { foreach (var reference in received.Keys.Where(id => !accepted.Contains(id))) Warn("missing_summary:" + reference); }
-    private void Warn(string reason) => warn("Advisor text compression: " + reason);
+    { foreach (var reference in received.Keys.Where(id => !accepted.Contains(id))) Record("missing_summary:" + reference); }
+    private void Record(string reason) => log?.Info("Advisor text compression: " + reason);
 }

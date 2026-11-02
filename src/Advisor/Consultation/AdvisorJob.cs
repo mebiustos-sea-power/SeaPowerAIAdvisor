@@ -8,7 +8,7 @@ namespace SeaPowerAIAdvisor;
 internal sealed class AdvisorJob : IDisposable
 {
     private readonly CancellationTokenSource cancellation = new();
-    private readonly Action<string> warn;
+    private readonly Action<string> logError;
     private volatile bool retired;
     private AdvisorProgress? pendingProgress;
     internal AdvisorProgress? TakeProgress() => Interlocked.Exchange(ref pendingProgress, null);
@@ -16,12 +16,12 @@ internal sealed class AdvisorJob : IDisposable
     private bool observed;
     internal Task<AdviceCompletion> Completion { get; }
 
-    internal AdvisorJob(Func<CancellationToken, Task<AdviceResult>> work, Action<string> warn)
-        : this((cancellation, _) => work(cancellation), warn) { }
+    internal AdvisorJob(Func<CancellationToken, Task<AdviceResult>> work, Action<string> logError)
+        : this((cancellation, _) => work(cancellation), logError) { }
 
-    internal AdvisorJob(Func<CancellationToken, Action<AdvisorProgress>, Task<AdviceResult>> work, Action<string> warn)
+    internal AdvisorJob(Func<CancellationToken, Action<AdvisorProgress>, Task<AdviceResult>> work, Action<string> logError)
     {
-        this.warn = warn;
+        this.logError = logError;
         Completion = Task.Run(async () =>
         {
             try
@@ -55,7 +55,7 @@ internal sealed class AdvisorJob : IDisposable
         _ = Completion.ContinueWith(t =>
         {
             if (!observed && t.Result.UnexpectedError != null)
-                warn("Advisor background operation failed: " + t.Result.UnexpectedError);
+                logError("Advisor background operation failed: " + t.Result.UnexpectedError);
             cancellation.Dispose();
         }, TaskScheduler.Default);
     }

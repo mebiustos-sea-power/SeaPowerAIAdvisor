@@ -11,6 +11,7 @@
     <Compile Include="..\Shared\Game\*.cs" Link="Shared\Game\%(Filename)%(Extension)" />
     <Compile Include="..\Shared\AI\**\*.cs" Link="Shared\AI\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="..\Shared\Configuration\*.cs" Link="Shared\Configuration\%(Filename)%(Extension)" />
+    <Compile Include="..\Shared\Diagnostics\DiagnosticLog.cs" Link="Shared\Diagnostics\DiagnosticLog.cs" />
     <Compile Include="..\Shared\Development\*.cs" Link="Shared\Development\%(Filename)%(Extension)" />
     <Compile Include="..\Shared\UI\AiConnection*.cs" Link="Shared\UI\%(Filename)%(Extension)" />
     <Compile Include="..\Shared\UI\SettingsTabNavigation.cs" Link="Shared\UI\SettingsTabNavigation.cs" />

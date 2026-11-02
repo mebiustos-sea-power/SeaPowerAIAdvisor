@@ -8,7 +8,7 @@ src/
   Shared/
     AI/              provider protocols/definitions, per-connection sessions, HTTP, neutral profiles and connection tests
     Configuration/   file read/write primitives without feature-owned paths
-    Diagnostics/     secret redaction
+    Diagnostics/     secret redaction and host-supplied logging destinations
     Game/            common game language and mod-activation lookup
     Infrastructure/  embedded dependency loading
     UI/              shared connection cards/editor, tab navigation, controls and Markdown

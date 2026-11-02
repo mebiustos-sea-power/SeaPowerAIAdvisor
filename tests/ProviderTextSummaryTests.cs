@@ -138,22 +138,22 @@ internal static partial class ProviderTests
         {
             foreach (var clear in new[] { false, true })
             {
-                var cache = new AdvisorTextSummaryCache(); var warnings = new List<string>();
-                var old = AdvisorContext.Create(SummaryKnowledge(cache, true, reports: false, warn: warnings.Add), Array.Empty<ChatExchange>());
+                var cache = new AdvisorTextSummaryCache(); var messages = new List<string>();
+                var old = AdvisorContext.Create(SummaryKnowledge(cache, true, reports: false, log: SummaryLog(messages)), Array.Empty<ChatExchange>());
                 var sent = SummaryRows(old.PrepareStandardInput(AdvisorSituationDelivery.Upfront).Data).Single();
                 if (clear) cache.Clear();
                 var changed = SummaryKnowledge(cache, true, reports: false, briefing: clear ? BriefingText : "New mission constraints.");
                 old.TextSummaries!.ReadReply(SummaryReply(new JArray(SummaryRow(sent, "stale compressed text"))));
                 var input = AdvisorContext.Create(changed, Array.Empty<ChatExchange>()).PrepareStandardInput(AdvisorSituationDelivery.Upfront);
-                Require((bool?)SummaryRows(input.Data).Single()["summary_required"] == true && warnings.Any(w => w.Contains("source_changed", StringComparison.Ordinal)), "A late result poisoned changed or new-battle source memory");
+                Require((bool?)SummaryRows(input.Data).Single()["summary_required"] == true && messages.Any(w => w.Contains("source_changed", StringComparison.Ordinal)), "A late result poisoned changed or new-battle source memory");
             }
         });
         check("Malformed, missing, duplicate and unseen compression entries do not reject a valid final answer", () =>
         {
             for (var invalid = 0; invalid < 6; invalid++)
             {
-                var cache = new AdvisorTextSummaryCache(); var warnings = new List<string>();
-                var context = AdvisorContext.Create(SummaryKnowledge(cache, true, reports: false, warn: warnings.Add), Array.Empty<ChatExchange>());
+                var cache = new AdvisorTextSummaryCache(); var messages = new List<string>();
+                var context = AdvisorContext.Create(SummaryKnowledge(cache, true, reports: false, log: SummaryLog(messages)), Array.Empty<ChatExchange>());
                 var row = SummaryRows(context.PrepareStandardInput(AdvisorSituationDelivery.Upfront).Data).Single();
                 var item = SummaryRow(row, "valid"); JToken entries = invalid switch
                 {
@@ -164,27 +164,27 @@ internal static partial class ProviderTests
                     _ => new JArray(SummaryRow(row, " "))
                 };
                 var reply = context.TextSummaries!.ReadReply(SummaryReply(entries));
-                Require(reply.Text == "日本語の回答" && reply.Calls.Count == 0 && warnings.Count > 0, "Auxiliary formatting failed the answer or concealed invalid memory");
+                Require(reply.Text == "日本語の回答" && reply.Calls.Count == 0 && messages.Count > 0, "Auxiliary formatting failed the answer or concealed invalid memory");
                 var fresh = AdvisorContext.Create(SummaryKnowledge(cache, true, reports: false), Array.Empty<ChatExchange>()).PrepareStandardInput(AdvisorSituationDelivery.Upfront);
                 Require((string?)SummaryRows(fresh.Data).Single()["text"] == BriefingText, "Invalid compression replaced the source text");
             }
         });
         check("Missing compression preserves a normal final reply and is not automatically retried", () => Async(async () =>
         {
-            var warnings = new List<string>(); var cache = new AdvisorTextSummaryCache();
+            var messages = new List<string>(); var cache = new AdvisorTextSummaryCache();
             var provider = new FakeProvider("no-memory", (_, n, _, _) => Task.FromResult(new AiReply("Ordinary answer", Array.Empty<AiToolCall>(), 7)));
             var result = await new AdvisorEngine(provider, delivery: AdvisorSituationDelivery.Upfront).ConsultAsync(
-                AdvisorContext.Create(SummaryKnowledge(cache, true, reports: false, warn: warnings.Add), Array.Empty<ChatExchange>()), CancellationToken.None);
-            Require(result.Text == "Ordinary answer" && result.ApiRequests == 1 && warnings.Count > 0, "Missing auxiliary output failed, retried or went undiagnosed");
+                AdvisorContext.Create(SummaryKnowledge(cache, true, reports: false, log: SummaryLog(messages)), Array.Empty<ChatExchange>()), CancellationToken.None);
+            Require(result.Text == "Ordinary answer" && result.ApiRequests == 1 && messages.Count > 0, "Missing auxiliary output failed, retried or went undiagnosed");
         }));
         check("Unseen source IDs and disabled source categories cannot be summarized", () =>
         {
-            var cache = new AdvisorTextSummaryCache(); var warnings = new List<string>();
-            var knowledge = SummaryKnowledge(cache, true, reports: false, warn: warnings.Add);
+            var cache = new AdvisorTextSummaryCache(); var messages = new List<string>();
+            var knowledge = SummaryKnowledge(cache, true, reports: false, log: SummaryLog(messages));
             var context = AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>()); var input = context.PrepareStandardInput();
             var id = (string)input.Tools.Single(t => (string?)t["name"] == AdvisorTextSummarySession.CompletionTool)["parameters"]!["properties"]!["summaries"]!["items"]!["properties"]!["summary_ref"]!["enum"]![0]!;
             context.TextSummaries!.ReadReply(SummaryReply(new JArray(new JObject { ["summary_ref"] = id, ["text"] = "invented" })));
-            Require(warnings.Count > 0, "An unseen source was allowed to seed memory");
+            Require(messages.Count > 0, "An unseen source was allowed to seed memory");
             var hidden = AdvisorInformation.All.With(InformationKind.BattleBriefing, false).With(InformationKind.BattleReports, false);
             var disabled = new BattleQuerySession(new BattleSnapshot(SummarySnapshot()), "ja", "Question", information: hidden, summaryCache: cache, summarizeText: true);
             var filtered = AdvisorContext.Create(disabled, Array.Empty<ChatExchange>()).PrepareStandardInput(AdvisorSituationDelivery.Upfront);
@@ -211,8 +211,12 @@ internal static partial class ProviderTests
         if (reports) data["published_reports"] = new JArray(new JObject { ["id"] = "report_1", ["published_at_utc"] = "1985-06-01T00:00:00Z", ["text"] = "Four hostile surface contacts observed." });
         return data;
     }
-    private static BattleQuerySession SummaryKnowledge(AdvisorTextSummaryCache cache, bool enabled, bool reports = true, string briefing = BriefingText, Action<string>? warn = null) =>
-        new(new BattleSnapshot(SummarySnapshot(briefing, reports)), "ja", "Question", summaryCache: cache, summarizeText: enabled, summaryWarning: warn);
+    private static DiagnosticLog SummaryLog(List<string> messages) => new(messages.Add,
+        message => throw new InvalidOperationException("Recoverable text compression emitted a warning: " + message),
+        message => throw new InvalidOperationException("Recoverable text compression emitted an error: " + message));
+
+    private static BattleQuerySession SummaryKnowledge(AdvisorTextSummaryCache cache, bool enabled, bool reports = true, string briefing = BriefingText, DiagnosticLog? log = null) =>
+        new(new BattleSnapshot(SummarySnapshot(briefing, reports)), "ja", "Question", summaryCache: cache, summarizeText: enabled, summaryLog: log);
     private static IEnumerable<JObject> SummaryRows(JToken token) => (token is JContainer container ? container.DescendantsAndSelf() : Enumerable.Empty<JToken>()).OfType<JObject>().Where(row => row["summary_required"]?.Type == JTokenType.Boolean && row["summary_ref"] != null);
     private static JObject SummaryRow(JObject source, string text) => new() { ["summary_ref"] = source["summary_ref"]!.DeepClone(), ["text"] = text };
     private static AiReply SummaryReply(JToken rows) => new("", new[] { new AiToolCall("done", AdvisorTextSummarySession.CompletionTool,

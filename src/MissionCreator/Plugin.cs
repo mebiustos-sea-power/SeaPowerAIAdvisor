@@ -19,6 +19,7 @@ public sealed class Plugin : IAnchorChainMod
 {
     public const string ModId = "mebiustos.seapower.aimissioncreator";
     private static readonly ManualLogSource Log = BepInEx.Logging.Logger.CreateLogSource("AI Mission Creator");
+    private static readonly DiagnosticLog Diagnostics = new(Log.LogInfo, Log.LogWarning, Log.LogError);
     private static bool installed;
     private static MissionCreatorConnections? connections;
     private static MissionCreatorLocalApiDriver? driver;
@@ -34,7 +35,7 @@ public sealed class Plugin : IAnchorChainMod
             connections = new MissionCreatorConnections(new MissionCreatorSettingsStore(Path.Combine(Application.persistentDataPath, "SeaPowerAIMissionCreator")),
                 error => Log.LogError("Mission Creator connection failed: " + error));
             var runtime = new GameObject("SeaPowerAIMissionCreator.Runtime"); UnityEngine.Object.DontDestroyOnLoad(runtime);
-            driver = runtime.AddComponent<MissionCreatorLocalApiDriver>(); driver.Initialize(connections, message => Log.LogWarning(message));
+            driver = runtime.AddComponent<MissionCreatorLocalApiDriver>(); driver.Initialize(connections, Diagnostics);
             var constructor = AccessTools.Constructor(typeof(MissionEditorView), Type.EmptyTypes)
                 ?? throw new MissingMethodException(typeof(MissionEditorView).FullName, ".ctor");
             new Harmony(ModId).Patch(constructor, postfix: new HarmonyMethod(typeof(Plugin), nameof(EditorCreated)));

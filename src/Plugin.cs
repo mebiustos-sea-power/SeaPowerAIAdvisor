@@ -25,6 +25,7 @@ public sealed class Plugin : IAnchorChainMod
         ?? throw new InvalidOperationException("The adviser backend registry has not been initialized.");
     private static Type? campaignFiles;
     private static bool campaignInstallAttempted;
+    private static readonly DiagnosticLog Diagnostics = new(Log.LogInfo, Log.LogWarning, Log.LogError);
     private static bool installed;
     private static readonly AdvisorRuntime BattleRuntime = new("tactical_battle", message => Log.LogError(message), () => battle?.Stop());
     private static readonly AdvisorRuntime CampaignRuntime = new("dynamic_campaign", message => Log.LogError(message), () => campaign?.Stop());
@@ -51,12 +52,12 @@ public sealed class Plugin : IAnchorChainMod
             campaignFiles = files;
             EmbeddedDependencies.LoadMarkdown(typeof(Plugin).Assembly);
             harmony = new Harmony(ModId);
-            battle = new BattleIntegration(BattleRuntime, message => Log.LogWarning(message), options, Backends);
+            battle = new BattleIntegration(BattleRuntime, Diagnostics, options, Backends);
             crew = new Crew.CrewIntegration(Path.Combine(UnityEngine.Application.persistentDataPath, "SeaPowerAIAdvisor", "crew-chatter.json"),
                 () => options.Current.CrewEnabled, options.SaveCrew,
                 id => { if (!options.Current.LocalConnections.AllowedIds.Contains(id)) throw new LocalApiException(403, "connection_not_allowed"); },
                 saved => new ChatterConnections(settingsPath, AdvisorTrace.DirectoryIn(UnityEngine.Application.persistentDataPath), saved, () => AdvisorText.Load(GameLanguage.Read())),
-                key => AdvisorText.Load(GameLanguage.Read())[key], error => Log.LogError("AI Crew Chatter failed: " + error));
+                key => AdvisorText.Load(GameLanguage.Read())[key], Diagnostics);
             harmony.Patch(Required(typeof(MainGameViewModel), "OnLateUpdate"), postfix: new HarmonyMethod(typeof(Plugin), nameof(BattleFrame)));
             harmony.Patch(Required(typeof(MainGameViewModel), "OnDestroy"), prefix: new HarmonyMethod(typeof(Plugin), nameof(BattleDestroyed)));
             SeaPowerAIAdvisor.Api.AdvisorApi.Attach(extension =>
@@ -83,7 +84,7 @@ public sealed class Plugin : IAnchorChainMod
                 }, (method, path, body) => crew?.LocalRequest(method, path, body));
             var driverObject = new UnityEngine.GameObject("SeaPowerAIAdvisor.DeveloperLocalApi");
             UnityEngine.Object.DontDestroyOnLoad(driverObject);
-            driverObject.AddComponent<AdvisorLocalApiDriver>().Initialize(options, LocalApi, message => Log.LogWarning(message));
+            driverObject.AddComponent<AdvisorLocalApiDriver>().Initialize(options, LocalApi, Diagnostics);
             Translation.ScreenTranslationDriver? screenTranslation = null;
             try
             {
@@ -145,7 +146,7 @@ public sealed class Plugin : IAnchorChainMod
             Log.LogInfo("DCM is disabled; tactical advisor is available independently.");
             return;
         }
-        campaign = new CampaignIntegration(assembly, CampaignRuntime, message => Log.LogWarning(message), options!, Backends);
+        campaign = new CampaignIntegration(assembly, CampaignRuntime, Diagnostics, options!, Backends);
         var ui = assembly.GetType("DynamicCampaignMod.UI.CampaignUI", true)!;
         harmony!.Patch(Required(ui, "Frame"), postfix: new HarmonyMethod(typeof(Plugin), nameof(CampaignFrame)));
         harmony.Patch(Required(ui, "Detach"), prefix: new HarmonyMethod(typeof(Plugin), nameof(CampaignDetach)));
