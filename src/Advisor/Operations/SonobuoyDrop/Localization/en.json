@@ -3,5 +3,5 @@
   "summary": "Schedule an ordered sonobuoy drop plan for each unit, appending to or replacing existing reservations.",
   "requirements": "Requires Data for AI access to own units and weapons. The target must be a player-controlled unit with available sonobuoys. Aircraft must be airborne. Replacement clears the target unit's entire existing reservation queue. The current in-game depth setting is preserved.",
   "proposal_summary": "{0}: schedule {1} sonobuoy drops.",
-  "proposal_independent": "Switches to independent action."
+  "proposal_independent": "{0}: switches to independent action."
 }

@@ -19,8 +19,9 @@ internal static partial class ReservationCompositionTests
             var batch = Batch(Plan(new[] { Policy(42, "replace"), Policy(43, "append") },
                 Move(42, 1), Drop(42, 2), Move(43, 8), Move(42, 3), Drop(42, 4), Return(42)));
             service.SubmitPlans("mixed", batch); var proposal = service.FinishProposal("mixed", true)!;
-            var text = service.DescribeProposal(proposal, "ja"); var preview = service.PreviewProposal(proposal, "en");
+            var text = OperationSubmissionFixture.ReviewText(service.DescribeProposal(proposal, "ja")); var preview = service.PreviewProposal(proposal, "en");
             Require(game.Log.Count == 0 && text.IndexOf("移動予約", StringComparison.Ordinal) < text.IndexOf("ソノブイ", StringComparison.Ordinal), "Review changed the game or reordered command explanations");
+            Require(!text.Contains("注意事項：", StringComparison.Ordinal), "Review added empty notes to reservations without side effects");
             var frame = AdvisorOperationTargets.Render(new[] { proposal.Plans[0] }, AdvisorText.Load("en"), id => "Unit " + id);
             var rows = frame.Descendants().Where(e => e.Name.LocalName == "WrapPanel").ToArray();
             Require(rows.Length == 2 && rows.All(row => row.Elements().Count(e => e.Name.LocalName == "Border") == 1),
@@ -81,6 +82,7 @@ internal static partial class ReservationCompositionTests
                 "A later waypoint stamped captured defaults, changed another setting or cleared an append plan");
         });
         RunPresets(check);
+        RunArrivalRules(check);
         check("A follower can enter independent movement, drop and queue a return without changing control during review", () =>
         {
             var game = new Game { Following = true }; var service = Service(game, "follower");
@@ -88,9 +90,11 @@ internal static partial class ReservationCompositionTests
             var proposal = service.FinishProposal("follower", true)!;
             foreach (var language in new[] { "en", "ja" })
             {
-                var independentNote = new AdvisorOperationText(new MovementExtension().GetDefinition().Localizations).For(language)["proposal_independent"];
-                Require(game.Following && service.DescribeProposal(proposal, language).Contains(independentNote, StringComparison.Ordinal) && game.Log.Count == 0,
-                    "Review omitted the control change or switched formation control before approval");
+                var text = new AdvisorOperationText(new MovementExtension().GetDefinition().Localizations).For(language);
+                var review = OperationSubmissionFixture.ReviewText(service.DescribeProposal(proposal, language));
+                Require(game.Following && review.Contains("• " + text.Format("proposal_independent", "Hobby 1"), StringComparison.Ordinal) &&
+                    review.Split('\n').Count(line => line == AdvisorText.Load(language)["operation.notes_heading"]) == 1 && game.Log.Count == 0,
+                    "Review omitted or repeated the control-change note, or switched formation control before approval");
             }
             service.Approve(proposal);
             Require(!game.Following && game.Log.SequenceEqual(new[] { "clear:42", "independent:42", "move:42:1", "drop:42:2", "return:42" }) && game.Returns == 1,

@@ -76,7 +76,7 @@ internal static class Program
                 var orders = new[] { Order(26.1), Order(26.2) };
                 foreach (var language in new[] { "en", "ja" })
                 {
-                    var description = actions.DescribeProposal(orders, language);
+                    var description = actions.DescribeProposal(orders, language).Description;
                     Require(description.Contains("Hobby") && description.IndexOf("26.10000", StringComparison.Ordinal) <
                         description.IndexOf("26.20000", StringComparison.Ordinal), "Review lost its target or order");
                 }

@@ -65,7 +65,7 @@ internal static partial class ReservationCompositionTests
             service.SubmitPlans("mixed-phases", request); var proposal = service.FinishProposal("mixed-phases", true)!;
             foreach (var language in new[] { "en", "ja" })
             {
-                var text = AdvisorText.Load(language); var description = service.DescribeProposal(proposal, language);
+                var text = AdvisorText.Load(language); var description = OperationSubmissionFixture.ReviewText(service.DescribeProposal(proposal, language));
                 Require(description.IndexOf(text["operation.reservation_heading"], StringComparison.Ordinal) <
                     description.IndexOf(text["operation.immediate_heading"], StringComparison.Ordinal), "Approval descriptions lost their phase order");
                 _ = service.PreviewProposal(proposal, language);
@@ -131,7 +131,7 @@ internal static partial class ReservationCompositionTests
                 new[] { PhaseOrder("custom.instant", 42, 1), PhaseOrder("custom.instant", 42, 2) },
                 new[] { PhaseOrder("custom.reserve", 42, 3), PhaseOrder("custom.reserve", 42, 4) })));
             var proposal = service.FinishProposal("review", true)!;
-            var description = service.DescribeProposal(proposal, "en"); var preview = service.PreviewProposal(proposal, "en");
+            var description = OperationSubmissionFixture.ReviewText(service.DescribeProposal(proposal, "en")); var preview = service.PreviewProposal(proposal, "en");
             Require(description.Contains("custom.instant:2", StringComparison.Ordinal) && description.Contains("custom.reserve:2", StringComparison.Ordinal) &&
                 preview.Drawings.Count == 2 && preview.Drawings[0].Coordinates.Select(p => p.Latitude).SequenceEqual(new[] { 3d, 4d }) &&
                 preview.Drawings[1].Coordinates.Select(p => p.Latitude).SequenceEqual(new[] { 1d, 2d }) && log.Count == 0,
@@ -185,7 +185,7 @@ internal static partial class ReservationCompositionTests
         public JArray Candidates() => new();
         public void Validate(IReadOnlyList<AdvisorOperationOrder> orders)
         { if (ValidationFail) throw new AdvisorOperationException(409, "target_unavailable"); }
-        public string DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => Id + ":" + orders.Count;
+        public SeaPowerAIAdvisor.Api.OperationReview DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => new(Id + ":" + orders.Count);
         public AdvisorMapPreview Preview(IReadOnlyList<AdvisorOperationOrder> orders, string language) => orders.Count < 2
             ? AdvisorMapPreview.Empty : new AdvisorMapPreview(new[] {
                 AdvisorMapDrawing.Line(orders.Select(o => new AdvisorMapCoordinate((int)o.Arguments["index"]!, 127))) });

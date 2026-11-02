@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 
 namespace SeaPowerAIAdvisor.Api;
 
@@ -59,6 +60,20 @@ public sealed class OperationOrder
     public OperationOrder(string target, string argumentsJson) { Target = target; ArgumentsJson = argumentsJson; }
 }
 
+// Commands provide localized content and scoped notes; the host owns their placement.
+public sealed class OperationReview
+{
+    public string Description { get; }
+    public IReadOnlyList<string> Notes { get; }
+    public OperationReview(string description, IEnumerable<string>? notes = null)
+    {
+        Description = description ?? throw new ArgumentNullException(nameof(description));
+        var items = notes?.ToArray() ?? Array.Empty<string>();
+        if (items.Any(string.IsNullOrWhiteSpace)) throw new ArgumentException("Approval notes must contain text.", nameof(notes));
+        Notes = Array.AsReadOnly(items);
+    }
+}
+
 public interface IAdvisorOperationHandler : IDisposable
 {
     string GetCandidates();
@@ -68,7 +83,7 @@ public interface IAdvisorOperationHandler : IDisposable
 public interface IAdvisorOperationActions
 {
     void Validate(IReadOnlyList<OperationOrder> orders);
-    string DescribeProposal(IReadOnlyList<OperationOrder> orders, string language);
+    OperationReview DescribeProposal(IReadOnlyList<OperationOrder> orders, string language);
     string Execute(OperationOrder order);
 }
 

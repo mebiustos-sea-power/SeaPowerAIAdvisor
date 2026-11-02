@@ -82,6 +82,28 @@ internal static partial class BattleTests
                 fresh["loop"]!["waypoints"]![0]!["relative_to_unit_id"]!.Type == JTokenType.Null,
                 "A loop exposed a hidden anchor or its stored geometry");
         });
+        check("Movement snapshots preserve arrival ROE on absolute, relative and saved loop points without inventing omitted changes", () =>
+        {
+            var f = MovementFixture(out _, out _);
+            var tasks = ((MovementRoot)f.Own._userRoot!).TaskViewModels;
+            var first = (GoToWaypointTask)tasks[0].Task!;
+            var last = (GoToWaypointTask)tasks[1].Task!;
+            first._setWeaponStatus = (true, "Tight");
+            last._setWeaponStatus = (false, "Hold");
+            last._waypointsData.Add(new SavedWaypoint { _setWeaponStatus = (true, "Hold") });
+            last._waypointsData.Add(new SavedWaypoint { _setWeaponStatus = (false, "Free") });
+            tasks.Insert(1, new MovementView { Task = new GoToRelativePoint
+                { target = new Parameter<object?>(f.Own), _setWeaponStatus = (true, "Free") } });
+            var route = BattleMovementReader.Capture(new[] { ((object)f.Own, "own_unit_1") }).Routes[0]!;
+            first._setWeaponStatus = (true, "Hold");
+            last._waypointsData[0]._setWeaponStatus = (true, "Free");
+            Require((string?)route["waypoints"]![0]!["rules_of_engagement_on_arrival"] == "tight" &&
+                (string?)route["waypoints"]![1]!["rules_of_engagement_on_arrival"] == "free" &&
+                route["waypoints"]![2]!["rules_of_engagement_on_arrival"] == null &&
+                (string?)route["loop"]!["waypoints"]![0]!["rules_of_engagement_on_arrival"] == "hold" &&
+                route["loop"]!["waypoints"]![1]!["rules_of_engagement_on_arrival"] == null,
+                "Arrival policies were lost, read from live tasks after capture, or inferred from disabled change flags");
+        });
         check("Movement defaults to enabled for missing selections, saved choices persist and excluded units cannot leak routes", () =>
         {
             var kind = InformationKind.BattleMovementPlans;
@@ -204,6 +226,7 @@ internal static partial class BattleTests
         public int _setTelegraph { get; set; } = -100;
         public string _heightState { get; set; } = "NoChange";
         public bool _returnToFormation { get; set; }
+        public (bool, string) _setWeaponStatus { get; set; } = (false, "Free");
     }
     private sealed class GoToWaypointTask
     {
@@ -216,6 +239,7 @@ internal static partial class BattleTests
         public Parameter<object> _speedState { get; set; } = new(SavedSpeed.Ahead_Standard);
         public Parameter<string> _heightState { get; set; } = new("NoChange");
         public bool _returnToFormation { get; set; }
+        public (bool, string) _setWeaponStatus { get; set; } = (false, "Free");
         public Parameter<bool> _setCourse { get; set; } = new(false);
         public Parameter<bool> _setTurn { get; set; } = new(false);
         public Parameter<double> _course { get; set; } = new(0);
@@ -233,6 +257,7 @@ internal static partial class BattleTests
         public Parameter<object> _speedState { get; set; } = new(SavedSpeed.Ahead_Standard);
         public Parameter<bool> setHeight { get; set; } = new(false);
         public bool _returnToFormation { get; set; }
+        public (bool, string) _setWeaponStatus { get; set; } = (false, "Free");
         public Parameter<object?> target { get; set; } = new(null);
         public Parameter<Geo?> targetPosition { get; set; } = new(null);
         public object? _patrolZone => null;

@@ -20,12 +20,12 @@ public sealed class CommandHandler : IAdvisorOperationHandler, IAdvisorOperation
 {
     public Func<string> Candidates { get; set; } = () => "[{\"target_ref\":\"fixture:target\",\"display_name\":\"Target\"}]";
     public Action<IReadOnlyList<OperationOrder>> Check { get; set; } = _ => { };
-    public Func<IReadOnlyList<OperationOrder>, string, string> Describe { get; set; } = (_, _) => "Fixture proposal";
+    public Func<IReadOnlyList<OperationOrder>, string, OperationReview> Describe { get; set; } = (_, _) => new OperationReview("Fixture proposal");
     public Func<OperationOrder, string> Run { get; set; } = _ => "{}";
     public Action Close { get; set; } = () => { };
     public string GetCandidates() => Candidates();
     public void Validate(IReadOnlyList<OperationOrder> orders) => Check(orders);
-    public string DescribeProposal(IReadOnlyList<OperationOrder> orders, string language) => Describe(orders, language);
+    public OperationReview DescribeProposal(IReadOnlyList<OperationOrder> orders, string language) => Describe(orders, language);
     public string Execute(OperationOrder order) => Run(order);
     public void Dispose() => Close();
 }

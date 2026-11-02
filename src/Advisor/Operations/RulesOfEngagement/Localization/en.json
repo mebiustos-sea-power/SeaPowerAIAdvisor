@@ -6,5 +6,5 @@
   "mode_tight": "Weapons Tight",
   "mode_hold": "Weapons Hold",
   "proposal_summary": "{0}: {1} → {2}",
-  "execution_note": "Existing attack orders are not cancelled."
+  "execution_note": "{0} (ROE change): changing ROE alone does not cancel existing attack orders."
 }

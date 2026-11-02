@@ -98,10 +98,14 @@ internal sealed partial class BattleOperationSupport : IAdvisorReservationSequen
         if (waypoint.Depth != null) heightState = BattleMovementPresets.DepthState(unit, waypoint.Depth);
         // Resolve every requested setting before creating or appending a task.
         var speedState = waypoint.Speed == null ? (ObjectSpeed.SpeedSettings?)null : BattleMovementPresets.SpeedState(unit, waypoint.Speed);
+        var engagement = waypoint.RulesOfEngagementOnArrival is RulesOfEngagement mode
+            ? NativeRulesOfEngagement(mode) : (ObjectBase.WeaponStatus?)null;
         var task = NodeCanvas.Framework.Task.Create<GoToWaypointTask>(unit._userRoot.graph);
         task._baseObject = unit; task._waypointGeoPos = position; task.wpName = "wp";
         task._heightState = heightState; task._isReachable = true; task._returnToFormation = returnToFormation;
         if (speedState.HasValue) { task._setSpeed = true; task._speedState = speedState.Value; }
+        // Native arrival processing applies this policy, including its formation rules; registration does not change ROE.
+        if (engagement.HasValue) task._setWeaponStatus = (true, engagement.Value);
         // Append explicitly: the standard factory inserts after the UI-selected waypoint instead.
         unit._userRoot.AddTask(task);
         if (!unit._userRoot.TaskViewModels.Any(v => ReferenceEquals(v?.Task, task)))

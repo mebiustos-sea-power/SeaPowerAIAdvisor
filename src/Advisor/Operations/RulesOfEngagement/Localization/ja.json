@@ -6,5 +6,5 @@
   "mode_tight": "自衛のみ（Weapons Tight）",
   "mode_hold": "武器使用禁止（Weapons Hold）",
   "proposal_summary": "{0}: {1} → {2}",
-  "execution_note": "既存の攻撃指示は中止しません。"
+  "execution_note": "{0}（交戦規定変更）: この操作だけでは既存の攻撃指示を中止しません。"
 }

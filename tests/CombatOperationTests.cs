@@ -30,7 +30,7 @@ internal static partial class CombatOperationTests
             var p = s.FinishProposal("test", true)!;
             foreach (var lang in new[] { "en", "ja" })
             {
-                var text = s.DescribeProposal(p, lang);
+                var text = OperationSubmissionFixture.ReviewText(s.DescribeProposal(p, lang));
                 Require(text.Contains("Unit 42", StringComparison.Ordinal) && text.Contains("Contact 7023", StringComparison.Ordinal) && game.Log.Count == 0,
                     "Review omitted the actors/targets or executed work");
             }
@@ -118,8 +118,20 @@ internal static partial class CombatOperationTests
             OperationSubmissionFixture.Submit(s, "test", CancelAttack(42), CancelReservations(43), CancelReservations(42));
             var p = s.FinishProposal("test", true)!;
             foreach (var lang in new[] { "en", "ja" })
-                Require(s.DescribeProposal(p, lang).Contains("Unit 43", StringComparison.Ordinal) && game.Log.Count == 0,
+            {
+                var review = OperationSubmissionFixture.ReviewText(s.DescribeProposal(p, lang));
+                Require(review.Contains("Unit 43", StringComparison.Ordinal) && game.Log.Count == 0,
                     "Review omitted an actor or cancelled before approval");
+                var text = new AdvisorOperationText(new CancelAttackExtension().GetDefinition().Localizations).For(lang);
+                var reservations = new AdvisorOperationText(new CancelReservationsExtension().GetDefinition().Localizations).For(lang);
+                var heading = AdvisorText.Load(lang)["operation.notes_heading"];
+                Require(review.Split('\n').Count(line => line == heading) == 1 &&
+                    review.Split('\n').Count(line => line.StartsWith("• ", StringComparison.Ordinal)) == 2 &&
+                    review.Contains("• " + text.Format("execution_note", "Unit 42"), StringComparison.Ordinal) &&
+                    review.Contains("• " + reservations.Format("execution_note", "Unit 43, Unit 42"), StringComparison.Ordinal) &&
+                    review.IndexOf(heading, StringComparison.Ordinal) > review.LastIndexOf(reservations.Format("proposal_summary", "Unit 42"), StringComparison.Ordinal),
+                    "Mixed cancellation review repeated notes, lost their actors or placed them before action details");
+            }
             s.Approve(p); s.Approve(p);
             Require(p.State == AdvisorProposalState.Registered && game.Log.SequenceEqual(new[] {
                 "cancel-attack:unit:42", "cancel-reservations:unit:43", "cancel-reservations:unit:42" }),

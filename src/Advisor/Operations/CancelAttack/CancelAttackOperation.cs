@@ -31,8 +31,12 @@ internal sealed class CancelAttackOperation : CombatOperationBase
         return unit;
     }
     public override void Validate(IReadOnlyList<OperationOrder> orders) { foreach (var order in orders) Read(order); }
-    public override string DescribeProposal(IReadOnlyList<OperationOrder> orders, string language) =>
-        string.Join("\n\n", orders.Select(order => Context.Text.Format(language, "proposal_summary", Read(order).Name))) + "\n\n" + Context.Text.Get(language, "execution_note");
+    public override OperationReview DescribeProposal(IReadOnlyList<OperationOrder> orders, string language)
+    {
+        var units = orders.Select(Read).ToArray();
+        return new OperationReview(string.Join("\n\n", units.Select(unit => Context.Text.Format(language, "proposal_summary", unit.Name))),
+            new[] { Context.Text.Format(language, "execution_note", string.Join(", ", units.Select(unit => unit.Name))) });
+    }
     public override string Execute(OperationOrder order)
     {
         Read(order); Combat.CancelAttack(order.Target);

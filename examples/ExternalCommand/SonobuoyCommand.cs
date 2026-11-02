@@ -123,14 +123,14 @@ internal sealed class SonobuoyCommand : IAdvisorOperationHandler, IAdvisorOperat
         foreach (var group in drops.GroupBy(d => (d.Unit.Target, d.Ammo.Id)))
             if (group.First().Ammo.Available < group.Count()) throw new OperationException(409, "no_available_sonobuoy");
     }
-    public string DescribeProposal(IReadOnlyList<OperationOrder> orders, string language)
+    public OperationReview DescribeProposal(IReadOnlyList<OperationOrder> orders, string language)
     {
         var drops = orders.Select(Read).ToArray();
-        return string.Join("\n\n", drops.GroupBy(d => d.Unit.Target).Select(group =>
+        return new OperationReview(string.Join("\n\n", drops.GroupBy(d => d.Unit.Target).Select(group =>
             context.Text.Format(language, "proposal", group.First().Unit.Name, group.Count()) + "\n" +
             string.Join("\n", group.Select((drop, i) => (i + 1) + ". " + drop.Ammo.Name + " - " +
                 drop.Position.Latitude.ToString("F5", System.Globalization.CultureInfo.InvariantCulture) + ", " +
-                drop.Position.Longitude.ToString("F5", System.Globalization.CultureInfo.InvariantCulture)))));
+                drop.Position.Longitude.ToString("F5", System.Globalization.CultureInfo.InvariantCulture))))));
     }
     public AdvisorMapPreview Preview(IReadOnlyList<OperationOrder> orders, string language)
     {

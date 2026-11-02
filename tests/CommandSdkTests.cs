@@ -93,13 +93,58 @@ internal static class CommandSdkTests
             service.BeginProposal("test"); var first = Request(service, 0); var second = Request(service, 1);
             OperationSubmissionFixture.Submit(service, "test", first, second);
             var proposal = service.FinishProposal("test", true)!;
-            Require(executed.Count == 0 && service.DescribeProposal(proposal, "en").EndsWith("Fixture proposal", StringComparison.Ordinal) && service.PreviewProposal(proposal, "en").Drawings.Count == 0,
+            Require(executed.Count == 0 && OperationSubmissionFixture.ReviewText(service.DescribeProposal(proposal, "en")).EndsWith("Fixture proposal", StringComparison.Ordinal) && service.PreviewProposal(proposal, "en").Drawings.Count == 0,
                 "A command ran before approval or required an optional preview");
             service.Approve(proposal); service.Approve(proposal); OperationSubmissionFixture.Submit(service, "test", first, second);
             Require(executed.SequenceEqual(new[] { 0, 1 }) && validations.SequenceEqual(new[] { 2, 2, 2, 2 }), "Approval changed order, skipped combined validation or executed twice");
             service.BeginProposal("later"); OperationSubmissionFixture.Submit(service, "later", Request(service, 2)); var later = service.FinishProposal("later", true)!;
             ready = false; service.Approve(later);
             Require(later.State == AdvisorProposalState.Pending && later.ErrorCode == "target_unavailable" && executed.Count == 2, "Approval ignored changed live conditions"); service.Retire();
+        });
+        check("External commands contribute one trailing approval-notes section across phases without executing or interpreting repeated wording", () =>
+        {
+            var catalog = new AdvisorOperationCatalog(); var executed = new List<string>();
+            foreach (var mode in new[] { Api.OperationExecutionMode.Reservation, Api.OperationExecutionMode.Immediate })
+            {
+                var name = mode == Api.OperationExecutionMode.Reservation ? "route" : "action";
+                catalog.Register(new Client.CommandExtension
+                {
+                    Definition = new Api.OperationDefinition("fixture." + name, mode, name, "{\"type\":\"object\"}",
+                        new Dictionary<string, string> { ["en"] = Text }),
+                    Open = _ => new Client.CommandHandler
+                    {
+                        Describe = (_, _) => new Api.OperationReview(name + " details\n**literal** <raw> & _value_", new[] { "Shared wording", name + " note" }),
+                        Run = _ => { executed.Add(name); return "{}"; }
+                    }
+                });
+            }
+            var service = Service(catalog); service.BeginProposal("notes");
+            JObject Order(string id) => new() { ["operation_id"] = "fixture." + id, ["target_ref"] = "fixture:target", ["arguments"] = new JObject() };
+            service.SubmitPlans("notes", new JObject { ["request_id"] = "notes", ["plans"] = new JArray(new JObject
+            {
+                ["plan_id"] = "combined", ["title"] = "Combined", ["summary"] = "Purpose", ["reservation_updates"] = new JArray(),
+                ["reservation_operations"] = new JArray(Order("route")), ["immediate_operations"] = new JArray(Order("action"))
+            }) });
+            var proposal = service.FinishProposal("notes", true)!;
+            foreach (var language in new[] { "en", "ja" })
+            {
+                var sections = service.DescribeProposal(proposal, language);
+                var review = OperationSubmissionFixture.ReviewText(sections); var text = AdvisorText.Load(language);
+                var heading = text["operation.notes_heading"];
+                Require(sections.Select(section => section.Heading).SequenceEqual(new[] {
+                        text["operation.reservation_heading"], text["operation.immediate_heading"], heading }) &&
+                    sections[0].Body == "route details\n**literal** <raw> & _value_" &&
+                    sections[1].Body == "action details\n**literal** <raw> & _value_" &&
+                    review.Split('\n').Count(line => line == heading) == 1 &&
+                    review.IndexOf("route details", StringComparison.Ordinal) < review.IndexOf("action details", StringComparison.Ordinal) &&
+                    review.IndexOf(heading, StringComparison.Ordinal) > review.IndexOf("action details", StringComparison.Ordinal) &&
+                    review.Split('\n').Count(line => line == "• Shared wording") == 2 &&
+                    review.EndsWith("• action note", StringComparison.Ordinal) && executed.Count == 0,
+                    "Review scattered notes, reordered phases, inferred duplicates or executed external work before approval");
+            }
+            service.Approve(proposal);
+            Require(executed.SequenceEqual(new[] { "route", "action" }), "Approval text changed external execution order");
+            service.Retire();
         });
         check("Retiring SDK commands disposes sessions and only their map leases, and revokes retained game services", () =>
         {

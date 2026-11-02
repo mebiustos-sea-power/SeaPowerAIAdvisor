@@ -7,6 +7,9 @@ using SeaPowerAIAdvisor;
 // Builds the public batch from the tests' internal order fixtures. No incremental staging is performed.
 internal static class OperationSubmissionFixture
 {
+    // Content assertions use plain text; production retains section boundaries for styling.
+    internal static string ReviewText(IEnumerable<(string Heading, string Body)> sections) =>
+        string.Join("\n\n", sections.Select(section => section.Heading + "\n" + section.Body));
     internal static JObject Batch(params JObject[] orders)
     {
         var updates = new JArray(); var targets = new HashSet<string>(StringComparer.Ordinal);

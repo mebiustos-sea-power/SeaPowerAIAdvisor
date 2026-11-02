@@ -91,7 +91,14 @@ internal static class BattleMovementReader
         var height = relative ? (bool)RequiredParameter(task, "setHeight") ? "relative_to_parent" : "unchanged"
             : Code(RequiredParameter(task, "_heightState"));
         Settings(row, unit, position, speed, height);
+        ArrivalRules(row, task);
         row["return_to_formation"] = (bool)Required(task, "_returnToFormation");
+    }
+
+    private static void ArrivalRules(JObject row, object source)
+    {
+        var setting = Required(source, "_setWeaponStatus");
+        if ((bool)Required(setting, "Item1")) row["rules_of_engagement_on_arrival"] = Code(Required(setting, "Item2"));
     }
 
     private static void Settings(JObject row, object unit, object? position, string? speed, string height)
@@ -166,6 +173,7 @@ internal static class BattleMovementReader
             }
             var height = Code(Required(data, "_heightState"));
             Settings(row, unit, position, speed, relative && height != "nochange" ? "relative_to_parent" : height);
+            ArrivalRules(row, data);
             row["return_to_formation"] = (bool)Required(data, "_returnToFormation");
             points.Add(row);
         }

@@ -149,7 +149,7 @@ internal static class OperationGatewayTests
         public SeaPowerAIAdvisor.Api.OperationExecutionMode ExecutionMode => SeaPowerAIAdvisor.Api.OperationExecutionMode.Immediate;
         public bool RequiresApproval => false;
         public void Validate(IReadOnlyList<AdvisorOperationOrder> orders) { }
-        public string DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => "Custom operation";
+        public SeaPowerAIAdvisor.Api.OperationReview DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => new("Custom operation");
         public string Id { get; }
         public AdvisorOperationText Documentation => OperationDocumentationTests.Example;
         public string Description => "Custom extension action";

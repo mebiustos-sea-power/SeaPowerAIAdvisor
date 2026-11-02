@@ -99,7 +99,7 @@ internal static class OperationPreviewTests
         public JObject Definition() => new() { ["id"] = Id };
         public JArray Candidates() => new();
         public void Validate(IReadOnlyList<AdvisorOperationOrder> orders) { }
-        public string DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => Description;
+        public SeaPowerAIAdvisor.Api.OperationReview DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => new(Description);
         public JObject Execute(string target, JObject arguments) { Executions++; return new JObject(); }
     }
     private sealed class VisibleOperation : TextOperation, IAdvisorOperationPreview

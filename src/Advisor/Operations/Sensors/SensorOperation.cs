@@ -60,7 +60,7 @@ internal abstract class SensorOperationBase : IAdvisorOperationHandler, IAdvisor
     public void Dispose() { }
     public abstract string GetCandidates();
     public abstract void Validate(IReadOnlyList<OperationOrder> orders);
-    public abstract string DescribeProposal(IReadOnlyList<OperationOrder> orders, string language);
+    public abstract OperationReview DescribeProposal(IReadOnlyList<OperationOrder> orders, string language);
     public abstract string Execute(OperationOrder order);
 }
 
@@ -112,7 +112,7 @@ internal sealed class SensorOperation : SensorOperationBase
     }
     public override void Validate(IReadOnlyList<OperationOrder> orders)
     { foreach (var order in orders) Read(order); }
-    public override string DescribeProposal(IReadOnlyList<OperationOrder> orders, string language) => string.Join("\n\n", orders.Select(order =>
+    public override OperationReview DescribeProposal(IReadOnlyList<OperationOrder> orders, string language) => new OperationReview(string.Join("\n\n", orders.Select(order =>
     {
         var data = Read(order);
         return Context.Text.Format(language, "proposal_summary", data.Unit.Unit.Name) + "\n" + string.Join("\n", data.Changes.Select(change =>
@@ -124,7 +124,7 @@ internal sealed class SensorOperation : SensorOperationBase
                 ": " + Context.Text.Get(language, "value_" + change.Value) +
                 (preparation == null ? "" : "\n  " + Context.Text.Get(language, "preparation_" + preparation));
         }));
-    }));
+    })));
     public override string Execute(OperationOrder order)
     {
         var data = Read(order); Sensors.SetSensorControls(order.Target, data.Changes);

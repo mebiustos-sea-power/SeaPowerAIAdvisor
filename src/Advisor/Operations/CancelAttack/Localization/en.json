@@ -3,5 +3,5 @@
   "summary": "Cancel current attacks, guidance and jamming for the specified unit while retaining reservations.",
   "requirements": "Requires own-unit information and a unit accepting player orders. Does not propagate to formation members.",
   "proposal_summary": "{0}: cancel attack",
-  "execution_note": "Also stops offensive jamming. Guidance for launched weapons may be affected.\nReservations and rules of engagement remain unchanged."
+  "execution_note": "{0} (cancel attack): also stops offensive jamming and may affect guidance for launched weapons."
 }

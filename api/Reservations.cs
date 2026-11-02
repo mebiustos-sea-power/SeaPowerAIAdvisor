@@ -21,7 +21,7 @@ public interface IAdvisorLoopableReservationOperation
 public interface IAdvisorReservationOperation
 {
     void ValidateReservations(IReadOnlyList<ReservationOrder> orders);
-    string DescribeReservation(ReservationOrder order, string language);
+    OperationReview DescribeReservation(ReservationOrder order, string language);
     ReservationPreview PreviewReservation(ReservationOrder order, string language);
     string ExecuteReservation(ReservationOrder order);
 }
@@ -115,9 +115,15 @@ public sealed class MovementWaypoint
     public string? Speed { get; }
     public string? Altitude { get; }
     public string? Depth { get; }
-    public MovementWaypoint(AdvisorMapCoordinate position, string? speed = null, string? altitude = null, string? depth = null)
+    // Applied on arrival using the game's formation-control rules, not when travel to this point starts.
+    public RulesOfEngagement? RulesOfEngagementOnArrival { get; }
+    public MovementWaypoint(AdvisorMapCoordinate position, string? speed = null, string? altitude = null, string? depth = null,
+        RulesOfEngagement? rulesOfEngagementOnArrival = null)
     {
         if (altitude != null && depth != null) throw new ArgumentException("Choose altitude or depth.");
+        if (rulesOfEngagementOnArrival.HasValue && !Enum.IsDefined(typeof(RulesOfEngagement), rulesOfEngagementOnArrival.Value))
+            throw new ArgumentOutOfRangeException(nameof(rulesOfEngagementOnArrival));
         Position = position; Speed = speed; Altitude = altitude; Depth = depth;
+        RulesOfEngagementOnArrival = rulesOfEngagementOnArrival;
     }
 }

@@ -17,7 +17,7 @@ internal interface IAdvisorReservationCommand
     ReservationQueueState InspectQueue(string target, ReservationPlacement placement);
     bool BeginQueue(string target, ReservationPlacement placement);
     void ValidateReservations(IReadOnlyList<ReservationOrder> orders);
-    string DescribeReservation(ReservationOrder order, string language);
+    OperationReview DescribeReservation(ReservationOrder order, string language);
     ReservationPreview PreviewReservation(ReservationOrder order, string language);
     JObject ExecuteReservation(ReservationOrder order);
 }
@@ -121,30 +121,47 @@ internal sealed partial class AdvisorOperations
         }
         return result;
     }
-    private string DescribePlan(AdvisorOperationPlan plan, string language)
+    private IReadOnlyList<(string Heading, string Body)> DescribePlan(AdvisorOperationPlan plan, string language)
     {
-        var prepared = ValidatePlan(plan); var text = AdvisorText.Load(language); var sections = new List<string>();
+        var prepared = ValidatePlan(plan); var text = AdvisorText.Load(language);
+        var sections = new List<(string Heading, string Body)>(); var notes = new List<string>();
         if (plan.ReservationOrders.Count > 0)
         {
-            var descriptions = prepared.Steps.Count == 0
-                ? plan.ReservationOrders.GroupBy(o => o.OperationId).Select(g => Operation(g.Key).DescribeProposal(g.ToArray(), language))
-                : plan.ReservationOrders.Select(order =>
+            var descriptions = new List<string>();
+            if (prepared.Steps.Count == 0)
+            {
+                foreach (var group in plan.ReservationOrders.GroupBy(o => o.OperationId))
                 {
-                    var description = ReservationCommand(order) is IAdvisorReservationCommand command
-                        ? command.DescribeReservation(prepared.Steps[order.Id], language)
-                        : Operation(order.OperationId).DescribeProposal(new[] { order }, language);
-                    if (prepared.Loops.TryGetValue(order.Target, out var loop) && loop.FirstOrder == order.Id)
-                        description += "\n" + text.Format("operation.loop_summary",
-                            loop.Points[0].Latitude.ToString("F5", System.Globalization.CultureInfo.InvariantCulture),
-                            loop.Points[0].Longitude.ToString("F5", System.Globalization.CultureInfo.InvariantCulture), loop.Points.Count);
-                    return description;
-                });
-            sections.Add(text["operation.reservation_heading"] + "\n" + string.Join("\n\n", descriptions));
+                    var review = Operation(group.Key).DescribeProposal(group.ToArray(), language);
+                    descriptions.Add(review.Description); notes.AddRange(review.Notes);
+                }
+            }
+            else foreach (var order in plan.ReservationOrders)
+            {
+                var review = ReservationCommand(order) is IAdvisorReservationCommand command
+                    ? command.DescribeReservation(prepared.Steps[order.Id], language)
+                    : Operation(order.OperationId).DescribeProposal(new[] { order }, language);
+                var description = review.Description;
+                if (prepared.Loops.TryGetValue(order.Target, out var loop) && loop.FirstOrder == order.Id)
+                    description += "\n" + text.Format("operation.loop_summary",
+                        loop.Points[0].Latitude.ToString("F5", System.Globalization.CultureInfo.InvariantCulture),
+                        loop.Points[0].Longitude.ToString("F5", System.Globalization.CultureInfo.InvariantCulture), loop.Points.Count);
+                descriptions.Add(description); notes.AddRange(review.Notes);
+            }
+            sections.Add((text["operation.reservation_heading"], string.Join("\n\n", descriptions)));
         }
         if (plan.ImmediateOrders.Count > 0)
-            sections.Add(text["operation.immediate_heading"] + "\n" + string.Join("\n\n", plan.ImmediateOrders.GroupBy(o => o.OperationId)
-                .Select(g => Operation(g.Key).DescribeProposal(g.ToArray(), language))));
-        return string.Join("\n\n", sections);
+        {
+            var descriptions = new List<string>();
+            foreach (var group in plan.ImmediateOrders.GroupBy(o => o.OperationId))
+            {
+                var review = Operation(group.Key).DescribeProposal(group.ToArray(), language);
+                descriptions.Add(review.Description); notes.AddRange(review.Notes);
+            }
+            sections.Add((text["operation.immediate_heading"], string.Join("\n\n", descriptions)));
+        }
+        if (notes.Count > 0) sections.Add((text["operation.notes_heading"], string.Join("\n", notes.Select(note => "• " + note))));
+        return sections;
     }
     private AdvisorMapPreview PreviewPlan(AdvisorOperationPlan plan, string language)
     {

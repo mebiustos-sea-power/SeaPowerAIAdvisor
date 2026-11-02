@@ -1,10 +1,10 @@
 {
-  "proposal_independent": "Switches to independent action.",
+  "proposal_independent": "{0}: switches to independent action.",
   "name": "Movement reservation",
-  "summary": "Schedule an ordered route, optionally setting speed, altitude or depth for each leg. Repeating routes can start after a one-time approach.",
+  "summary": "Schedule an ordered route with per-leg speed, altitude or depth, and optional rules of engagement on arrival. Repeating routes can start after a one-time approach.",
   "requirements": "Requires Data for AI access to own units and movement plans. The target must be controllable and mobile; aircraft must be airborne. Settings must be among the target's available options. The first reservation update may switch a follower to independent action.",
   "proposal_summary": "{0}: schedule {1} movement waypoints.",
-  "proposal_followers": "Formation followers will move with the leader.",
+  "proposal_followers": "{0}: following units will move with the leader.",
   "setting_speed": "Speed: {0}",
   "setting_altitude": "Altitude: {0} ft",
   "setting_depth": "Depth: {0}",
@@ -22,5 +22,10 @@
   "depth_above_layer": "Above layer",
   "depth_below_layer": "Below layer",
   "depth_deep": "Deep",
-  "depth_very_deep": "Very deep"
+  "depth_very_deep": "Very deep",
+  "proposal_arrival_rules_scope": "{0}: arrival ROE may also apply to other formation members (including those acting independently), depending on formation-control settings.",
+  "setting_rules_of_engagement_on_arrival": "ROE on arrival: {0}",
+  "mode_free": "Weapons Free",
+  "mode_tight": "Weapons Tight",
+  "mode_hold": "Weapons Hold"
 }

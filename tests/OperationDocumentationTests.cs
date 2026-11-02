@@ -98,7 +98,7 @@ internal static class OperationDocumentationTests
         public JObject Definition() => new();
         public JArray Candidates() => throw new InvalidOperationException();
         public void Validate(IReadOnlyList<AdvisorOperationOrder> orders) => throw new InvalidOperationException();
-        public string DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => throw new InvalidOperationException();
+        public SeaPowerAIAdvisor.Api.OperationReview DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => throw new InvalidOperationException();
         public JObject Execute(string target, JObject arguments) => throw new InvalidOperationException();
     }
 }

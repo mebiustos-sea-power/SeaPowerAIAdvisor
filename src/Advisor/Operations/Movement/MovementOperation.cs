@@ -12,11 +12,11 @@ internal sealed class MovementExtension : IAdvisorOperationExtension, IAdvisorOp
 {
     internal const string OperationId = "seapower.schedule_movement";
     public int ApiVersion => AdvisorApi.ContractVersion;
-    public string Version => "1.0.0";
+    public string Version => "1.1.0";
     public bool SupportsLoop => true;
     public bool EndsReservationSequence => false;
     public string GetInstructions() => AdvisorPrompts.Current.Text("battle.json", "operation_movement");
-    public OperationDefinition GetDefinition() => new(OperationId, OperationExecutionMode.Reservation, "Schedule an ordered movement route.", new JObject
+    public OperationDefinition GetDefinition() => new(OperationId, OperationExecutionMode.Reservation, "Schedule an ordered movement route with optional arrival rules of engagement.", new JObject
     {
         ["type"] = "object", ["additionalProperties"] = false, ["required"] = new JArray("waypoints"),
         ["properties"] = new JObject { ["waypoints"] = new JObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = 40,
@@ -27,7 +27,9 @@ internal sealed class MovementExtension : IAdvisorOperationExtension, IAdvisorOp
                     ["longitude"] = new JObject { ["type"] = "number", ["minimum"] = -180, ["maximum"] = 180 },
                     ["speed"] = new JObject { ["type"] = "string", ["description"] = "An ID from the target's speed_options. Omit to preserve its speed command." },
                     ["altitude"] = new JObject { ["type"] = "string", ["description"] = "An ID from the target's altitude_options. Applies while travelling TO this point; omit to preserve target altitude." },
-                    ["depth"] = new JObject { ["type"] = "string", ["description"] = "An ID from the target's depth_options. Applies while travelling TO this point; do not combine with altitude." }
+                    ["depth"] = new JObject { ["type"] = "string", ["description"] = "An ID from the target's depth_options. Applies while travelling TO this point; do not combine with altitude." },
+                    ["rules_of_engagement_on_arrival"] = new JObject { ["type"] = "string", ["enum"] = new JArray("free", "tight", "hold"),
+                        ["description"] = "Apply on arrival using the game's formation-control rules; may affect other formation members. Omit to leave ROE unchanged. Does not cancel attacks." }
                 } } } }
     }.ToString(Formatting.None), AdvisorText.ReadResources(typeof(MovementExtension).Assembly,
         "SeaPowerAIAdvisor.Commands.Movement.Localization.", "en", "ja"), true, new OperationPlanPolicy(2, 1, 2, OperationPlanSelection.Single));
@@ -55,12 +57,10 @@ internal abstract class MovementOperationBase : IAdvisorOperationHandler, IAdvis
     }
     protected static JObject Position(AdvisorMapCoordinate? position) => position is AdvisorMapCoordinate value
         ? new JObject { ["latitude_deg"] = value.Latitude, ["longitude_deg"] = value.Longitude } : new JObject();
-    protected string FormationDescription(ReservationOrder order, string language) => order.Index == 0 && order.Queue.BecomesIndependent
-        ? "\n" + Context.Text.Get(language, "proposal_independent") : "";
     public void Dispose() { }
     public abstract string GetCandidates();
     public abstract void ValidateReservations(IReadOnlyList<ReservationOrder> orders);
-    public abstract string DescribeReservation(ReservationOrder order, string language);
+    public abstract OperationReview DescribeReservation(ReservationOrder order, string language);
     public abstract ReservationPreview PreviewReservation(ReservationOrder order, string language);
     public abstract string ExecuteReservation(ReservationOrder order);
 }
@@ -86,7 +86,7 @@ internal sealed class MovementOperation : MovementOperationBase, IAdvisorLoopabl
             throw new OperationException(400, "invalid_movement_arguments");
         return points.Select(value =>
         {
-            if (value is not JObject point || point.Properties().Any(p => p.Name is not ("latitude" or "longitude" or "speed" or "altitude" or "depth")))
+            if (value is not JObject point || point.Properties().Any(p => p.Name is not ("latitude" or "longitude" or "speed" or "altitude" or "depth" or "rules_of_engagement_on_arrival")))
                 throw new OperationException(400, "invalid_movement_arguments");
             string? Text(string field) => point[field] == null ? null : point[field]!.Type == JTokenType.String && !string.IsNullOrWhiteSpace((string?)point[field])
                 ? (string)point[field]! : throw new OperationException(400, "invalid_movement_arguments");
@@ -100,7 +100,13 @@ internal sealed class MovementOperation : MovementOperationBase, IAdvisorLoopabl
             var depth = Text("depth"); var speed = Text("speed");
             var altitude = Text("altitude");
             if (altitude != null && depth != null) throw new OperationException(400, "invalid_movement_arguments");
-            return new MovementWaypoint(new AdvisorMapCoordinate(Number("latitude", -90, 90), Number("longitude", -180, 180)), speed, altitude, depth);
+            RulesOfEngagement? engagement = Text("rules_of_engagement_on_arrival") switch
+            {
+                null => null, "free" => RulesOfEngagement.Free, "tight" => RulesOfEngagement.Tight, "hold" => RulesOfEngagement.Hold,
+                _ => throw new OperationException(400, "invalid_movement_arguments")
+            };
+            return new MovementWaypoint(new AdvisorMapCoordinate(Number("latitude", -90, 90), Number("longitude", -180, 180)),
+                speed, altitude, depth, engagement);
         }).ToArray();
     }
     private (MovementUnitInfo Unit, IReadOnlyList<MovementWaypoint> Points) Read(ReservationOrder order)
@@ -116,16 +122,24 @@ internal sealed class MovementOperation : MovementOperationBase, IAdvisorLoopabl
     {
         if (orders.Sum(o => Read(o).Points.Count) > 40) throw new OperationException(400, "too_many_movement_waypoints");
     }
-    public override string DescribeReservation(ReservationOrder order, string language)
+    public override OperationReview DescribeReservation(ReservationOrder order, string language)
     {
         var data = Read(order);
-        return Context.Text.Format(language, "proposal_summary", data.Unit.Unit.Name, data.Points.Count) + FormationDescription(order, language) +
-            (data.Unit.IsFormationLeader ? "\n" + Context.Text.Get(language, "proposal_followers") : "") + "\n\n" +
+        var notes = new List<string>();
+        if (order.Index == 0 && order.Queue.BecomesIndependent)
+            notes.Add(Context.Text.Format(language, "proposal_independent", data.Unit.Unit.Name));
+        if (data.Unit.IsFormationLeader) notes.Add(Context.Text.Format(language, "proposal_followers", data.Unit.Unit.Name));
+        if (data.Points.Any(p => p.RulesOfEngagementOnArrival.HasValue))
+            notes.Add(Context.Text.Format(language, "proposal_arrival_rules_scope", data.Unit.Unit.Name));
+        var description = Context.Text.Format(language, "proposal_summary", data.Unit.Unit.Name, data.Points.Count) + "\n\n" +
             string.Join("\n", data.Points.Select((p, i) => (i + 1).ToString(CultureInfo.InvariantCulture) + ". " +
                 p.Position.Latitude.ToString("F5", CultureInfo.InvariantCulture) + ", " + p.Position.Longitude.ToString("F5", CultureInfo.InvariantCulture) +
                 (p.Speed == null ? "" : " / " + Context.Text.Format(language, "setting_speed", Context.Text.Get(language, "speed_" + p.Speed))) +
                 (p.Altitude == null ? "" : " / " + Context.Text.Format(language, "setting_altitude", data.Unit.Altitudes.Single(a => a.Id == p.Altitude).Value)) +
-                (p.Depth == null ? "" : " / " + Context.Text.Format(language, "setting_depth", Context.Text.Get(language, "depth_" + p.Depth)))));
+                (p.Depth == null ? "" : " / " + Context.Text.Format(language, "setting_depth", Context.Text.Get(language, "depth_" + p.Depth))) +
+                (p.RulesOfEngagementOnArrival is RulesOfEngagement mode ? " / " + Context.Text.Format(language, "setting_rules_of_engagement_on_arrival",
+                    Context.Text.Get(language, "mode_" + mode.ToString().ToLowerInvariant())) : "")));
+        return new OperationReview(description, notes);
     }
     public override ReservationPreview PreviewReservation(ReservationOrder order, string language)
     {

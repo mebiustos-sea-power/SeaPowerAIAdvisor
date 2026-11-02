@@ -41,10 +41,10 @@ internal sealed class FormationReturnOperation : MovementOperationBase
     }
     public override void ValidateReservations(IReadOnlyList<ReservationOrder> orders)
     { foreach (var order in orders) Read(order); }
-    public override string DescribeReservation(ReservationOrder order, string language)
+    public override OperationReview DescribeReservation(ReservationOrder order, string language)
     {
         var unit = Read(order);
-        return Context.Text.Format(language, "proposal_summary", unit.Unit.Name, unit.LeaderName ?? unit.LeaderTarget!);
+        return new OperationReview(Context.Text.Format(language, "proposal_summary", unit.Unit.Name, unit.LeaderName ?? unit.LeaderTarget!));
     }
     public override ReservationPreview PreviewReservation(ReservationOrder order, string language)
     {

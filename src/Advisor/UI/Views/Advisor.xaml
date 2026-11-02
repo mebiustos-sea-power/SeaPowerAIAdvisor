@@ -624,7 +624,7 @@
           </WrapPanel>
         </StackPanel>
         <ScrollViewer x:Name="OperationReviewScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="300" Margin="0,8,0,0">
-          <TextBlock x:Name="OperationReviewText" TextWrapping="Wrap" FontSize="14" />
+          <StackPanel x:Name="OperationReviewContent" />
         </ScrollViewer>
         <TextBlock x:Name="OperationReviewFailure" TextWrapping="Wrap" FontSize="12" Margin="0,8,0,0" Foreground="{DynamicResource AdvisorErrorBrush}" />
         <Border x:Name="OperationReviewTargets" BorderBrush="#55606B" BorderThickness="1" Padding="8" Margin="0,12,0,0" />

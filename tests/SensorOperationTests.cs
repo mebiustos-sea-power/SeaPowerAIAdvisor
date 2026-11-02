@@ -38,7 +38,7 @@ internal static class SensorOperationTests
             var proposal = service.FinishProposal("test", true)!;
             foreach (var language in new[] { "en", "ja" })
             {
-                var description = service.DescribeProposal(proposal, language);
+                var description = OperationSubmissionFixture.ReviewText(service.DescribeProposal(proposal, language));
                 Require(description.Contains("Unit 42", StringComparison.Ordinal) && description.Contains("Radar", StringComparison.Ordinal) &&
                     description.Contains("Unit 43", StringComparison.Ordinal) && game.Log.Count == 0, "Review omitted the actual targets or executed work");
             }

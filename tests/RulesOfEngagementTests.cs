@@ -27,13 +27,14 @@ internal static partial class CombatOperationTests
                 var proposal = service.FinishProposal("test", true)!;
                 foreach (var language in new[] { "en", "ja" })
                 {
-                    var review = service.DescribeProposal(proposal, language);
+                    var review = OperationSubmissionFixture.ReviewText(service.DescribeProposal(proposal, language));
                     Require(review.Contains("Unit 42", StringComparison.Ordinal) && review.Contains("Weapons Free", StringComparison.Ordinal) &&
                         review.Contains("Weapons " + mode, StringComparison.Ordinal) && review.Contains('→') && game.Log.Count == 0,
                         "Review omitted the current/requested mode or changed policy before approval");
-                    var holdNote = new AdvisorOperationText(new RulesOfEngagementExtension().GetDefinition().Localizations).For(language)["execution_note"];
-                    Require(review.Contains(holdNote, StringComparison.Ordinal) == (mode == RulesOfEngagement.Hold),
-                        "Review omitted the Hold consequence or added it to a different requested mode");
+                    var text = new AdvisorOperationText(new RulesOfEngagementExtension().GetDefinition().Localizations).For(language);
+                    Require(review.Contains("• " + text.Format("execution_note", "Unit 42"), StringComparison.Ordinal) == (mode == RulesOfEngagement.Hold) &&
+                        review.Split('\n').Count(line => line == AdvisorText.Load(language)["operation.notes_heading"]) == (mode == RulesOfEngagement.Hold ? 1 : 0),
+                        "Review omitted the Hold consequence, repeated its heading or added notes to a different requested mode");
                 }
                 service.Approve(proposal); service.Approve(proposal);
                 Require(proposal.State == AdvisorProposalState.Registered && game.Engagement["unit:42"] == mode &&

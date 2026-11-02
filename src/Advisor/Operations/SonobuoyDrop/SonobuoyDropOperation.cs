@@ -159,14 +159,15 @@ internal sealed class SonobuoyDropOperation : IAdvisorOperationHandler,
             }
         }
     }
-    public string DescribeReservation(ReservationOrder order, string language)
+    public OperationReview DescribeReservation(ReservationOrder order, string language)
     {
         var plan = Parse(JObject.Parse(order.Order.ArgumentsJson)); var unit = ReservationUnit(order); var text = context.Text;
         var summary = text.Format(language, "proposal_summary", unit.Info.Name, plan.Drops.Count);
-        if (order.Index == 0 && order.Queue.BecomesIndependent) summary += "\n" + text.Get(language, "proposal_independent");
-        return summary + "\n\n" + string.Join("\n", plan.Drops.Select((drop, i) =>
+        var notes = order.Index == 0 && order.Queue.BecomesIndependent
+            ? new[] { text.Format(language, "proposal_independent", unit.Info.Name) } : Array.Empty<string>();
+        return new OperationReview(summary + "\n\n" + string.Join("\n", plan.Drops.Select((drop, i) =>
             (i + 1).ToString(CultureInfo.InvariantCulture) + ". " + (unit.Ammunition.FirstOrDefault(a => a.Id == drop.Ammunition)?.Name ?? drop.Ammunition) +
-            " — " + drop.Position.Latitude.ToString("F5", CultureInfo.InvariantCulture) + ", " + drop.Position.Longitude.ToString("F5", CultureInfo.InvariantCulture)));
+            " — " + drop.Position.Latitude.ToString("F5", CultureInfo.InvariantCulture) + ", " + drop.Position.Longitude.ToString("F5", CultureInfo.InvariantCulture))), notes);
     }
     public ReservationPreview PreviewReservation(ReservationOrder order, string language)
     {

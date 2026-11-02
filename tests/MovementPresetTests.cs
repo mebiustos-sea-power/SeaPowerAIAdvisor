@@ -35,7 +35,7 @@ internal static partial class ReservationCompositionTests
             first["arguments"]!["waypoints"]![0]!["altitude"] = "preset_0";
             second["arguments"]!["waypoints"]![0]!["altitude"] = "preset_0";
             service.SubmitPlans("review-values", Batch(Plan(new[] { Policy(42, "append"), Policy(43, "append") }, first, second)));
-            var review = service.DescribeProposal(service.FinishProposal("review-values", true)!, "en");
+            var review = OperationSubmissionFixture.ReviewText(service.DescribeProposal(service.FinishProposal("review-values", true)!, "en"));
             Require(review.Contains("1000 ft", StringComparison.Ordinal) && review.Contains("20000 ft", StringComparison.Ordinal) &&
                 !review.Contains("preset_0", StringComparison.Ordinal) && game.Log.Count == 0,
                 "Review exposed an internal altitude ID, reused another unit's altitude or issued an order before approval");

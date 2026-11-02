@@ -9,7 +9,8 @@ namespace SeaPowerAIAdvisor;
 internal sealed class AdvisorOperationReview
 {
     private readonly FrameworkElement overlay, conversation, navigation, selection;
-    private readonly TextBlock details, counter, selectedCount, failure;
+    private readonly StackPanel details;
+    private readonly TextBlock counter, selectedCount, failure;
     private readonly ScrollViewer detailScroll;
     private readonly Border targets;
     private readonly CheckBox include;
@@ -33,7 +34,7 @@ internal sealed class AdvisorOperationReview
         counter = Find<TextBlock>(root, "OperationPlanCounter");
         selectedCount = Find<TextBlock>(root, "OperationPlanSelectedCount");
         include = Find<CheckBox>(root, "IncludeOperationPlan");
-        details = Find<TextBlock>(root, "OperationReviewText");
+        details = Find<StackPanel>(root, "OperationReviewContent");
         detailScroll = Find<ScrollViewer>(root, "OperationReviewScroll");
         failure = Find<TextBlock>(root, "OperationReviewFailure");
         targets = Find<Border>(root, "OperationReviewTargets");
@@ -85,7 +86,19 @@ internal sealed class AdvisorOperationReview
         if (review == null) return;
         var service = Service(); var plan = review.Current;
         counter.Text = text().Format("operation.plan_counter", review.Index + 1, review.Proposal.Plans.Count);
-        details.Text = (plan.Title.Length == 0 ? "" : plan.Title + "\n" + plan.Summary + "\n\n") + service.DescribeProposal(review.Proposal, text().RequestedLanguage, plan.Id);
+        var sections = service.DescribeProposal(review.Proposal, text().RequestedLanguage, plan.Id);
+        details.Children.Clear();
+        if (plan.Title.Length > 0)
+            details.Children.Add(new TextBlock { Text = plan.Title + "\n" + plan.Summary, TextWrapping = TextWrapping.Wrap, FontSize = 14 });
+        foreach (var section in sections)
+        {
+            details.Children.Add(new TextBlock
+            {
+                Text = section.Heading, TextWrapping = TextWrapping.Wrap, FontSize = 14,
+                FontWeight = FontWeights.Bold, Margin = new Thickness(0, 10, 0, 4)
+            });
+            details.Children.Add(new TextBlock { Text = section.Body, TextWrapping = TextWrapping.Wrap, FontSize = 14 });
+        }
         detailScroll.ScrollToVerticalOffset(0, false);
         UpdateTargets();
         try { preview.Show(service, review.Proposal, text().RequestedLanguage, plan.Id); }

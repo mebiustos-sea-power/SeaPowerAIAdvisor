@@ -25,7 +25,7 @@ internal static partial class OperationPlanTests
             Require((string?)result["status"] == "proposed" && log.Count == 0, "Submission executed or lost its receipt");
             var proposal = service.FinishProposal("mixed", true)!;
             Require(proposal.Plans[0].Title == "Plan a" && proposal.Plans[0].Orders.Count == 3, "Caller mutation changed a retained plan");
-            Require(service.DescribeProposal(proposal, "en", "a").Contains("custom.move:2", StringComparison.Ordinal), "Command descriptions did not receive the inspected plan");
+            Require(OperationSubmissionFixture.ReviewText(service.DescribeProposal(proposal, "en", "a")).Contains("custom.move:2", StringComparison.Ordinal), "Command descriptions did not receive the inspected plan");
             service.Approve(proposal, new[] { "a" }); service.Approve(proposal, new[] { "b" });
             Require(log.SequenceEqual(new[] { "custom.move:one:1", "custom.observe:two:2", "custom.move:two:3" }) && proposal.RegisteredCount == 3,
                 "Selection mixed alternatives, reordered operations or registered twice");
@@ -236,7 +236,7 @@ internal static partial class OperationPlanTests
             Require(map.Active == 1 && map.Latitudes.SequenceEqual(new[] { 1d, 3d, 1d, 2d, 3d, 1d, 3d }) &&
                 state.Current.Id == "c" && state.SelectedPlanIds.SequenceEqual(new[] { "c" }) && log.Count == 0,
                 "Browsing changed the game, mixed previews or kept an invisible execution target");
-            Require(service.DescribeProposal(proposal, "en", state.Current.Id).EndsWith("custom.browse:1", StringComparison.Ordinal), "The inspected description used another plan");
+            Require(OperationSubmissionFixture.ReviewText(service.DescribeProposal(proposal, "en", state.Current.Id)).EndsWith("custom.browse:1", StringComparison.Ordinal), "The inspected description used another plan");
             service.Approve(proposal, state.SelectedPlanIds); preview.Tick(service);
             Require(log.Single() == "custom.browse:three:3" && map.Active == 0, "Approval executed a different plan or left a stale preview");
             var reopened = new AdvisorOperationReviewState(proposal);
@@ -465,7 +465,7 @@ internal static partial class OperationPlanTests
             if (orders.Any(o => (int)o.Arguments["index"]! < 0)) throw new AdvisorOperationException(400, "invalid_command_argument");
             if (orders.GroupBy(o => o.Target).Any(g => g.Count() > Available)) throw new AdvisorOperationException(409, "insufficient_stock");
         }
-        public string DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => Id + ":" + orders.Count;
+        public SeaPowerAIAdvisor.Api.OperationReview DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => new(Id + ":" + orders.Count);
         public JObject Execute(string target, JObject arguments)
         {
             var index = (int)arguments["index"]!;

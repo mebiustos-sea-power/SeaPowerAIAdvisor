@@ -26,14 +26,15 @@ internal sealed partial class BattleOperationSupport : IAdvisorRulesOfEngagement
     {
         var unit = Unit(target);
         if (EngagementIdentity(unit).OrderUnavailableReason is string reason) throw new OperationException(409, reason);
-        var native = mode switch
+        var native = NativeRulesOfEngagement(mode);
+        // Use the policy setter directly: the UI's Hold action also ceases fire and can propagate through a formation.
+        unit.SetWeaponStatus(native, formationCheck: false);
+    }
+    private static ObjectBase.WeaponStatus NativeRulesOfEngagement(RulesOfEngagement mode) => mode switch
         {
             RulesOfEngagement.Free => ObjectBase.WeaponStatus.Free,
             RulesOfEngagement.Tight => ObjectBase.WeaponStatus.Tight,
             RulesOfEngagement.Hold => ObjectBase.WeaponStatus.Hold,
             _ => throw new OperationException(400, "invalid_rules_of_engagement_arguments")
         };
-        // Use the policy setter directly: the UI's Hold action also ceases fire and can propagate through a formation.
-        unit.SetWeaponStatus(native, formationCheck: false);
-    }
 }

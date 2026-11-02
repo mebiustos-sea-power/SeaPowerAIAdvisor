@@ -1,10 +1,10 @@
 {
-  "proposal_independent": "個別行動に切り替えます。",
+  "proposal_independent": "{0}: 個別行動に切り替えます。",
   "name": "移動予約",
-  "summary": "地点の順序を指定して移動を予約します。各区間の速力・高度・深度も指定できます。進出経路を一度だけ実行し、指定地点から先をループできます。",
+  "summary": "地点の順序を指定して移動を予約します。各区間の速力・高度・深度と、到着時の交戦規定も指定できます。進出経路を一度だけ実行し、指定地点から先をループできます。",
   "requirements": "「AIに渡す情報」の自軍部隊・移動計画が有効で、対象が操作可能かつ移動可能である必要があります。航空機は飛行中である必要があります。設定値は対象の候補から選びます。追従中のユニットは個別行動へ切り替えます。",
   "proposal_summary": "{0}の移動予約: {1}地点",
-  "proposal_followers": "追従中のユニットも移動します。",
+  "proposal_followers": "{0}: 追従中のユニットも移動します。",
   "setting_speed": "速力: {0}",
   "setting_altitude": "高度: {0} ft",
   "setting_depth": "深度: {0}",
@@ -22,5 +22,10 @@
   "depth_above_layer": "変温層より上",
   "depth_below_layer": "変温層より下",
   "depth_deep": "深深度",
-  "depth_very_deep": "最深深度"
+  "depth_very_deep": "最深深度",
+  "proposal_arrival_rules_scope": "{0}: 到着時の交戦規定変更は、編隊設定によって他の編隊メンバー（個別行動中を含む）にも適用される場合があります。",
+  "setting_rules_of_engagement_on_arrival": "到着時の交戦規定: {0}",
+  "mode_free": "武器使用自由（Weapons Free）",
+  "mode_tight": "自衛のみ（Weapons Tight）",
+  "mode_hold": "武器使用禁止（Weapons Hold）"
 }

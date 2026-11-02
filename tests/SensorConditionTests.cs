@@ -89,7 +89,7 @@ internal static class SensorConditionTests
             Require(power["options"]!.Values<string>().Contains("on") && power["option_conditions"]!.Single()["preparation"] != null &&
                 helicopter.DesiredAltitude.Value == 1 && sonar.Executed.Count == 0, "Preparations ran during discovery or a supported native preparation was excluded");
             OperationSubmissionFixture.Submit(service, "test", Order(42, "tow", "on")); var proposal = service.FinishProposal("test", true)!;
-            var description = service.DescribeProposal(proposal, "en");
+            var description = OperationSubmissionFixture.ReviewText(service.DescribeProposal(proposal, "en"));
             Require(description.Contains("Hover", StringComparison.Ordinal) && helicopter.DesiredAltitude.Value == 1, "Review hid the motion side effect or performed it before adoption");
             service.Approve(proposal); game.SetSensorControls("unit:42", Changes("tow", "on"));
             Require(proposal.State == AdvisorProposalState.Registered && helicopter.DesiredAltitude.Value < 1 && sonar._wasSetOn &&

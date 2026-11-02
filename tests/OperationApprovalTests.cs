@@ -22,7 +22,7 @@ internal static class OperationApprovalTests
             Require(proposal.State == AdvisorProposalState.Pending && proposal.Orders.Count == 1, "Requests were not held together");
             foreach (var language in new[] { "en", "ja" })
             {
-                var description = service.DescribeProposal(proposal, language);
+                var description = OperationSubmissionFixture.ReviewText(service.DescribeProposal(proposal, language));
                 Require(description.Contains("Hobby 1", StringComparison.Ordinal) && description.Contains("12", StringComparison.Ordinal) &&
                     description.Contains("Custom buoy", StringComparison.Ordinal) && description.Contains("26.51100", StringComparison.Ordinal),
                     "The command summary lost the target, total, ammunition or last destination");
@@ -173,7 +173,7 @@ internal static class OperationApprovalTests
                 Request(service, "mixed", 1, second.Id), Request(service, "mixed", 2, first.Id));
             var proposal = service.FinishProposal("mixed", true)!;
             Require(log.Count == 0 && proposal.State == AdvisorProposalState.Pending, "An unchecked operation ran ahead of the required approval");
-            var summary = service.DescribeProposal(proposal, "en");
+            var summary = OperationSubmissionFixture.ReviewText(service.DescribeProposal(proposal, "en"));
             Require(summary.Contains("custom.first:2", StringComparison.Ordinal) && summary.Contains("custom.second:1", StringComparison.Ordinal),
                 "The common layer assumed a unit type or constructed extension-specific text");
             service.Approve(proposal);
@@ -420,7 +420,7 @@ internal static class OperationApprovalTests
         public JObject Definition() => new() { ["id"] = Id };
         public JArray Candidates() => new();
         public void Validate(IReadOnlyList<AdvisorOperationOrder> orders) { }
-        public string DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => Id + ":" + orders.Count;
+        public SeaPowerAIAdvisor.Api.OperationReview DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => new(Id + ":" + orders.Count);
         public JObject Execute(string target, JObject arguments)
         {
             var index = (int)arguments["index"]!;

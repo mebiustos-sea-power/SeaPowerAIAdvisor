@@ -65,7 +65,7 @@ internal static class AdvisorOperationPlanBatch
         {
             ["plan_id"] = new JObject { ["type"] = "string", ["minLength"] = 1, ["maxLength"] = 40, ["pattern"] = "^[A-Za-z0-9._-]+$" },
             ["title"] = new JObject { ["type"] = "string", ["minLength"] = 1, ["maxLength"] = 120 },
-            ["summary"] = new JObject { ["type"] = "string", ["minLength"] = 1, ["maxLength"] = 1200, ["description"] = "Purpose and main trade-off." },
+            ["summary"] = new JObject { ["type"] = "string", ["minLength"] = 1, ["maxLength"] = 1200, ["description"] = "Brief purpose and main trade-off. Do not repeat operation details or standard command effects." },
             ["reservation_operations"] = Orders(target, "Reservation-mode commands register game reservations on acceptance, before all immediate operations. Preserve their intended queue order; use [] if unused. Both operation arrays together must contain 1 to 40 operations."),
             ["immediate_operations"] = Orders(target, "Immediate-mode commands execute on acceptance after all reservations are registered, without waiting for reserved actions to finish. Preserve their intended order; use [] if unused."),
             ["reservation_updates"] = new JObject { ["type"] = "array", ["maxItems"] = MaximumOrders,
