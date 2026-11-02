@@ -455,7 +455,7 @@
   "operation.loop_start": "ループ開始",
   "operation.loop_summary": "{0}, {1}から最後までの{2}地点を反復します。それより前の区間は反復しません。",
   "operation.reservation_heading": "予約に登録",
-  "operation.targets": "操作対象",
+  "operation.targets": "操作対象 ({0})",
   "operation.no_targets": "なし",
   "operation.title": "提案の確認",
   "operation.accept": "採用",

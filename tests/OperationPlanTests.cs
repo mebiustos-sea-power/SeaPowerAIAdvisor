@@ -277,27 +277,29 @@ internal static partial class OperationPlanTests
             {
                 var text = AdvisorText.Load(language); var lookups = new List<int>();
                 string? Name(int id) { lookups.Add(id); return id is 1029 or 1030 ? "Hobby 1" : null; }
-                string[] Targets(AdvisorOperationReviewState state)
+                string[] Targets(AdvisorOperationReviewState state, int expectedCount)
                 {
                     var view = AdvisorOperationTargets.Render(state.SelectedPlans, text, Name);
+                    Require((string?)view.Elements().First().Attribute("Text") == text.Format("operation.targets", expectedCount),
+                        "The target count did not follow the distinct identities in the selected plans");
                     Require(!view.Descendants().Any(e => e.Name.LocalName == "Border"), "A nonreservation command displayed a queue-policy badge");
                     return view.Descendants().Where(e => e.Name.LocalName == "WrapPanel")
                         .Select(row => (string)row.Elements().First().Attribute("Text")!).ToArray();
                 }
                 var state = new AdvisorOperationReviewState(proposal, "b");
-                Require(Targets(state).SequenceEqual(new[] { "Hobby 1 (1029)" }) && lookups.SequenceEqual(new[] { 1029 }),
+                Require(Targets(state, 1).SequenceEqual(new[] { "Hobby 1 (1029)" }) && lookups.SequenceEqual(new[] { 1029 }),
                     "Browsing an unchecked plan changed targets or repeated an identity lookup");
                 state.IncludeCurrent(true); state.Move(1);
-                Require(Targets(state).SequenceEqual(new[] { "Hobby 1 (1029)", "Hobby 1 (1030)" }),
+                Require(Targets(state, 2).SequenceEqual(new[] { "Hobby 1 (1029)", "Hobby 1 (1030)" }),
                     "Same-name units merged, repeated reservations duplicated a target or targets followed browsing instead of execution order");
                 state.IncludeCurrent(true);
-                Require(Targets(state).SequenceEqual(new[] { "Hobby 1 (1029)", "Hobby 1 (1030)", "unit:999", "zone:alpha" }),
+                Require(Targets(state, 4).SequenceEqual(new[] { "Hobby 1 (1029)", "Hobby 1 (1030)", "unit:999", "zone:alpha" }),
                     "An unavailable name or non-unit reference was dropped or invented");
                 state.IncludeCurrent(false); state.Move(1); state.IncludeCurrent(false); state.Move(1); state.IncludeCurrent(false);
                 var empty = AdvisorOperationTargets.Render(state.SelectedPlans, text, Name);
-                Require(state.SelectedPlanIds.Count == 0 && Targets(state).Length == 0 &&
+                Require(state.SelectedPlanIds.Count == 0 && Targets(state, 0).Length == 0 &&
                     empty.Descendants().Where(e => e.Name.LocalName == "TextBlock").Select(e => (string)e.Attribute("Text")!)
-                        .SequenceEqual(new[] { text["operation.targets"], text["operation.no_targets"] }) && log.Count == 0,
+                        .SequenceEqual(new[] { text.Format("operation.targets", 0), text["operation.no_targets"] }) && log.Count == 0,
                     "Empty selection retained targets or review formatting executed game orders");
             }
             var singleCommand = new Command("custom.single_targets", log, selection: AdvisorPlanSelection.Single);
