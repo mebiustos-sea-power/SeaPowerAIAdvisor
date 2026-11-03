@@ -129,14 +129,11 @@ internal sealed partial class AdvisorOperations
             var command = ReservationCommand(o)!;
             return (Command: command, Presentation: command.PrepareReservationPresentation(prepared.Steps[o.Id]));
         }, StringComparer.Ordinal);
-        var reservationActions = new Dictionary<string, OperationPresentation>(StringComparer.Ordinal);
-        if (prepared.Steps.Count == 0)
-            foreach (var group in plan.ReservationOrders.GroupBy(o => o.OperationId))
-                reservationActions.Add(group.Key, Operation(group.Key).PreparePresentation(group.ToArray()));
-        else foreach (var order in plan.ReservationOrders.Where(o => !composed.ContainsKey(o.Id)))
-            reservationActions.Add(order.Id, Operation(order.OperationId).PreparePresentation(new[] { order }));
-        var immediateActions = plan.ImmediateOrders.GroupBy(o => o.OperationId)
-            .ToDictionary(g => g.Key, g => Operation(g.Key).PreparePresentation(g.ToArray()), StringComparer.Ordinal);
+        // Text preserves individual operation order; map presenters may combine operations to retain connected geometry.
+        var actions = plan.Orders.Where(o => !composed.ContainsKey(o.Id)).ToDictionary(o => o.Id,
+            o => Operation(o.OperationId).PreparePresentation(new[] { o }), StringComparer.Ordinal);
+        var reservationPreviews = prepared.Steps.Count == 0 ? PreparePreviews(plan.ReservationOrders) : Array.Empty<OperationPresentation>();
+        var immediatePreviews = PreparePreviews(plan.ImmediateOrders);
         return new AdvisorPlanPresentation(Describe, Preview);
 
         IReadOnlyList<(string Heading, string Body)> Describe(string language)
@@ -146,18 +143,10 @@ internal sealed partial class AdvisorOperations
             if (plan.ReservationOrders.Count > 0)
             {
                 var descriptions = new List<string>();
-                if (prepared.Steps.Count == 0)
-                {
-                    foreach (var group in plan.ReservationOrders.GroupBy(o => o.OperationId))
-                    {
-                        var review = reservationActions[group.Key].Describe(language);
-                        descriptions.Add(review.Description); notes.AddRange(review.Notes);
-                    }
-                }
-                else foreach (var order in plan.ReservationOrders)
+                foreach (var order in plan.ReservationOrders)
                 {
                     var review = composed.TryGetValue(order.Id, out var captured)
-                        ? captured.Presentation.Describe(language) : reservationActions[order.Id].Describe(language);
+                        ? captured.Presentation.Describe(language) : actions[order.Id].Describe(language);
                     var description = review.Description;
                     if (prepared.Loops.TryGetValue(order.Target, out var loop) && loop.FirstOrder == order.Id)
                         description += "\n" + text.Format("operation.loop_summary",
@@ -170,9 +159,9 @@ internal sealed partial class AdvisorOperations
             if (plan.ImmediateOrders.Count > 0)
             {
                 var descriptions = new List<string>();
-                foreach (var group in plan.ImmediateOrders.GroupBy(o => o.OperationId))
+                foreach (var order in plan.ImmediateOrders)
                 {
-                    var review = immediateActions[group.Key].Describe(language);
+                    var review = actions[order.Id].Describe(language);
                     descriptions.Add(review.Description); notes.AddRange(review.Notes);
                 }
                 sections.Add((text["operation.immediate_heading"], string.Join("\n\n", descriptions)));
@@ -188,8 +177,8 @@ internal sealed partial class AdvisorOperations
             var drawings = new List<AdvisorMapDrawing>();
             if (prepared.Steps.Count == 0)
             {
-                foreach (var group in plan.ReservationOrders.GroupBy(o => o.OperationId))
-                    drawings.AddRange(reservationActions[group.Key].Preview(language).Drawings);
+                foreach (var presentation in reservationPreviews)
+                    drawings.AddRange(presentation.Preview(language).Drawings);
             }
             else
             {
@@ -208,7 +197,7 @@ internal sealed partial class AdvisorOperations
                         var preview = captured.Presentation.Preview(start, language);
                         drawings.AddRange(preview.Preview.Drawings); tails[order.Target] = preview.EndPosition;
                     }
-                    else drawings.AddRange(reservationActions[order.Id].Preview(language).Drawings);
+                    else drawings.AddRange(actions[order.Id].Preview(language).Drawings);
                 }
             }
             foreach (var loop in prepared.Loops.Values)
@@ -216,10 +205,15 @@ internal sealed partial class AdvisorOperations
                 drawings.Add(AdvisorMapDrawing.Line(new[] { loop.Points.Last(), loop.Points[0] }));
                 drawings.Add(AdvisorMapDrawing.Point(loop.Points[0], AdvisorText.Load(language)["operation.loop_start"]));
             }
-            foreach (var group in plan.ImmediateOrders.GroupBy(o => o.OperationId))
-                drawings.AddRange(immediateActions[group.Key].Preview(language).Drawings);
+            foreach (var presentation in immediatePreviews)
+                drawings.AddRange(presentation.Preview(language).Drawings);
             return new AdvisorMapPreview(drawings);
         }
+        OperationPresentation[] PreparePreviews(IEnumerable<AdvisorOperationOrder> orders) => orders.GroupBy(o => o.OperationId).Select(group =>
+        {
+            var batch = group.ToArray();
+            return batch.Length == 1 ? actions[batch[0].Id] : Operation(group.Key).PreparePresentation(batch);
+        }).ToArray();
     }
     private static AdvisorOperationPlan CombinePlans(IEnumerable<AdvisorOperationPlan> selected)
     {

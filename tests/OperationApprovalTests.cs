@@ -178,9 +178,9 @@ internal static class OperationApprovalTests
                 Request(service, "mixed", 1, second.Id), Request(service, "mixed", 2, first.Id));
             var proposal = service.FinishProposal("mixed", true)!;
             Require(log.Count == 0 && proposal.State == AdvisorProposalState.Pending, "An unchecked operation ran ahead of the required approval");
-            var summary = OperationSubmissionFixture.ReviewText(service.DescribeProposal(proposal, "en"));
-            Require(summary.Contains("custom.first:2", StringComparison.Ordinal) && summary.Contains("custom.second:1", StringComparison.Ordinal),
-                "The common layer assumed a unit type or constructed extension-specific text");
+            var summary = service.DescribeProposal(proposal, "en").Single().Body;
+            Require(summary.Split("\n\n", StringSplitOptions.None).SequenceEqual(new[] { "custom.first:1", "custom.second:1", "custom.first:1" }),
+                "The common layer regrouped operations or constructed extension-specific text");
             service.Approve(proposal);
             Require(log.SequenceEqual(new[] { "custom.first:0", "custom.second:1", "custom.first:2" }), "Grouping summaries reordered execution");
             service.BeginProposal("automatic"); OperationSubmissionFixture.Submit(service, "automatic", Request(service, "automatic", 3, first.Id));

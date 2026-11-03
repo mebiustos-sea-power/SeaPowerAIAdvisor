@@ -24,7 +24,9 @@ internal static partial class OperationPlanTests
             Require((string?)result["status"] == "proposed" && log.Count == 0, "Submission executed or lost its receipt");
             var proposal = service.FinishProposal("mixed", true)!;
             Require(proposal.Plans[0].Title == "Plan a" && proposal.Plans[0].Orders.Count == 3, "Caller mutation changed a retained plan");
-            Require(OperationSubmissionFixture.ReviewText(service.DescribeProposal(proposal, "en", "a")).Contains("custom.move:2", StringComparison.Ordinal), "Command descriptions did not receive the inspected plan");
+            Require(service.DescribeProposal(proposal, "en", "a").Single().Body.Split("\n\n", StringSplitOptions.None)
+                .SequenceEqual(new[] { "custom.move:1", "custom.observe:1", "custom.move:1" }),
+                "Command descriptions did not preserve the inspected plan's individual operation order");
             service.Approve(proposal, new[] { "a" }); service.Approve(proposal, new[] { "b" });
             Require(log.SequenceEqual(new[] { "custom.move:one:1", "custom.observe:two:2", "custom.move:two:3" }) && proposal.RegisteredCount == 3,
                 "Selection mixed alternatives, reordered operations or registered twice");

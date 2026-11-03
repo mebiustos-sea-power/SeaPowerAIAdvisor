@@ -121,7 +121,7 @@ internal static partial class ReservationCompositionTests
                 }
             }
         });
-        check("Noncomposing commands retain multi-order descriptions and connected previews within each phase", () =>
+        check("Noncomposing commands describe each operation while preserving connected previews within each phase", () =>
         {
             var log = new List<string>(); var service = new AdvisorOperations(_ => true);
             service.Register(new PhaseAction("custom.instant", OperationExecutionMode.Immediate, log));
@@ -131,11 +131,54 @@ internal static partial class ReservationCompositionTests
                 new[] { PhaseOrder("custom.instant", 42, 1), PhaseOrder("custom.instant", 42, 2) },
                 new[] { PhaseOrder("custom.reserve", 42, 3), PhaseOrder("custom.reserve", 42, 4) })));
             var proposal = service.FinishProposal("review", true)!;
-            var description = OperationSubmissionFixture.ReviewText(service.DescribeProposal(proposal, "en")); var preview = service.PreviewProposal(proposal, "en");
-            Require(description.Contains("custom.instant:2", StringComparison.Ordinal) && description.Contains("custom.reserve:2", StringComparison.Ordinal) &&
+            var sections = service.DescribeProposal(proposal, "en"); var preview = service.PreviewProposal(proposal, "en");
+            Require(sections[0].Body.Split('\n', StringSplitOptions.RemoveEmptyEntries).SequenceEqual(new[] {
+                    "custom.reserve:unit:42:3", "custom.reserve:unit:42:4" }) &&
+                sections[1].Body.Split('\n', StringSplitOptions.RemoveEmptyEntries).SequenceEqual(new[] {
+                    "custom.instant:unit:42:1", "custom.instant:unit:42:2" }) &&
                 preview.Drawings.Count == 2 && preview.Drawings[0].Coordinates.Select(p => p.Latitude).SequenceEqual(new[] { 3d, 4d }) &&
                 preview.Drawings[1].Coordinates.Select(p => p.Latitude).SequenceEqual(new[] { 1d, 2d }) && log.Count == 0,
-                "Phase separation split a command's description or disconnected its multi-order preview");
+                "Individual descriptions lost operations or disconnected the multi-order map preview");
+        });
+        check("Approval text and notes retain command, target and setting order while whole-command preflight still blocks all execution", () =>
+        {
+            var log = new List<string>(); var service = new AdvisorOperations(_ => true);
+            var reserved = new PhaseAction("custom.reserve", OperationExecutionMode.Reservation, log);
+            foreach (var action in new[] { reserved,
+                new PhaseAction("custom.other_reserve", OperationExecutionMode.Reservation, log),
+                new PhaseAction("custom.instant", OperationExecutionMode.Immediate, log),
+                new PhaseAction("custom.other_instant", OperationExecutionMode.Immediate, log) }) service.Register(action);
+            service.BeginProposal("ordered-review");
+            service.SubmitPlans("ordered-review", Batch(PhasePlan("one",
+                new[] { PhaseOrder("custom.instant", 42, 6), PhaseOrder("custom.instant", 43, 7), PhaseOrder("custom.instant", 42, 8),
+                    PhaseOrder("custom.other_instant", 43, 9), PhaseOrder("custom.instant", 42, 10) },
+                new[] { PhaseOrder("custom.reserve", 42, 1), PhaseOrder("custom.reserve", 43, 2), PhaseOrder("custom.reserve", 42, 3),
+                    PhaseOrder("custom.other_reserve", 43, 4), PhaseOrder("custom.reserve", 42, 5) })));
+            var proposal = service.FinishProposal("ordered-review", true)!;
+            var reservationLabels = new[] { "custom.reserve:unit:42:1", "custom.reserve:unit:43:2", "custom.reserve:unit:42:3",
+                "custom.other_reserve:unit:43:4", "custom.reserve:unit:42:5" };
+            var immediateLabels = new[] { "custom.instant:unit:42:6", "custom.instant:unit:43:7", "custom.instant:unit:42:8",
+                "custom.other_instant:unit:43:9", "custom.instant:unit:42:10" };
+            foreach (var language in new[] { "en", "ja" })
+            {
+                var sections = service.DescribeProposal(proposal, language);
+                Require(sections.Count == 3 &&
+                    sections[0].Body.Split('\n', StringSplitOptions.RemoveEmptyEntries).SequenceEqual(reservationLabels) &&
+                    sections[1].Body.Split('\n', StringSplitOptions.RemoveEmptyEntries).SequenceEqual(immediateLabels) &&
+                    sections[2].Body.Split('\n').SequenceEqual(reservationLabels.Concat(immediateLabels).Select(label => "• Note " + label)),
+                    "Review regrouped commands or targets, lost setting differences or reordered scoped notes");
+            }
+            _ = service.PreviewProposal(proposal, "en");
+            Require(log.Count == 0, "Inspecting the ordered proposal executed operations");
+            reserved.Available = 2;
+            service.Approve(proposal);
+            Require(proposal.State == AdvisorProposalState.Pending && proposal.ErrorCode == "insufficient_stock" && log.Count == 0,
+                "Individual presentation bypassed combined stock validation or allowed partial execution");
+            _ = service.DescribeProposal(proposal, "ja");
+            reserved.Available = 100;
+            service.Approve(proposal);
+            Require(proposal.State == AdvisorProposalState.Registered && log.SequenceEqual(reservationLabels.Concat(immediateLabels)),
+                "Displayed operation order differed from actual execution order");
         });
         check("An immediate command cannot declare participation in reservation composition", () =>
         {
@@ -180,12 +223,22 @@ internal static partial class ReservationCompositionTests
         public bool RequiresApproval => true;
         public AdvisorOperationPlanPolicy PlanPolicy => new(1, 1, 8, AdvisorPlanSelection.Multiple);
         internal bool Fail, ValidationFail;
+        internal int Available = 100;
         internal PhaseAction(string id, OperationExecutionMode mode, List<string> log) { Id = id; ExecutionMode = mode; this.log = log; }
         public JObject Definition() => new() { ["type"] = "object" };
         public JArray Candidates() => new();
         public void Validate(IReadOnlyList<AdvisorOperationOrder> orders)
-        { if (ValidationFail) throw new AdvisorOperationException(409, "target_unavailable"); }
-        public SeaPowerAIAdvisor.Api.OperationPresentation PreparePresentation(IReadOnlyList<AdvisorOperationOrder> orders) => new(language => new SeaPowerAIAdvisor.Api.OperationReview(Id + ":" + orders.Count), language => Preview(orders, language));
+        {
+            if (ValidationFail) throw new AdvisorOperationException(409, "target_unavailable");
+            if (orders.GroupBy(o => o.Target).Any(group => group.Count() > Available)) throw new AdvisorOperationException(409, "insufficient_stock");
+        }
+        public SeaPowerAIAdvisor.Api.OperationPresentation PreparePresentation(IReadOnlyList<AdvisorOperationOrder> orders)
+        {
+            // Models an extension that groups its batch by target before describing it.
+            var labels = orders.GroupBy(o => o.Target).SelectMany(group => group.Select(o => Id + ":" + o.Target + ":" + (int)o.Arguments["index"]!)).ToArray();
+            return new(language => new SeaPowerAIAdvisor.Api.OperationReview(string.Join("\n", labels), labels.Select(label => "Note " + label)),
+                language => Preview(orders, language));
+        }
         public AdvisorMapPreview Preview(IReadOnlyList<AdvisorOperationOrder> orders, string language) => orders.Count < 2
             ? AdvisorMapPreview.Empty : new AdvisorMapPreview(new[] {
                 AdvisorMapDrawing.Line(orders.Select(o => new AdvisorMapCoordinate((int)o.Arguments["index"]!, 127))) });

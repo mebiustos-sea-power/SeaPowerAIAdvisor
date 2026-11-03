@@ -128,18 +128,20 @@ internal static partial class CombatOperationTests
             var p = s.FinishProposal("test", true)!;
             foreach (var lang in new[] { "en", "ja" })
             {
-                var review = OperationSubmissionFixture.ReviewText(s.DescribeProposal(p, lang));
+                var sections = s.DescribeProposal(p, lang);
+                var review = OperationSubmissionFixture.ReviewText(sections);
                 Require(review.Contains("Unit 43", StringComparison.Ordinal) && game.Log.Count == 0,
                     "Review omitted an actor or cancelled before approval");
                 var text = new AdvisorOperationText(new CancelAttackExtension().GetDefinition().Localizations).For(lang);
                 var reservations = new AdvisorOperationText(new CancelReservationsExtension().GetDefinition().Localizations).For(lang);
                 var heading = AdvisorText.Load(lang)["operation.notes_heading"];
                 Require(review.Split('\n').Count(line => line == heading) == 1 &&
-                    review.Split('\n').Count(line => line.StartsWith("• ", StringComparison.Ordinal)) == 2 &&
-                    review.Contains("• " + text.Format("execution_note", "Unit 42"), StringComparison.Ordinal) &&
-                    review.Contains("• " + reservations.Format("execution_note", "Unit 43, Unit 42"), StringComparison.Ordinal) &&
+                    sections.Last().Body.Split('\n').SequenceEqual(new[] {
+                        "• " + text.Format("execution_note", "Unit 42"),
+                        "• " + reservations.Format("execution_note", "Unit 43"),
+                        "• " + reservations.Format("execution_note", "Unit 42") }) &&
                     review.IndexOf(heading, StringComparison.Ordinal) > review.LastIndexOf(reservations.Format("proposal_summary", "Unit 42"), StringComparison.Ordinal),
-                    "Mixed cancellation review repeated notes, lost their actors or placed them before action details");
+                    "Mixed cancellation review lost per-operation note order or scope, or placed notes before action details");
             }
             s.Approve(p); s.Approve(p);
             Require(p.State == AdvisorProposalState.Registered && game.Log.SequenceEqual(new[] {
