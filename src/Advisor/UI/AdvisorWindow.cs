@@ -29,6 +29,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     private readonly AdvisorUnitMentionController? unitMentions;
     private readonly Window window;
     private readonly AdvisorSettingsController settings;
+    private readonly AdvisorConfirmation confirmation;
     private readonly AdvisorConsultationMenu consultationMenu;
     private readonly ToggleButton otherConsultations;
     private AdvisorText text;
@@ -82,7 +83,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         transcriptScroll = Named<ScrollViewer>(content, "Transcript");
         unitNavigationHint = Named<TextBlock>(content, "UnitNavigationHint");
         this.navigation = navigation;
-        transcript = new AdvisorTranscriptView(Named<StackPanel>(content, "TranscriptMessages"), transcriptScroll, guard, RetryConsultation, ReassessContact, InsertUnit, navigation, weapons, map, ReviewProposal);
+        transcript = new AdvisorTranscriptView(Named<StackPanel>(content, "TranscriptMessages"), transcriptScroll, guard, RetryConsultation, RestoreQuestion, ReassessContact, InsertUnit, navigation, weapons, map, ReviewProposal);
         status = Named<TextBlock>(content, "Status");
         diagnosticStatus = Named<TextBlock>(content, "DiagnosticStatus");
         diagnosticOutput = Named<TextBox>(content, "DiagnosticOutput");
@@ -92,6 +93,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         portraitError = Named<TextBlock>(content, "PortraitError");
         portraitImage = Named<Image>(content, "Portrait");
         conversationPane = Named<FrameworkElement>(content, "ConversationPane");
+        confirmation = new AdvisorConfirmation(content, ReleaseInput, guard);
         profileDirectory = AdvisorProfile.DirectoryIn(UnityEngine.Application.persistentDataPath);
         settingsPath = AdvisorSettings.PathIn(UnityEngine.Application.persistentDataPath);
         send = Named<Button>(content, "Send");
@@ -170,7 +172,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
             {
                 conversation.UseInformationPolicy(options.Current.Information.Key);
                 RefreshConfigurationNotice(); ShowConversation(false);
-            }, ReturnToConversation, log, () => OperationService);
+            }, ReturnToConversation, log, () => OperationService, confirmation);
         operationReview = new AdvisorOperationReview(content, conversationPane, () => OperationService,
             () => text, guard, () => ShowConversation(false), map, navigation);
         updateNotice = new AdvisorUpdateNoticeWindow(view, host, window, new AdvisorUpdateNoticeStore(profileDirectory),
@@ -211,7 +213,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
     }
     internal bool HasUnreadResult { get; private set; }
     internal string DisplayName => appliedProfile?.DisplayName ?? speakerName;
-    internal bool CanConsult => active == null && !operationReview.IsOpen && conversationPane.Visibility == Visibility.Visible;
+    internal bool CanConsult => active == null && !operationReview.IsOpen && !confirmation.IsOpen && conversationPane.Visibility == Visibility.Visible;
 
     internal void ConsultContext(string promptKey, string caption, Newtonsoft.Json.Linq.JObject context)
     {
@@ -309,6 +311,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
 
     private void OnWindowClosed()
     {
+        confirmation.Close();
         draftMap.Dispose();
         updateNotice.Dismiss();
         consultationMenu.Close();
@@ -383,8 +386,8 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         draftMap.Update(draft.Locations, DraftMapVisible);
         UpdateInputClear();
     }
-    private void UpdateInputClear() => clearInput.IsEnabled = active == null &&
-        (!string.IsNullOrEmpty(question.Text) || draft.Units.Count > 0 || draft.Locations.Count > 0);
+    private bool HasDraft => !string.IsNullOrEmpty(question.Text) || draft.Units.Count > 0 || draft.Locations.Count > 0;
+    private void UpdateInputClear() => clearInput.IsEnabled = active == null && HasDraft;
 
     private void ClearDraft()
     {
@@ -496,6 +499,25 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
 
     private void StartConsultation() => StartConsultation(draft.Prepare(question.Text ?? string.Empty));
 
+    private void RestoreQuestion(AdvisorTurn turn)
+    {
+        if (!CanEditDraft() || !conversation.Turns.Contains(turn)) return;
+        if (HasDraft)
+            confirmation.Show(conversationPane, text["transcript.replace_draft_question"], text["action.replace"],
+                text["settings.cancel"], () => RestoreDraft(turn.Request));
+        else RestoreDraft(turn.Request);
+    }
+
+    private void RestoreDraft(AdvisorQuestion request)
+    {
+        if (!CanEditDraft()) return;
+        questionInput.Reset();
+        draft.Restore(request); question.Text = request.DraftText;
+        RefreshDraftBadges();
+        question.SelectionStart = question.Text.Length; question.SelectionLength = 0;
+        questionInput.RequestFocus();
+    }
+
     private void RetryConsultation(AdvisorTurn turn)
     {
         if (!conversation.CanRetry(turn)) return;
@@ -521,7 +543,7 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
 
     private void StartConsultation(AdvisorQuestion request, AdvisorTurn? retry = null, AdvisorLocalRun? recording = null, AdvisorBackendSetup? prepared = null)
     {
-        if (active != null || operationReview.IsOpen || conversationPane.Visibility != Visibility.Visible) return;
+        if (!CanConsult) return;
         if (QuestionInputController.IsComposing)
         {
             status.Text = text["status.ime"];

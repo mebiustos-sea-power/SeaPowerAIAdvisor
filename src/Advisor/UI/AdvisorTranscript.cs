@@ -24,10 +24,9 @@ internal static class AdvisorTranscript
         for (var i = 0; i < conversation.Turns.Count; i++)
         {
             var turn = conversation.Turns[i];
-            var copyCaption = turn.Request.IsShortcut ? "action.copy_prompt" : "action.copy";
-            var copyTip = turn.Request.IsShortcut ? "transcript.copy_prompt_tip" : "transcript.copy_question_tip";
             var row = Element("StackPanel", new XAttribute("Margin", "0,0,0,20"),
-                Header(text["speaker.you"], "AdvisorPlayerNameBrush", "CopyQuestion" + i, text, copyTip, "0,0,0,6", copyCaption));
+                Header(text["speaker.you"], "AdvisorPlayerNameBrush", "RestoreQuestion" + i, text,
+                    "transcript.restore_tip", "0,0,0,6", "action.restore_input", enabled: !busy));
             if (turn.Request.Units.Count > 0 || turn.Request.Locations.Count > 0)
                 row.Add(Element("WrapPanel", new XAttribute("Margin", "0,0,0,6"),
                     turn.Request.Units.Select(unit => AdvisorBadge.Render(unit.Id, unit.Name, links))
@@ -130,8 +129,8 @@ internal static class AdvisorTranscript
             yield return (name + "Plan" + i, text.Format("operation.review_plan", i + 1, proposal.Plans[i].Title), proposal.Plans[i].Id);
     }
 
-    private static XElement Header(string speaker, string brush, string? copyName, AdvisorText text, string tipKey, string margin,
-        string captionKey = "action.copy", TimeSpan? elapsed = null)
+    private static XElement Header(string speaker, string brush, string? actionName, AdvisorText text, string tipKey, string margin,
+        string captionKey = "action.copy", TimeSpan? elapsed = null, bool enabled = true)
     {
         var header = Element("Grid", new XAttribute("Margin", margin),
             Element("Grid.ColumnDefinitions", Element("ColumnDefinition", new XAttribute("Width", "*")),
@@ -142,7 +141,12 @@ internal static class AdvisorTranscript
                 Text("Text", ((long)elapsed.Value.TotalSeconds).ToString(CultureInfo.InvariantCulture) + "s"),
                 new XAttribute("FontSize", "12"), new XAttribute("Foreground", "#8996A3"), new XAttribute("Grid.Column", "1"),
                 new XAttribute("VerticalAlignment", "Center"), new XAttribute("Margin", "8,0,8,0")));
-        if (copyName != null) header.Add(Action(copyName, text[captionKey], text[tipKey], 2));
+        if (actionName != null)
+        {
+            var action = Action(actionName, text[captionKey], text[tipKey], 2);
+            action.Add(new XAttribute("IsEnabled", enabled));
+            header.Add(action);
+        }
         return header;
     }
 

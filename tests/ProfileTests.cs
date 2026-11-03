@@ -401,8 +401,8 @@ internal static class ProfileTests
                 Named("AddApiConfiguration").Ancestors().Contains(apiList) &&
                 new[] { "DuplicateApiConfiguration", "RemoveApiConfiguration" }.All(id => Named(id).Ancestors().Contains(apiEditor)) &&
                 Named("ApiProvider").Name.LocalName == "ComboBox", "The saved-connection list shares editing space or changes provider selection");
-            Require(Named("SettingsConfirmation").Parent == root && (string?)Named("SettingsConfirmation").Attribute("Visibility") == "Collapsed" &&
-                Named("AcceptConfirmation").Ancestors().Contains(Named("SettingsConfirmation")), "Delete and discard confirmations are not available outside the disabled page");
+            Require(Named("Confirmation").Parent == root && (string?)Named("Confirmation").Attribute("Visibility") == "Collapsed" &&
+                Named("AcceptConfirmation").Ancestors().Contains(Named("Confirmation")), "Delete and discard confirmations are not available outside the disabled page");
             Require(Named("DeveloperCategory").Name.LocalName == "TabControl" &&
                 Named("PromptFields").Ancestors().Contains(Named("DeveloperCategory")) &&
                 Named("ApplyPrompts").Ancestors().Contains(Named("DeveloperCategory")) &&

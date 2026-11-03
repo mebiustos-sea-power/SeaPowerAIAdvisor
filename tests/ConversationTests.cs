@@ -8,6 +8,27 @@ internal static class ConversationTests
 {
     internal static void Run(Action<string, Action> check)
     {
+        check("Questions can be restored only while idle and answer copying remains available during a later consultation", () =>
+        {
+            XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+            var chat = new AdvisorConversation(); var first = chat.Begin(new AdvisorQuestion("Earlier question"));
+            first.Complete("Earlier answer");
+            var next = chat.Begin(AdvisorShortcut.NextSteps.Prepare("Next steps"));
+            foreach (var language in new[] { "en", "ja" })
+            {
+                var pending = XDocument.Parse(AdvisorTranscript.Render(chat, AdvisorText.Load(language), "Adviser", "empty"));
+                var buttons = pending.Descendants().Where(e => e.Name.LocalName == "Button").ToArray();
+                var restore = buttons.Where(e => ((string?)e.Attribute(x + "Name"))?.StartsWith("RestoreQuestion", StringComparison.Ordinal) == true).ToArray();
+                Require(restore.Length == 2 && restore.All(e => (bool?)e.Attribute("IsEnabled") == false) &&
+                    buttons.Any(e => (string?)e.Attribute(x + "Name") == "CopyAnswer0" && (bool?)e.Attribute("IsEnabled") != false),
+                    "Pending consultation allowed draft restoration or disabled copying an earlier answer");
+            }
+            next.Complete("Latest answer");
+            var idle = XDocument.Parse(AdvisorTranscript.Render(chat, AdvisorText.Load("en"), "Adviser", "empty"));
+            Require(idle.Descendants().Where(e => ((string?)e.Attribute(x + "Name"))?.StartsWith("RestoreQuestion", StringComparison.Ordinal) == true)
+                .All(e => (bool?)e.Attribute("IsEnabled") == true) && chat.Exchanges.Count == 2,
+                "Completed consultation did not restore the draft actions or changed conversation history");
+        });
         check("Accepted messages are visible before a reply without entering AI history or exposing shortcut prompts", () =>
         {
             foreach (var language in new[] { "en", "ja" })

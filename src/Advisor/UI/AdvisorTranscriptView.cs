@@ -10,17 +10,17 @@ internal sealed class AdvisorTranscriptView
 {
     private readonly StackPanel panel;
     private readonly Action<Action> guard;
-    private readonly Action<AdvisorTurn> retry;
+    private readonly Action<AdvisorTurn> retry, restoreQuestion;
     private readonly Action<AdvisorTurn, ContactAssumption> reassess;
     private readonly Action<int> insertUnit;
     private readonly Action<AdvisorTurn, string?>? reviewProposal;
     private readonly IAdvisorUnitNavigation? navigation;
     private readonly IAdvisorWeaponNavigation? weapons;
     private readonly IAdvisorMapNavigation? map;
-    private readonly List<Button> reassessmentButtons = new();
+    private readonly List<Button> idleButtons = new();
     private readonly Dictionary<AdvisorTurn, FrameworkElement> answerHeaders = new();
     private readonly Stopwatch clock = Stopwatch.StartNew();
-    private readonly Dictionary<(AdvisorTurn Turn, bool Answer), double> copiedUntil = new();
+    private readonly Dictionary<AdvisorTurn, double> copiedUntil = new();
     private readonly List<CopyBinding> copyButtons = new();
     private AdvisorTurn? waitingTurn;
     private TextBlock? waitingText;
@@ -34,14 +34,14 @@ internal sealed class AdvisorTranscriptView
         if (copiedUntil.Count == 0) return;
         var now = clock.Elapsed.TotalSeconds;
         foreach (var binding in copyButtons)
-            if (copiedUntil.TryGetValue(binding.Key, out var until) && now >= until)
-            { copiedUntil.Remove(binding.Key); binding.SetCopied(false); }
+            if (copiedUntil.TryGetValue(binding.Turn, out var until) && now >= until)
+            { copiedUntil.Remove(binding.Turn); binding.SetCopied(false); }
     }
 
-    internal AdvisorTranscriptView(StackPanel panel, ScrollViewer scroll, Action<Action> guard, Action<AdvisorTurn> retry,
+    internal AdvisorTranscriptView(StackPanel panel, ScrollViewer scroll, Action<Action> guard, Action<AdvisorTurn> retry, Action<AdvisorTurn> restoreQuestion,
         Action<AdvisorTurn, ContactAssumption> reassess, Action<int> insertUnit, IAdvisorUnitNavigation? navigation = null, IAdvisorWeaponNavigation? weapons = null, IAdvisorMapNavigation? map = null, Action<AdvisorTurn, string?>? reviewProposal = null)
     {
-        this.reviewProposal = reviewProposal;
+        this.reviewProposal = reviewProposal; this.restoreQuestion = restoreQuestion;
         this.panel = panel; this.guard = guard; this.retry = retry; this.reassess = reassess; this.insertUnit = insertUnit; this.navigation = navigation; this.weapons = weapons; this.map = map;
         panel.PreviewMouseWheel += (_, e) =>
         {
@@ -53,7 +53,7 @@ internal sealed class AdvisorTranscriptView
     }
 
     internal void UpdateBusy(bool busy)
-    { foreach (var button in reassessmentButtons) button.IsEnabled = !busy; }
+    { foreach (var button in idleButtons) button.IsEnabled = !busy; }
 
     internal void Show(AdvisorConversation conversation, AdvisorText text, string advisor, string empty, AdvisorNotice? notice, AdvisorTextSize textSize, bool linkOwnUnits, bool linkContacts)
     {
@@ -96,14 +96,17 @@ internal sealed class AdvisorTranscriptView
                 link.Click += (_, e) => { e.Handled = true; guard(() => map!.Focus(item.Latitude, item.Longitude)); };
             }
         waitingTurn = null; waitingText = null;
-        copyButtons.Clear(); reassessmentButtons.Clear(); answerHeaders.Clear();
+        copyButtons.Clear(); idleButtons.Clear(); answerHeaders.Clear();
         var now = clock.Elapsed.TotalSeconds;
-        foreach (var key in copiedUntil.Keys.Where(key => !conversation.Turns.Contains(key.Turn) || copiedUntil[key] <= now).ToArray())
+        foreach (var key in copiedUntil.Keys.Where(key => !conversation.Turns.Contains(key) || copiedUntil[key] <= now).ToArray())
             copiedUntil.Remove(key);
         for (var i = 0; i < conversation.Turns.Count; i++)
         {
             var turn = conversation.Turns[i];
-            BindCopy(root, "CopyQuestion" + i, turn.Request.Text, turn, false);
+            var restore = root.FindName("RestoreQuestion" + i) as Button
+                ?? throw new InvalidOperationException("The question restore button is missing.");
+            idleButtons.Add(restore);
+            restore.Click += (_, _) => guard(() => { if (restore.IsEnabled) restoreQuestion(turn); });
             if (turn.State == AdvisorTurnState.Waiting || turn.State == AdvisorTurnState.Answered)
                 answerHeaders.Add(turn, root.FindName("AnswerHeader" + i) as FrameworkElement
                     ?? throw new InvalidOperationException("The advisor response header is missing."));
@@ -114,13 +117,13 @@ internal sealed class AdvisorTranscriptView
                     ?? throw new InvalidOperationException("The waiting progress label is missing.");
             }
             if (turn.Exchange != null)
-                BindCopy(root, "CopyAnswer" + i, turn.Exchange.Answer, turn, true);
+                BindCopy(root, "CopyAnswer" + i, turn.Exchange.Answer, turn);
             if (BattleContactAssessment.CanReassess(turn))
                 foreach (var assumption in new[] { ContactAssumption.Friendly, ContactAssumption.Enemy })
                 {
                     var button = root.FindName("Reassess" + assumption + i) as Button
                         ?? throw new InvalidOperationException("The contact reassessment button is missing.");
-                    reassessmentButtons.Add(button);
+                    idleButtons.Add(button);
                     button.Click += (_, _) => guard(() => { if (button.IsEnabled) reassess(turn, assumption); });
                 }
             if (turn.State != AdvisorTurnState.Incomplete && turn.Proposal is AdvisorOperationProposal proposal && proposal.Orders.Count > 0 && proposal.State != AdvisorProposalState.Collecting)
@@ -130,7 +133,7 @@ internal sealed class AdvisorTranscriptView
                     var button = root.FindName(action.Name) as Button
                         ?? throw new InvalidOperationException("The proposal review button is missing.");
                     if (proposal.State is AdvisorProposalState.Pending or AdvisorProposalState.Partial or AdvisorProposalState.Rejected or AdvisorProposalState.Unknown)
-                        reassessmentButtons.Add(button);
+                        idleButtons.Add(button);
                     button.Click += (_, _) => guard(() => { if (button.IsEnabled) reviewProposal?.Invoke(turn, action.PlanId); });
                 }
             }
@@ -153,18 +156,18 @@ internal sealed class AdvisorTranscriptView
         scroll.ScrollToVerticalOffset(origin.Y, false);
     }
 
-    private void BindCopy(FrameworkElement root, string name, string value, AdvisorTurn turn, bool answer)
+    private void BindCopy(FrameworkElement root, string name, string value, AdvisorTurn turn)
     {
         var button = root.FindName(name) as Button
             ?? throw new InvalidOperationException("The conversation copy button is missing: " + name);
-        var binding = new CopyBinding(button, (turn, answer));
+        var binding = new CopyBinding(button, turn);
         copyButtons.Add(binding);
-        binding.SetCopied(copiedUntil.ContainsKey(binding.Key));
+        binding.SetCopied(copiedUntil.ContainsKey(binding.Turn));
         binding.Button.Click += (_, _) => guard(() =>
         {
             if (!binding.Button.IsEnabled) return;
             UnityEngine.GUIUtility.systemCopyBuffer = value;
-            copiedUntil[binding.Key] = clock.Elapsed.TotalSeconds + 2;
+            copiedUntil[binding.Turn] = clock.Elapsed.TotalSeconds + 2;
             binding.SetCopied(true);
         });
     }
@@ -172,9 +175,9 @@ internal sealed class AdvisorTranscriptView
     private sealed class CopyBinding
     {
         internal Button Button { get; }
-        internal (AdvisorTurn Turn, bool Answer) Key { get; }
-        internal CopyBinding(Button button, (AdvisorTurn Turn, bool Answer) key)
-        { Button = button; Key = key; }
+        internal AdvisorTurn Turn { get; }
+        internal CopyBinding(Button button, AdvisorTurn turn)
+        { Button = button; Turn = turn; }
         internal void SetCopied(bool value) => Button.IsEnabled = !value;
     }
 }

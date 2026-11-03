@@ -63,6 +63,43 @@ internal static class LocationDraftTests
             }
             finally { CultureInfo.CurrentCulture = previous; }
         });
+        check("Restoring a question replaces the draft without losing text, badge identities, coordinates or label gaps", () =>
+        {
+            var original = new AdvisorDraft(); original.Add(1005, "Orion");
+            var a = original.AddLocation(new AdvisorMapCoordinate(26.125, 127.375), "Point {0}");
+            var b = original.AddLocation(new AdvisorMapCoordinate(-12.25, -45.5), "Point {0}");
+            original.RemoveLocation(a);
+            var request = original.Prepare("Patrol near Point B.");
+            var history = new AdvisorConversation(); history.Begin(request).Complete("Answer");
+            original.Clear();
+
+            var editor = new AdvisorDraft(); editor.Add(9999, "Replace me");
+            editor.AddLocation(new AdvisorMapCoordinate(0, 0), "地点{0}");
+            editor.Restore(request);
+            var restored = editor.Prepare(request.DraftText);
+            Require(restored.Text == request.Text && restored.DisplayText == request.DisplayText &&
+                restored.DisplayBody == "Patrol near Point B." && restored.Units.Single().Id == 1005 &&
+                restored.Locations.Single() == b,
+                "Restoration merged unrelated draft references, duplicated badge metadata or changed the submitted question");
+            Require(editor.AddLocation(a.Coordinate, "Point {0}").Label == "Point C",
+                "Restoration renumbered a saved location or reused an existing label");
+            editor.Remove(1005); editor.RemoveLocation(b);
+            Require(request.Units.Single().Id == 1005 && request.Locations.Single() == b && history.Turns.Count == 1 &&
+                history.Exchanges.Single().Question == request.Text,
+                "Editing a restored draft changed the historical question or created another consultation");
+
+            foreach (var plain in new[] { new AdvisorQuestion("Plain question"), AdvisorShortcut.AttackProposal.Prepare("攻撃提案") })
+            {
+                editor.Restore(plain);
+                Require(editor.Units.Count == 0 && editor.Locations.Count == 0 &&
+                    editor.Prepare(plain.DraftText).Text == plain.Text,
+                    "Restoring a plain or quick question retained stale badges or used its caption instead of its actual prompt");
+            }
+            var badgesOnly = new AdvisorDraft(); badgesOnly.Add(1001, "California");
+            var emptyBody = badgesOnly.Prepare(""); editor.Restore(emptyBody);
+            Require(emptyBody.DraftText == "" && editor.Prepare(emptyBody.DraftText).Text == emptyBody.Text,
+                "A badges-only question was restored with duplicate unit text");
+        });
         check("History location badges retain exact clickable coordinates alongside unit badges and typed text", () =>
         {
             var draft = new AdvisorDraft(); draft.Add(1005, "Orion");

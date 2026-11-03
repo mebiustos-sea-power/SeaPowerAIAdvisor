@@ -29,6 +29,12 @@ internal sealed class AdvisorDraft
     }
     internal void Remove(int id) => units.RemoveAll(unit => unit.Id == id);
     internal void Clear() { units.Clear(); locations.Clear(); }
+    internal void Restore(AdvisorQuestion request)
+    {
+        Clear();
+        units.AddRange(request.Units);
+        locations.AddRange(request.Locations);
+    }
     internal AdvisorQuestion Prepare(string text)
     {
         if (units.Count == 0 && locations.Count == 0) return new AdvisorQuestion(text);

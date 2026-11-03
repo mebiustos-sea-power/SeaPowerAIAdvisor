@@ -10,7 +10,8 @@ namespace SeaPowerAIAdvisor;
 internal sealed class AdvisorSettingsController
 {
     private enum Category { General, Profile, Templates, Api, Consultation, Information, Developer, Wip, Extensions }
-    private readonly FrameworkElement content, pane, home, page, chat, confirmation;
+    private readonly FrameworkElement content, pane, home, page, chat;
+    private readonly AdvisorConfirmation confirmation;
     private readonly FrameworkElement[] pages;
     private readonly Func<AdvisorText> text;
     private readonly AdvisorOptionsStore options;
@@ -31,13 +32,12 @@ internal sealed class AdvisorSettingsController
     private readonly TextBox rounds, history, prompt, userName;
     private readonly ComboBox size, templateInsertion;
     private readonly CheckBox campaign, log, localApi, linkOwnUnits, linkContacts, showSystemTemplates, crewEnabled, unitMentionCompletion;
-    private readonly TextBlock title, testStatus, testError, confirmationText;
-    private readonly Button test, accept, cancelConfirmation, throwException;
+    private readonly TextBlock title, testStatus, testError;
+    private readonly Button test, throwException;
     private readonly Dictionary<Category, SettingsTabNavigation> tabs = new();
     private Category? current;
     private int ActiveTab => current.HasValue && tabs.TryGetValue(current.Value, out var navigation) ? navigation.Current : 0;
     private string baseline = "", testingName = "";
-    private Action? confirmed;
     private AdvisorJob? testing;
     private bool available;
     private readonly UiNotice notice;
@@ -45,14 +45,13 @@ internal sealed class AdvisorSettingsController
     internal AdvisorSettingsController(FrameworkElement content, Func<AdvisorText> text, AdvisorOptionsStore options,
         string profileDirectory, string settingsPath, AdvisorTextTemplateStore templateStore, Func<byte[]> defaultPortrait, Action<Action> guard, TypingScope typing,
         Action releaseInput, Func<bool> consultationBusy, Action<AdvisorProfile> profileSaved, Action changed,
-        Action back, DiagnosticLog diagnostics, Func<AdvisorOperations?> operations)
+        Action back, DiagnosticLog diagnostics, Func<AdvisorOperations?> operations, AdvisorConfirmation confirmation)
     {
+        this.confirmation = confirmation;
         this.content = content; this.text = text; this.options = options; this.guard = guard;
         this.releaseInput = releaseInput; this.consultationBusy = consultationBusy; this.changed = changed; this.back = back; this.diagnostics = diagnostics;
         pane = Named<FrameworkElement>("SettingsPane"); home = Named<FrameworkElement>("SettingsHome");
         page = Named<FrameworkElement>("SettingsCategoryPage"); chat = Named<FrameworkElement>("ConversationPane");
-        confirmation = Named<FrameworkElement>("SettingsConfirmation"); confirmationText = Named<TextBlock>("SettingsConfirmationText");
-        accept = Named<Button>("AcceptConfirmation"); cancelConfirmation = Named<Button>("CancelConfirmation");
         notice = new UiNotice(Named<TextBlock>("SettingsStatus"), content); title = Named<TextBlock>("SettingsCategoryTitle");
         rounds = Named<TextBox>("MaxQueryRounds"); history = Named<TextBox>("HistoryExchanges"); prompt = Named<TextBox>("CommonPrompt");
         prompt.MaxLength = AdvisorOptions.MaxCommonPromptLength;
@@ -97,8 +96,6 @@ internal sealed class AdvisorSettingsController
         {
             if (testing == null && !consultationBusy()) AdvisorRuntime.ThrowTestException();
         });
-        Bind("CancelConfirmation", HideConfirmation);
-        Bind("AcceptConfirmation", () => { var action = confirmed; HideConfirmation(); action?.Invoke(); });
         foreach (var input in new[] { rounds, history, prompt, userName, Named<TextBox>("ProfilePath") })
         { input.GotKeyboardFocus += (_, _) => guard(() => typing.Acquire(input)); input.LostKeyboardFocus += (_, _) => guard(() => typing.Release(input)); }
         Named<TextBox>("ProfilePath").Text = AdvisorProfile.SettingsPath(profileDirectory);
@@ -123,7 +120,7 @@ internal sealed class AdvisorSettingsController
     }
     internal void Close()
     {
-        available = false; CancelTest(); HideConfirmation(); profiles.Close(); api.Close(); promptEditor.Close(); errorHistory.Close(); templates.Close(); commands.Close(); adapters.Close(); current = null; available = false;
+        available = false; CancelTest(); confirmation.Close(); profiles.Close(); api.Close(); promptEditor.Close(); errorHistory.Close(); templates.Close(); commands.Close(); adapters.Close(); current = null; available = false;
         Notice(""); pane.Visibility = Visibility.Collapsed; chat.Visibility = Visibility.Visible;
     }
     private void OpenCategory(Category category)
@@ -258,13 +255,8 @@ internal sealed class AdvisorSettingsController
     private void ConfirmDiscard(Action action) => Confirm(text()["settings.discard_question"], text()["settings.discard_action"], action, "settings.continue_editing");
     private void ConfirmDuplicate(Action action) => Confirm(text()["connection.duplicate_discard_question"], text()["settings.duplicate"], action, "settings.continue_editing");
     private void ConfirmDelete(string name, Action action) => Confirm(text().Format("settings.delete_question", name), text()["profile.remove"], action);
-    private void Confirm(string message, string caption, Action action, string cancelKey = "settings.cancel")
-    {
-        releaseInput(); confirmed = action; confirmationText.Text = message; accept.Content = caption;
-        cancelConfirmation.Content = text()[cancelKey];
-        pane.IsEnabled = false; confirmation.Visibility = Visibility.Visible; cancelConfirmation.Focus();
-    }
-    private void HideConfirmation() { confirmed = null; confirmation.Visibility = Visibility.Collapsed; pane.IsEnabled = true; }
+    private void Confirm(string message, string caption, Action action, string cancelKey = "settings.cancel") =>
+        confirmation.Show(pane, message, caption, text()[cancelKey], action);
     private void Save(Action action)
     {
         if (!available) return;
