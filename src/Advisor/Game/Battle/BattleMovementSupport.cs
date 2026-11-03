@@ -48,7 +48,10 @@ internal sealed partial class BattleOperationSupport : IAdvisorReservationSequen
     }
     public ReservationQueueState InspectReservations(string target, ReservationPlacement placement)
     {
-        var unit = Unit(target); var reason = MovementUnavailableReason(unit);
+        if (!IsInformationEnabled("battle_units")) return new ReservationQueueState(null, null, false, "information_disabled");
+        var unit = VisibleUnits().FirstOrDefault(u => Target(u) == target);
+        if (unit == null) return new ReservationQueueState(null, null, false, "target_unavailable");
+        var reason = MovementUnavailableReason(unit);
         var follows = unit.FollowingFormation && !unit.IsFormationLeader;
         if (reason == null && follows && placement == ReservationPlacement.Append && !IsOnlyFormationFollow(unit))
             reason = "formation_reservations_not_separable";

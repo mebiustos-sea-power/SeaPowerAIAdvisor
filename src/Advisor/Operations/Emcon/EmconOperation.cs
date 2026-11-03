@@ -29,8 +29,11 @@ internal sealed class EmconOperation : SensorOperationBase
     }
     public override void Validate(IReadOnlyList<OperationOrder> orders)
     { foreach (var order in orders) Read(order); }
-    public override OperationReview DescribeProposal(IReadOnlyList<OperationOrder> orders, string language) =>
-        new OperationReview(string.Join("\n", orders.Select(order => Context.Text.Format(language, "proposal_summary", Read(order).Unit.Name))));
+    public override OperationPresentation PreparePresentation(IReadOnlyList<OperationOrder> orders)
+    {
+        var units = orders.Select(Read).ToArray();
+        return new OperationPresentation(language => new OperationReview(string.Join("\n", units.Select(unit => Context.Text.Format(language, "proposal_summary", unit.Unit.Name)))));
+    }
     public override string Execute(OperationOrder order)
     {
         Read(order); Sensors.ApplyEmcon(order.Target);

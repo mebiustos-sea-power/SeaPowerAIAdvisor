@@ -51,7 +51,7 @@ internal sealed class SonobuoyCommandExtension : IAdvisorOperationExtension, IAd
     public IAdvisorOperationHandler CreateSession(IAdvisorOperationContext context) => new SonobuoyCommand(context);
 }
 
-internal sealed class SonobuoyCommand : IAdvisorOperationHandler, IAdvisorOperationActions, IAdvisorOperationPreview
+internal sealed class SonobuoyCommand : IAdvisorOperationHandler, IAdvisorOperationActions
 {
     private readonly IAdvisorOperationContext context;
     internal SonobuoyCommand(IAdvisorOperationContext context) => this.context = context;
@@ -123,33 +123,37 @@ internal sealed class SonobuoyCommand : IAdvisorOperationHandler, IAdvisorOperat
         foreach (var group in drops.GroupBy(d => (d.Unit.Target, d.Ammo.Id)))
             if (group.First().Ammo.Available < group.Count()) throw new OperationException(409, "no_available_sonobuoy");
     }
-    public OperationReview DescribeProposal(IReadOnlyList<OperationOrder> orders, string language)
+    public OperationPresentation PreparePresentation(IReadOnlyList<OperationOrder> orders)
     {
-        var drops = orders.Select(Read).ToArray();
-        return new OperationReview(string.Join("\n\n", drops.GroupBy(d => d.Unit.Target).Select(group =>
-            context.Text.Format(language, "proposal", group.First().Unit.Name, group.Count()) + "\n" +
-            string.Join("\n", group.Select((drop, i) => (i + 1) + ". " + drop.Ammo.Name + " - " +
-                drop.Position.Latitude.ToString("F5", System.Globalization.CultureInfo.InvariantCulture) + ", " +
-                drop.Position.Longitude.ToString("F5", System.Globalization.CultureInfo.InvariantCulture))))));
-    }
-    public AdvisorMapPreview Preview(IReadOnlyList<OperationOrder> orders, string language)
-    {
-        var drawings = new List<AdvisorMapDrawing>();
-        foreach (var group in orders.Select(Read).GroupBy(d => d.Unit.Target))
+        var captured = orders.Select(Read).ToArray();
+        return new OperationPresentation(Describe, Preview);
+        OperationReview Describe(string language)
         {
-            var drops = group.ToArray();
-            var route = new List<AdvisorMapCoordinate>();
-            if (context.Game.IsInformationEnabled("battle_movement_plans"))
-            {
-                var existing = context.Game.GetReservationRoute(group.Key);
-                if (existing != null) route.Add(existing.EndPosition ?? existing.CurrentPosition);
-            }
-            route.AddRange(drops.Select(d => d.Position));
-            if (route.Count > 1) drawings.Add(AdvisorMapDrawing.Line(route));
-            for (var i = 0; i < drops.Length; i++)
-                drawings.Add(AdvisorMapDrawing.Point(drops[i].Position, drops[i].Unit.Name + " " + (i + 1)));
+            return new OperationReview(string.Join("\n\n", captured.GroupBy(d => d.Unit.Target).Select(group =>
+                context.Text.Format(language, "proposal", group.First().Unit.Name, group.Count()) + "\n" +
+                string.Join("\n", group.Select((drop, i) => (i + 1) + ". " + drop.Ammo.Name + " - " +
+                    drop.Position.Latitude.ToString("F5", System.Globalization.CultureInfo.InvariantCulture) + ", " +
+                    drop.Position.Longitude.ToString("F5", System.Globalization.CultureInfo.InvariantCulture))))));
         }
-        return new AdvisorMapPreview(drawings);
+        AdvisorMapPreview Preview(string language)
+        {
+            var drawings = new List<AdvisorMapDrawing>();
+            foreach (var group in captured.GroupBy(d => d.Unit.Target))
+            {
+                var drops = group.ToArray();
+                var route = new List<AdvisorMapCoordinate>();
+                if (context.Game.IsInformationEnabled("battle_movement_plans") && context.Game.GetUnits().Any(unit => unit.Target == group.Key))
+                {
+                    var existing = context.Game.GetReservationRoute(group.Key);
+                    if (existing != null) route.Add(existing.EndPosition ?? existing.CurrentPosition);
+                }
+                route.AddRange(drops.Select(d => d.Position));
+                if (route.Count > 1) drawings.Add(AdvisorMapDrawing.Line(route));
+                for (var i = 0; i < drops.Length; i++)
+                    drawings.Add(AdvisorMapDrawing.Point(drops[i].Position, drops[i].Unit.Name + " " + (i + 1)));
+            }
+            return new AdvisorMapPreview(drawings);
+        }
     }
     public string Execute(OperationOrder order)
     {

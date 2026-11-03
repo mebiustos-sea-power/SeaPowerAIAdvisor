@@ -61,7 +61,9 @@ internal static class SonobuoyFixture
         public void ClearReservations(string target) => Unit(target).ClearReservations();
         public ReservationQueueState InspectReservations(string target, ReservationPlacement placement)
         {
-            var unit = Unit(target); var route = IsInformationEnabled("battle_movement_plans") ? unit.ReservationRoute : null;
+            var unit = units().SingleOrDefault(u => "unit:" + u.Id == target);
+            if (unit == null) return new ReservationQueueState(null, null, false, "target_unavailable");
+            var route = IsInformationEnabled("battle_movement_plans") ? unit.ReservationRoute : null;
             var position = route?.CurrentPosition;
             if (position == null && unit.Position["latitude_deg"] != null && unit.Position["longitude_deg"] != null)
                 position = new AdvisorMapCoordinate((double)unit.Position["latitude_deg"]!, (double)unit.Position["longitude_deg"]!);

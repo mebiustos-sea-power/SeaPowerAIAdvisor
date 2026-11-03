@@ -25,7 +25,8 @@ public sealed class CommandHandler : IAdvisorOperationHandler, IAdvisorOperation
     public Action Close { get; set; } = () => { };
     public string GetCandidates() => Candidates();
     public void Validate(IReadOnlyList<OperationOrder> orders) => Check(orders);
-    public OperationReview DescribeProposal(IReadOnlyList<OperationOrder> orders, string language) => Describe(orders, language);
+    public OperationPresentation PreparePresentation(IReadOnlyList<OperationOrder> orders)
+    { var describe = Describe; return new OperationPresentation(language => describe(orders, language)); }
     public string Execute(OperationOrder order) => Run(order);
     public void Dispose() => Close();
 }

@@ -159,13 +159,13 @@ internal sealed class AttackOperation : CombatOperationBase, SeaPowerAIAdvisor.A
             }
         }
     }
-    public override OperationReview DescribeProposal(IReadOnlyList<OperationOrder> orders, string language)
+    public override OperationPresentation PreparePresentation(IReadOnlyList<OperationOrder> orders)
     {
         var plans = ReadOrders(orders); var targets = Combat.GetAttackTargets().ToDictionary(t => t.Target, StringComparer.Ordinal);
-        return new OperationReview(string.Join("\n\n", plans.Select(plan =>
+        return new OperationPresentation(language => new OperationReview(string.Join("\n\n", plans.Select(plan =>
             Context.Text.Format(language, "proposal_summary", plan.Unit.Unit.Name, Context.Text.Get(language, plan.Mode == AttackUpdateMode.Append ? "mode_append" : "mode_replace")) +
             "\n" + string.Join("\n", plan.Attacks.Select(a => "- " + Context.Text.Format(language, "attack_line", targets[a.Target].Name,
-                plan.Unit.Ammunition.Single(m => m.Id == a.Ammunition).Name, a.Rounds))))));
+                plan.Unit.Ammunition.Single(m => m.Id == a.Ammunition).Name, a.Rounds)))))));
     }
 
     public override string Execute(OperationOrder order)

@@ -1,4 +1,3 @@
-using IAdvisorOperationPreview = SeaPowerAIAdvisor.IAdvisorOperationPreview;
 using SeaPowerAIAdvisor.Api;
 using System;
 using System.Collections.Generic;
@@ -447,7 +446,7 @@ internal static partial class OperationPlanTests
         try { action(); } catch (AdvisorOperationException error) when (error.Code == code) { return; }
         throw new InvalidOperationException("Expected " + code);
     }
-    private sealed class Command : IAdvisorOperation, IAdvisorOperationPlans, IAdvisorOperationPreview
+    private sealed class Command : IAdvisorOperation, IAdvisorOperationPlans
     {
         public string Id { get; }
         public AdvisorOperationText Documentation => OperationDocumentationTests.Example;
@@ -467,7 +466,7 @@ internal static partial class OperationPlanTests
             if (orders.Any(o => (int)o.Arguments["index"]! < 0)) throw new AdvisorOperationException(400, "invalid_command_argument");
             if (orders.GroupBy(o => o.Target).Any(g => g.Count() > Available)) throw new AdvisorOperationException(409, "insufficient_stock");
         }
-        public SeaPowerAIAdvisor.Api.OperationReview DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => new(Id + ":" + orders.Count);
+        public SeaPowerAIAdvisor.Api.OperationPresentation PreparePresentation(IReadOnlyList<AdvisorOperationOrder> orders) => new(language => new SeaPowerAIAdvisor.Api.OperationReview(Id + ":" + orders.Count), language => Preview(orders, language));
         public JObject Execute(string target, JObject arguments)
         {
             var index = (int)arguments["index"]!;

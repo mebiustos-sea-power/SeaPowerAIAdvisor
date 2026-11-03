@@ -4,12 +4,6 @@ using SeaPowerAIAdvisor.Api;
 
 namespace SeaPowerAIAdvisor;
 
-// Optional for operations whose proposed work has a useful geographic representation.
-internal interface IAdvisorOperationPreview
-{
-    AdvisorMapPreview Preview(IReadOnlyList<AdvisorOperationOrder> orders, string language);
-}
-
 // The review owns this lease; closing a preview does not cancel the proposal or change the game.
 internal sealed class AdvisorOperationPreview : IDisposable
 {

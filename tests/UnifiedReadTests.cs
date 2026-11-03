@@ -214,7 +214,7 @@ internal static partial class ProviderTests
             return new JArray(new JObject { ["target_ref"] = "unit:42", ["details"] = Detail }, new JObject { ["target_ref"] = "unit:43" });
         }
         public void Validate(System.Collections.Generic.IReadOnlyList<AdvisorOperationOrder> orders) { }
-        public SeaPowerAIAdvisor.Api.OperationReview DescribeProposal(System.Collections.Generic.IReadOnlyList<AdvisorOperationOrder> orders, string language) => new("Example");
+        public SeaPowerAIAdvisor.Api.OperationPresentation PreparePresentation(System.Collections.Generic.IReadOnlyList<AdvisorOperationOrder> orders) => new(language => new SeaPowerAIAdvisor.Api.OperationReview("Example"));
         public JObject Execute(string target, JObject arguments) { Writes++; return new JObject(); }
     }
     private sealed class BrokenReadKnowledge : IAdvisorQuerySession

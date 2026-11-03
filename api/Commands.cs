@@ -83,7 +83,7 @@ public interface IAdvisorOperationHandler : IDisposable
 public interface IAdvisorOperationActions
 {
     void Validate(IReadOnlyList<OperationOrder> orders);
-    OperationReview DescribeProposal(IReadOnlyList<OperationOrder> orders, string language);
+    OperationPresentation PreparePresentation(IReadOnlyList<OperationOrder> orders);
     string Execute(OperationOrder order);
 }
 
@@ -102,9 +102,16 @@ public interface IAdvisorOperationText
 
 // Optional instructions can follow a command's live prompt source. Other definition fields are frozen at registration.
 public interface IAdvisorOperationInstructions { string GetInstructions(); }
-public interface IAdvisorOperationPreview
+// Capture detached facts when a submission is accepted; rendering must not revalidate live eligibility.
+public sealed class OperationPresentation
 {
-    AdvisorMapPreview Preview(IReadOnlyList<OperationOrder> orders, string language);
+    private readonly Func<string, OperationReview> describe;
+    private readonly Func<string, AdvisorMapPreview>? preview;
+    public OperationPresentation(Func<string, OperationReview> describe, Func<string, AdvisorMapPreview>? preview = null)
+    { this.describe = describe ?? throw new ArgumentNullException(nameof(describe)); this.preview = preview; }
+    public OperationReview Describe(string language) => describe(language) ?? throw new InvalidOperationException("The command description is missing.");
+    public AdvisorMapPreview Preview(string language) => preview == null ? AdvisorMapPreview.Empty :
+        preview(language) ?? throw new InvalidOperationException("The command preview is missing.");
 }
 public interface IAdvisorOperationArgumentNormalizer
 {

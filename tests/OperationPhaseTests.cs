@@ -170,7 +170,7 @@ internal static partial class ReservationCompositionTests
         }
         public IAdvisorOperationHandler CreateSession(IAdvisorOperationContext context) => throw new InvalidOperationException("Invalid metadata created a session");
     }
-    private sealed class PhaseAction : IAdvisorOperation, IAdvisorOperationPlans, SeaPowerAIAdvisor.IAdvisorOperationPreview
+    private sealed class PhaseAction : IAdvisorOperation, IAdvisorOperationPlans
     {
         private readonly List<string> log;
         public string Id { get; }
@@ -185,7 +185,7 @@ internal static partial class ReservationCompositionTests
         public JArray Candidates() => new();
         public void Validate(IReadOnlyList<AdvisorOperationOrder> orders)
         { if (ValidationFail) throw new AdvisorOperationException(409, "target_unavailable"); }
-        public SeaPowerAIAdvisor.Api.OperationReview DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => new(Id + ":" + orders.Count);
+        public SeaPowerAIAdvisor.Api.OperationPresentation PreparePresentation(IReadOnlyList<AdvisorOperationOrder> orders) => new(language => new SeaPowerAIAdvisor.Api.OperationReview(Id + ":" + orders.Count), language => Preview(orders, language));
         public AdvisorMapPreview Preview(IReadOnlyList<AdvisorOperationOrder> orders, string language) => orders.Count < 2
             ? AdvisorMapPreview.Empty : new AdvisorMapPreview(new[] {
                 AdvisorMapDrawing.Line(orders.Select(o => new AdvisorMapCoordinate((int)o.Arguments["index"]!, 127))) });

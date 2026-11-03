@@ -21,8 +21,7 @@ public interface IAdvisorLoopableReservationOperation
 public interface IAdvisorReservationOperation
 {
     void ValidateReservations(IReadOnlyList<ReservationOrder> orders);
-    OperationReview DescribeReservation(ReservationOrder order, string language);
-    ReservationPreview PreviewReservation(ReservationOrder order, string language);
+    ReservationPresentation PreparePresentation(ReservationOrder order);
     string ExecuteReservation(ReservationOrder order);
 }
 
@@ -31,12 +30,23 @@ public sealed class ReservationOrder
     public OperationOrder Order { get; }
     public ReservationPlacement Placement { get; }
     public ReservationQueueState Queue { get; }
-    // Preview calls receive the preceding planned endpoint; validation/execution receive the original queue start.
+    // Validation, execution and presentation capture receive the original queue start; the preview delegate receives its live start separately.
     public AdvisorMapCoordinate? StartPosition { get; }
     public int Index { get; }
     public ReservationOrder(OperationOrder order, ReservationPlacement placement, ReservationQueueState queue,
         AdvisorMapCoordinate? startPosition, int index)
     { Order = order; Placement = placement; Queue = queue; StartPosition = startPosition; Index = index; }
+}
+
+// The host supplies the live route start separately from captured labels and proposed destinations.
+public sealed class ReservationPresentation
+{
+    private readonly Func<string, OperationReview> describe;
+    private readonly Func<AdvisorMapCoordinate?, string, ReservationPreview> preview;
+    public ReservationPresentation(Func<string, OperationReview> describe, Func<AdvisorMapCoordinate?, string, ReservationPreview> preview)
+    { this.describe = describe ?? throw new ArgumentNullException(nameof(describe)); this.preview = preview ?? throw new ArgumentNullException(nameof(preview)); }
+    public OperationReview Describe(string language) => describe(language) ?? throw new InvalidOperationException("The reservation description is missing.");
+    public ReservationPreview Preview(AdvisorMapCoordinate? start, string language) => preview(start, language) ?? throw new InvalidOperationException("The reservation preview is missing.");
 }
 
 public sealed class ReservationPreview
@@ -60,6 +70,7 @@ public sealed class ReservationQueueState
 
 public interface IAdvisorReservationSequenceSupport
 {
+    // Missing or ineligible targets return UnavailableReason; absent positions stay null.
     ReservationQueueState InspectReservations(string target, ReservationPlacement placement);
     // Called once, immediately before the target's first registration. Returns whether the queue/control changed.
     bool BeginReservations(string target, ReservationPlacement placement);

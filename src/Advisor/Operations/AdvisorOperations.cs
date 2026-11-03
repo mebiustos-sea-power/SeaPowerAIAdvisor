@@ -15,7 +15,7 @@ internal interface IAdvisorOperation
     OperationExecutionMode ExecutionMode { get; }
     bool RequiresApproval { get; }
     void Validate(IReadOnlyList<AdvisorOperationOrder> orders);
-    OperationReview DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language);
+    OperationPresentation PreparePresentation(IReadOnlyList<AdvisorOperationOrder> orders);
     // Metadata is read without querying live candidates or changing game state.
     JObject Definition();
     JArray Candidates();
@@ -168,13 +168,13 @@ internal sealed partial class AdvisorOperations
     internal IReadOnlyList<(string Heading, string Body)> DescribeProposal(AdvisorOperationProposal proposal, string language, string? planId = null)
     {
         CheckThread(); RequireCurrent(proposal);
-        return DescribePlan(Plan(proposal, planId), language);
+        return Presentation(Plan(proposal, planId)).Describe(language);
     }
     internal AdvisorMapPreview PreviewProposal(AdvisorOperationProposal proposal, string language, string? planId = null)
     {
         CheckThread(); RequireCurrent(proposal);
         if (proposal.State != AdvisorProposalState.Pending || !Enabled) return AdvisorMapPreview.Empty;
-        return PreviewPlan(Plan(proposal, planId), language);
+        return Presentation(Plan(proposal, planId)).Preview(language);
     }
     internal void Approve(AdvisorOperationProposal proposal, IEnumerable<string>? selected = null)
     {

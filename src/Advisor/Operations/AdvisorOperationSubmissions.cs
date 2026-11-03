@@ -52,7 +52,11 @@ internal sealed partial class AdvisorOperations
             if (receipts.ContainsKey(order.Id)) throw new AdvisorOperationException(409, "request_id_conflict");
         }
         // Validate the complete revision before changing any accepted plans or receipts.
-        foreach (var plan in plans) ValidatePlan(plan);
+        foreach (var plan in plans)
+        {
+            var prepared = ValidatePlan(plan);
+            plan.Presentation = PreparePresentation(plan, prepared);
+        }
         foreach (var order in proposal.Orders)
             receipts[order.Id].Result = new JObject { ["request_id"] = order.Id, ["status"] = "superseded", ["registered"] = false };
         foreach (var order in orders)

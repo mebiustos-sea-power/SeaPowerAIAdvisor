@@ -31,11 +31,11 @@ internal sealed class CancelAttackOperation : CombatOperationBase
         return unit;
     }
     public override void Validate(IReadOnlyList<OperationOrder> orders) { foreach (var order in orders) Read(order); }
-    public override OperationReview DescribeProposal(IReadOnlyList<OperationOrder> orders, string language)
+    public override OperationPresentation PreparePresentation(IReadOnlyList<OperationOrder> orders)
     {
         var units = orders.Select(Read).ToArray();
-        return new OperationReview(string.Join("\n\n", units.Select(unit => Context.Text.Format(language, "proposal_summary", unit.Name))),
-            new[] { Context.Text.Format(language, "execution_note", string.Join(", ", units.Select(unit => unit.Name))) });
+        return new OperationPresentation(language => new OperationReview(string.Join("\n\n", units.Select(unit => Context.Text.Format(language, "proposal_summary", unit.Name))),
+            new[] { Context.Text.Format(language, "execution_note", string.Join(", ", units.Select(unit => unit.Name))) }));
     }
     public override string Execute(OperationOrder order)
     {

@@ -96,9 +96,17 @@ internal static class CommandSdkTests
             Require(executed.Count == 0 && OperationSubmissionFixture.ReviewText(service.DescribeProposal(proposal, "en")).EndsWith("Fixture proposal", StringComparison.Ordinal) && service.PreviewProposal(proposal, "en").Drawings.Count == 0,
                 "A command ran before approval or required an optional preview");
             service.Approve(proposal); service.Approve(proposal); OperationSubmissionFixture.Submit(service, "test", first, second);
-            Require(executed.SequenceEqual(new[] { 0, 1 }) && validations.SequenceEqual(new[] { 2, 2, 2, 2 }), "Approval changed order, skipped combined validation or executed twice");
+            Require(executed.SequenceEqual(new[] { 0, 1 }) && validations.SequenceEqual(new[] { 2, 2 }), "Approval changed order, skipped combined validation or executed twice");
             service.BeginProposal("later"); OperationSubmissionFixture.Submit(service, "later", Request(service, 2)); var later = service.FinishProposal("later", true)!;
-            ready = false; service.Approve(later);
+            ready = false;
+            var checksBeforeReview = validations.Count;
+            foreach (var language in new[] { "en", "ja" })
+            {
+                Require(OperationSubmissionFixture.ReviewText(service.DescribeProposal(later, language)).Contains("Fixture proposal", StringComparison.Ordinal) &&
+                    service.PreviewProposal(later, language).Drawings.Count == 0 && validations.Count == checksBeforeReview,
+                    "A changed live condition prevented external command review or caused a display-time validation");
+            }
+            service.Approve(later);
             Require(later.State == AdvisorProposalState.Pending && later.ErrorCode == "target_unavailable" && executed.Count == 2, "Approval ignored changed live conditions"); service.Retire();
         });
         check("External commands contribute one trailing approval-notes section across phases without executing or interpreting repeated wording", () =>

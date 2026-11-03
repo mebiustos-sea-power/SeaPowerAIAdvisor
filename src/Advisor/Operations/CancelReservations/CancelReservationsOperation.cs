@@ -43,11 +43,11 @@ internal sealed class CancelReservationsOperation : IAdvisorOperationHandler, IA
         return unit;
     }
     public void Validate(IReadOnlyList<OperationOrder> orders) { foreach (var order in orders) Read(order); }
-    public OperationReview DescribeProposal(IReadOnlyList<OperationOrder> orders, string language)
+    public OperationPresentation PreparePresentation(IReadOnlyList<OperationOrder> orders)
     {
         var units = orders.Select(Read).ToArray();
-        return new OperationReview(string.Join("\n\n", units.Select(unit => context.Text.Format(language, "proposal_summary", unit.Name))),
-            new[] { context.Text.Format(language, "execution_note", string.Join(", ", units.Select(unit => unit.Name))) });
+        return new OperationPresentation(language => new OperationReview(string.Join("\n\n", units.Select(unit => context.Text.Format(language, "proposal_summary", unit.Name))),
+            new[] { context.Text.Format(language, "execution_note", string.Join(", ", units.Select(unit => unit.Name))) }));
     }
     public string Execute(OperationOrder order)
     {

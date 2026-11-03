@@ -60,7 +60,7 @@ internal abstract class SensorOperationBase : IAdvisorOperationHandler, IAdvisor
     public void Dispose() { }
     public abstract string GetCandidates();
     public abstract void Validate(IReadOnlyList<OperationOrder> orders);
-    public abstract OperationReview DescribeProposal(IReadOnlyList<OperationOrder> orders, string language);
+    public abstract OperationPresentation PreparePresentation(IReadOnlyList<OperationOrder> orders);
     public abstract string Execute(OperationOrder order);
 }
 
@@ -112,19 +112,22 @@ internal sealed class SensorOperation : SensorOperationBase
     }
     public override void Validate(IReadOnlyList<OperationOrder> orders)
     { foreach (var order in orders) Read(order); }
-    public override OperationReview DescribeProposal(IReadOnlyList<OperationOrder> orders, string language) => new OperationReview(string.Join("\n\n", orders.Select(order =>
+    public override OperationPresentation PreparePresentation(IReadOnlyList<OperationOrder> orders)
     {
-        var data = Read(order);
-        return Context.Text.Format(language, "proposal_summary", data.Unit.Unit.Name) + "\n" + string.Join("\n", data.Changes.Select(change =>
+        var entries = orders.Select(Read).ToArray();
+        return new OperationPresentation(language => new OperationReview(string.Join("\n\n", entries.Select(data =>
         {
-            var c = data.Unit.Controls.Single(v => v.Id == change.Control);
-            var setting = c.Setting == "power" ? c.Kind == "sonar" ? "deployment" : null : c.Setting;
-            var preparation = c.Options.Single(o => o.Value == change.Value).Preparation;
-            return "- " + c.Name + (setting == null ? "" : " / " + Context.Text.Get(language, "setting_" + setting)) +
-                ": " + Context.Text.Get(language, "value_" + change.Value) +
-                (preparation == null ? "" : "\n  " + Context.Text.Get(language, "preparation_" + preparation));
-        }));
-    })));
+            return Context.Text.Format(language, "proposal_summary", data.Unit.Unit.Name) + "\n" + string.Join("\n", data.Changes.Select(change =>
+            {
+                var c = data.Unit.Controls.Single(v => v.Id == change.Control);
+                var setting = c.Setting == "power" ? c.Kind == "sonar" ? "deployment" : null : c.Setting;
+                var preparation = c.Options.Single(o => o.Value == change.Value).Preparation;
+                return "- " + c.Name + (setting == null ? "" : " / " + Context.Text.Get(language, "setting_" + setting)) +
+                    ": " + Context.Text.Get(language, "value_" + change.Value) +
+                    (preparation == null ? "" : "\n  " + Context.Text.Get(language, "preparation_" + preparation));
+            }));
+        }))));
+    }
     public override string Execute(OperationOrder order)
     {
         var data = Read(order); Sensors.SetSensorControls(order.Target, data.Changes);

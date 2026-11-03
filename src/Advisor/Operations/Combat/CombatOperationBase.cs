@@ -24,6 +24,6 @@ internal abstract class CombatOperationBase : IAdvisorOperationHandler, IAdvisor
     public void Dispose() { }
     public abstract string GetCandidates();
     public abstract void Validate(IReadOnlyList<OperationOrder> orders);
-    public abstract OperationReview DescribeProposal(IReadOnlyList<OperationOrder> orders, string language);
+    public abstract OperationPresentation PreparePresentation(IReadOnlyList<OperationOrder> orders);
     public abstract string Execute(OperationOrder order);
 }

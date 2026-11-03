@@ -278,7 +278,7 @@ internal static class OperationTests
         public SeaPowerAIAdvisor.Api.OperationExecutionMode ExecutionMode => SeaPowerAIAdvisor.Api.OperationExecutionMode.Immediate;
         public bool RequiresApproval => false;
         public void Validate(IReadOnlyList<AdvisorOperationOrder> orders) { }
-        public SeaPowerAIAdvisor.Api.OperationReview DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => new("Custom operation");
+        public SeaPowerAIAdvisor.Api.OperationPresentation PreparePresentation(IReadOnlyList<AdvisorOperationOrder> orders) => new(language => new SeaPowerAIAdvisor.Api.OperationReview("Custom operation"));
         public AdvisorOperationText Documentation => OperationDocumentationTests.Example;
         public string Description => "Test failure";
         internal int Calls;

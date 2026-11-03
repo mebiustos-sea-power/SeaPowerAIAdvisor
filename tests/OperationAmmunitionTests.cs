@@ -214,7 +214,7 @@ internal static class OperationAmmunitionTests
         public JObject Definition() => new();
         public JArray Candidates() => new();
         public void Validate(IReadOnlyList<AdvisorOperationOrder> orders) { }
-        public SeaPowerAIAdvisor.Api.OperationReview DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => new("Custom");
+        public SeaPowerAIAdvisor.Api.OperationPresentation PreparePresentation(IReadOnlyList<AdvisorOperationOrder> orders) => new(language => new SeaPowerAIAdvisor.Api.OperationReview("Custom"));
         public JObject Execute(string target, JObject arguments) { Value = (string?)arguments["ammunition"]; return new JObject(); }
     }
 }

@@ -49,14 +49,23 @@ internal static partial class CombatOperationTests
             var p = s.FinishProposal("test", true)!; s.Approve(p);
             Require(p.State == AdvisorProposalState.Registered && game.Log.Count == 2, "An initial switch did not release old commitments, or later attacks were lost");
         });
-        check("Attack approval revalidates contact, ammunition compatibility, inventory, control and permissions before mutation", () =>
+        check("Stale attacks remain reviewable while approval revalidates contact, ammunition, control and permissions before mutation", () =>
         {
             foreach (var fault in new[] { "target", "ammo", "compatibility", "quantity", "control", "permission" })
             {
                 var game = new Game(); var s = Service(game);
                 OperationSubmissionFixture.Submit(s, "test", CancelAttack(43), Attack(42, "append", ("unit:7022", "missile", 2)));
                 var p = s.FinishProposal("test", true)!;
-                game.Fault = fault; s.Approve(p);
+                var accepted = new[] { "en", "ja" }.ToDictionary(language => language, language => OperationSubmissionFixture.ReviewText(s.DescribeProposal(p, language)));
+                game.Fault = fault;
+                foreach (var language in accepted.Keys)
+                    Require(OperationSubmissionFixture.ReviewText(s.DescribeProposal(p, language)) == accepted[language] &&
+                        s.PreviewProposal(p, language).Drawings.Count == 0 && game.Log.Count == 0,
+                        "A stale attack could not be reviewed without executing or revalidating it: " + fault);
+                s.Approve(p);
+                foreach (var language in accepted.Keys)
+                    Require(OperationSubmissionFixture.ReviewText(s.DescribeProposal(p, language)) == accepted[language],
+                        "A preflight rejection made the accepted attack description unavailable: " + fault);
                 Require(p.State == AdvisorProposalState.Pending && p.ErrorCode != null && game.Log.Count == 0,
                     "Stale attack data permitted partial execution: " + fault);
             }

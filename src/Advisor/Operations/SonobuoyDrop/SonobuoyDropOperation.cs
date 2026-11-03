@@ -159,26 +159,29 @@ internal sealed class SonobuoyDropOperation : IAdvisorOperationHandler,
             }
         }
     }
-    public OperationReview DescribeReservation(ReservationOrder order, string language)
+    public ReservationPresentation PreparePresentation(ReservationOrder order)
     {
         var plan = Parse(JObject.Parse(order.Order.ArgumentsJson)); var unit = ReservationUnit(order); var text = context.Text;
-        var summary = text.Format(language, "proposal_summary", unit.Info.Name, plan.Drops.Count);
-        var notes = order.Index == 0 && order.Queue.BecomesIndependent
-            ? new[] { text.Format(language, "proposal_independent", unit.Info.Name) } : Array.Empty<string>();
-        return new OperationReview(summary + "\n\n" + string.Join("\n", plan.Drops.Select((drop, i) =>
-            (i + 1).ToString(CultureInfo.InvariantCulture) + ". " + (unit.Ammunition.FirstOrDefault(a => a.Id == drop.Ammunition)?.Name ?? drop.Ammunition) +
-            " — " + drop.Position.Latitude.ToString("F5", CultureInfo.InvariantCulture) + ", " + drop.Position.Longitude.ToString("F5", CultureInfo.InvariantCulture))), notes);
+        return new ReservationPresentation(language =>
+        {
+            var summary = text.Format(language, "proposal_summary", unit.Info.Name, plan.Drops.Count);
+            var notes = order.Index == 0 && order.Queue.BecomesIndependent
+                ? new[] { text.Format(language, "proposal_independent", unit.Info.Name) } : Array.Empty<string>();
+            return new OperationReview(summary + "\n\n" + string.Join("\n", plan.Drops.Select((drop, i) =>
+                (i + 1).ToString(CultureInfo.InvariantCulture) + ". " + (unit.Ammunition.FirstOrDefault(a => a.Id == drop.Ammunition)?.Name ?? drop.Ammunition) +
+                " — " + drop.Position.Latitude.ToString("F5", CultureInfo.InvariantCulture) + ", " + drop.Position.Longitude.ToString("F5", CultureInfo.InvariantCulture))), notes);
+        }, (startPosition, language) =>
+        {
+            var drawings = new List<AdvisorMapDrawing>();
+            var route = new List<AdvisorMapCoordinate>(); if (startPosition is AdvisorMapCoordinate start) route.Add(start);
+            route.AddRange(plan.Drops.Select(d => d.Position));
+            if (route.Count > 1) drawings.Add(AdvisorMapDrawing.Line(route));
+            for (var i = 0; i < plan.Drops.Count; i++) drawings.Add(AdvisorMapDrawing.Point(plan.Drops[i].Position,
+                unit.Info.Name + " / " + (order.Index + 1).ToString(CultureInfo.InvariantCulture) + "." + (i + 1).ToString(CultureInfo.InvariantCulture)));
+            return new ReservationPreview(new AdvisorMapPreview(drawings), plan.Drops.Last().Position);
+        });
     }
-    public ReservationPreview PreviewReservation(ReservationOrder order, string language)
-    {
-        var plan = Parse(JObject.Parse(order.Order.ArgumentsJson)); var unit = ReservationUnit(order); var drawings = new List<AdvisorMapDrawing>();
-        var route = new List<AdvisorMapCoordinate>(); if (order.StartPosition is AdvisorMapCoordinate start) route.Add(start);
-        route.AddRange(plan.Drops.Select(d => d.Position));
-        if (route.Count > 1) drawings.Add(AdvisorMapDrawing.Line(route));
-        for (var i = 0; i < plan.Drops.Count; i++) drawings.Add(AdvisorMapDrawing.Point(plan.Drops[i].Position,
-            unit.Info.Name + " / " + (order.Index + 1).ToString(CultureInfo.InvariantCulture) + "." + (i + 1).ToString(CultureInfo.InvariantCulture)));
-        return new ReservationPreview(new AdvisorMapPreview(drawings), plan.Drops.Last().Position);
-    }
+
     public string ExecuteReservation(ReservationOrder order)
     {
         var plan = Parse(JObject.Parse(order.Order.ArgumentsJson)); var unit = ReservationUnit(order); var changed = false;

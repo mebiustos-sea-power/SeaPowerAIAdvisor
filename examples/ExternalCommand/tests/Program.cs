@@ -74,22 +74,28 @@ internal static class Program
             {
                 var context = new Context(); using var handler = Extension.CreateSession(context); var actions = (IAdvisorOperationActions)handler;
                 var orders = new[] { Order(26.1), Order(26.2) };
+                var presentation = actions.PreparePresentation(orders);
                 foreach (var language in new[] { "en", "ja" })
                 {
-                    var description = actions.DescribeProposal(orders, language).Description;
+                    var description = presentation.Describe(language).Description;
                     Require(description.Contains("Hobby") && description.IndexOf("26.10000", StringComparison.Ordinal) <
                         description.IndexOf("26.20000", StringComparison.Ordinal), "Review lost its target or order");
                 }
-                var preview = ((IAdvisorOperationPreview)handler).Preview(orders, "ja");
+                var preview = presentation.Preview("ja");
                 var line = preview.Drawings.Single(d => d.Kind == AdvisorMapDrawingKind.Line);
                 Require(line.Coordinates.Count == 3 && line.Coordinates[0].Latitude == 25 &&
                     line.Coordinates[1].Latitude == 26.1 && preview.Drawings.Count == 3 && context.Game.Drops.Count == 0,
                     "Preview lost the queued endpoint or proposed order");
                 context.Game.MovementEnabled = false;
                 var reads = context.Game.RouteReads;
-                preview = ((IAdvisorOperationPreview)handler).Preview(orders, "en");
+                preview = presentation.Preview("en");
                 Require(context.Game.RouteReads == reads && preview.Drawings.First().Coordinates.Count == 2,
                     "Preview read disabled movement information");
+                context.Game.Units.Clear();
+                Require(presentation.Describe("ja").Description.Contains("Hobby") && presentation.Preview("en").Drawings.Count == 3,
+                    "Target disappearance invalidated accepted labels or proposed destinations");
+                Reject("target_unavailable", () => actions.Validate(orders));
+                Require(context.Game.Drops.Count == 0, "Reviewing a stale target registered a drop");
             });
             Check("Execution uses exact coordinates, appends in order and preserves the current depth setting", () =>
             {

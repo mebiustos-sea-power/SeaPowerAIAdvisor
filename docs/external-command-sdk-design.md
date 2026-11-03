@@ -65,7 +65,7 @@ Anchor Chainは依存順の適用前に公開型を探索する。既存の外�
 | --- | --- |
 | `GetCandidates()` | 操作に対応する対象・選択肢と、現在の利用可否・理由を返す |
 | `Validate(orders)` | 引数、対象の状態、複数操作を合わせた資源消費などを副作用なしで検証する |
-| `DescribeProposal(orders, language)` | 採用前にユーザーが読む、当該コマンドの内容説明を作る |
+| `PreparePresentation(orders)` | 受理時に表示用の情報を保持し、現在の実行可否から独立した説明・地図描画を作る |
 | `Execute(order)` | 承認方針に従って本体から呼び出され、1件の操作とその実結果を返す |
 | `Dispose()` | 戦闘用インスタンスが所有する参照・資源を片付ける |
 
@@ -171,11 +171,11 @@ v0.20.0の公開契約は4、API AssemblyVersionは4.0.0.0とする。v0.19.0で
 | `AdvisorApi.RegisterOperation(IAdvisorOperationExtension)` | 有効な外部MODからのコマンド登録。プロバイダーの`Register`とは別入口 |
 | `OperationDefinition` / `OperationPlanPolicy` | 登録時に固定するID・即時／予約の実行方式・引数Schema・表示言語資源・承認・目標案数と受理範囲・選択方式 |
 | `IAdvisorOperationHandler` | 戦闘単位の`GetCandidates`・`Dispose` |
-| `IAdvisorOperationActions` | 予約合成へ参加しないコマンドの`Validate`・`DescribeProposal`・承認後の`Execute` |
+| `IAdvisorOperationActions` | 予約合成へ参加しないコマンドの`Validate`・`PreparePresentation`・承認後の`Execute` |
 | `OperationOrder` | 正式な対象参照と引数JSON。操作の順序・要求ID・提案の寿命は本体が所有 |
 | `IAdvisorOperationContext` | ゲーム支援・地図操作・登録されたコマンドの翻訳を提供 |
 | `IAdvisorGameSupport` | 自軍ユニット、搭載弾薬、予約終点、現在のソノブイ深度、移動＋1発投下予約の登録 |
-| `IAdvisorOperationPreview` | 任意。表示用の点・線・円を返し、承認画面が描画の寿命を管理 |
+| `OperationPresentation` / `ReservationPresentation` | 受理時に保持した情報から説明・点・線・円を作る。描画の寿命は承認画面が管理し、採用直前の再検証と分離する |
 | `IAdvisorOperationArgumentNormalizer` / `IAdvisorOperationReferences` | 任意。相談内参照と適格な弾薬を用い、一意に解決できる引数だけ補正 |
 | `IAdvisorOperationInstructions` | 任意。ゲーム状態に触れず現在のAI向け説明を返す。標準コマンドの一時プロンプト差替えを維持するために利用 |
 

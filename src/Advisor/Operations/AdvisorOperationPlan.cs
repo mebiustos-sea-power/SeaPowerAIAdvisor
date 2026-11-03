@@ -34,6 +34,7 @@ internal sealed class AdvisorOperationPlanPolicy
 
 internal sealed class AdvisorOperationPlan
 {
+    internal AdvisorPlanPresentation? Presentation { get; set; }
     internal JArray ReservationUpdates { get; }
     internal string Id { get; }
     internal string Title { get; }

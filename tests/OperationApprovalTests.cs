@@ -75,7 +75,12 @@ internal static class OperationApprovalTests
             Require(refreshed.Drawings.First(d => d.Kind == AdvisorMapDrawingKind.Line).Coordinates[0].Latitude == 29,
                 "Reopening a preview reused an old current position or queued endpoint");
             units.Remove(second);
-            Expect(() => service.PreviewProposal(proposal, "en"), "target_unavailable");
+            var stale = service.PreviewProposal(proposal, "en");
+            Require(stale.Drawings.Count(d => d.Kind == AdvisorMapDrawingKind.Point) == 4 &&
+                OperationSubmissionFixture.ReviewText(service.DescribeProposal(proposal, "en")).Contains("Hobby 2", StringComparison.Ordinal),
+                "A missing actor prevented inspection of the accepted destinations or their labels");
+            service.Approve(proposal);
+            Require(proposal.State == AdvisorProposalState.Pending && proposal.ErrorCode == "target_unavailable", "A missing actor was not rejected before execution");
             Require(first.Latitudes.Count == 0 && second.Latitudes.Count == 0, "A stale preview registered an order");
         });
         check("Sonobuoy previews respect the movement-plan disclosure setting without disabling the proposed drops", () =>
@@ -420,7 +425,7 @@ internal static class OperationApprovalTests
         public JObject Definition() => new() { ["id"] = Id };
         public JArray Candidates() => new();
         public void Validate(IReadOnlyList<AdvisorOperationOrder> orders) { }
-        public SeaPowerAIAdvisor.Api.OperationReview DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => new(Id + ":" + orders.Count);
+        public SeaPowerAIAdvisor.Api.OperationPresentation PreparePresentation(IReadOnlyList<AdvisorOperationOrder> orders) => new(language => new SeaPowerAIAdvisor.Api.OperationReview(Id + ":" + orders.Count));
         public JObject Execute(string target, JObject arguments)
         {
             var index = (int)arguments["index"]!;

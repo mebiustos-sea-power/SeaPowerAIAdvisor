@@ -1,4 +1,3 @@
-using IAdvisorOperationPreview = SeaPowerAIAdvisor.IAdvisorOperationPreview;
 using SeaPowerAIAdvisor.Api;
 using System;
 using System.Collections.Generic;
@@ -99,22 +98,23 @@ internal static class OperationPreviewTests
         public JObject Definition() => new() { ["id"] = Id };
         public JArray Candidates() => new();
         public void Validate(IReadOnlyList<AdvisorOperationOrder> orders) { }
-        public SeaPowerAIAdvisor.Api.OperationReview DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => new(Description);
+        public virtual SeaPowerAIAdvisor.Api.OperationPresentation PreparePresentation(IReadOnlyList<AdvisorOperationOrder> orders) => new(language => new SeaPowerAIAdvisor.Api.OperationReview(Description));
         public JObject Execute(string target, JObject arguments) { Executions++; return new JObject(); }
     }
-    private sealed class VisibleOperation : TextOperation, IAdvisorOperationPreview
+    private sealed class VisibleOperation : TextOperation
     {
         internal VisibleOperation(string id) : base(id) { }
-        public AdvisorMapPreview Preview(IReadOnlyList<AdvisorOperationOrder> orders, string language)
+        public override OperationPresentation PreparePresentation(IReadOnlyList<AdvisorOperationOrder> orders) =>
+            new(language => new OperationReview(Description), language => Preview());
+        private AdvisorMapPreview Preview()
         {
             var a = new AdvisorMapCoordinate(27, 128); var b = new AdvisorMapCoordinate(28, 129);
             return new AdvisorMapPreview(new[] { AdvisorMapDrawing.Point(a, "Example"), AdvisorMapDrawing.Line(new[] { a, b }), AdvisorMapDrawing.Circle(a, 3) });
         }
     }
-    private sealed class EmptyPreviewOperation : TextOperation, IAdvisorOperationPreview
+    private sealed class EmptyPreviewOperation : TextOperation
     {
         internal EmptyPreviewOperation() : base("custom.empty") { }
-        public AdvisorMapPreview Preview(IReadOnlyList<AdvisorOperationOrder> orders, string language) => AdvisorMapPreview.Empty;
     }
     private sealed class Map : IAdvisorMap
     {

@@ -11,7 +11,7 @@ namespace SeaPowerAIAdvisor;
 
 // All built-in and external commands cross this boundary before entering the existing approval engine.
 internal sealed class AdvisorRegisteredOperation : IAdvisorOperation, IAdvisorOperationPlans,
-    IAdvisorOperationPreview, IAdvisorOperationArgumentNormalizer, IAdvisorOperationContactQuery, IAdvisorReservationCommand, IAdvisorExtensionVersion, IDisposable
+    IAdvisorOperationArgumentNormalizer, IAdvisorOperationContactQuery, IAdvisorReservationCommand, IAdvisorExtensionVersion, IDisposable
 {
     private readonly AdvisorOperationRegistration registration;
     private readonly AdvisorOperationContext context;
@@ -33,8 +33,8 @@ internal sealed class AdvisorRegisteredOperation : IAdvisorOperation, IAdvisorOp
     public ReservationQueueState InspectQueue(string target, ReservationPlacement placement) => Translate(() => context.InspectReservations(target, placement));
     public bool BeginQueue(string target, ReservationPlacement placement) => Translate(() => context.BeginReservations(target, placement));
     public void ValidateReservations(IReadOnlyList<ReservationOrder> orders) => Call(h => { Reservation(h).ValidateReservations(orders); return true; });
-    public OperationReview DescribeReservation(ReservationOrder order, string language) => Call(h => Reservation(h).DescribeReservation(order, language));
-    public ReservationPreview PreviewReservation(ReservationOrder order, string language) => Call(h => Reservation(h).PreviewReservation(order, language));
+    public ReservationPresentation PrepareReservationPresentation(ReservationOrder order) => Call(h => Reservation(h).PreparePresentation(order)
+        ?? throw new InvalidOperationException("The reservation presentation is missing: " + Id));
     public JObject ExecuteReservation(ReservationOrder order) => Call(h => JObject.Parse(Reservation(h).ExecuteReservation(order)));
     public string Id => registration.Definition.Id;
     public string Description => registration.Instructions;
@@ -63,10 +63,9 @@ internal sealed class AdvisorRegisteredOperation : IAdvisorOperation, IAdvisorOp
         h is Api.IAdvisorOperationContactCandidates query ? JArray.Parse(query.GetCandidates(contacts, shooter))
             : throw new OperationException(400, "candidate_contacts_unsupported"));
     public void Validate(IReadOnlyList<AdvisorOperationOrder> orders) => Call(h => { Actions(h).Validate(Orders(orders)); return true; });
-    public OperationReview DescribeProposal(IReadOnlyList<AdvisorOperationOrder> orders, string language) => Call(h => Actions(h).DescribeProposal(Orders(orders), language));
+    public OperationPresentation PreparePresentation(IReadOnlyList<AdvisorOperationOrder> orders) => Call(h => Actions(h).PreparePresentation(Orders(orders))
+        ?? throw new InvalidOperationException("The command presentation is missing: " + Id));
     public JObject Execute(string target, JObject arguments) => Call(h => JObject.Parse(Actions(h).Execute(new OperationOrder(target, arguments.ToString(Formatting.None)))));
-    public AdvisorMapPreview Preview(IReadOnlyList<AdvisorOperationOrder> orders, string language) => Call(h =>
-        h is Api.IAdvisorOperationPreview preview ? preview.Preview(Orders(orders), language) : AdvisorMapPreview.Empty);
     public JObject NormalizeArguments(string target, JObject arguments, AdvisorOperationReferences references, JArray resolutions) => Call(h =>
     {
         if (h is not Api.IAdvisorOperationArgumentNormalizer normalizer) return arguments;

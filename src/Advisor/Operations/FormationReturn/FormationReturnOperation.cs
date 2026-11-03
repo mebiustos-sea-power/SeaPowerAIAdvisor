@@ -41,18 +41,20 @@ internal sealed class FormationReturnOperation : MovementOperationBase
     }
     public override void ValidateReservations(IReadOnlyList<ReservationOrder> orders)
     { foreach (var order in orders) Read(order); }
-    public override OperationReview DescribeReservation(ReservationOrder order, string language)
+    public override ReservationPresentation PreparePresentation(ReservationOrder order)
     {
         var unit = Read(order);
-        return new OperationReview(Context.Text.Format(language, "proposal_summary", unit.Unit.Name, unit.LeaderName ?? unit.LeaderTarget!));
+        return new ReservationPresentation(language =>
+        {
+            return new OperationReview(Context.Text.Format(language, "proposal_summary", unit.Unit.Name, unit.LeaderName ?? unit.LeaderTarget!));
+        }, (startPosition, language) =>
+        {
+            var drawings = startPosition is AdvisorMapCoordinate start
+                ? new[] { AdvisorMapDrawing.Point(start, Context.Text.Format(language, "preview_return", unit.Unit.Name)) } : new AdvisorMapDrawing[0];
+            return new ReservationPreview(new AdvisorMapPreview(drawings), null);
+        });
     }
-    public override ReservationPreview PreviewReservation(ReservationOrder order, string language)
-    {
-        var unit = Read(order);
-        var drawings = order.StartPosition is AdvisorMapCoordinate start
-            ? new[] { AdvisorMapDrawing.Point(start, Context.Text.Format(language, "preview_return", unit.Unit.Name)) } : new AdvisorMapDrawing[0];
-        return new ReservationPreview(new AdvisorMapPreview(drawings), null);
-    }
+
     public override string ExecuteReservation(ReservationOrder order)
     {
         var unit = Read(order); Movement.AppendFormationReturn(order.Order.Target);

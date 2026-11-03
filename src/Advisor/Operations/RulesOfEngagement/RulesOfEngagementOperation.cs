@@ -57,14 +57,13 @@ internal sealed class RulesOfEngagementOperation : IAdvisorOperationHandler, IAd
         return (unit, mode);
     }
     public void Validate(IReadOnlyList<OperationOrder> orders) { foreach (var order in orders) Read(order); }
-    public OperationReview DescribeProposal(IReadOnlyList<OperationOrder> orders, string language)
+    public OperationPresentation PreparePresentation(IReadOnlyList<OperationOrder> orders)
     {
         var items = orders.Select(Read).ToArray();
-        var description = string.Join("\n", items.Select(item => context.Text.Format(language, "proposal_summary", item.Unit.Unit.Name,
-            context.Text.Get(language, "mode_" + Code(item.Unit.Mode)), context.Text.Get(language, "mode_" + Code(item.Mode)))));
         var holdUnits = items.Where(item => item.Mode == RulesOfEngagement.Hold).Select(item => item.Unit.Unit.Name).ToArray();
-        return new OperationReview(description, holdUnits.Length == 0 ? Array.Empty<string>() :
-            new[] { context.Text.Format(language, "execution_note", string.Join(", ", holdUnits)) });
+        return new OperationPresentation(language => new OperationReview(string.Join("\n", items.Select(item => context.Text.Format(language, "proposal_summary", item.Unit.Unit.Name,
+            context.Text.Get(language, "mode_" + Code(item.Unit.Mode)), context.Text.Get(language, "mode_" + Code(item.Mode))))),
+            holdUnits.Length == 0 ? Array.Empty<string>() : new[] { context.Text.Format(language, "execution_note", string.Join(", ", holdUnits)) }));
     }
     public string Execute(OperationOrder order)
     {
