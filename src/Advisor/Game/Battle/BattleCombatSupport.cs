@@ -89,7 +89,7 @@ internal sealed partial class BattleOperationSupport : IAdvisorCombatSupport
         {
             var pending = PendingAttackTasks(unit).ToArray();
             var ammo = GetAmmunition("unit:" + unit.Id.ToString(CultureInfo.InvariantCulture)).Where(a =>
-                unit.GetWeaponSystemsForAmmunition(a.Id, false).Count > 0).Select(a =>
+                unit.GetWeaponSystemsForAmmunition(a.Id, false) is { Count: > 0 }).Select(a =>
             {
                 var reserved = unit._userRoot?.TaskViewModels.Where(v => v?.Task is AttackAtWaypoint task && task._ammunitionName == a.Id)
                     .Sum(v => (long)((AttackAtWaypoint)v.Task)._salvo) ?? 0;

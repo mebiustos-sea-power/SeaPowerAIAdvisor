@@ -28,7 +28,7 @@ internal sealed partial class BattleOperationSupport
         var shooter = shooters[unit.Unit.Target];
         foreach (var ammunition in unit.Ammunition.Where(a => Math.Max(a.Available, a.AvailableAfterSwitch) > 0))
         {
-            if (!shooter.GetWeaponSystemsForAmmunition(ammunition.Id, false).Any(w => !w.IsDestroyed && !w.Inoperable.Value)) continue;
+            if (shooter.GetWeaponSystemsForAmmunition(ammunition.Id, false)?.Any(w => !w.IsDestroyed && !w.Inoperable.Value) != true) continue;
             var native = shooter.getAmmunitionByName(ammunition.Id);
             foreach (var contact in ammunition.CompatibleTargets.Where(contacts.ContainsKey))
             {
