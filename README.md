@@ -6,11 +6,12 @@ An in-game operations adviser and screen-translation tool for **Sea Power: Naval
 
 [Download releases](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/releases) · [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3821064016) · [Report an issue](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/issues)
 
-## What's new in v0.20.1
+## What's new in v0.20.2
 
-Fixed an error that could stop tactical consultations after missile launches (`unit:-1` duplicate-key error). Objects without a player-map identity are now excluded from command targets.
+- Fixed an error that could stop tactical consultations when a unit carried ammunition without an associated launcher.
+- Selecting a screen-translation region with no translatable text now shows an on-screen message without raising an exception.
 
-See the [v0.20.1 release notes](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/releases/tag/v0.20.1) for details.
+See the [v0.20.2 release notes](https://github.com/mebiustos-sea-power/SeaPowerAIAdvisor/releases/tag/v0.20.2) for details.
 
 ## Features
 
