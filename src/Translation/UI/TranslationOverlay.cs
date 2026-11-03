@@ -93,6 +93,7 @@ internal sealed class TranslationOverlay : IDisposable
             {
                 var captured = ScreenTextReader.Capture(candidates[index], GameLanguage.Read(), layer);
                 afterRelease?.Dispose(); afterRelease = captured;
+                if (captured == null) Status(text("translation.error.empty"));
             });
         };
         shield.PreviewMouseUp += (_, args) => { args.Handled = true; if (args.ChangedButton == MouseButton.Left) releaseFrame = Time.frameCount; };
