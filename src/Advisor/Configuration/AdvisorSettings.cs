@@ -79,7 +79,6 @@ internal sealed class AdvisorSettings
     internal static byte[]? Backup(string path)
     {
         try { return ConfigFile.Backup(path); }
-        catch (InvalidDataException) { throw new AiConnectionException("settings_invalid"); }
         catch (IOException) { throw new AiConnectionException("settings_unreadable"); }
         catch (UnauthorizedAccessException) { throw new AiConnectionException("settings_unreadable"); }
     }

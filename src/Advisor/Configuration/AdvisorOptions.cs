@@ -162,7 +162,6 @@ internal sealed class AdvisorOptionsStore
     internal byte[]? Backup()
     {
         try { return ConfigFile.Backup(Path); }
-        catch (InvalidDataException) { throw new AdvisorOptionsException("options_invalid"); }
         catch (IOException) { throw new AdvisorOptionsException("options_unreadable"); }
         catch (UnauthorizedAccessException) { throw new AdvisorOptionsException("options_unreadable"); }
     }

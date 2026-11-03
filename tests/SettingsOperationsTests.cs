@@ -30,6 +30,31 @@ internal static class SettingsOperationsTests
             var cancelled = store.Read().Find(pending.Id)!; cancelled.ApiKey = "unsaved";
             Require(store.Read().Main.ApiKey == "mock_main", "Canceling an editor altered saved credentials");
         }));
+        check("API libraries larger than 16 KiB can be backed up and restored within their own document limit", () => InTemp(directory =>
+        {
+            var path = Path.Combine(directory, "connections.json");
+            var store = new AdvisorApiSettingsStore(path, () => "API {0}");
+            var prompt = new string('あ', AdvisorApiConfiguration.MaxPromptLength);
+            for (var i = 0; i < 4; i++)
+            {
+                var entry = store.Read().Add(); entry.ApiKey = "mock_large_library_" + i; entry.Model = "gemini-" + i;
+                entry.Prompt = prompt; store.SaveEntry(entry, true);
+            }
+            var entries = store.Read().Configurations;
+            store.Assign(entries[0].Id, entries[1].Id);
+            var before = File.ReadAllBytes(path);
+            Require(before.Length > 16_384 && before.Length <= AdvisorSettings.MaxDocumentBytes,
+                "The fixture did not fall between the former shared limit and the API document limit");
+            var backup = AdvisorSettings.Backup(path)!;
+            Require(backup.SequenceEqual(before), "Backing up a valid API library lost bytes");
+            store.SaveLogging(true);
+            AdvisorSettings.Restore(path, backup);
+            var restored = store.Read();
+            Require(File.ReadAllBytes(path).SequenceEqual(before) && restored.Configurations.Count == 4 &&
+                restored.Configurations.All(entry => entry.Prompt == prompt) && restored.MainId == entries[0].Id &&
+                restored.SubId == entries[1].Id && !restored.LogAiJson,
+                "Restoring a valid API library lost connections, instructions or role assignments");
+        }));
         check("Connection prompts default empty, preserve multiline instructions and reject invalid edits without changing storage", () => InTemp(directory =>
         {
             var path = Path.Combine(directory, "connections.json"); var store = new AdvisorApiSettingsStore(path, () => "API {0}");

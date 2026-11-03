@@ -35,6 +35,23 @@ internal static class OptionsTests
                 throw new InvalidOperationException("An invalid completion setting was accepted");
             }
         }));
+        check("Behavior settings larger than 16 KiB survive reopening and unrelated category saves without losing values", () => InTemp(directory =>
+        {
+            var path = Path.Combine(directory, "options.json");
+            var disabled = Enumerable.Range(0, 256).Select(i => "external.command_" + i.ToString("D3") + new string('x', 60)).ToArray();
+            var prompt = new string('あ', AdvisorOptions.MaxCommonPromptLength);
+            var original = new AdvisorOptions(commonPrompt: prompt, disabledCommands: disabled);
+            var store = new AdvisorOptionsStore(path); store.Write(original);
+            var before = File.ReadAllBytes(path);
+            Require(before.Length > 16_384, "The fixture did not cross the former shared file limit");
+            var reopened = new AdvisorOptionsStore(path);
+            Require(reopened.Current.CommonPrompt == prompt && reopened.Current.DisabledCommands.SequenceEqual(original.DisabledCommands) &&
+                File.ReadAllBytes(path).SequenceEqual(before), "Reopening large valid settings rejected, rewrote or lost their contents");
+            reopened.SaveGeneral(AdvisorTextSize.Large, "Commander");
+            var saved = new AdvisorOptionsStore(path).Current;
+            Require(saved.TextSize == AdvisorTextSize.Large && saved.UserName == "Commander" && saved.CommonPrompt == prompt &&
+                saved.DisabledCommands.SequenceEqual(original.DisabledCommands), "Saving another category lost large existing settings");
+        }));
         check("Missing behavior settings opt out of campaign AI and malformed values remain visible errors", () => InTemp(directory =>
         {
             var path = Path.Combine(directory, "options.json");

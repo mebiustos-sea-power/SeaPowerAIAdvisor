@@ -9,7 +9,6 @@ internal static class ConfigFile
     internal static byte[]? Backup(string path)
     {
         if (!File.Exists(path)) return null;
-        if (new FileInfo(path).Length > 16_384) throw new InvalidDataException("Settings file is too large.");
         return File.ReadAllBytes(path);
     }
     internal static void Restore(string path, byte[]? before)
