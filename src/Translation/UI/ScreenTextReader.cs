@@ -8,7 +8,7 @@ namespace SeaPowerAIAdvisor.Translation;
 // Capture displayed text and request-scoped destinations, not view-model fields or editable input values.
 internal static class ScreenTextReader
 {
-    internal static ScreenTextSnapshot Capture(FrameworkElement root, string language, DependencyObject? exclude = null)
+    internal static ScreenTextSnapshot? Capture(FrameworkElement root, string language, DependencyObject? exclude = null)
     {
         var targets = new List<ScreenTextTarget>(); var pending = new Stack<DependencyObject>(); var seen = new HashSet<DependencyObject>(); long characters = 0;
         void Add(TextBlock owner, FrameworkElement target, DependencyProperty property)
@@ -43,7 +43,7 @@ internal static class ScreenTextReader
             }
             for (var i = VisualTreeHelper.GetChildrenCount(node) - 1; i >= 0; i--) pending.Push(VisualTreeHelper.GetChild(node, i));
         }
-        return new ScreenTextSnapshot(root, targets, language);
+        return targets.Count == 0 ? null : new ScreenTextSnapshot(root, targets, language);
     }
 }
 
