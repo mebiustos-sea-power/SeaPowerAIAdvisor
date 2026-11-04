@@ -9,6 +9,7 @@
   <ItemGroup>
     <!-- Share source ownership without requiring the Advisor MOD or a common runtime DLL. -->
     <Compile Include="..\Shared\Game\*.cs" Link="Shared\Game\%(Filename)%(Extension)" />
+    <Compile Include="..\Shared\Game\Saving\SaveDataFormat.cs" Link="Shared\Game\Saving\SaveDataFormat.cs" />
     <Compile Include="..\Shared\AI\**\*.cs" Link="Shared\AI\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="..\Shared\Configuration\*.cs" Link="Shared\Configuration\%(Filename)%(Extension)" />
     <Compile Include="..\Shared\Diagnostics\DiagnosticLog.cs" Link="Shared\Diagnostics\DiagnosticLog.cs" />

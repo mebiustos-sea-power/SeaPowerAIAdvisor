@@ -16,6 +16,7 @@ internal static class Program
         {
             BattleBriefingTests.Run(Check);
             BattleMissionMessageTests.Run(Check);
+            MissionMessageSaveTests.Run(Check);
             RuntimeTests.Run(Check);
             LocalApiTests.Run(Check);
             OperationTests.Run(Check);
@@ -148,6 +149,7 @@ internal static class Program
         RuntimeTests.Run(Check);
         BattleBriefingTests.Run(Check);
         BattleMissionMessageTests.Run(Check);
+        MissionMessageSaveTests.Run(Check);
         BattleBriefingTests.RunInstalled(args[2], Check);
         BattleTests.Run(Check);
         SituationTests.Run(args[0], Check, args.Skip(3).ToArray());

@@ -5,19 +5,19 @@ namespace SeaPowerAIAdvisor.Shared;
 // A load stages detached data; feature restoration waits until native units are ready.
 internal sealed class SaveDataSession
 {
-    private readonly Action reset;
+    private readonly Action<object> reset;
     private readonly Func<Func<byte[]?>?> prepareCapture;
     private readonly Action<byte[]?> restore;
     private object? owner;
     private byte[]? pending;
     private bool staged, ready;
-    internal SaveDataSession(Action reset, Func<Func<byte[]?>?> prepareCapture, Action<byte[]?> restore)
+    internal SaveDataSession(Action<object> reset, Func<Func<byte[]?>?> prepareCapture, Action<byte[]?> restore)
     { this.reset = reset; this.prepareCapture = prepareCapture; this.restore = restore; }
 
     internal void Begin(object mission)
     {
         owner = null; pending = null; staged = false; ready = false;
-        reset(); owner = mission;
+        reset(mission); owner = mission;
     }
     internal void Stage(object mission, string? payload)
     {

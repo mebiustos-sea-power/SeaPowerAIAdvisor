@@ -46,7 +46,7 @@ internal static class SaveDataCompatibilityTests
         check("Unsupported old MOD data is reset once and permits new saves without touching the original bytes", () =>
         {
             var state = new AdvisorSaveData(new SaveDataFormat(2, 2));
-            var session = new SaveDataSession(state.Reset, () => state.Capture, state.Restore);
+            var session = new SaveDataSession(state.Begin, () => state.Capture, state.Restore);
             var original = Bytes(Document(1, new JObject { ["obsolete"] = 7 })); var before = original.ToArray();
             var mission = new object(); state.Data["previous_mission"] = true;
             session.Begin(mission); session.Stage(mission, SaveDataSection.Encode(original)); session.Complete(mission, true);
@@ -75,7 +75,7 @@ internal static class SaveDataCompatibilityTests
                 "{\"version\":1,\"version\":3,\"data\":{}}", "{\"version\":3,\"data\":{}} {}", "not json" })
                 Reject(() => state.Restore(Encoding.UTF8.GetBytes(json)));
             Require(state.UnsupportedData == null && (int?)state.Data["existing"] == 9, "A malformed or future schema was silently reset");
-            var session = new SaveDataSession(state.Reset, () => state.Capture, state.Restore); var mission = new object();
+            var session = new SaveDataSession(state.Begin, () => state.Capture, state.Restore); var mission = new object();
             session.Begin(mission); session.Stage(mission, SaveDataSection.Encode(Bytes(Document(4, new JObject()))));
             Reject(() => session.Complete(mission, true)); Reject(() => session.Capture());
             Require(state.UnsupportedData == null, "A future schema was treated as a retired one");

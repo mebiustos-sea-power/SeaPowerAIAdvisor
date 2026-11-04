@@ -194,7 +194,7 @@ internal sealed partial class BattleQuerySession : IAdvisorQuerySession, IAdviso
                     : TextSummaries.Present("briefing", (string)snapshot["mission_briefing"]!);
                 if (information.Allows(InformationKind.BattleMissionMessages))
                 {
-                    briefing["message_history_scope"] = "since_current_load";
+                    briefing["message_history_scope"] = "recorded_publications";
                     briefing["messages"] = new JArray(Rows("mission_messages").OfType<JObject>().Select(message =>
                     {
                         var item = (JObject)message.DeepClone();

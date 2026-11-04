@@ -13,7 +13,7 @@ internal sealed class AdvisorSaveDataNotice
 {
     // The native model is internal; reflection is confined to this presentation boundary.
     private static readonly Lazy<Type> MessageBox = new(() => typeof(MainGameViewModel).Assembly.GetType("SeapowerUI.ViewModels.MessageBoxViewModel", true)!);
-    private SaveDataUpgradeResult? shown;
+    private AdvisorSaveDataIssue? shown;
     internal void Tick(AdvisorSaveData data, MainGameViewModel current, Action<Action> guard)
     {
         var issue = data.UnsupportedData;
@@ -26,7 +26,7 @@ internal sealed class AdvisorSaveDataNotice
         var notice = Activator.CreateInstance(MessageBox.Value, true)
             ?? throw new InvalidOperationException("The game's message-box model could not be created.");
         Set(notice, "Header", text["save_data.notice_title"]);
-        Set(notice, "Message", text["save_data.unsupported_old"]);
+        Set(notice, "Message", text.Format("save_data.unsupported_old", text["save_data.part." + issue.Part]));
         Set(notice, "MessageBoxType", MessageBoxType.Warning);
         Set(notice, "AcknowledgeCommandLabel", text["save_data.continue"]);
         Set(notice, "AcknowledgeCommand", new DelegateCommand(_ => guard(() => WindowHostCommands.CloseWindowCommand.Execute(notice, view))));

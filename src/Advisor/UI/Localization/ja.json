@@ -1,6 +1,8 @@
 {
+  "save_data.part.mission_messages": "任務メッセージの履歴",
+  "save_data.part.mod": "AIアドバイザーの保存情報",
   "save_data.notice_title": "AIアドバイザー：保存情報",
-  "save_data.unsupported_old": "このセーブに含まれるAIアドバイザーの保存情報は、対応を終了した古い形式のため復元できませんでした。保存情報を初期状態にして続行します。次回保存時、復元できなかった情報は引き継がれません。",
+  "save_data.unsupported_old": "このセーブに含まれる{0}は、対応を終了した古い形式のため復元できませんでした。復元できなかった情報を初期状態にして続行します。次回保存時、その情報は引き継がれません。",
   "save_data.continue": "続行",
   "wip.category": "WIP（試験的機能）",
   "wip.campaign_alpha": "Bungalow's Dynamic Campaign Mod のキャンペーン画面でAIを有効にする（アルファ版）",
@@ -309,7 +311,7 @@
   "information.threats_tip": "識別された艦級・機種などの装備候補や射程を示す性能資料。",
   "information.briefing": "ブリーフィング",
   "information.mission_messages": "任務メッセージ",
-  "information.mission_messages_tip": "ロード後に表示された任務メッセージを送信します。",
+  "information.mission_messages_tip": "表示された任務メッセージを送信します。セーブから復元した履歴も含みます。",
   "information.reports": "公開済みの報告",
   "information.forces": "艦隊の基本情報・位置・任務",
   "information.ships": "所属艦の基本情報",

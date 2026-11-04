@@ -1,6 +1,8 @@
 {
+  "save_data.part.mission_messages": "mission message history",
+  "save_data.part.mod": "AI Advisor data",
   "save_data.notice_title": "AI Advisor save data",
-  "save_data.unsupported_old": "The AI Advisor data in this save uses an old format that is no longer supported and could not be restored. Play will continue with that data reset. The unrestored data will not be carried over when you next save.",
+  "save_data.unsupported_old": "The {0} in this save uses an old format that is no longer supported and could not be restored. Play will continue with that information reset. The unrestored information will not be carried over when you next save.",
   "save_data.continue": "Continue",
   "wip.category": "WIP (experimental)",
   "wip.campaign_alpha": "Enable AI on the campaign screen of Bungalow's Dynamic Campaign Mod (alpha)",
@@ -309,7 +311,7 @@
   "information.threats_tip": "Reference specifications for possible weapons and ranges of identified classes and aircraft types.",
   "information.briefing": "Mission briefing",
   "information.mission_messages": "Mission messages",
-  "information.mission_messages_tip": "Send mission messages displayed since the current load.",
+  "information.mission_messages_tip": "Send displayed mission messages, including history restored from the save.",
   "information.reports": "Published reports",
   "information.forces": "Fleet identities, positions and missions",
   "information.ships": "Ship identities",

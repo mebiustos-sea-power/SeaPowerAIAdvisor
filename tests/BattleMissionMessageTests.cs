@@ -46,7 +46,7 @@ internal static class BattleMissionMessageTests
                     {
                         var data = result["results"]![0]!["data"]!;
                         Require((data["text"] != null) == briefing && (data["messages"] != null) == messages, "A disabled source leaked or an enabled source was blocked");
-                        if (messages) Require(data["messages"]!.Count() == 1 && (string?)data["message_history_scope"] == "since_current_load", "Message coverage was lost");
+                        if (messages) Require(data["messages"]!.Count() == 1 && (string?)data["message_history_scope"] == "recorded_publications", "Message coverage was lost");
                     }
                     var full = session.ExportSituation().ToString();
                     Require(full.Contains("Original briefing", StringComparison.Ordinal) == briefing && full.Contains("Protect the convoy", StringComparison.Ordinal) == messages, "Full delivery bypassed independent permissions");

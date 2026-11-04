@@ -19,7 +19,7 @@ public sealed class Plugin : IAnchorChainMod
     private static BattleIntegration? battle;
     private static Crew.CrewIntegration? crew;
     private static Shared.GameSaveIntegration? saveIntegration;
-    private static readonly AdvisorSaveData SaveData = new();
+    private static readonly AdvisorSaveData SaveData = new(missionMessages: Shared.BattleMissionMessageSource.History);
     private static readonly AdvisorSaveDataNotice SaveDataNotice = new();
     private static AdvisorOptionsStore? options;
     private static AdvisorBackendRegistry? backends;
@@ -57,7 +57,7 @@ public sealed class Plugin : IAnchorChainMod
             harmony = new Harmony(ModId);
             battle = new BattleIntegration(BattleRuntime, Diagnostics, options, Backends);
             harmony.Patch(Required(typeof(SeaPower.SceneCreator), "LoadMission"),
-                prefix: new HarmonyMethod(typeof(Plugin), nameof(MissionMessagesBegin)));
+                prefix: new HarmonyMethod(typeof(Plugin), nameof(InstallMissionMessageCapture)));
             crew = new Crew.CrewIntegration(Path.Combine(UnityEngine.Application.persistentDataPath, "SeaPowerAIAdvisor", "crew-chatter.json"),
                 () => options.Current.CrewEnabled, options.SaveCrew,
                 id => { if (!options.Current.LocalConnections.AllowedIds.Contains(id)) throw new LocalApiException(403, "connection_not_allowed"); },
@@ -120,7 +120,7 @@ public sealed class Plugin : IAnchorChainMod
                 if (screenTranslation != null) UnityEngine.Object.Destroy(screenTranslation);
                 Log.LogError("Screen translation initialization failed: " + error);
             }
-            saveIntegration = new Shared.GameSaveIntegration(ModId, SaveData.Reset, () => SaveData.PrepareCapture(options.Current), RestoreSaveData, Log.LogError);
+            saveIntegration = new Shared.GameSaveIntegration(ModId, SaveData.Begin, () => SaveData.PrepareCapture(options.Current), RestoreSaveData, Log.LogError);
             installed = true;
             Log.LogInfo("Advisor 0.20.1 ready for tactical battles. DCM is optional. Open AI in the bottom-right battle toolbar.");
             TryInstallCampaign();
@@ -165,7 +165,7 @@ public sealed class Plugin : IAnchorChainMod
     {
         SaveData.Restore(bytes);
         if (SaveData.UnsupportedData is { } issue)
-            Log.LogInfo($"AI Advisor save data in retired format {issue.SourceVersion} was not restored; continuing with initial state.");
+            Log.LogInfo($"AI Advisor save data ({issue.Part}) in retired format {issue.SourceVersion} was not restored; continuing with initial state.");
     }
     private static void BattleFrame(MainGameViewModel __instance)
     {
@@ -178,9 +178,8 @@ public sealed class Plugin : IAnchorChainMod
         crew?.Tick(__instance, battle?.HudControl);
         TryInstallCampaign();
     }
-    private static void MissionMessagesBegin(SeaPower.SceneCreator __instance)
+    private static void InstallMissionMessageCapture()
     {
-        Shared.BattleMissionMessageSource.Begin(__instance);
         if (missionMessagesInstalled) return;
         // Harmony compiles the popup factory and initializes its Noesis types. Mission loading follows UI startup.
         try

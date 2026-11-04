@@ -29,7 +29,7 @@ internal static class SaveDataTests
         check("Load restoration waits for both metadata and ready units and runs once", () =>
         {
             var mission = new object(); var calls = new List<string>(); byte[]? restored = null;
-            var session = new SaveDataSession(() => calls.Add("reset"), () => () => restored, bytes => { calls.Add("restore"); restored = bytes; });
+            var session = new SaveDataSession(_ => calls.Add("reset"), () => () => restored, bytes => { calls.Add("restore"); restored = bytes; });
             session.Begin(mission); session.Complete(mission, true);
             Require(calls.SequenceEqual(new[] { "reset" }), "Restored before metadata was read");
             session.Stage(mission, SaveDataSection.Encode(new byte[] { 4, 5 }));
@@ -41,7 +41,7 @@ internal static class SaveDataTests
         check("A new load discards the previous pending payload and cannot save unrestored state", () =>
         {
             var first = new object(); var second = new object(); byte[]? state = new byte[] { 99 }; var count = 0;
-            var session = new SaveDataSession(() => state = null, () => () => state, bytes => { state = bytes; count++; });
+            var session = new SaveDataSession(_ => state = null, () => () => state, bytes => { state = bytes; count++; });
             session.Begin(first); session.Stage(first, SaveDataSection.Encode(new byte[] { 7 }));
             session.Begin(second); session.Complete(first, true); Reject(() => session.Capture());
             Reject(() => session.Stage(first, SaveDataSection.Encode(new byte[] { 8 })));
@@ -53,7 +53,7 @@ internal static class SaveDataTests
             var section = new SaveDataSection("example"); var sections = new Dictionary<string, Dictionary<string, string>> { ["ModData.example"] = new() };
             Reject(() => section.Read(sections));
             var mission = new object(); var calls = 0;
-            var session = new SaveDataSession(() => { }, () => () => new byte[] { 1 }, _ => calls++);
+            var session = new SaveDataSession(_ => { }, () => () => new byte[] { 1 }, _ => calls++);
             session.Begin(mission); Reject(() => session.Stage(mission, "not-base64!"));
             session.Complete(mission, true); Reject(() => session.Capture());
             Require(calls == 0, "Malformed data was restored as absent data");
@@ -61,7 +61,7 @@ internal static class SaveDataTests
         check("A failed feature reset or restoration blocks saving and is not retried every frame", () =>
         {
             var mission = new object(); var restores = 0; var resetFails = true;
-            var session = new SaveDataSession(() => { if (resetFails) throw new InvalidOperationException("reset"); }, () => () => null,
+            var session = new SaveDataSession(_ => { if (resetFails) throw new InvalidOperationException("reset"); }, () => () => null,
                 _ => { restores++; throw new InvalidOperationException("restore"); });
             Reject(() => session.Begin(mission)); Reject(() => session.Stage(mission, null)); Reject(() => session.Capture());
             resetFails = false; session.Begin(mission); session.Stage(mission, null);
@@ -71,7 +71,7 @@ internal static class SaveDataTests
         check("Capture failure allows an explicit retry without losing the restored mission", () =>
         {
             var mission = new object(); var fail = true;
-            var session = new SaveDataSession(() => { }, () => () => fail ? throw new InvalidOperationException("capture") : new byte[] { 3 }, _ => { });
+            var session = new SaveDataSession(_ => { }, () => () => fail ? throw new InvalidOperationException("capture") : new byte[] { 3 }, _ => { });
             session.Begin(mission); session.Stage(mission, null); session.Complete(mission, true);
             Reject(() => session.Capture()); fail = false;
             Require(SaveDataSection.Decode(session.Capture())!.SequenceEqual(new byte[] { 3 }), "Capture failure damaged the active session");
@@ -81,7 +81,7 @@ internal static class SaveDataTests
             var state = new AdvisorSaveData(); state.Data["feature"] = new JObject { ["value"] = "saved" };
             var original = state.Capture()!;
             var options = new AdvisorOptions(includeModSaveData: false);
-            var session = new SaveDataSession(state.Reset, () => state.PrepareCapture(options), state.Restore);
+            var session = new SaveDataSession(state.Begin, () => state.PrepareCapture(options), state.Restore);
             var mission = new object(); session.Begin(mission); session.Stage(mission, SaveDataSection.Encode(original)); session.Complete(mission, true);
             Require((string?)state.Data["feature"]?["value"] == "saved" && state.PrepareCapture(options) == null,
                 "Disabling writes also disabled restoration or selected capture work");
@@ -100,7 +100,7 @@ internal static class SaveDataTests
         {
             var include = false; var captures = 0; var restoreFails = true;
             Func<byte[]?>? Prepare() => include ? () => { captures++; return new byte[] { 7 }; } : null;
-            var session = new SaveDataSession(() => { }, Prepare,
+            var session = new SaveDataSession(_ => { }, Prepare,
                 _ => { if (restoreFails) throw new InvalidOperationException("restore"); });
             Require(session.Capture() == null && captures == 0, "Omitted work required restoration or invoked data collection");
             include = true; Reject(() => session.Capture());
