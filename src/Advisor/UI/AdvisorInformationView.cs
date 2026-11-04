@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Xml.Linq;
 using Noesis;
 using static SeaPowerAIAdvisor.Shared.UiMarkup;
@@ -29,7 +28,6 @@ internal sealed class AdvisorInformationView
                 box.SetAttributeValue("ToolTip", "{DynamicResource Advisor." + item.TextKey + "_tip}");
             root.Add(box);
         }
-        var grouped = AdvisorInformation.Groups.SelectMany(g => g.Items).ToHashSet();
         var index = 0;
         bool? section = null;
         foreach (var group in AdvisorInformation.Groups)
@@ -57,9 +55,6 @@ internal sealed class AdvisorInformationView
                         new XAttribute("Text", "{DynamicResource Advisor.information.mandatory}"),
                         new XAttribute("FontSize", "12"), new XAttribute("TextWrapping", "Wrap"),
                         new XAttribute("Opacity", "0.7"), new XAttribute("Margin", "0,6,0,0")));
-                foreach (var item in AdvisorInformation.Items.Where(i => !grouped.Contains(i.Kind) &&
-                    i.Id.StartsWith(group.Battle ? "battle_" : "campaign_", StringComparison.Ordinal)))
-                    AddItem(item, 0);
                 section = group.Battle;
             }
             root.Add(Box("InformationGroup" + index++, group.TextKey, "0,12,0,6", true));
