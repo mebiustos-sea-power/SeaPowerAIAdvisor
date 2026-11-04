@@ -62,6 +62,23 @@ internal static class CrewTests
             foreach (var invalid in new JToken[] { JValue.CreateNull(), new JValue("false"), new JValue(0) })
                 Throws<CrewException>(() => CrewSettings.Parse(new JObject { ["show_help_tab"] = invalid }.ToString()));
         }));
+        check("Automatic appointment preferences default off, persist independently and reject malformed flags", () => Temp(directory =>
+        {
+            var path = Path.Combine(directory, "crew.json"); var store = new CrewSettingsStore(path);
+            Require(!store.Current.AutoAppointments && !CrewSettings.Parse("{}").AutoAppointments && !File.Exists(path),
+                "Opening settings enabled automatic appointments or wrote a file");
+            var selected = CrewInformation.Default.With("fuel", false);
+            store.Save(new CrewSettings("crew-api", 7, 12, CrewNotificationPosition.BottomLeft, false, 75, selected, false, true));
+            var saved = new CrewSettingsStore(path).Current;
+            Require(saved.AutoAppointments && saved.ConnectionId == "crew-api" && saved.IntervalMinutes == 7 && saved.DisplaySeconds == 12 &&
+                saved.NotificationPosition == CrewNotificationPosition.BottomLeft && !saved.ShowHelpTab && !saved.ShowRanks &&
+                saved.ExchangeChancePercent == 75 && saved.Information.Key == selected.Key, "Saving appointments changed other preferences");
+            foreach (var invalid in new JToken[] { JValue.CreateNull(), new JValue("false"), new JValue(0) })
+                Throws<CrewException>(() => CrewSettings.Parse(new JObject { ["auto_appointments"] = invalid }.ToString()));
+            File.Delete(path); Directory.CreateDirectory(path);
+            Throws<CrewException>(() => store.Save(new CrewSettings(autoAppointments: false)));
+            Require(store.Current.AutoAppointments, "A failed write applied an appointment draft");
+        }));
         check("Chatter positions default to top right, persist all six choices and reject invalid saved values", () => Temp(directory =>
         {
             var path = Path.Combine(directory, "crew.json"); var store = new CrewSettingsStore(path);
@@ -421,6 +438,118 @@ internal static class CrewTests
             rig.Complete(next); rig.Pump(101);
             Require(!rig.Chatter.Enabled("unit:1") && !rig.Chatter.Enabled("unit:2") && rig.Chatter.Enabled("unit:3") && ReferenceEquals(person, rig.Chatter.Person("unit:1")), "Additional appointment reset an existing OFF choice or person");
             rig.Chatter.RequestAppointments(200); rig.Tick(201); Require(rig.Requests == 2, "Already appointed units sent another appointment request");
+        });
+        check("Automatic appointments require successful initial appointment and continue with every existing participant OFF", () =>
+        {
+            using var rig = new Rig(settings: new CrewSettings("chatter", 1, autoAppointments: true));
+            rig.Chatter.Refresh(new[] { Target(1), Follower(2) }); rig.Tick(0); rig.Tick(1000);
+            Require(!rig.Chatter.Busy && rig.Requests == 0, "The option started initial appointment without the user");
+            rig.Chatter.RequestAppointments(1000); rig.Tick(1001); var initial = rig.Take(); rig.Complete(initial); rig.Pump(1001);
+            var existing = rig.Chatter.Person("unit:1"); rig.Chatter.ApplyTargets(Array.Empty<string>(), 1001);
+            rig.Tick(1002);
+            Require(!rig.Chatter.Busy && rig.Requests == 1, "An empty automatic check sent an API request");
+            rig.Chatter.Refresh(new[] { Target(1), Follower(2), Target(3), Follower(4) }); rig.Tick(1061);
+            Require(!rig.Chatter.Busy, "New units bypassed the configured opportunity interval");
+            rig.Tick(1062); var added = rig.Take(); var input = added.Batch.Input("").Data;
+            Require(input["appointments"]!.Select(t => (string)t["id"]!).OrderBy(id => id).SequenceEqual(new[] { "unit:3", "unit:4" }) &&
+                input["speakers"] is JArray { Count: 0 }, "Automatic selection omitted a follower or regenerated existing people");
+            rig.Complete(added); rig.Pump(1062);
+            Require(ReferenceEquals(existing, rig.Chatter.Person("unit:1")) && !rig.Chatter.Enabled("unit:1") && !rig.Chatter.Enabled("unit:2") &&
+                rig.Chatter.Enabled("unit:3") && rig.Chatter.Enabled("unit:4"), "Automatic appointment changed old people or old OFF choices");
+        });
+        check("Enabling appointments includes the unappointed backlog and disabling rejects pending automatic results without blocking manual work", () =>
+        {
+            using var rig = new Rig(); rig.Chatter.Refresh(new[] { Target(1) }); rig.PreparePeople(); rig.Tick(0);
+            rig.Chatter.Refresh(new[] { Target(1), Target(2) }); rig.Tick(500);
+            Require(!rig.Chatter.Busy && rig.Requests == 1, "Default OFF appointed an additional unit");
+            rig.Settings = new CrewSettings("chatter", 1, autoAppointments: true); rig.Tick(500); rig.Tick(559);
+            Require(!rig.Chatter.Busy, "Enabling sent immediately instead of waiting for the next opportunity");
+            rig.Tick(560); var automatic = rig.Take();
+            rig.Settings = new CrewSettings("chatter", 1); rig.Tick(560); rig.Complete(automatic); rig.Pump(560);
+            Require(rig.Chatter.Person("unit:2") == null && !rig.Chatter.HasPendingAppointments && !rig.Chatter.Paused,
+                "Disabling retained automatic work or paused unrelated Chatter");
+            rig.GamePaused = true; rig.Chatter.RequestAppointments(560); rig.Tick(561); var manual = rig.Take(); rig.Complete(manual); rig.Pump(561);
+            Require(rig.Chatter.Person("unit:2") != null && rig.Chatter.Enabled("unit:2"), "Disabling automation blocked explicit paused-game appointment");
+        });
+        check("Game pause freezes automatic opportunities while sent appointments can finish normally", () =>
+        {
+            using var rig = new Rig(settings: new CrewSettings("chatter", 1, autoAppointments: true));
+            rig.Chatter.Refresh(new[] { Target(1) }); rig.PreparePeople(); rig.Tick(0);
+            rig.Chatter.Refresh(new[] { Target(1), Target(2) }); rig.Tick(20); rig.GamePaused = true; rig.Tick(20); rig.Tick(500);
+            Require(!rig.Chatter.Busy && rig.Requests == 1, "A paused game started automatic appointment");
+            rig.GamePaused = false; rig.Tick(500); rig.Tick(539);
+            Require(!rig.Chatter.Busy, "Game pause consumed the remaining automatic countdown");
+            rig.Tick(540); var automatic = rig.Take(); rig.GamePaused = true; rig.Tick(541); rig.Complete(automatic); rig.Pump(600);
+            Require(rig.Chatter.Person("unit:2") != null && rig.Chatter.Enabled("unit:2") && rig.Requests == 2 && !rig.Chatter.Paused,
+                "Game pause discarded a sent appointment or started another generation");
+        });
+        check("Manual pause stops automatic checks until explicit resume", () =>
+        {
+            using var rig = new Rig(settings: new CrewSettings("chatter", 1, autoAppointments: true));
+            rig.Chatter.Refresh(new[] { Target(1) }); rig.PreparePeople(); rig.Tick(0);
+            rig.Chatter.Refresh(new[] { Target(1), Target(2) }); rig.Chatter.SetPaused(true, 20); rig.Tick(1000);
+            Require(!rig.Chatter.Busy && rig.Requests == 1 && rig.Chatter.Person("unit:2") == null, "Manual pause permitted automatic work");
+            rig.Chatter.SetPaused(false, 1000); rig.Tick(1000); rig.Tick(1059);
+            Require(!rig.Chatter.Busy, "Resume bypassed the automatic interval with no speakers");
+            rig.Tick(1060); var resumed = rig.Take(); rig.Complete(resumed); rig.Pump(1060);
+            Require(rig.Chatter.Person("unit:2") != null, "Automatic work did not resume");
+        });
+        check("Large automatic batches stop queued automatic work when disabled and preserve explicit appointment requests", () =>
+        {
+            foreach (var explicitRemainder in new[] { false, true })
+            {
+                using var rig = new Rig(settings: new CrewSettings("chatter", 1, autoAppointments: true));
+                rig.Chatter.Refresh(new[] { Target(1) }); rig.PreparePeople(); rig.Tick(0);
+                var targets = Enumerable.Range(1, CrewBatch.MaximumAppointments + 3).Select(i => Target(i)).ToArray();
+                rig.Chatter.Refresh(targets); rig.Tick(60); var first = rig.Take();
+                Require(first.Batch.Input("").Data["appointments"]!.Count() == CrewBatch.MaximumAppointments, "Automatic batch exceeded the existing batch boundary");
+                rig.Complete(first); rig.Pump(60);
+                if (explicitRemainder) rig.Chatter.RequestAppointments(60);
+                rig.Settings = new CrewSettings("chatter", 1); rig.GamePaused = true; rig.Tick(61);
+                if (explicitRemainder)
+                {
+                    var last = rig.Take(); Require(last.Batch.Input("").Data["appointments"]!.Count() == 2, "Explicit remainder was cancelled or enlarged");
+                    rig.Complete(last); rig.Pump(61);
+                    Require(targets.All(t => rig.Chatter.Person(t.Id) != null), "An explicit request was lost when automatic appointments were disabled");
+                }
+                else Require(!rig.Chatter.Busy && !rig.Chatter.HasPendingAppointments && rig.Requests == 2 &&
+                    targets.Count(t => rig.Chatter.Person(t.Id) == null) == 2, "Disabling scheduled another automatic batch");
+            }
+        });
+        check("Automatic appointment shares the next Chatter opportunity even after a silent response", () =>
+        {
+            using var rig = new Rig(settings: new CrewSettings("chatter", 1, autoAppointments: true));
+            rig.Chatter.Refresh(new[] { Target(1) }); rig.PreparePeople(); rig.SetEnabled("unit:1", true, 0);
+            rig.Tick(1); var silent = rig.Take(); rig.Complete(silent); rig.Pump(1);
+            rig.Chatter.Refresh(new[] { Target(1), Target(2) }); rig.Tick(60);
+            Require(!rig.Chatter.Busy, "Silence or a new unit shortened the interval");
+            rig.Tick(61); var next = rig.Take();
+            Require(next.Batch.Input("").Data["appointments"] is JArray { Count: 1 } && next.Batch.Input("").Data["speakers"] is JArray { Count: 0 },
+                "Silence prevented automatic appointment or forced speech into appointment work");
+            rig.Complete(next); rig.Pump(71); rig.Tick(130);
+            Require(!rig.Chatter.Busy, "The next cycle ignored automatic generation completion time");
+            rig.Tick(131); var speech = rig.Take(); rig.Complete(speech); rig.Pump(131);
+        });
+        check("Automatic response failure pauses Chatter without changing existing participation and does not retry itself", () =>
+        {
+            using var rig = new Rig(settings: new CrewSettings("chatter", 1, autoAppointments: true));
+            rig.Chatter.Refresh(new[] { Target(1) }); rig.PreparePeople(); rig.Tick(0); var existing = rig.Chatter.Person("unit:1");
+            rig.Chatter.Refresh(new[] { Target(1), Target(2) }); rig.Tick(60); var failed = rig.Take();
+            failed.Completion.SetException(new CrewException("invalid_response")); rig.Pump(60); rig.Tick(1000);
+            Require(rig.Chatter.Paused && rig.Chatter.Error == "invalid_response" && rig.Requests == 2 && !rig.Chatter.Enabled("unit:1") &&
+                ReferenceEquals(existing, rig.Chatter.Person("unit:1")) && rig.Chatter.Person("unit:2") == null,
+                "Automatic failure changed old state or kept requesting without resume");
+        });
+        check("Automatic results for removed units are discarded and later arrivals wait for the next opportunity", () =>
+        {
+            using var rig = new Rig(settings: new CrewSettings("chatter", 1, autoAppointments: true));
+            rig.Chatter.Refresh(new[] { Target(1) }); rig.PreparePeople(); rig.Tick(0);
+            rig.Chatter.Refresh(new[] { Target(1), Target(2) }); rig.Tick(60); var removed = rig.Take();
+            rig.Chatter.Refresh(new[] { Target(1), Target(3) }); rig.Complete(removed); rig.Pump(60); rig.Tick(119);
+            Require(rig.Chatter.Person("unit:2") == null && rig.Chatter.Person("unit:3") == null && !rig.Chatter.Paused && !rig.Chatter.Busy,
+                "A stale response was rebound to a later unit or bypassed the next opportunity");
+            rig.Tick(120); var next = rig.Take(); rig.Complete(next); rig.Pump(120);
+            Require(rig.Chatter.Person("unit:3") != null && rig.Chatter.Person("unit:2") == null, "The next arrival was not appointed independently");
         });
         check("Repeated game pauses preserve the remaining speech countdown without catch-up requests", () =>
         {

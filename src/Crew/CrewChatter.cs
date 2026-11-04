@@ -36,10 +36,12 @@ internal sealed class CrewRemark
 // Session-owned scheduling receives monotonic real time and game pause state, never simulation speed.
 internal sealed class CrewChatter : IDisposable
 {
+    private enum AppointmentRequest { None, Manual, Automatic }
     private sealed class State
     {
         internal CrewTarget Target;
-        internal bool Enabled, AppointmentRequested;
+        internal bool Enabled;
+        internal AppointmentRequest Appointment;
         internal int Revision;
         internal long LastConsidered;
         internal State(CrewTarget target) => Target = target;
@@ -52,7 +54,7 @@ internal sealed class CrewChatter : IDisposable
     private readonly Action<Exception> log;
     private CancellationTokenSource? cancellation;
     private Task<CrewGeneration>? task;
-    private (State State, int Revision, CrewTarget Target)[] active = Array.Empty<(State, int, CrewTarget)>();
+    private (State State, int Revision, CrewTarget Target, AppointmentRequest Appointment)[] active = Array.Empty<(State, int, CrewTarget, AppointmentRequest)>();
     private bool retired, speechInFlight;
     private double startedAt, nextOpportunity = double.PositiveInfinity, nextAppointments = double.PositiveInfinity;
     private double gamePauseOffset;
@@ -72,9 +74,9 @@ internal sealed class CrewChatter : IDisposable
     internal bool Paused { get; private set; }
     internal bool HasEnabledTargets => states.Values.Any(s => s.Enabled);
     private bool HasSpeakers => states.Values.Any(s => s.Enabled && s.Target.CanSpeak);
-    internal bool HasPendingAppointments => states.Values.Any(s => s.AppointmentRequested);
+    internal bool HasPendingAppointments => states.Values.Any(s => s.Appointment != AppointmentRequest.None);
     internal bool HasUnappointedTargets => states.Values.Any(s => !people.ContainsKey(s.Target.Id));
-    internal bool AppointmentRequested(string id) => states.TryGetValue(id, out var s) && s.AppointmentRequested;
+    internal bool AppointmentRequested(string id) => states.TryGetValue(id, out var s) && s.Appointment != AppointmentRequest.None;
     internal int Version { get; private set; }
     internal IReadOnlyList<CrewRemark> History => history;
     internal IReadOnlyList<CrewTarget> Targets => states.Values.Select(s => s.Target).OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
@@ -92,17 +94,19 @@ internal sealed class CrewChatter : IDisposable
         if (!HasEnabledTargets)
         {
             if (speechInFlight) CancelGeneration();
-            pending.Clear(); nextOpportunity = double.PositiveInfinity;
+            pending.Clear();
         }
         if (!HasPendingAppointments) nextAppointments = double.PositiveInfinity;
     }
-    internal void RequestAppointments(double now)
+    internal void RequestAppointments(double now) => QueueAppointments(now + 1, AppointmentRequest.Manual);
+    private void QueueAppointments(double when, AppointmentRequest request)
     {
         var changed = false;
-        foreach (var state in states.Values.Where(s => !people.ContainsKey(s.Target.Id) && !s.AppointmentRequested))
-        { state.AppointmentRequested = true; changed = true; }
+        foreach (var state in states.Values.Where(s => !people.ContainsKey(s.Target.Id) &&
+            (s.Appointment == AppointmentRequest.None || request == AppointmentRequest.Manual && s.Appointment == AppointmentRequest.Automatic)))
+        { state.Appointment = request; changed = true; }
         if (!changed) return;
-        nextAppointments = Math.Min(nextAppointments, now + 1); Version++;
+        nextAppointments = Math.Min(nextAppointments, when); Version++;
     }
     // The caller commits a complete selection; editing checkboxes never changes this state.
     internal void ApplyTargets(IReadOnlyCollection<string> selected, double now)
@@ -119,7 +123,7 @@ internal sealed class CrewChatter : IDisposable
         if (!HasEnabledTargets)
         {
             if (speechInFlight) CancelGeneration();
-            pending.Clear(); nextOpportunity = double.PositiveInfinity;
+            pending.Clear();
         }
         else if (!wasActive) nextOpportunity = OpportunityTime(now) + 1;
         Error = null; Version++;
@@ -132,18 +136,19 @@ internal sealed class CrewChatter : IDisposable
         else
         {
             Error = null;
-            nextOpportunity = HasEnabledTargets ? OpportunityTime(now) + 1 : double.PositiveInfinity;
+            nextOpportunity = HasSpeakers ? OpportunityTime(now) + 1 : double.PositiveInfinity;
             nextAppointments = HasPendingAppointments ? now + 1 : double.PositiveInfinity;
         }
         Version++;
     }
     private double OpportunityTime(double now) => now - gamePauseOffset -
         (gamePaused && gamePauseObservedAt is double observed ? now - observed : 0);
+    private bool HasOpportunities(CrewSettings settings) => HasSpeakers || settings.AutoAppointments && people.Count > 0;
     internal void Tick(double now, bool simulationPaused, CrewSettings settings, string language, Func<IReadOnlyList<CrewTarget>, JObject> capture, Func<string, JObject> captureAppointments,
         Func<CrewBatch, string, CancellationToken, Action<long?>, Task<CrewGeneration>> generate)
     {
         if (retired) return;
-        // Exclude paused wall time only from speech scheduling; request freshness keeps using now.
+        // Speech and automatic checks share the pause-aware clock; request freshness keeps using now.
         if (gamePaused && gamePauseObservedAt is double previous) gamePauseOffset += now - previous;
         gamePauseObservedAt = now; gamePaused = simulationPaused;
         var opportunityNow = OpportunityTime(now);
@@ -151,14 +156,22 @@ internal sealed class CrewChatter : IDisposable
         {
             informationKey = settings.Information.Key; informationRevision++;
         }
+        if (!settings.AutoAppointments)
+        {
+            foreach (var state in states.Values.Where(s => s.Appointment == AppointmentRequest.Automatic))
+            { state.Appointment = AppointmentRequest.None; Version++; }
+            if (!HasPendingAppointments) nextAppointments = double.PositiveInfinity;
+        }
         if (Paused) return;
-        if (!HasSpeakers) nextOpportunity = double.PositiveInfinity;
-        else if (double.IsPositiveInfinity(nextOpportunity) && !speechInFlight) nextOpportunity = opportunityNow + 1;
+        if (!HasOpportunities(settings)) nextOpportunity = double.PositiveInfinity;
+        else if (double.IsPositiveInfinity(nextOpportunity) && task == null && !HasPendingAppointments)
+            nextOpportunity = opportunityNow + (HasSpeakers ? 1 : 60 * settings.IntervalMinutes);
         if (task?.IsCompleted == true)
         {
             var completed = task; task = null; var work = active; var hadSpeech = speechInFlight;
-            active = Array.Empty<(State, int, CrewTarget)>(); speechInFlight = false;
-            bool Valid((State State, int Revision, CrewTarget Target) entry) =>
+            var hadAutomaticAppointments = work.Any(w => w.Appointment == AppointmentRequest.Automatic);
+            active = Array.Empty<(State, int, CrewTarget, AppointmentRequest)>(); speechInFlight = false;
+            bool Valid((State State, int Revision, CrewTarget Target, AppointmentRequest Appointment) entry) =>
                 states.TryGetValue(entry.Target.Id, out var current) && ReferenceEquals(current, entry.State) && now - startedAt <= 180;
             try
             {
@@ -166,14 +179,14 @@ internal sealed class CrewChatter : IDisposable
                 foreach (var appointment in result.Appointments)
                 {
                     var entry = work.Single(w => w.Target.Id == appointment.Key);
-                    if (!Valid(entry) || !entry.State.AppointmentRequested || people.ContainsKey(appointment.Key)) continue;
+                    if (!Valid(entry) || entry.State.Appointment == AppointmentRequest.None || people.ContainsKey(appointment.Key)) continue;
                     people.Add(appointment.Key, appointment.Value.Person);
-                    entry.State.AppointmentRequested = false; entry.State.Enabled = true; entry.State.Revision++; entry.State.LastConsidered = 0;
+                    entry.State.Appointment = AppointmentRequest.None; entry.State.Enabled = true; entry.State.Revision++; entry.State.LastConsidered = 0;
                     if (appointment.Value.RankBeforeName is bool before)
                     { if (before) RankBeforeVotes++; else RankAfterVotes++; }
                     else RankInvalidVotes++;
                 }
-                if (!hadSpeech && HasSpeakers && double.IsPositiveInfinity(nextOpportunity)) nextOpportunity = opportunityNow + 1;
+                if (!hadSpeech && !hadAutomaticAppointments && HasSpeakers && double.IsPositiveInfinity(nextOpportunity)) nextOpportunity = opportunityNow + 1;
                 // Evaluate once after accepting the batch, so a tie preserves the previous shared order.
                 if (RankBeforeVotes != RankAfterVotes) RankBeforeName = RankBeforeVotes > RankAfterVotes;
                 foreach (var submission in result.Remarks)
@@ -199,8 +212,8 @@ internal sealed class CrewChatter : IDisposable
                 if (Paused) { nextOpportunity = double.PositiveInfinity; nextAppointments = double.PositiveInfinity; }
                 else
                 {
-                    if (!HasSpeakers) nextOpportunity = double.PositiveInfinity;
-                    else if (hadSpeech && double.IsPositiveInfinity(nextOpportunity))
+                    if (!HasOpportunities(settings)) nextOpportunity = double.PositiveInfinity;
+                    else if (double.IsPositiveInfinity(nextOpportunity) && (hadSpeech || hadAutomaticAppointments || !HasSpeakers))
                         nextOpportunity = opportunityNow + 60 * settings.IntervalMinutes;
                     if (!HasPendingAppointments) nextAppointments = double.PositiveInfinity;
                     else if (double.IsPositiveInfinity(nextAppointments)) nextAppointments = now + 1;
@@ -208,13 +221,26 @@ internal sealed class CrewChatter : IDisposable
                 cancellation?.Dispose(); cancellation = null; Version++;
             }
         }
-        if (Paused || task != null || ((simulationPaused || opportunityNow < nextOpportunity) && now < nextAppointments)) return;
-        var appointments = now < nextAppointments ? Array.Empty<State>() : states.Values.Where(s => s.AppointmentRequested).Take(CrewBatch.MaximumAppointments).ToArray();
-        var candidates = HasPendingAppointments || simulationPaused || opportunityNow < nextOpportunity ? Array.Empty<State>() : states.Values.Where(s => s.Enabled && s.Target.CanSpeak && people.ContainsKey(s.Target.Id))
+        if (Paused || task != null) return;
+        var opportunityDue = !simulationPaused && opportunityNow >= nextOpportunity;
+        if (opportunityDue && settings.AutoAppointments && people.Count > 0)
+        {
+            QueueAppointments(now, AppointmentRequest.Automatic);
+            // An empty check is a normal opportunity and sends no request on its own.
+            nextOpportunity = opportunityNow + 60 * settings.IntervalMinutes;
+        }
+        if (!opportunityDue && now < nextAppointments) return;
+        var appointments = now < nextAppointments ? Array.Empty<State>() : states.Values.Where(s => s.Appointment != AppointmentRequest.None &&
+            (!simulationPaused || s.Appointment == AppointmentRequest.Manual)).Take(CrewBatch.MaximumAppointments).ToArray();
+        var candidates = HasPendingAppointments || !opportunityDue ? Array.Empty<State>() : states.Values.Where(s => s.Enabled && s.Target.CanSpeak && people.ContainsKey(s.Target.Id))
             .OrderBy(s => s.LastConsidered).ThenBy(_ => random.NextDouble()).Take(4).ToArray();
         if (appointments.Length == 0 && candidates.Length == 0) return;
         if (settings.ConnectionId == null) { Error = "connection_required"; SetPaused(true, now); return; }
-        if (appointments.Length > 0) nextAppointments = double.PositiveInfinity;
+        if (appointments.Length > 0)
+        {
+            nextAppointments = double.PositiveInfinity;
+            if (appointments.Any(s => s.Appointment == AppointmentRequest.Automatic)) nextOpportunity = double.PositiveInfinity;
+        }
         if (candidates.Length > 0)
         {
             nextOpportunity = double.PositiveInfinity; var round = ++selectionRound;
@@ -237,7 +263,7 @@ internal sealed class CrewChatter : IDisposable
             return row;
         }));
         if (candidates.Length > 0) data["recent_remarks"] = new JArray(history.Where(r => r.InformationRevision == informationRevision).TakeLast(3).Select(r => new JObject { ["id"] = r.Target.Id, ["text"] = r.Submission.Text }));
-        active = appointments.Concat(candidates).Distinct().Select(s => (s, s.Revision, s.Target)).ToArray(); startedAt = now; speechInFlight = candidates.Length > 0;
+        active = appointments.Concat(candidates).Distinct().Select(s => (s, s.Revision, s.Target, s.Appointment)).ToArray(); startedAt = now; speechInFlight = candidates.Length > 0;
         activeInformationRevision = informationRevision;
         cancellation = new CancellationTokenSource();
         var batch = new CrewBatch(data, candidates.ToDictionary(s => s.Target.Id, s => Person(s.Target.Id)), appointments.Select(s => s.Target.Id),
@@ -259,7 +285,7 @@ internal sealed class CrewChatter : IDisposable
     private void CancelGeneration()
     {
         cancellation?.Cancel();
-        var oldTask = task; task = null; active = Array.Empty<(State, int, CrewTarget)>(); speechInFlight = false;
+        var oldTask = task; task = null; active = Array.Empty<(State, int, CrewTarget, AppointmentRequest)>(); speechInFlight = false;
         var oldCancellation = cancellation; cancellation = null;
         if (oldTask == null) oldCancellation?.Dispose();
         else _ = oldTask.ContinueWith(t => { if (t.IsFaulted) log(t.Exception!); oldCancellation?.Dispose(); }, TaskScheduler.Default);
@@ -268,7 +294,7 @@ internal sealed class CrewChatter : IDisposable
     }
     internal void Suspend()
     {
-        CancelGeneration(); foreach (var state in states.Values) { state.Enabled = false; state.AppointmentRequested = false; }
+        CancelGeneration(); foreach (var state in states.Values) { state.Enabled = false; state.Appointment = AppointmentRequest.None; }
         Paused = false; Error = null; Version++;
     }
     public void Dispose() { retired = true; Suspend(); states.Clear(); people.Clear(); history.Clear(); }

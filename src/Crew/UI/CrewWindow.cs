@@ -32,7 +32,7 @@ internal sealed class CrewWindow : IDisposable
     private readonly SettingsTabNavigation tabs, apiTabs;
     private readonly ComboBox selection, notificationPosition;
     private readonly TextBox interval, duration, exchangeChance;
-    private readonly CheckBox showHelpTab, showRanks;
+    private readonly CheckBox showHelpTab, showRanks, autoAppointments;
     private readonly ImageSource portrait;
     private readonly UiNotice settingsNotice, chatterNotice;
     private readonly CrewTargetSelection targetSelection = new();
@@ -52,6 +52,7 @@ internal sealed class CrewWindow : IDisposable
     private string Values => page switch
     {
         "chatter" => interval.Text + ":" + duration.Text + ":" + notificationPosition.SelectedIndex + ":" + showHelpTab.IsChecked + ":" + exchangeChance.Text + ":" + showRanks.IsChecked,
+        "appointments" => autoAppointments.IsChecked.ToString(),
         "information" => information.Key,
         _ => SelectedId ?? ""
     };
@@ -80,6 +81,7 @@ internal sealed class CrewWindow : IDisposable
         foreach (CrewNotificationPosition position in Enum.GetValues(typeof(CrewNotificationPosition)))
             notificationPosition.Items.Add(new ComboBoxItem { Content = text["position." + CrewSettings.PositionCode(position)] });
         interval = Find<TextBox>("Interval"); duration = Find<TextBox>("Duration"); exchangeChance = Find<TextBox>("ExchangeChance"); showHelpTab = Find<CheckBox>("ShowHelpTab"); showRanks = Find<CheckBox>("ShowRanks");
+        autoAppointments = Find<CheckBox>("AutoAppointments");
         var fixedInformation = Find<FrameworkElement>("InformationFixed");
         fixedInformation.Loaded += (_, _) => Run(() => UiResources.ApplyDisabledCheckBoxBrushes(fixedInformation));
         foreach (var item in CrewInformation.Items)
@@ -102,6 +104,7 @@ internal sealed class CrewWindow : IDisposable
         tabs = Navigation("Tabs"); apiTabs = Navigation("ApiTabs");
         Bind("OpenConnections", () => OpenPage("api")); Bind("OpenChatter", () => OpenPage("chatter"));
         Bind("OpenInformation", () => OpenPage("information"));
+        Bind("OpenAppointments", () => OpenPage("appointments"));
         Bind("ResetInformation", () => { SetInformation(CrewInformation.Default); settingsNotice.Show(""); });
         Bind("Back", () => Navigate(Home));
         Bind("AppointAll", () =>
@@ -127,14 +130,14 @@ internal sealed class CrewWindow : IDisposable
         Bind("SaveConnection", () =>
         {
             if (!CanCommit()) return;
-            var saved = settings.Current; settings.Save(new CrewSettings(SelectedId, saved.IntervalMinutes, saved.DisplaySeconds, saved.NotificationPosition, saved.ShowHelpTab, saved.ExchangeChancePercent, saved.Information, saved.ShowRanks));
+            var saved = settings.Current; settings.Save(new CrewSettings(SelectedId, saved.IntervalMinutes, saved.DisplaySeconds, saved.NotificationPosition, saved.ShowHelpTab, saved.ExchangeChancePercent, saved.Information, saved.ShowRanks, saved.AutoAppointments));
             baseline = Values; editor.UpdateCards(); Saved();
         });
         Bind("SaveChatter", () =>
         {
             if (!CanCommit()) return;
             int Read(TextBox input) => int.TryParse(input.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : throw new CrewException("settings_invalid");
-            settings.Save(new CrewSettings(settings.Current.ConnectionId, Read(interval), Read(duration), (CrewNotificationPosition)notificationPosition.SelectedIndex, showHelpTab.IsChecked == true, Read(exchangeChance), settings.Current.Information, showRanks.IsChecked == true));
+            settings.Save(new CrewSettings(settings.Current.ConnectionId, Read(interval), Read(duration), (CrewNotificationPosition)notificationPosition.SelectedIndex, showHelpTab.IsChecked == true, Read(exchangeChance), settings.Current.Information, showRanks.IsChecked == true, settings.Current.AutoAppointments));
             UpdateHelpTab(); revision = -1;
             baseline = Values; Saved();
         });
@@ -142,7 +145,14 @@ internal sealed class CrewWindow : IDisposable
         {
             if (!CanCommit()) return;
             var saved = settings.Current;
-            settings.Save(new CrewSettings(saved.ConnectionId, saved.IntervalMinutes, saved.DisplaySeconds, saved.NotificationPosition, saved.ShowHelpTab, saved.ExchangeChancePercent, information, saved.ShowRanks));
+            settings.Save(new CrewSettings(saved.ConnectionId, saved.IntervalMinutes, saved.DisplaySeconds, saved.NotificationPosition, saved.ShowHelpTab, saved.ExchangeChancePercent, information, saved.ShowRanks, saved.AutoAppointments));
+            baseline = Values; Saved();
+        });
+        Bind("SaveAppointments", () =>
+        {
+            if (!CanCommit()) return;
+            var saved = settings.Current;
+            settings.Save(new CrewSettings(saved.ConnectionId, saved.IntervalMinutes, saved.DisplaySeconds, saved.NotificationPosition, saved.ShowHelpTab, saved.ExchangeChancePercent, saved.Information, saved.ShowRanks, autoAppointments.IsChecked == true));
             baseline = Values; Saved();
         });
         Bind("CancelConfirmation", HideConfirmation);
@@ -205,11 +215,12 @@ internal sealed class CrewWindow : IDisposable
     private void OpenPage(string value)
     {
         page = value; typing.Release(); settingsNotice.Show("");
-        Find<TextBlock>("SettingsCategoryTitle").Text = text[value switch { "api" => "connections", "chatter" => "chatter", "information" => "information", _ => throw new ArgumentOutOfRangeException(nameof(value)) }];
+        Find<TextBlock>("SettingsCategoryTitle").Text = text[value switch { "api" => "connections", "chatter" => "chatter", "information" => "information", "appointments" => "appointments", _ => throw new ArgumentOutOfRangeException(nameof(value)) }];
         Find<FrameworkElement>("SettingsHome").Visibility = Visibility.Collapsed; Find<FrameworkElement>("SettingsPage").Visibility = Visibility.Visible;
         Find<FrameworkElement>("ApiTabs").Visibility = value == "api" ? Visibility.Visible : Visibility.Collapsed;
         Find<FrameworkElement>("ChatterSettings").Visibility = value == "chatter" ? Visibility.Visible : Visibility.Collapsed;
         Find<FrameworkElement>("InformationSettings").Visibility = value == "information" ? Visibility.Visible : Visibility.Collapsed;
+        Find<FrameworkElement>("AppointmentSettings").Visibility = value == "appointments" ? Visibility.Visible : Visibility.Collapsed;
         if (value == "api") { apiTabs.Reset(); RefreshConnections(); editor.Open(); }
         else if (value == "chatter")
         {
@@ -219,6 +230,7 @@ internal sealed class CrewWindow : IDisposable
             duration.Text = saved.DisplaySeconds.ToString(CultureInfo.InvariantCulture); notificationPosition.SelectedIndex = (int)saved.NotificationPosition;
             showHelpTab.IsChecked = saved.ShowHelpTab; showRanks.IsChecked = saved.ShowRanks;
         }
+        else if (value == "appointments") autoAppointments.IsChecked = settings.Current.AutoAppointments;
         else SetInformation(settings.Current.Information);
         baseline = Values;
     }

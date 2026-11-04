@@ -39,8 +39,9 @@
           <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
           <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
           <Button x:Name="OpenChatter" Grid.Column="0" Content="{DynamicResource Crew.chatter}" Height="64" Margin="4" FontSize="15" />
-          <Button x:Name="OpenConnections" Grid.Column="1" Content="{DynamicResource Crew.connections}" Height="64" Margin="4" FontSize="15" />
-          <Button x:Name="OpenInformation" Grid.Row="1" Grid.Column="0" Content="{DynamicResource Crew.information}" Height="64" Margin="4" FontSize="15" />
+          <Button x:Name="OpenAppointments" Grid.Column="1" Content="{DynamicResource Crew.appointments}" Height="64" Margin="4" FontSize="15" />
+          <Button x:Name="OpenConnections" Grid.Row="1" Grid.Column="0" Content="{DynamicResource Crew.connections}" Height="64" Margin="4" FontSize="15" />
+          <Button x:Name="OpenInformation" Grid.Row="1" Grid.Column="1" Content="{DynamicResource Crew.information}" Height="64" Margin="4" FontSize="15" />
         </Grid>
         <Grid x:Name="SettingsPage" Visibility="Collapsed">
           <Grid.RowDefinitions>
@@ -66,6 +67,17 @@
               </TabItem>
               <TabItem x:Name="ApiEdit" Header="{DynamicResource Crew.registration}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"><ContentControl x:Name="Registration" /></TabItem>
             </TabControl>
+            <ScrollViewer x:Name="AppointmentSettings" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+              <StackPanel Margin="0,8,8,0">
+                <CheckBox x:Name="AutoAppointments" HorizontalContentAlignment="Stretch">
+                  <TextBlock Text="{DynamicResource Crew.auto_appointments}" TextWrapping="Wrap" />
+                </CheckBox>
+                <TextBlock Text="{DynamicResource Crew.auto_appointments_hint}" FontSize="12" TextWrapping="Wrap" Opacity="0.85" Margin="0,8,0,12" />
+                <WrapPanel HorizontalAlignment="Right" Margin="0,8,0,0">
+                  <Button x:Name="SaveAppointments" Content="{DynamicResource Crew.save}" Height="30" Padding="12,0" Margin="8,0,0,0" />
+                </WrapPanel>
+              </StackPanel>
+            </ScrollViewer>
             <ScrollViewer x:Name="ChatterSettings" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
               <StackPanel Margin="0,8,8,0">
                 <TextBlock Text="{DynamicResource Crew.interval_hint}" FontSize="12" TextWrapping="Wrap" Opacity="0.85" Margin="0,0,0,12" />

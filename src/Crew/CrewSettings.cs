@@ -22,17 +22,18 @@ internal sealed class CrewSettings
     internal CrewNotificationPosition NotificationPosition { get; }
     internal bool ShowHelpTab { get; }
     internal bool ShowRanks { get; }
+    internal bool AutoAppointments { get; }
     internal CrewInformation Information { get; }
-    internal CrewSettings(string? connectionId = null, int intervalMinutes = DefaultIntervalMinutes, int displaySeconds = 10, CrewNotificationPosition notificationPosition = DefaultNotificationPosition, bool showHelpTab = true, int exchangeChancePercent = DefaultExchangeChancePercent, CrewInformation? information = null, bool showRanks = true)
+    internal CrewSettings(string? connectionId = null, int intervalMinutes = DefaultIntervalMinutes, int displaySeconds = 10, CrewNotificationPosition notificationPosition = DefaultNotificationPosition, bool showHelpTab = true, int exchangeChancePercent = DefaultExchangeChancePercent, CrewInformation? information = null, bool showRanks = true, bool autoAppointments = false)
     {
         if (connectionId != null && (string.IsNullOrWhiteSpace(connectionId) || connectionId.Length > 80) ||
             intervalMinutes < 1 || intervalMinutes > 15 || displaySeconds < 1 || displaySeconds > 60 || exchangeChancePercent < 0 || exchangeChancePercent > 100)
             throw new CrewException("settings_invalid");
         _ = PositionCode(notificationPosition); NotificationPosition = notificationPosition;
         ConnectionId = connectionId; IntervalMinutes = intervalMinutes; DisplaySeconds = displaySeconds; ShowHelpTab = showHelpTab; ExchangeChancePercent = exchangeChancePercent;
-        Information = information ?? CrewInformation.Default; ShowRanks = showRanks;
+        Information = information ?? CrewInformation.Default; ShowRanks = showRanks; AutoAppointments = autoAppointments;
     }
-    internal JObject Json() => new() { ["schema_version"] = CrewSettingsMigration.CurrentVersion, ["connection_id"] = ConnectionId, ["interval_minutes"] = IntervalMinutes, ["display_seconds"] = DisplaySeconds, ["notification_position"] = PositionCode(NotificationPosition), ["show_help_tab"] = ShowHelpTab, ["show_ranks"] = ShowRanks, ["exchange_chance_percent"] = ExchangeChancePercent, ["information_selection"] = Information.Json() };
+    internal JObject Json() => new() { ["schema_version"] = CrewSettingsMigration.CurrentVersion, ["connection_id"] = ConnectionId, ["interval_minutes"] = IntervalMinutes, ["display_seconds"] = DisplaySeconds, ["notification_position"] = PositionCode(NotificationPosition), ["show_help_tab"] = ShowHelpTab, ["show_ranks"] = ShowRanks, ["auto_appointments"] = AutoAppointments, ["exchange_chance_percent"] = ExchangeChancePercent, ["information_selection"] = Information.Json() };
     internal static string PositionCode(CrewNotificationPosition position) => position switch
     {
         CrewNotificationPosition.TopLeft => "top_left", CrewNotificationPosition.TopCenter => "top_center", CrewNotificationPosition.TopRight => "top_right",
@@ -57,14 +58,15 @@ internal sealed class CrewSettings
             if (reader.Read()) throw new CrewException("settings_invalid");
             var value = CrewSettingsMigration.Upgrade(original); migrated = !ReferenceEquals(original, value);
             foreach (var p in value.Properties())
-                if (p.Name != "schema_version" && p.Name != "connection_id" && p.Name != "interval_minutes" && p.Name != "display_seconds" && p.Name != "notification_position" && p.Name != "show_help_tab" && p.Name != "show_ranks" && p.Name != "exchange_chance_percent" && p.Name != "information_selection")
+                if (p.Name != "schema_version" && p.Name != "connection_id" && p.Name != "interval_minutes" && p.Name != "display_seconds" && p.Name != "notification_position" && p.Name != "show_help_tab" && p.Name != "show_ranks" && p.Name != "auto_appointments" && p.Name != "exchange_chance_percent" && p.Name != "information_selection")
                     throw new CrewException("settings_invalid");
             if (value["connection_id"] is JToken id && id.Type is not (JTokenType.Null or JTokenType.String)) throw new CrewException("settings_invalid");
             if (value["show_help_tab"] is JToken showHelp && showHelp.Type != JTokenType.Boolean) throw new CrewException("settings_invalid");
             if (value["show_ranks"] is JToken showRanks && showRanks.Type != JTokenType.Boolean) throw new CrewException("settings_invalid");
+            if (value["auto_appointments"] is JToken autoAppointments && autoAppointments.Type != JTokenType.Boolean) throw new CrewException("settings_invalid");
             int Read(string key, int fallback) => value[key] == null ? fallback : value[key]!.Type == JTokenType.Integer
                 ? value[key]!.Value<int>() : throw new CrewException("settings_invalid");
-            return new CrewSettings((string?)value["connection_id"], Read("interval_minutes", DefaultIntervalMinutes), Read("display_seconds", 10), ReadPosition(value["notification_position"]), (bool?)value["show_help_tab"] ?? true, Read("exchange_chance_percent", DefaultExchangeChancePercent), CrewInformation.Parse(value["information_selection"]), (bool?)value["show_ranks"] ?? true);
+            return new CrewSettings((string?)value["connection_id"], Read("interval_minutes", DefaultIntervalMinutes), Read("display_seconds", 10), ReadPosition(value["notification_position"]), (bool?)value["show_help_tab"] ?? true, Read("exchange_chance_percent", DefaultExchangeChancePercent), CrewInformation.Parse(value["information_selection"]), (bool?)value["show_ranks"] ?? true, (bool?)value["auto_appointments"] ?? false);
         }
         catch (Exception e) when (e is JsonException || e is OverflowException) { throw new CrewException("settings_invalid"); }
     }
