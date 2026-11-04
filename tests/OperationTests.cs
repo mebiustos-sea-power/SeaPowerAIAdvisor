@@ -30,8 +30,8 @@ internal static class OperationTests
                     var path = Path.Combine(directory, "legacy-" + number++ + ".json");
                     var original = new JObject { ["wip_unit_operations_enabled"] = old }.ToString(); File.WriteAllText(path, original);
                     var legacy = new AdvisorOptionsStore(path);
-                    Require(legacy.Current.IsCommandEnabled("custom.new") && File.ReadAllText(path) == original,
-                        "The obsolete switch affected commands or loading rewrote the file");
+                    Require(legacy.Current.IsCommandEnabled("custom.new") && File.ReadAllText(path + ".bak") == original,
+                        "The obsolete switch affected commands or migration lost the original");
                     legacy.SaveCommands(new[] { "custom.off" });
                     var saved = JObject.Parse(File.ReadAllText(path));
                     Require(saved["wip_unit_operations_enabled"] == null && !new AdvisorOptionsStore(path).Current.IsCommandEnabled("custom.off") &&

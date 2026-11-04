@@ -47,7 +47,7 @@ internal static class ProfileLibraryTests
             File.WriteAllText(path, legacy.ToString()); var before = File.ReadAllBytes(path);
             var loaded = AdvisorProfile.Load(directory);
             AdvisorProfile.EnsureCreated(directory, () => throw new InvalidOperationException("Unexpected image reset"), "New language role");
-            Require(File.ReadAllBytes(path).SequenceEqual(before) && loaded.Advisers.Count == 1 && loaded.DisplayName == "Existing" &&
+            Require(File.ReadAllBytes(path + ".bak").SequenceEqual(before) && loaded.Advisers.Count == 1 && loaded.DisplayName == "Existing" &&
                 loaded.Personality == "Personal" && loaded.DefaultPersonality == "Default" && loaded.CustomRole == "",
                 "Legacy read changed user data or failed to retain a custom profile");
             var draft = new AdvisorProfileDraft(loaded); draft.Add("Second", "Role"); draft.Save(directory);

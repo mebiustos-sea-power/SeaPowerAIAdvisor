@@ -78,6 +78,7 @@ internal sealed class AdvisorOptions
     {
         var value = new JObject
         {
+            ["schema_version"] = AdvisorOptionsMigration.CurrentVersion,
             ["crew_enabled"] = CrewEnabled, ["max_query_rounds"] = MaxQueryRounds, ["campaign_advisor_enabled"] = CampaignEnabled,
             ["information_selection"] = Information.Data(), ["common_prompt"] = CommonPrompt,
             ["conversation_text_size"] = TextSize.ToString().ToLowerInvariant(),
@@ -92,14 +93,18 @@ internal sealed class AdvisorOptions
         return Encoding.UTF8.GetBytes(value.ToString(Formatting.Indented) + Environment.NewLine);
     }
 
-    internal static AdvisorOptions Parse(string json)
+    internal static AdvisorOptions Parse(string json) => Parse(json, out _);
+    internal static AdvisorOptions Parse(string json, out bool migrated)
     {
         try
         {
             using var source = new StringReader(json);
             using var reader = new JsonTextReader(source) { DateParseHandling = DateParseHandling.None, MaxDepth = 5 };
             var value = JObject.Load(reader, new JsonLoadSettings { DuplicatePropertyNameHandling = DuplicatePropertyNameHandling.Error });
-            if (reader.Read() || value.Properties().Any(p => p.Name != "summarize_mission_text" && p.Name != "unit_mention_completion" && p.Name != "crew_enabled" && p.Name != "max_query_rounds" && p.Name != "campaign_advisor_enabled" && p.Name != "disabled_information" && p.Name != "information_selection" && p.Name != "common_prompt" && p.Name != "conversation_text_size" && p.Name != "history_exchanges" && p.Name != "user_name" && p.Name != "developer_local_api_enabled" && p.Name != "developer_local_api_connections" && p.Name != "link_own_units" && p.Name != "link_contacts" && p.Name != "wip_unit_operations_enabled" && p.Name != "disabled_commands" && p.Name != "template_options"))
+            if (reader.Read()) throw new AdvisorOptionsException("options_invalid");
+            var upgraded = AdvisorOptionsMigration.Upgrade(value);
+            migrated = !ReferenceEquals(value, upgraded); value = upgraded;
+            if (value.Properties().Any(p => p.Name != "schema_version" && p.Name != "summarize_mission_text" && p.Name != "unit_mention_completion" && p.Name != "crew_enabled" && p.Name != "max_query_rounds" && p.Name != "campaign_advisor_enabled" && p.Name != "information_selection" && p.Name != "common_prompt" && p.Name != "conversation_text_size" && p.Name != "history_exchanges" && p.Name != "user_name" && p.Name != "developer_local_api_enabled" && p.Name != "developer_local_api_connections" && p.Name != "link_own_units" && p.Name != "link_contacts" && p.Name != "disabled_commands" && p.Name != "template_options"))
                 throw new AdvisorOptionsException("options_invalid");
             var rounds = AdvisorQueryLimits.DefaultMaxRounds;
             if (value["max_query_rounds"] != null && (value["max_query_rounds"]!.Type != JTokenType.Integer ||
@@ -120,10 +125,7 @@ internal sealed class AdvisorOptions
                 throw new AdvisorOptionsException("common_prompt_invalid");
             if (value["user_name"] != null && value["user_name"]!.Type != JTokenType.String)
                 throw new AdvisorOptionsException("user_name_invalid");
-            if (value["disabled_information"] != null && value["information_selection"] != null)
-                throw new AdvisorOptionsException("information_invalid");
-            var information = value["information_selection"] == null ? AdvisorInformation.Parse(value["disabled_information"])
-                : AdvisorInformation.ParseSelections(value["information_selection"]);
+            var information = AdvisorInformation.ParseSelections(value["information_selection"]);
             return new AdvisorOptions(rounds, (bool?)value["campaign_advisor_enabled"] ?? false, information, (string?)value["common_prompt"] ?? "", ParseTextSize(value["conversation_text_size"]), historyExchanges, (string?)value["user_name"], (bool?)value["developer_local_api_enabled"] ?? false, AdvisorLocalConnections.Parse(value["developer_local_api_connections"]), (bool?)value["link_own_units"] ?? true, (bool?)value["link_contacts"] ?? true, ReadDisabledCommands(value["disabled_commands"]), AdvisorTemplateOptions.Parse(value["template_options"]), (bool?)value["crew_enabled"] ?? false, (bool?)value["unit_mention_completion"] ?? false, (bool?)value["summarize_mission_text"] ?? false);
         }
         catch (JsonException) { throw new AdvisorOptionsException("options_invalid"); }
@@ -157,7 +159,17 @@ internal sealed class AdvisorOptionsStore
     {
         if (Directory.Exists(Path)) throw new AdvisorOptionsException("options_unreadable");
         var data = Backup();
-        return data == null ? new AdvisorOptions() : AdvisorOptions.Parse(Encoding.UTF8.GetString(data));
+        if (data == null) return new AdvisorOptions();
+        AdvisorOptions value; bool migrated;
+        try { value = AdvisorOptions.Parse(ConfigFile.Decode(data), out migrated); }
+        catch (DecoderFallbackException) { throw new AdvisorOptionsException("options_invalid"); }
+        if (migrated)
+        {
+            try { ConfigFile.WriteMigration(Path, data, value.Data()); }
+            catch (IOException) { throw new AdvisorOptionsException("options_write_failed"); }
+            catch (UnauthorizedAccessException) { throw new AdvisorOptionsException("options_write_failed"); }
+        }
+        return value;
     }
     internal byte[]? Backup()
     {

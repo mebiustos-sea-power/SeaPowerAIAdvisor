@@ -7,7 +7,7 @@ using Newtonsoft.Json.Linq;
 
 namespace SeaPowerAIAdvisor;
 
-// A local library editor. Neither migration nor editing writes the saved document.
+// A local library editor. Constructing or editing a draft never writes a file.
 internal sealed class AdvisorSettingsDraft
 {
     private readonly JObject source;
@@ -29,8 +29,10 @@ internal sealed class AdvisorSettingsDraft
 
     internal AdvisorSettingsDraft(JObject source, string namePattern = "API setting {0}")
     {
+        try { source = AdvisorApiSettingsMigration.Upgrade(source, namePattern); }
+        catch (JsonException) { throw new AiConnectionException("settings_invalid"); }
         this.source = (JObject)source.DeepClone();
-        var library = AdvisorApiLibrary.Read(source, namePattern);
+        var library = AdvisorApiLibrary.Read(source);
         configurations = library.Configurations.Select(c => new AdvisorApiConfigurationDraft(c)).ToList();
         MainId = library.MainId; SubId = library.SubId; TranslationId = library.TranslationId;
         LogAiJson = (bool?)source["log_ai_json"] ?? false;
@@ -72,8 +74,8 @@ internal sealed class AdvisorSettingsDraft
     }
 
     // Tests use the chosen pending entry and saved logging preference, independently of role assignments.
-    internal AdvisorSettings TestConfiguration(string id) => AdvisorSettings.Parse(
-        AdvisorApiLibrary.Connection(source, (Find(id) ?? throw new AiConnectionException("api_selection_invalid")).Build()).ToString(Formatting.None));
+    internal AdvisorSettings TestConfiguration(string id) => AdvisorSettings.FromConnections(source,
+        (Find(id) ?? throw new AiConnectionException("api_selection_invalid")).Build());
     internal AdvisorSettings TestSettings(bool fallback = false) => TestConfiguration(fallback
         ? SubId ?? throw new AiConnectionException("fallback_key_missing")
         : MainId ?? throw new AiConnectionException("api_main_missing"));

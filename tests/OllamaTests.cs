@@ -14,7 +14,7 @@ internal static partial class ProviderTests
 {
     private static void RunOllama(Action<string, Action> check)
     {
-        check("Legacy and registered Gemini settings migrate without altering saved bytes, credentials, IDs, names or assignments", () => Async(async () =>
+        check("Legacy and registered Gemini settings migrate with an exact backup and preserve credentials, budgets and assignments", () => Async(async () =>
         {
             await InServiceDirectory(async directory =>
             {
@@ -38,16 +38,16 @@ internal static partial class ProviderTests
                         var body = JObject.Parse(await request.Content!.ReadAsStringAsync(token));
                         Require(request.RequestUri!.Host == "generativelanguage.googleapis.com" && request.RequestUri.AbsolutePath == "/v1beta/interactions" &&
                             request.Headers.GetValues("x-goog-api-key").Single() == "mock_migration_main" && (string?)body["model"] == "gemini-original" &&
-                            (int?)body["generation_config"]?["max_output_tokens"] == 8192, "Existing Gemini connection changed after migration");
+                            (int?)body["generation_config"]?["max_output_tokens"] == (version == 0 ? 2048 : 8192), "Existing Gemini connection changed after migration");
                         return JsonResponse(InteractionFixture.Reply(new JObject { ["text"] = "Original connection" }));
                     });
                     var registry = AdvisorServices.CreateRegistry(path, transportFactory: trace => new AiHttpTransport(handler, trace));
-                    Require((await RunPrepared(registry.Prepare())).Text == "Original connection" && handler.Disposed && File.ReadAllBytes(path).SequenceEqual(original),
-                        "Merely loading or using a legacy registration rewrote the user's file");
+                    Require((await RunPrepared(registry.Prepare())).Text == "Original connection" && handler.Disposed && File.ReadAllBytes(path + ".bak").SequenceEqual(original),
+                        "Migrating a legacy registration lost the original file");
                     File.WriteAllBytes(path, draft.Data()); var after = AdvisorSettings.Edit(path);
                     Require(after.Main.Id == before.Id && after.Main.Name == before.Name && after.Main.ApiKey == before.ApiKey && after.Main.Model == before.Model &&
                         after.Main.Provider == "gemini" && after.Sub!.ApiKey == "mock_migration_sub" && after.Sub.Model == "gemini-original-sub" &&
-                        after.Options.RequestTimeoutSeconds == 45 && after.Main.MaxOutputTokens == 8192,
+                        after.Options.RequestTimeoutSeconds == 45 && after.Main.MaxOutputTokens == (version == 0 ? 2048 : 8192),
                         "Saving migration lost a credential, identity, assignment or numeric option");
                 }
             });

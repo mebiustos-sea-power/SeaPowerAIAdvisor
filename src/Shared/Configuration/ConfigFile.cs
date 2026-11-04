@@ -1,11 +1,18 @@
 using System;
 using System.IO;
+using System.Text;
 
 namespace SeaPowerAIAdvisor.Shared;
 
 // Shared file operations; each settings owner translates I/O failures into its own error codes.
 internal static class ConfigFile
 {
+    internal static string Decode(byte[] bytes)
+    {
+        using var input = new MemoryStream(bytes, writable: false);
+        using var reader = new StreamReader(input, new UTF8Encoding(false, true), detectEncodingFromByteOrderMarks: true);
+        return reader.ReadToEnd();
+    }
     internal static byte[]? Backup(string path)
     {
         if (!File.Exists(path)) return null;
@@ -15,6 +22,12 @@ internal static class ConfigFile
     {
         if (before != null) Write(path, before);
         else File.Delete(path);
+    }
+    // Keep the exact previous document. A failed backup must never replace the settings file.
+    internal static void WriteMigration(string path, byte[] before, byte[] after)
+    {
+        Write(path + ".bak", before);
+        Write(path, after);
     }
     internal static void Write(string path, byte[] bytes)
     {

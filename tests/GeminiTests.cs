@@ -33,14 +33,14 @@ internal static class GeminiTests
                 { Require(!error.ToString().Contains(MockKey, StringComparison.Ordinal), "Config error leaked a key"); continue; }
                 throw new InvalidOperationException("Malformed settings accepted");
             }
-            ThrowsCode("api_key_missing", () => AdvisorSettings.Parse("{\"api_key\":\"\"}"));
+            ThrowsCode("api_main_missing", () => AdvisorSettings.Parse("{\"api_key\":\"\"}"));
             var path = Path.Combine(Path.GetTempPath(), "SeaPowerAIAdvisor-settings-" + Guid.NewGuid().ToString("N") + ".json");
             try
             {
                 Require(!AdvisorSettings.LoadLogging(path), "Missing settings enabled logs");
                 AdvisorSettings.SaveLogging(path, true);
                 Require(AdvisorSettings.LoadLogging(path), "Logging cannot be configured before an API key");
-                ThrowsCode("api_key_missing", () => AdvisorSettings.Load(path));
+                ThrowsCode("api_main_missing", () => AdvisorSettings.Load(path));
                 var original = new JObject
                 {
                     ["api_key"] = MockKey, ["model"] = AdvisorSettings.DefaultModel,
@@ -50,10 +50,13 @@ internal static class GeminiTests
                 File.WriteAllText(path, original.ToString());
                 Require(AdvisorSettings.Load(path).Model == AdvisorSettings.DefaultModel &&
                     !AdvisorSettings.LoadLogging(path), "Local config did not load with logging off by default");
+                var migrated = JObject.Parse(File.ReadAllText(path));
+                Require(AdvisorSettings.Load(path).ApiKey == MockKey && AdvisorSettings.Load(path).MaxOutputTokens == 2048,
+                    "Migration changed credentials or the configured output budget");
                 foreach (var enabled in new[] { true, false })
                 {
                     AdvisorSettings.SaveLogging(path, enabled);
-                    var expected = (JObject)original.DeepClone();
+                    var expected = (JObject)migrated.DeepClone();
                     expected["log_ai_json"] = enabled;
                     Require(JToken.DeepEquals(expected, JObject.Parse(File.ReadAllText(path))) &&
                         AdvisorSettings.LoadLogging(path) == enabled && AdvisorSettings.Load(path).LogAiJson == enabled,
@@ -66,7 +69,7 @@ internal static class GeminiTests
                 File.WriteAllText(path, "{\"api_key\":\"" + MockKey + "\",\"model\":\"gemini-3.1-flash-lite\"}");
                 Require(AdvisorSettings.Load(path).Model == "gemini-3.1-flash-lite", "Settings were cached across requests");
             }
-            finally { if (File.Exists(path)) File.Delete(path); }
+            finally { if (File.Exists(path)) File.Delete(path); if (File.Exists(path + ".bak")) File.Delete(path + ".bak"); }
         });
         check("Advisor preferences reach Gemini in both modes without replacing core rules, language or image privacy", () => Async(async () =>
         {

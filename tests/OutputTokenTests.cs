@@ -11,7 +11,7 @@ internal static partial class ProviderTests
 {
     private static void RunOutputTokens(Action<string, Action> check)
     {
-        check("Former NanoGPT limits move to connection metadata without changing the original file or keeping shared overrides", () => Async(async () =>
+        check("Former NanoGPT limits migrate with a backup and remove retired overrides", () => Async(async () =>
         {
             await InServiceDirectory(async directory =>
             {
@@ -24,7 +24,7 @@ internal static partial class ProviderTests
                 var before = File.ReadAllBytes(path); var store = new AdvisorApiSettingsStore(path, () => "API");
                 var read = store.Read();
                 Require(read.Main.MaxOutputTokens == 32768 && read.Main.Settings["max_output_tokens"] == null &&
-                    File.ReadAllBytes(path).SequenceEqual(before), "Reading a NanoGPT limit lost the explicit value or rewrote storage");
+                    File.ReadAllBytes(path + ".bak").SequenceEqual(before), "Migrating a NanoGPT limit lost its value or original storage");
                 store.SaveEntry(read.Main, false);
                 var saved = JObject.Parse(File.ReadAllText(path)); var item = saved["api_configurations"]![0]!;
                 Require(saved["max_output_tokens"] == null && (int?)item["max_output_tokens"] == 32768 && item["settings"]!["max_output_tokens"] == null &&

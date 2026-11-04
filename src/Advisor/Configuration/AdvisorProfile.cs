@@ -30,7 +30,7 @@ internal sealed class AdvisorProfile
     internal string DefaultPersonality { get; }
     internal string CustomPersonality => Custom?.Personality ?? "";
     internal string Personality => UseDefault ? DefaultPersonality : CustomPersonality;
-    // Retains the former single-custom constructor for value snapshots and legacy imports.
+    // Convenience constructor for a single custom adviser value.
     internal AdvisorProfile(string name, string portraitFile, bool useDefault = false,
         string defaultPersonality = "", string customPersonality = "", string customRole = "")
         : this(new[] { new AdvisorPersona("custom", name, customRole, portraitFile, customPersonality) }, "custom", useDefault, defaultPersonality) { }
@@ -55,12 +55,7 @@ internal sealed class AdvisorProfile
         catch (UnauthorizedAccessException) { throw new AdvisorProfileException("profile_write_failed"); }
         if (File.Exists(SettingsPath(directory)))
         {
-            if (initialCustomRole != null)
-            {
-                var existing = Read(directory, initialCustomRole, out var roleMissing);
-                // Initialize older profiles once; an explicit empty role is a saved user choice.
-                if (roleMissing) existing.Save(directory);
-            }
+            _ = Read(directory, initialCustomRole ?? "");
             return;
         }
         var portrait = Path.Combine(directory, DefaultPortraitFile);
@@ -76,16 +71,26 @@ internal sealed class AdvisorProfile
         catch (UnauthorizedAccessException) { throw new AdvisorProfileException("profile_write_failed"); }
     }
 
-    internal static AdvisorProfile Load(string directory) => Read(directory, "", out _);
+    internal static AdvisorProfile Load(string directory) => Read(directory, "");
 
-    private static AdvisorProfile Read(string directory, string initialCustomRole, out bool roleMissing)
+    private static AdvisorProfile Read(string directory, string initialCustomRole)
     {
         var path = SettingsPath(directory);
         if (!File.Exists(path)) throw new AdvisorProfileException("profile_missing");
         try
         {
             if (new FileInfo(path).Length > MaxProfileBytes) throw new AdvisorProfileException("profile_invalid");
-            return Parse(File.ReadAllText(path, new UTF8Encoding(false, true)), initialCustomRole, out roleMissing);
+            var before = File.ReadAllBytes(path);
+            var result = Parse(ConfigFile.Decode(before), initialCustomRole, out var migrated);
+            if (migrated)
+            {
+                var after = Encoding.UTF8.GetBytes(result.Json());
+                if (after.Length > MaxProfileBytes) throw new AdvisorProfileException("profile_invalid");
+                try { ConfigFile.WriteMigration(path, before, after); }
+                catch (IOException) { throw new AdvisorProfileException("profile_write_failed"); }
+                catch (UnauthorizedAccessException) { throw new AdvisorProfileException("profile_write_failed"); }
+            }
+            return result;
         }
         catch (DecoderFallbackException) { throw new AdvisorProfileException("profile_invalid"); }
         catch (IOException) { throw new AdvisorProfileException("profile_unreadable"); }
@@ -93,7 +98,7 @@ internal sealed class AdvisorProfile
     }
     internal static AdvisorProfile Parse(string json) => Parse(json, "", out _);
 
-    private static AdvisorProfile Parse(string json, string initialCustomRole, out bool roleMissing)
+    private static AdvisorProfile Parse(string json, string initialCustomRole, out bool migrated)
     {
         try
         {
@@ -101,36 +106,17 @@ internal sealed class AdvisorProfile
             using var reader = new JsonTextReader(source) { MaxDepth = 8, DateParseHandling = DateParseHandling.None };
             var value = JObject.Load(reader, new JsonLoadSettings { DuplicatePropertyNameHandling = DuplicatePropertyNameHandling.Error });
             if (reader.Read()) throw new AdvisorProfileException("profile_invalid");
-            if (value["schema_version"] != null)
-            {
-                roleMissing = false;
-                var fields = new[] { "schema_version", "mode", "selected_custom_id", "default_personality", "custom_advisors" };
-                if (value["schema_version"]!.Type != JTokenType.Integer || value["schema_version"]!.ToString(Formatting.None) != "2" ||
-                    value.Properties().Any(p => !fields.Contains(p.Name)) || value["mode"]?.Type != JTokenType.String ||
-                    ((string?)value["mode"] != "default" && (string?)value["mode"] != "custom") ||
-                    value["default_personality"]?.Type != JTokenType.String ||
-                    (value["selected_custom_id"]?.Type != JTokenType.String && value["selected_custom_id"]?.Type != JTokenType.Null) ||
-                    !(value["custom_advisors"] is JArray advisers) || advisers.Any(a => !(a is JObject)))
-                    throw new AdvisorProfileException("profile_invalid");
-                return new AdvisorProfile(advisers.Cast<JObject>().Select(AdvisorPersona.Parse), (string?)value["selected_custom_id"],
-                    (string?)value["mode"] == "default", (string)value["default_personality"]!);
-            }
-            if (value.Properties().Any(p => p.Name != "mode" && p.Name != "display_name" &&
-                p.Name != "portrait_file" && p.Name != "personality" && p.Name != "default_personality" && p.Name != "custom_personality" && p.Name != "custom_role") ||
-                value["display_name"]?.Type != JTokenType.String || value["portrait_file"]?.Type != JTokenType.String ||
-                (value["mode"] != null && (value["mode"]!.Type != JTokenType.String ||
-                    ((string?)value["mode"] != "default" && (string?)value["mode"] != "custom"))) ||
-                new[] { "personality", "default_personality", "custom_personality", "custom_role" }.Any(key =>
-                    value[key] != null && value[key]!.Type != JTokenType.String))
+            var upgraded = AdvisorProfileMigration.Upgrade(value, initialCustomRole);
+            migrated = !ReferenceEquals(value, upgraded); value = upgraded;
+            var fields = new[] { "schema_version", "mode", "selected_custom_id", "default_personality", "custom_advisors" };
+            if (value.Properties().Any(p => !fields.Contains(p.Name)) || value["mode"]?.Type != JTokenType.String ||
+                ((string?)value["mode"] != "default" && (string?)value["mode"] != "custom") ||
+                value["default_personality"]?.Type != JTokenType.String ||
+                (value["selected_custom_id"]?.Type != JTokenType.String && value["selected_custom_id"]?.Type != JTokenType.Null) ||
+                !(value["custom_advisors"] is JArray advisers) || advisers.Any(a => !(a is JObject)))
                 throw new AdvisorProfileException("profile_invalid");
-            // Legacy profiles remain custom; the former shared personality supplies missing per-mode values.
-            var legacyPersonality = (string?)value["personality"] ?? "";
-            roleMissing = value["custom_role"] == null;
-            return new AdvisorProfile((string)value["display_name"]!, (string)value["portrait_file"]!,
-                (string?)value["mode"] == "default",
-                (string?)value["default_personality"] ?? legacyPersonality,
-                (string?)value["custom_personality"] ?? legacyPersonality,
-                (string?)value["custom_role"] ?? initialCustomRole);
+            return new AdvisorProfile(advisers.Cast<JObject>().Select(AdvisorPersona.Parse), (string?)value["selected_custom_id"],
+                (string?)value["mode"] == "default", (string)value["default_personality"]!);
         }
         catch (JsonException) { throw new AdvisorProfileException("profile_invalid"); }
         catch (ArgumentException) { throw new AdvisorProfileException("profile_invalid"); }
@@ -216,26 +202,13 @@ internal sealed class AdvisorProfile
         var data = Encoding.UTF8.GetBytes(Json());
         if (data.Length > MaxProfileBytes) throw new AdvisorProfileException("profile_invalid");
         var path = SettingsPath(directory);
-        var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        try
-        {
-            Directory.CreateDirectory(directory);
-            WriteNew(temporary, data);
-            if (File.Exists(path)) File.Replace(temporary, path, null);
-            else File.Move(temporary, path);
-        }
+        try { ConfigFile.Write(path, data); }
         catch (IOException) { throw new AdvisorProfileException("profile_write_failed"); }
         catch (UnauthorizedAccessException) { throw new AdvisorProfileException("profile_write_failed"); }
-        finally
-        {
-            try { if (File.Exists(temporary)) File.Delete(temporary); }
-            catch (IOException) { throw new AdvisorProfileException("profile_write_failed"); }
-            catch (UnauthorizedAccessException) { throw new AdvisorProfileException("profile_write_failed"); }
-        }
     }
     private string Json() => new JObject
     {
-        ["schema_version"] = 2, ["mode"] = UseDefault ? "default" : "custom",
+        ["schema_version"] = AdvisorProfileMigration.CurrentVersion, ["mode"] = UseDefault ? "default" : "custom",
         ["selected_custom_id"] = SelectedCustomId, ["default_personality"] = DefaultPersonality,
         ["custom_advisors"] = new JArray(Advisers.Select(a => a.Json()))
     }.ToString(Formatting.Indented) + Environment.NewLine;

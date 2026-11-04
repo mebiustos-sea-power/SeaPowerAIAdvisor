@@ -25,6 +25,7 @@ internal static partial class ProviderTests
                     ["api_key"] = "mock_free_key", ["model"] = "gemini-free-model",
                     ["fallback_api_key"] = "mock_metered_key", ["fallback_model"] = "gemini-metered-model"
                 }.ToString());
+                _ = AdvisorSettings.Edit(path);
                 var saved = File.ReadAllBytes(path);
                 foreach (var policy in new bool?[] { false, true, null })
                 {

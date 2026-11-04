@@ -109,8 +109,8 @@ internal static partial class BattleTests
             var kind = InformationKind.BattleMovementPlans;
             var oldSelections = AdvisorInformation.All.Data(); oldSelections.Remove("battle_movement_plans");
             Require(AdvisorInformation.Default.Allows(kind) && AdvisorInformation.ParseSelections(oldSelections).Allows(kind) &&
-                AdvisorInformation.Parse(new JArray()).Allows(kind), "Missing movement selections did not use the enabled default");
-            Require(!AdvisorInformation.Parse(new JArray("battle_movement_plans")).Allows(kind),
+                AdvisorOptions.Parse("{\"disabled_information\":[]}").Information.Allows(kind), "Missing movement selections did not use the enabled default");
+            Require(!AdvisorOptions.Parse("{\"disabled_information\":[\"battle_movement_plans\"]}").Information.Allows(kind),
                 "The enabled default overwrote an explicitly disabled legacy movement selection");
             foreach (var enabled in new[] { true, false })
                 Require(AdvisorInformation.ParseSelections(AdvisorInformation.Default.With(kind, enabled).Data()).Allows(kind) == enabled,

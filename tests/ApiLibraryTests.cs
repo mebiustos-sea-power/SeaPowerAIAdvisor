@@ -14,9 +14,9 @@ internal static class ApiLibraryTests
     private const string SubKey = "mock_library_sub_no_network";
     internal static void Run(Action<string, Action> check)
     {
-        check("Startup renames old settings byte-for-byte, preserves formats and leaves new installations unwritten", () => InTemp(directory =>
+        check("Startup renames old settings byte-for-byte and document migration preserves values while new installations stay unwritten", () => InTemp(directory =>
         {
-            var current = AdvisorSettings.MigrateFileName(directory);
+            var current = AdvisorApiSettingsMigration.ResolvePath(directory);
             Require(!Directory.Exists(Path.GetDirectoryName(current)!) && !File.Exists(current), "Startup created empty settings for a new installation");
             var registered = new JObject { ["schema_version"] = 2,
                 ["api_configurations"] = new JArray(new JObject { ["id"] = "kept", ["name"] = "Registered 日本語", ["api_key"] = MainKey, ["model"] = "gemini-main" }),
@@ -29,13 +29,14 @@ internal static class ApiLibraryTests
                 var legacy = Path.Combine(Path.GetDirectoryName(destination)!, "gemini.json");
                 var before = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(pair.ToString())).ToArray();
                 File.WriteAllBytes(legacy, before);
-                var path = AdvisorSettings.MigrateFileName(dataPath);
+                var path = AdvisorApiSettingsMigration.ResolvePath(dataPath);
                 Require(path == destination && !File.Exists(legacy) && File.ReadAllBytes(path).SequenceEqual(before),
                     "Filename migration transformed, duplicated or lost the existing settings");
                 var saved = AdvisorSettings.Edit(path);
-                Require(saved.Main.ApiKey == MainKey && saved.Main.MaxOutputTokens == 8192 && saved.LogAiJson,
+                var migrated = File.ReadAllBytes(path);
+                Require(saved.Main.ApiKey == MainKey && saved.Main.MaxOutputTokens == ((int?)pair["schema_version"] == 2 ? 8192 : 2048) && saved.LogAiJson,
                     "Renaming lost the registered connection, output budget or logging preference");
-                Require(AdvisorSettings.MigrateFileName(dataPath) == path && File.ReadAllBytes(path).SequenceEqual(before), "Repeated startup rewrote the migrated settings");
+                Require(AdvisorApiSettingsMigration.ResolvePath(dataPath) == path && File.ReadAllBytes(path).SequenceEqual(migrated), "Repeated startup rewrote the migrated settings");
                 new AdvisorApiSettingsStore(path, () => "API {0}").SaveLogging(false);
                 Require(!File.Exists(legacy) && !AdvisorSettings.Edit(path).LogAiJson, "Saving after migration wrote back to the retired filename");
             }
@@ -46,19 +47,19 @@ internal static class ApiLibraryTests
             var legacy = Path.Combine(Path.GetDirectoryName(current)!, "gemini.json");
             var original = Encoding.UTF8.GetBytes(Legacy().ToString()); File.WriteAllBytes(legacy, original);
             var newer = Legacy(); newer["api_key"] = "mock_preferred_new_settings"; File.WriteAllText(current, newer.ToString());
-            Require(AdvisorSettings.MigrateFileName(directory) == current && AdvisorSettings.Load(current).ApiKey == "mock_preferred_new_settings" &&
+            Require(AdvisorApiSettingsMigration.ResolvePath(directory) == current && AdvisorSettings.Load(current).ApiKey == "mock_preferred_new_settings" &&
                 File.ReadAllBytes(legacy).SequenceEqual(original), "Migration overwrote the new file or removed the old file when both existed");
             File.WriteAllText(current, "broken new settings");
-            Require(AdvisorSettings.MigrateFileName(directory) == current, "A broken new file selected the old filename");
+            Require(AdvisorApiSettingsMigration.ResolvePath(directory) == current, "A broken new file selected the old filename");
             Throws("settings_invalid", () => AdvisorSettings.Edit(current));
             File.Delete(current); Directory.CreateDirectory(current);
-            Throws("settings_migration_failed", () => AdvisorSettings.MigrateFileName(directory));
+            Throws("settings_migration_failed", () => AdvisorApiSettingsMigration.ResolvePath(directory));
             Require(File.ReadAllBytes(legacy).SequenceEqual(original), "A blocked migration deleted or rewrote the old file");
             Directory.Delete(current); File.Delete(legacy); Directory.CreateDirectory(legacy);
-            Throws("settings_migration_failed", () => AdvisorSettings.MigrateFileName(directory));
+            Throws("settings_migration_failed", () => AdvisorApiSettingsMigration.ResolvePath(directory));
             Require(!File.Exists(current), "An invalid old settings path was silently replaced with empty new settings");
         }));
-        check("Legacy API migration preserves both connections and advanced settings without writing until accepted", () => InTemp(directory =>
+        check("Legacy API migration persists validated connections once and keeps subsequent edits local", () => InTemp(directory =>
         {
             var path = Path.Combine(directory, "gemini.json");
             var old = Legacy(); File.WriteAllText(path, old.ToString()); var before = File.ReadAllBytes(path);
@@ -66,13 +67,13 @@ internal static class ApiLibraryTests
             Require(draft.Configurations.Count == 2 && draft.Main.ApiKey == MainKey && draft.Sub!.ApiKey == SubKey &&
                 draft.Main.Model == "gemini-main" && draft.Sub.Model == "gemini-sub", "Migration lost a key/model pair or changed roles");
             var pending = draft.Data();
-            Require(File.ReadAllBytes(path).SequenceEqual(before) && AdvisorSettings.Load(path).ApiKey == MainKey,
-                "Opening or validating settings rewrote the legacy file");
+            Require(File.ReadAllBytes(path + ".bak").SequenceEqual(before) && AdvisorSettings.Load(path).ApiKey == MainKey,
+                "Migration lost the original file or selected connection");
             AdvisorSettings.WriteBytes(path, pending);
             var saved = AdvisorSettings.Load(path); var loaded = AdvisorSettings.Edit(path, "Different language {0}");
             Require(saved.ApiKey == MainKey && saved.ForFallback().RequestApiKey == SubKey && saved.Model == "gemini-main" &&
                 saved.ForFallback().RequestModel == "gemini-sub" && saved.RequestTimeoutSeconds == 45 &&
-                saved.MaxOutputTokens == 8192 && saved.LogAiJson &&
+                saved.MaxOutputTokens == 2048 && saved.LogAiJson &&
                 loaded.Main.Name == "API設定1" && loaded.Sub!.Name == "API設定2", "Saving migration reset credentials, labels or advanced settings");
             var json = JObject.Parse(File.ReadAllText(path));
             Require(json["api_key"] == null && json["fallback_api_key"] == null && json["model"] == null && json["fallback_model"] == null,
@@ -118,7 +119,7 @@ internal static class ApiLibraryTests
             Require(test.RequestApiKey == extra.ApiKey && test.RequestModel == extra.Model && !test.LogAiJson &&
                 test.FallbackApiKey == "" && test.RequestTimeoutSeconds == 45,
                 "Testing depended on main settings, used another key or applied unsaved logging");
-            Throws("api_key_missing", () => draft.TestSettings());
+            Throws("model_invalid", () => draft.TestSettings());
         });
         check("Deleting registered API settings clears their assignments without silently choosing another credential", () =>
         {

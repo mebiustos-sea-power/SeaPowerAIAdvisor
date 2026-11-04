@@ -28,13 +28,13 @@ internal static partial class ProviderTests
                 File.WriteAllText(path, source.ToString()); var original = File.ReadAllBytes(path);
                 var store = new AdvisorApiSettingsStore(path, () => "Connection {0}"); var read = store.Read();
                 Require(read.Main.RequestTimeoutSeconds == 45 && read.Sub!.RequestTimeoutSeconds == 45 &&
-                    File.ReadAllBytes(path).SequenceEqual(original), "Reading migration lost the legacy deadline or rewrote storage");
+                    File.ReadAllBytes(path + ".bak").SequenceEqual(original), "Migration lost the legacy deadline or original storage");
                 read.Main.RequestTimeoutSeconds = 600; store.SaveEntry(read.Main, false);
                 var edited = store.Read().Sub!; edited.RequestTimeoutSeconds = 17; store.SaveEntry(edited, false);
                 var saved = store.Read();
                 Require(saved.Main.RequestTimeoutSeconds == 600 && saved.Sub!.RequestTimeoutSeconds == 17 &&
                     (string?)saved.Main.Settings["num_ctx"] == "32768" && saved.Sub.ApiKey == "mock_timeout_key" &&
-                    (int?)JObject.Parse(File.ReadAllText(path))["consultation_timeout_seconds"] == 90,
+                    JObject.Parse(File.ReadAllText(path))["consultation_timeout_seconds"] == null,
                     "Editing one deadline reset another entry, changed existing context length or discarded legacy data");
                 var beforeInvalid = File.ReadAllBytes(path); var invalid = store.Read().Main; invalid.RequestTimeoutSeconds = 0;
                 ExpectServiceError("request_timeout_invalid", () => store.SaveEntry(invalid, false));

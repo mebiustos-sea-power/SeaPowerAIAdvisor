@@ -24,8 +24,9 @@ internal static class FallbackModelTests
             File.WriteAllText(path,new JObject { ["api_key"] = MainKey, ["fallback_api_key"] = BackupKey, ["model"] = Primary }.ToString());
             var before = File.ReadAllBytes(path);
             var legacy = AdvisorSettings.Load(path);
-            Require(legacy.FallbackModel == Primary && legacy.ForFallback().RequestModel == Primary && File.ReadAllBytes(path).SequenceEqual(before),
-                "Reading a legacy shared model reset or rewrote user settings");
+            Require(legacy.FallbackModel == Primary && legacy.ForFallback().RequestModel == Primary && File.ReadAllBytes(path + ".bak").SequenceEqual(before),
+                "Migrating a legacy shared model reset choices or lost the backup");
+            before = File.ReadAllBytes(path);
             var draft = AdvisorSettings.Edit(path); draft.Sub!.Model = Secondary; _ = draft.Data();
             Require(AdvisorSettings.Edit(path).Sub!.Model == Primary && File.ReadAllBytes(path).SequenceEqual(before), "A pending model edit was saved immediately");
             AdvisorSettings.WriteBytes(path,draft.Data());

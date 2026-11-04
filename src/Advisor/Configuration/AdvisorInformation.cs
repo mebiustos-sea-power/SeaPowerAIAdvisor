@@ -119,18 +119,6 @@ internal sealed class AdvisorInformation
             throw new AdvisorOptionsException("information_invalid");
         return new AdvisorInformation(Items.ToDictionary(i => i.Id, i => (bool?)values[i.Id] ?? i.DefaultEnabled, StringComparer.Ordinal));
     }
-    // Legacy files stored only disabled IDs. Missing legacy items were explicitly on under that format.
-    internal static AdvisorInformation Parse(JToken? token)
-    {
-        if (token == null) return Default;
-        if (!(token is JArray array) || array.Any(i => i.Type != JTokenType.String) ||
-            array.Values<string>().Distinct(StringComparer.Ordinal).Count() != array.Count ||
-            array.Values<string>().Any(id => !Items.Any(i => i.Id == id)))
-            throw new AdvisorOptionsException("information_invalid");
-        var disabled = array.Values<string>().ToHashSet(StringComparer.Ordinal);
-        return new AdvisorInformation(Items.ToDictionary(i => i.Id,
-            i => !disabled.Contains(i.Id) && ((int)i.Kind <= (int)InformationKind.CampaignReports || i.DefaultEnabled), StringComparer.Ordinal));
-    }
     internal JArray Excluded(bool battle) => new(Items.Where(i => i.Id.StartsWith(battle ? "battle_" : "campaign_", StringComparison.Ordinal) && !Allows(i.Kind)).Select(i => i.Id));
     internal void AddCoverage(JObject initial, bool battle)
     {

@@ -147,6 +147,9 @@
     <Compile Include="..\src\Advisor\Configuration\AdvisorApiLibrary.cs" Link="AdvisorApiLibrary.cs" />
     <Compile Include="..\src\Advisor\Configuration\AdvisorSettingsOperations.cs" Link="AdvisorSettingsOperations.cs" />
     <Compile Include="..\src\Shared\Configuration\ConfigFile.cs" Link="ConfigFile.cs" />
+    <Compile Include="..\src\Shared\Configuration\ConfigMigration.cs" Link="ConfigMigration.cs" />
+    <Compile Include="..\src\Advisor\Configuration\*Migration.cs" />
+    <Compile Include="..\src\Crew\CrewSettingsMigration.cs" />
     <Compile Include="..\src\Advisor\Notifications\AdvisorUpdateNotice.cs" Link="AdvisorUpdateNotice.cs" />
     <Compile Include="..\src\Advisor\Notifications\AdvisorUpdateNoticeStore.cs" Link="AdvisorUpdateNoticeStore.cs" />
     <EmbeddedResource Include="..\src\Advisor\UI\Updates\current.json" LogicalName="SeaPowerAIAdvisor.UpdateNotice.json" />

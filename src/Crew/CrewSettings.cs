@@ -32,7 +32,7 @@ internal sealed class CrewSettings
         ConnectionId = connectionId; IntervalMinutes = intervalMinutes; DisplaySeconds = displaySeconds; ShowHelpTab = showHelpTab; ExchangeChancePercent = exchangeChancePercent;
         Information = information ?? CrewInformation.Default; ShowRanks = showRanks;
     }
-    internal JObject Json() => new() { ["connection_id"] = ConnectionId, ["interval_minutes"] = IntervalMinutes, ["display_seconds"] = DisplaySeconds, ["notification_position"] = PositionCode(NotificationPosition), ["show_help_tab"] = ShowHelpTab, ["show_ranks"] = ShowRanks, ["exchange_chance_percent"] = ExchangeChancePercent, ["information_selection"] = Information.Json() };
+    internal JObject Json() => new() { ["schema_version"] = CrewSettingsMigration.CurrentVersion, ["connection_id"] = ConnectionId, ["interval_minutes"] = IntervalMinutes, ["display_seconds"] = DisplaySeconds, ["notification_position"] = PositionCode(NotificationPosition), ["show_help_tab"] = ShowHelpTab, ["show_ranks"] = ShowRanks, ["exchange_chance_percent"] = ExchangeChancePercent, ["information_selection"] = Information.Json() };
     internal static string PositionCode(CrewNotificationPosition position) => position switch
     {
         CrewNotificationPosition.TopLeft => "top_left", CrewNotificationPosition.TopCenter => "top_center", CrewNotificationPosition.TopRight => "top_right",
@@ -47,13 +47,17 @@ internal sealed class CrewSettings
                 if ((string?)value == PositionCode(position)) return position;
         throw new CrewException("settings_invalid");
     }
-    internal static CrewSettings Parse(string json)
+    internal static CrewSettings Parse(string json) => Parse(json, out _);
+    internal static CrewSettings Parse(string json, out bool migrated)
     {
         try
         {
-            var value = JObject.Parse(json);
+            using var reader = new JsonTextReader(new StringReader(json)) { DateParseHandling = DateParseHandling.None, MaxDepth = 5 };
+            var original = JObject.Load(reader, new JsonLoadSettings { DuplicatePropertyNameHandling = DuplicatePropertyNameHandling.Error });
+            if (reader.Read()) throw new CrewException("settings_invalid");
+            var value = CrewSettingsMigration.Upgrade(original); migrated = !ReferenceEquals(original, value);
             foreach (var p in value.Properties())
-                if (p.Name != "connection_id" && p.Name != "interval_minutes" && p.Name != "display_seconds" && p.Name != "notification_position" && p.Name != "show_help_tab" && p.Name != "show_ranks" && p.Name != "exchange_chance_percent" && p.Name != "information_selection")
+                if (p.Name != "schema_version" && p.Name != "connection_id" && p.Name != "interval_minutes" && p.Name != "display_seconds" && p.Name != "notification_position" && p.Name != "show_help_tab" && p.Name != "show_ranks" && p.Name != "exchange_chance_percent" && p.Name != "information_selection")
                     throw new CrewException("settings_invalid");
             if (value["connection_id"] is JToken id && id.Type is not (JTokenType.Null or JTokenType.String)) throw new CrewException("settings_invalid");
             if (value["show_help_tab"] is JToken showHelp && showHelp.Type != JTokenType.Boolean) throw new CrewException("settings_invalid");
@@ -73,9 +77,21 @@ internal sealed class CrewSettingsStore
     internal CrewSettingsStore(string path) { this.path = path; Current = Read(); }
     private CrewSettings Read()
     {
-        try { var bytes = ConfigFile.Backup(path); return bytes == null ? new CrewSettings() : CrewSettings.Parse(Encoding.UTF8.GetString(bytes)); }
+        byte[]? bytes;
+        try { bytes = ConfigFile.Backup(path); }
         catch (IOException) { throw new CrewException("settings_read_failed"); }
         catch (UnauthorizedAccessException) { throw new CrewException("settings_read_failed"); }
+        if (bytes == null) return new CrewSettings();
+        CrewSettings value; bool migrated;
+        try { value = CrewSettings.Parse(ConfigFile.Decode(bytes), out migrated); }
+        catch (DecoderFallbackException) { throw new CrewException("settings_invalid"); }
+        try
+        {
+            if (migrated) ConfigFile.WriteMigration(path, bytes, Encoding.UTF8.GetBytes(value.Json().ToString(Formatting.Indented) + Environment.NewLine));
+            return value;
+        }
+        catch (IOException) { throw new CrewException("settings_write_failed"); }
+        catch (UnauthorizedAccessException) { throw new CrewException("settings_write_failed"); }
     }
     internal void Save(CrewSettings value)
     {

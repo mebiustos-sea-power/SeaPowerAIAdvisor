@@ -30,6 +30,7 @@ internal static class Program
         SensorOperationTests.Run(Check);
         CombatOperationTests.Run(Check);
         SharedFoundationTests.Run(Check);
+        ConfigMigrationTests.Run(Check);
         CreatorConnectionTests.Run(Check);
         TranslationTests.Run(Check);
         CrewTests.Run(Check);
@@ -171,6 +172,7 @@ internal static class Program
         SensorOperationTests.Run(Check);
         CombatOperationTests.Run(Check);
         SharedFoundationTests.Run(Check);
+        ConfigMigrationTests.Run(Check);
         CreatorConnectionTests.Run(Check);
         TranslationTests.Run(Check);
         CrewTests.Run(Check);

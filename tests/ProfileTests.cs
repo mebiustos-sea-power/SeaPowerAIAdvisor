@@ -128,7 +128,7 @@ internal static class ProfileTests
                 var profile = AdvisorProfile.Load(directory);
                 Require(profile.DefaultPersonality == (string?)legacy["personality"] &&
                     profile.CustomPersonality == profile.DefaultPersonality &&
-                    File.ReadAllBytes(path).SequenceEqual(before), "Reading legacy settings lost text or rewrote the file");
+                    File.ReadAllBytes(path + ".bak").SequenceEqual(before), "Migrating legacy settings lost text or the original file");
                 var draft = new AdvisorProfileDraft(profile) { UseDefault = !useDefault, Personality = "" };
                 draft.Save(directory);
                 var saved = AdvisorProfile.Load(directory);
@@ -303,7 +303,7 @@ internal static class ProfileTests
             AdvisorProfile.EnsureCreated(directory, () => throw new InvalidOperationException("Missing user images must not be replaced"));
             Throws("portrait_missing", () => AdvisorProfile.Load(directory).ReadPortrait(directory));
             File.WriteAllText(AdvisorProfile.SettingsPath(directory), "{broken");
-            AdvisorProfile.EnsureCreated(directory, () => throw new InvalidOperationException("Broken profiles must not be reset"));
+            Throws("profile_invalid", () => AdvisorProfile.EnsureCreated(directory, () => throw new InvalidOperationException("Broken profiles must not be reset")));
             Throws("profile_invalid", () => AdvisorProfile.Load(directory));
             File.WriteAllBytes(AdvisorProfile.SettingsPath(directory), new byte[] { 255, 255 });
             Throws("profile_invalid", () => AdvisorProfile.Load(directory));

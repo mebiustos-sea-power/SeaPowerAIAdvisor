@@ -84,7 +84,7 @@ internal static class OptionsTests
             catch (AdvisorOptionsException error) when (error.Code == "options_unreadable") { return; }
             throw new InvalidOperationException("A directory at the settings path was treated as missing settings");
         }));
-        check("Missing API request limits use the new default without writing and every saved limit survives reads and unrelated saves", () => InTemp(directory =>
+        check("API request limits migrate with their defaults and survive reads and unrelated saves", () => InTemp(directory =>
         {
             var path = Path.Combine(directory, "options.json");
             foreach (var limit in new int?[] { null, 1, 5, 10, 15, 20 })
@@ -95,8 +95,8 @@ internal static class OptionsTests
                 var before = File.ReadAllBytes(path);
                 var store = new AdvisorOptionsStore(path);
                 var expected = limit ?? AdvisorQueryLimits.DefaultMaxRounds;
-                Require(store.Current.MaxQueryRounds == expected && File.ReadAllBytes(path).SequenceEqual(before),
-                    "Reading settings rewrote the file, replaced a saved limit or ignored the new missing-field default");
+                Require(store.Current.MaxQueryRounds == expected && File.ReadAllBytes(path + ".bak").SequenceEqual(before),
+                    "Migration lost the original, replaced a saved limit or ignored its missing-field default");
                 store.SaveInformation(AdvisorInformation.Default);
                 var reopened = new AdvisorOptionsStore(path);
                 Require(reopened.Current.MaxQueryRounds == expected && reopened.Current.CommonPrompt == "Existing preference",

@@ -44,7 +44,7 @@ public sealed class Plugin : IAnchorChainMod
             }
             AdvisorErrorHistory.StartRun(message => Log.LogWarning(message));
             options = new AdvisorOptionsStore(AdvisorOptionsStore.PathIn(UnityEngine.Application.persistentDataPath));
-            var settingsPath = AdvisorSettings.MigrateFileName(UnityEngine.Application.persistentDataPath);
+            var settingsPath = AdvisorApiSettingsMigration.ResolvePath(UnityEngine.Application.persistentDataPath);
             backends = AdvisorServices.CreateRegistry(settingsPath);
             // A broken prompt package must remain visible without disabling settings or diagnostics.
             try { _ = AdvisorPrompts.Current; }
