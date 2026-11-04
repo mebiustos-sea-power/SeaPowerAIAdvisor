@@ -18,6 +18,8 @@ public sealed class Plugin : IAnchorChainMod
     private static CampaignIntegration? campaign;
     private static BattleIntegration? battle;
     private static Crew.CrewIntegration? crew;
+    private static Shared.GameSaveIntegration? saveIntegration;
+    private static readonly AdvisorSaveData SaveData = new();
     private static AdvisorOptionsStore? options;
     private static AdvisorBackendRegistry? backends;
     internal static AdvisorLocalApi? LocalApi { get; private set; }
@@ -117,6 +119,7 @@ public sealed class Plugin : IAnchorChainMod
                 if (screenTranslation != null) UnityEngine.Object.Destroy(screenTranslation);
                 Log.LogError("Screen translation initialization failed: " + error);
             }
+            saveIntegration = new Shared.GameSaveIntegration(ModId, SaveData.Reset, SaveData.Capture, SaveData.Restore, Log.LogError);
             installed = true;
             Log.LogInfo("Advisor 0.20.1 ready for tactical battles. DCM is optional. Open AI in the bottom-right battle toolbar.");
             TryInstallCampaign();
@@ -159,6 +162,7 @@ public sealed class Plugin : IAnchorChainMod
 
     private static void BattleFrame(MainGameViewModel __instance)
     {
+        saveIntegration?.Tick();
         BattleRuntime.Tick(() => battle?.Tick(__instance));
         crew?.Tick(__instance, battle?.HudControl);
         TryInstallCampaign();

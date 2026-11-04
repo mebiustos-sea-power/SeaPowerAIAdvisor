@@ -8,6 +8,7 @@
   <!-- Compiling Shared without Advisor prevents a feature dependency from silently entering the common layer. -->
   <ItemGroup>
     <Compile Include="..\..\src\Shared\**\*.cs" />
+    <Reference Include="0Harmony" HintPath="$(SeaPowerDir)\BepInEx\core\0Harmony.dll" Private="false" ExternallyResolved="true" />
     <PackageReference Include="Markdig" Version="1.4.0" />
     <Reference Include="Newtonsoft.Json" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\Newtonsoft.Json.dll" Private="false" ExternallyResolved="true" />
     <Reference Include="Noesis.NoesisGUI" HintPath="$(SeaPowerDir)\Sea Power_Data\Managed\Noesis.NoesisGUI.dll" Private="false" ExternallyResolved="true" />

@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><TargetFramework>net10.0</TargetFramework><OutputType>Exe</OutputType><AssemblyName>SeaPowerAIAdvisor.Tests</AssemblyName></PropertyGroup>
   <ItemGroup>
+    <Compile Include="..\src\Shared\Game\Saving\SaveDataSection.cs" />
+    <Compile Include="..\src\Shared\Game\Saving\SaveDataSession.cs" />
+    <Compile Include="..\src\AdvisorSaveData.cs" />
     <Compile Include="..\src\Shared\Game\UnitStatusFacts.cs" />
     <Compile Include="..\src\Shared\Game\BattleWeatherFacts.cs" />
     <Compile Include="..\src\Shared\Game\UnitThreatFacts.cs" />
