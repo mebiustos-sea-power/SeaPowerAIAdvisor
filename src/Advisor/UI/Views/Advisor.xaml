@@ -243,6 +243,10 @@
                 <ComboBoxItem Content="{DynamicResource Advisor.general.text_size_standard}" />
                 <ComboBoxItem Content="{DynamicResource Advisor.general.text_size_large}" />
               </ComboBox>
+              <TextBlock Text="{DynamicResource Advisor.general.saving}" FontSize="14" FontWeight="Bold" Margin="0,24,0,10" />
+              <CheckBox x:Name="IncludeModSaveData" HorizontalContentAlignment="Stretch" Margin="0,0,0,8">
+                <TextBlock Text="{DynamicResource Advisor.general.include_mod_save_data}" TextWrapping="Wrap" />
+              </CheckBox>
               <TextBlock Text="{DynamicResource Advisor.general.input}" FontSize="14" FontWeight="Bold" Margin="0,24,0,10" />
               <CheckBox x:Name="UnitMentionCompletion" HorizontalContentAlignment="Stretch" Margin="0,0,0,8">
                 <TextBlock Text="{DynamicResource Advisor.general.unit_mention_completion}" TextWrapping="Wrap" />

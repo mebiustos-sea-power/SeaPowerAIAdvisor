@@ -11,6 +11,36 @@ internal static class OptionsTests
 {
     internal static void Run(string campaignPath, Action<string, Action> check)
     {
+        check("MOD save inclusion defaults on and explicit preferences survive other category saves and reopening", () => InTemp(directory =>
+        {
+            var path = Path.Combine(directory, "options.json"); var store = new AdvisorOptionsStore(path);
+            Require(store.Current.IncludeModSaveData && AdvisorOptions.Parse("{}").IncludeModSaveData && !File.Exists(path),
+                "Absent options disabled MOD saving or created settings on read");
+            var missing = JObject.Parse(System.Text.Encoding.UTF8.GetString(new AdvisorOptions().Data())); missing.Remove("include_mod_save_data");
+            File.WriteAllText(path, missing.ToString()); var before = File.ReadAllBytes(path);
+            store = new AdvisorOptionsStore(path);
+            Require(store.Current.IncludeModSaveData && File.ReadAllBytes(path).SequenceEqual(before),
+                "An existing current-format settings file lost its default or was rewritten just to add the field");
+            foreach (var enabled in new[] { false, true })
+            {
+                store.Write(new AdvisorOptions(includeModSaveData: enabled));
+                store = new AdvisorOptionsStore(path); store.EnsureUserName("Commander");
+                store.SaveConsultation(5, 2, "Keep this prompt"); store.SaveInformation(AdvisorInformation.Default);
+                store.SaveDeveloper(false); store.SaveCommands(Array.Empty<string>()); store.SaveTemplates(new AdvisorTemplateOptions());
+                store.SaveCrew(true); store.SaveWip(false, false); store.SaveGeneral(AdvisorTextSize.Large, "Commander");
+                Require(new AdvisorOptionsStore(path).Current.IncludeModSaveData == enabled,
+                    "Another category reset the selected MOD saving policy");
+                store.SaveGeneral(AdvisorTextSize.Standard, "Commander", includeModSaveData: !enabled);
+                Require(new AdvisorOptionsStore(path).Current.IncludeModSaveData == !enabled,
+                    "The general settings save did not publish the explicit policy");
+            }
+            foreach (var invalid in new[] { "null", "1", "\"false\"" })
+            {
+                try { _ = AdvisorOptions.Parse("{\"include_mod_save_data\":" + invalid + "}"); }
+                catch (AdvisorOptionsException) { continue; }
+                throw new InvalidOperationException("An invalid MOD saving preference was accepted");
+            }
+        }));
         check("Mention completion defaults off, saves per user and survives unrelated category saves", () => InTemp(directory =>
         {
             var store = new AdvisorOptionsStore(Path.Combine(directory, "options.json"));

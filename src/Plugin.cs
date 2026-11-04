@@ -120,7 +120,7 @@ public sealed class Plugin : IAnchorChainMod
                 if (screenTranslation != null) UnityEngine.Object.Destroy(screenTranslation);
                 Log.LogError("Screen translation initialization failed: " + error);
             }
-            saveIntegration = new Shared.GameSaveIntegration(ModId, SaveData.Reset, SaveData.Capture, RestoreSaveData, Log.LogError);
+            saveIntegration = new Shared.GameSaveIntegration(ModId, SaveData.Reset, () => SaveData.PrepareCapture(options.Current), RestoreSaveData, Log.LogError);
             installed = true;
             Log.LogInfo("Advisor 0.20.1 ready for tactical battles. DCM is optional. Open AI in the bottom-right battle toolbar.");
             TryInstallCampaign();

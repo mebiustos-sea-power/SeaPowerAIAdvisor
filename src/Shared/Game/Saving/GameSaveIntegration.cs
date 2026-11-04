@@ -19,10 +19,10 @@ internal sealed class GameSaveIntegration : IDisposable
     private readonly SaveDataSession session;
     private readonly Action<string> error;
 
-    internal GameSaveIntegration(string owner, Action reset, Func<byte[]?> capture, Action<byte[]?> restore, Action<string> error)
+    internal GameSaveIntegration(string owner, Action reset, Func<Func<byte[]?>?> prepareCapture, Action<byte[]?> restore, Action<string> error)
     {
         if (active != null) throw new InvalidOperationException("This MOD already has a save integration.");
-        section = new SaveDataSection(owner); session = new SaveDataSession(reset, capture, restore); this.error = error;
+        section = new SaveDataSection(owner); session = new SaveDataSession(reset, prepareCapture, restore); this.error = error;
         patches = new Harmony(owner + ".save-data"); active = this;
         try
         {

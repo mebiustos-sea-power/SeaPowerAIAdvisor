@@ -16,6 +16,7 @@ internal sealed class AdvisorSaveData
     internal SaveDataUpgradeResult? UnsupportedData { get; private set; }
     internal AdvisorSaveData(SaveDataFormat? format = null) => this.format = format ?? new SaveDataFormat(1, 1);
     internal void Reset() { Data = new JObject(); UnsupportedData = null; }
+    internal Func<byte[]?>? PrepareCapture(AdvisorOptions options) => options.IncludeModSaveData ? Capture : null;
     internal byte[]? Capture() => Data.HasValues
         ? Utf8.GetBytes(new JObject { ["version"] = format.CurrentVersion, ["data"] = Data.DeepClone() }.ToString(Formatting.None)) : null;
     internal void Restore(byte[]? bytes)

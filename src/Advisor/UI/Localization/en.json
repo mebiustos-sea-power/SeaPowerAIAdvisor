@@ -246,6 +246,8 @@
   "ai.answer_policy": "Response preferences",
   "ai.history_retrieval": "History and information retrieval",
   "settings.error.user_name_invalid": "Your name must be up to 80 characters on a single line.",
+  "general.saving": "Saving",
+  "general.include_mod_save_data": "Include battle-specific MOD data in saves",
   "general.input": "Input",
   "general.unit_mention_completion": "Complete unit badges with @",
   "general.conversation_display": "Conversation display",

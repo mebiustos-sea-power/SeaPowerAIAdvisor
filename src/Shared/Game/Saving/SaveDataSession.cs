@@ -6,13 +6,13 @@ namespace SeaPowerAIAdvisor.Shared;
 internal sealed class SaveDataSession
 {
     private readonly Action reset;
-    private readonly Func<byte[]?> capture;
+    private readonly Func<Func<byte[]?>?> prepareCapture;
     private readonly Action<byte[]?> restore;
     private object? owner;
     private byte[]? pending;
     private bool staged, ready;
-    internal SaveDataSession(Action reset, Func<byte[]?> capture, Action<byte[]?> restore)
-    { this.reset = reset; this.capture = capture; this.restore = restore; }
+    internal SaveDataSession(Action reset, Func<Func<byte[]?>?> prepareCapture, Action<byte[]?> restore)
+    { this.reset = reset; this.prepareCapture = prepareCapture; this.restore = restore; }
 
     internal void Begin(object mission)
     {
@@ -32,6 +32,9 @@ internal sealed class SaveDataSession
     }
     internal string? Capture()
     {
+        // The owner selects work without reading save state. Selected work waits for restoration.
+        var capture = prepareCapture();
+        if (capture == null) return null;
         if (!ready) throw new InvalidOperationException("MOD save data has not been restored for the current mission.");
         return SaveDataSection.Encode(capture());
     }

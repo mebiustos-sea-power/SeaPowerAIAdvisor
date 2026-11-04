@@ -246,6 +246,8 @@
   "ai.answer_policy": "回答方針",
   "ai.history_retrieval": "履歴・情報取得",
   "settings.error.user_name_invalid": "あなたの名前は80文字以内の1行で入力してください。",
+  "general.saving": "セーブ",
+  "general.include_mod_save_data": "戦闘固有のMODデータをセーブデータに含める",
   "general.input": "入力",
   "general.unit_mention_completion": "@でユニットバッジを補完する",
   "general.conversation_display": "会話履歴表示",

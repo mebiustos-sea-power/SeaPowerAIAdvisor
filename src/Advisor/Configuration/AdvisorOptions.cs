@@ -22,6 +22,7 @@ internal sealed class AdvisorOptions
     internal bool CampaignEnabled { get; }
     internal bool CrewEnabled { get; }
     internal bool SummarizeMissionText { get; }
+    internal bool IncludeModSaveData { get; }
     internal bool DeveloperApiEnabled { get; }
     internal IReadOnlyList<string> DisabledCommands { get; }
     internal bool IsCommandEnabled(string id) => !DisabledCommands.Contains(id, StringComparer.Ordinal);
@@ -32,7 +33,7 @@ internal sealed class AdvisorOptions
     internal bool LinkContacts { get; }
     internal bool UnitMentionCompletion { get; }
     internal AdvisorTemplateOptions Templates { get; }
-    internal AdvisorOptions(int maxQueryRounds = AdvisorQueryLimits.DefaultMaxRounds, bool campaignEnabled = false, AdvisorInformation? information = null, string commonPrompt = "", AdvisorTextSize textSize = AdvisorTypography.DefaultSize, int historyExchanges = DefaultHistoryExchanges, string? userName = null, bool developerApiEnabled = false, AdvisorLocalConnections? localConnections = null, bool linkOwnUnits = true, bool linkContacts = true, IEnumerable<string>? disabledCommands = null, AdvisorTemplateOptions? templates = null, bool crewEnabled = false, bool unitMentionCompletion = false, bool summarizeMissionText = false)
+    internal AdvisorOptions(int maxQueryRounds = AdvisorQueryLimits.DefaultMaxRounds, bool campaignEnabled = false, AdvisorInformation? information = null, string commonPrompt = "", AdvisorTextSize textSize = AdvisorTypography.DefaultSize, int historyExchanges = DefaultHistoryExchanges, string? userName = null, bool developerApiEnabled = false, AdvisorLocalConnections? localConnections = null, bool linkOwnUnits = true, bool linkContacts = true, IEnumerable<string>? disabledCommands = null, AdvisorTemplateOptions? templates = null, bool crewEnabled = false, bool unitMentionCompletion = false, bool summarizeMissionText = false, bool includeModSaveData = true)
     {
         if (maxQueryRounds < 1 || maxQueryRounds > AdvisorQueryLimits.MaximumRounds)
             throw new AdvisorOptionsException("query_rounds_invalid");
@@ -45,7 +46,7 @@ internal sealed class AdvisorOptions
         CrewEnabled = crewEnabled; DeveloperApiEnabled = developerApiEnabled; LocalConnections = localConnections ?? AdvisorLocalConnections.Empty;
         MaxQueryRounds = maxQueryRounds; CampaignEnabled = campaignEnabled; Information = information ?? AdvisorInformation.Default;
         if (!Enum.IsDefined(typeof(AdvisorTextSize), textSize)) throw new AdvisorOptionsException("options_invalid");
-        UnitMentionCompletion = unitMentionCompletion; SummarizeMissionText = summarizeMissionText;
+        UnitMentionCompletion = unitMentionCompletion; SummarizeMissionText = summarizeMissionText; IncludeModSaveData = includeModSaveData;
         TextSize = textSize; LinkOwnUnits = linkOwnUnits; LinkContacts = linkContacts; Templates = templates ?? new AdvisorTemplateOptions();
         CommonPrompt = ValidateCommonPrompt(commonPrompt);
         UserName = userName == null ? null : ValidateUserName(userName);
@@ -79,6 +80,7 @@ internal sealed class AdvisorOptions
         var value = new JObject
         {
             ["schema_version"] = AdvisorOptionsMigration.CurrentVersion,
+            ["include_mod_save_data"] = IncludeModSaveData,
             ["crew_enabled"] = CrewEnabled, ["max_query_rounds"] = MaxQueryRounds, ["campaign_advisor_enabled"] = CampaignEnabled,
             ["information_selection"] = Information.Data(), ["common_prompt"] = CommonPrompt,
             ["conversation_text_size"] = TextSize.ToString().ToLowerInvariant(),
@@ -104,7 +106,7 @@ internal sealed class AdvisorOptions
             if (reader.Read()) throw new AdvisorOptionsException("options_invalid");
             var upgraded = AdvisorOptionsMigration.Upgrade(value);
             migrated = !ReferenceEquals(value, upgraded); value = upgraded;
-            if (value.Properties().Any(p => p.Name != "schema_version" && p.Name != "summarize_mission_text" && p.Name != "unit_mention_completion" && p.Name != "crew_enabled" && p.Name != "max_query_rounds" && p.Name != "campaign_advisor_enabled" && p.Name != "information_selection" && p.Name != "common_prompt" && p.Name != "conversation_text_size" && p.Name != "history_exchanges" && p.Name != "user_name" && p.Name != "developer_local_api_enabled" && p.Name != "developer_local_api_connections" && p.Name != "link_own_units" && p.Name != "link_contacts" && p.Name != "disabled_commands" && p.Name != "template_options"))
+            if (value.Properties().Any(p => p.Name != "schema_version" && p.Name != "include_mod_save_data" && p.Name != "summarize_mission_text" && p.Name != "unit_mention_completion" && p.Name != "crew_enabled" && p.Name != "max_query_rounds" && p.Name != "campaign_advisor_enabled" && p.Name != "information_selection" && p.Name != "common_prompt" && p.Name != "conversation_text_size" && p.Name != "history_exchanges" && p.Name != "user_name" && p.Name != "developer_local_api_enabled" && p.Name != "developer_local_api_connections" && p.Name != "link_own_units" && p.Name != "link_contacts" && p.Name != "disabled_commands" && p.Name != "template_options"))
                 throw new AdvisorOptionsException("options_invalid");
             var rounds = AdvisorQueryLimits.DefaultMaxRounds;
             if (value["max_query_rounds"] != null && (value["max_query_rounds"]!.Type != JTokenType.Integer ||
@@ -118,7 +120,7 @@ internal sealed class AdvisorOptions
                 throw new AdvisorOptionsException("options_invalid");
             if (value["developer_local_api_enabled"] != null && value["developer_local_api_enabled"]!.Type != JTokenType.Boolean)
                 throw new AdvisorOptionsException("options_invalid");
-            foreach (var key in new[] { "link_own_units", "link_contacts", "crew_enabled", "unit_mention_completion", "summarize_mission_text" })
+            foreach (var key in new[] { "link_own_units", "link_contacts", "crew_enabled", "unit_mention_completion", "summarize_mission_text", "include_mod_save_data" })
                 if (value[key] != null && value[key]!.Type != JTokenType.Boolean)
                     throw new AdvisorOptionsException("options_invalid");
             if (value["common_prompt"] != null && value["common_prompt"]!.Type != JTokenType.String)
@@ -126,7 +128,7 @@ internal sealed class AdvisorOptions
             if (value["user_name"] != null && value["user_name"]!.Type != JTokenType.String)
                 throw new AdvisorOptionsException("user_name_invalid");
             var information = AdvisorInformation.ParseSelections(value["information_selection"]);
-            return new AdvisorOptions(rounds, (bool?)value["campaign_advisor_enabled"] ?? false, information, (string?)value["common_prompt"] ?? "", ParseTextSize(value["conversation_text_size"]), historyExchanges, (string?)value["user_name"], (bool?)value["developer_local_api_enabled"] ?? false, AdvisorLocalConnections.Parse(value["developer_local_api_connections"]), (bool?)value["link_own_units"] ?? true, (bool?)value["link_contacts"] ?? true, ReadDisabledCommands(value["disabled_commands"]), AdvisorTemplateOptions.Parse(value["template_options"]), (bool?)value["crew_enabled"] ?? false, (bool?)value["unit_mention_completion"] ?? false, (bool?)value["summarize_mission_text"] ?? false);
+            return new AdvisorOptions(rounds, (bool?)value["campaign_advisor_enabled"] ?? false, information, (string?)value["common_prompt"] ?? "", ParseTextSize(value["conversation_text_size"]), historyExchanges, (string?)value["user_name"], (bool?)value["developer_local_api_enabled"] ?? false, AdvisorLocalConnections.Parse(value["developer_local_api_connections"]), (bool?)value["link_own_units"] ?? true, (bool?)value["link_contacts"] ?? true, ReadDisabledCommands(value["disabled_commands"]), AdvisorTemplateOptions.Parse(value["template_options"]), (bool?)value["crew_enabled"] ?? false, (bool?)value["unit_mention_completion"] ?? false, (bool?)value["summarize_mission_text"] ?? false, (bool?)value["include_mod_save_data"] ?? true);
         }
         catch (JsonException) { throw new AdvisorOptionsException("options_invalid"); }
     }
@@ -189,56 +191,56 @@ internal sealed class AdvisorOptionsStore
         var saved = Read();
         if (saved.UserName != null) { Apply(saved); return; }
         Save(new AdvisorOptions(saved.MaxQueryRounds, saved.CampaignEnabled, saved.Information, saved.CommonPrompt,
-            saved.TextSize, saved.HistoryExchanges, initialName, saved.DeveloperApiEnabled, saved.LocalConnections, saved.LinkOwnUnits, saved.LinkContacts, saved.DisabledCommands, saved.Templates, saved.CrewEnabled, saved.UnitMentionCompletion, saved.SummarizeMissionText));
+            saved.TextSize, saved.HistoryExchanges, initialName, saved.DeveloperApiEnabled, saved.LocalConnections, saved.LinkOwnUnits, saved.LinkContacts, saved.DisabledCommands, saved.Templates, saved.CrewEnabled, saved.UnitMentionCompletion, saved.SummarizeMissionText, saved.IncludeModSaveData));
     }
-    internal void SaveGeneral(AdvisorTextSize size, string userName, bool? linkOwnUnits = null, bool? linkContacts = null, bool? unitMentionCompletion = null)
+    internal void SaveGeneral(AdvisorTextSize size, string userName, bool? linkOwnUnits = null, bool? linkContacts = null, bool? unitMentionCompletion = null, bool? includeModSaveData = null)
     {
         var saved = Read();
-        Save(new AdvisorOptions(saved.MaxQueryRounds, saved.CampaignEnabled, saved.Information, saved.CommonPrompt, size, saved.HistoryExchanges, userName, saved.DeveloperApiEnabled, saved.LocalConnections, linkOwnUnits ?? saved.LinkOwnUnits, linkContacts ?? saved.LinkContacts, saved.DisabledCommands, saved.Templates, saved.CrewEnabled, unitMentionCompletion ?? saved.UnitMentionCompletion, saved.SummarizeMissionText));
+        Save(new AdvisorOptions(saved.MaxQueryRounds, saved.CampaignEnabled, saved.Information, saved.CommonPrompt, size, saved.HistoryExchanges, userName, saved.DeveloperApiEnabled, saved.LocalConnections, linkOwnUnits ?? saved.LinkOwnUnits, linkContacts ?? saved.LinkContacts, saved.DisabledCommands, saved.Templates, saved.CrewEnabled, unitMentionCompletion ?? saved.UnitMentionCompletion, saved.SummarizeMissionText, includeModSaveData ?? saved.IncludeModSaveData));
     }
     internal void SaveCrew(bool enabled)
     {
         var saved = Read();
         Save(new AdvisorOptions(saved.MaxQueryRounds, saved.CampaignEnabled, saved.Information, saved.CommonPrompt,
             saved.TextSize, saved.HistoryExchanges, saved.UserName, saved.DeveloperApiEnabled, saved.LocalConnections,
-            saved.LinkOwnUnits, saved.LinkContacts, saved.DisabledCommands, saved.Templates, enabled, saved.UnitMentionCompletion, saved.SummarizeMissionText));
+            saved.LinkOwnUnits, saved.LinkContacts, saved.DisabledCommands, saved.Templates, enabled, saved.UnitMentionCompletion, saved.SummarizeMissionText, saved.IncludeModSaveData));
     }
     internal void SaveWip(bool campaignEnabled, bool crewEnabled)
     {
         var saved = Read();
         Save(new AdvisorOptions(saved.MaxQueryRounds, campaignEnabled, saved.Information, saved.CommonPrompt,
             saved.TextSize, saved.HistoryExchanges, saved.UserName, saved.DeveloperApiEnabled, saved.LocalConnections,
-            saved.LinkOwnUnits, saved.LinkContacts, saved.DisabledCommands, saved.Templates, crewEnabled, saved.UnitMentionCompletion, saved.SummarizeMissionText));
+            saved.LinkOwnUnits, saved.LinkContacts, saved.DisabledCommands, saved.Templates, crewEnabled, saved.UnitMentionCompletion, saved.SummarizeMissionText, saved.IncludeModSaveData));
     }
     internal void SaveConsultation(int rounds, int history, string prompt)
     {
         var saved = Read();
-        Save(new AdvisorOptions(rounds, saved.CampaignEnabled, saved.Information, prompt, saved.TextSize, history, saved.UserName, saved.DeveloperApiEnabled, saved.LocalConnections, saved.LinkOwnUnits, saved.LinkContacts, saved.DisabledCommands, saved.Templates, saved.CrewEnabled, saved.UnitMentionCompletion, saved.SummarizeMissionText));
+        Save(new AdvisorOptions(rounds, saved.CampaignEnabled, saved.Information, prompt, saved.TextSize, history, saved.UserName, saved.DeveloperApiEnabled, saved.LocalConnections, saved.LinkOwnUnits, saved.LinkContacts, saved.DisabledCommands, saved.Templates, saved.CrewEnabled, saved.UnitMentionCompletion, saved.SummarizeMissionText, saved.IncludeModSaveData));
     }
     internal void SaveInformation(AdvisorInformation information, bool? summarizeMissionText = null)
     {
         var saved = Read();
-        Save(new AdvisorOptions(saved.MaxQueryRounds, saved.CampaignEnabled, information, saved.CommonPrompt, saved.TextSize, saved.HistoryExchanges, saved.UserName, saved.DeveloperApiEnabled, saved.LocalConnections, saved.LinkOwnUnits, saved.LinkContacts, saved.DisabledCommands, saved.Templates, saved.CrewEnabled, saved.UnitMentionCompletion, summarizeMissionText ?? saved.SummarizeMissionText));
+        Save(new AdvisorOptions(saved.MaxQueryRounds, saved.CampaignEnabled, information, saved.CommonPrompt, saved.TextSize, saved.HistoryExchanges, saved.UserName, saved.DeveloperApiEnabled, saved.LocalConnections, saved.LinkOwnUnits, saved.LinkContacts, saved.DisabledCommands, saved.Templates, saved.CrewEnabled, saved.UnitMentionCompletion, summarizeMissionText ?? saved.SummarizeMissionText, saved.IncludeModSaveData));
     }
     internal void SaveDeveloper(bool enabled, AdvisorLocalConnections? connections = null)
     {
         var saved = Read();
         Save(new AdvisorOptions(saved.MaxQueryRounds, saved.CampaignEnabled, saved.Information, saved.CommonPrompt,
-            saved.TextSize, saved.HistoryExchanges, saved.UserName, enabled, connections ?? saved.LocalConnections, saved.LinkOwnUnits, saved.LinkContacts, saved.DisabledCommands, saved.Templates, saved.CrewEnabled, saved.UnitMentionCompletion, saved.SummarizeMissionText));
+            saved.TextSize, saved.HistoryExchanges, saved.UserName, enabled, connections ?? saved.LocalConnections, saved.LinkOwnUnits, saved.LinkContacts, saved.DisabledCommands, saved.Templates, saved.CrewEnabled, saved.UnitMentionCompletion, saved.SummarizeMissionText, saved.IncludeModSaveData));
     }
     internal void SaveCommands(IEnumerable<string> disabledCommands)
     {
         var saved = Read();
         Save(new AdvisorOptions(saved.MaxQueryRounds, saved.CampaignEnabled, saved.Information, saved.CommonPrompt,
             saved.TextSize, saved.HistoryExchanges, saved.UserName, saved.DeveloperApiEnabled, saved.LocalConnections,
-            saved.LinkOwnUnits, saved.LinkContacts, disabledCommands, saved.Templates, saved.CrewEnabled, saved.UnitMentionCompletion, saved.SummarizeMissionText));
+            saved.LinkOwnUnits, saved.LinkContacts, disabledCommands, saved.Templates, saved.CrewEnabled, saved.UnitMentionCompletion, saved.SummarizeMissionText, saved.IncludeModSaveData));
     }
     internal void SaveTemplates(AdvisorTemplateOptions templates)
     {
         var saved = Read();
         Save(new AdvisorOptions(saved.MaxQueryRounds, saved.CampaignEnabled, saved.Information, saved.CommonPrompt,
             saved.TextSize, saved.HistoryExchanges, saved.UserName, saved.DeveloperApiEnabled, saved.LocalConnections,
-            saved.LinkOwnUnits, saved.LinkContacts, saved.DisabledCommands, templates, saved.CrewEnabled, saved.UnitMentionCompletion, saved.SummarizeMissionText));
+            saved.LinkOwnUnits, saved.LinkContacts, saved.DisabledCommands, templates, saved.CrewEnabled, saved.UnitMentionCompletion, saved.SummarizeMissionText, saved.IncludeModSaveData));
     }
     private void Save(AdvisorOptions value) { Write(value); Apply(value); }
     internal void Apply(AdvisorOptions value) { Current = value; }
