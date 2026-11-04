@@ -44,6 +44,11 @@ internal sealed partial class BattleQuerySession : IAdvisorQuerySession, IAdviso
         this.information = information ?? AdvisorInformation.Default;
         information = this.information;
         snapshot = situation.Copy();
+        snapshot["mission_messages"] ??= new JArray();
+        // An identical briefing already carries this text in the same response; keep distinct publications.
+        if (information.Allows(InformationKind.BattleBriefing) && (bool?)snapshot["mission_briefing_unavailable"] != true)
+            foreach (var message in ((JArray)snapshot["mission_messages"]!).OfType<JObject>()
+                .Where(m => ((string)m["text"]!).Trim() == ((string)snapshot["mission_briefing"]!).Trim()).ToArray()) message.Remove();
         snapshot["friendly_launched_weapons"] ??= new JArray();
         snapshot["sensor_references"] ??= new JArray();
         snapshot["movement_plans"] ??= new JArray();
@@ -180,10 +185,25 @@ internal sealed partial class BattleQuerySession : IAdvisorQuerySession, IAdviso
             case "catalog":
                 return Catalogue();
             case "get_briefing":
-                if ((bool?)snapshot["mission_briefing_unavailable"] == true)
+                var includeBriefing = information.Allows(InformationKind.BattleBriefing);
+                var unavailable = includeBriefing && (bool?)snapshot["mission_briefing_unavailable"] == true;
+                if (unavailable && Rows("mission_messages").Count == 0)
                     throw Error("briefing_unavailable", "briefing_unavailable");
-                var briefing = TextSummaries.Present("briefing", (string)snapshot["mission_briefing"]!);
-                if (snapshot["mission_briefing_source"] is JValue source)
+                var briefing = !includeBriefing ? new JObject() : unavailable
+                    ? new JObject { ["briefing_error"] = new JObject { ["code"] = "briefing_unavailable", ["message"] = Prompts.Text("battle.json", "error_briefing_unavailable") } }
+                    : TextSummaries.Present("briefing", (string)snapshot["mission_briefing"]!);
+                if (information.Allows(InformationKind.BattleMissionMessages))
+                {
+                    briefing["message_history_scope"] = "since_current_load";
+                    briefing["messages"] = new JArray(Rows("mission_messages").OfType<JObject>().Select(message =>
+                    {
+                        var item = (JObject)message.DeepClone();
+                        foreach (var property in TextSummaries.Present((string)message["id"]!, (string)message["text"]!).Properties())
+                            item[property.Name] = property.Value.DeepClone();
+                        return item;
+                    }));
+                }
+                if (includeBriefing && snapshot["mission_briefing_source"] is JValue source)
                 {
                     briefing["source"] = "mission_briefing";
                     if ((string?)source == "base_mission_xml") briefing["note"] = Prompts.Text("battle.json", "base_briefing_note");

@@ -302,6 +302,8 @@
   "information.threats": "Public identified-unit specifications and threat references",
   "information.threats_tip": "Reference specifications for possible weapons and ranges of identified classes and aircraft types.",
   "information.briefing": "Mission briefing",
+  "information.mission_messages": "Mission messages",
+  "information.mission_messages_tip": "Send mission messages displayed since the current load.",
   "information.reports": "Published reports",
   "information.forces": "Fleet identities, positions and missions",
   "information.ships": "Ship identities",

@@ -38,7 +38,7 @@ internal static partial class ProviderTests
         check("Requested full data uses permission-filtered projections once, including responses above the partial-read ceiling", () => Async(async () =>
         {
             var policy = AdvisorInformation.All.With(InformationKind.BattleFuel, false).With(InformationKind.BattleNeutralContacts, false)
-                .With(InformationKind.BattleDestroyedContacts, false).With(InformationKind.BattleBriefing, false);
+                .With(InformationKind.BattleDestroyedContacts, false).With(InformationKind.BattleBriefing, false).With(InformationKind.BattleMissionMessages, false);
             var knowledge = new SnapshotSpy(DeliveryKnowledge(policy, new string('p', 200_000)));
             var recording = new AdvisorLocalRun();
             var context = AdvisorContext.Create(recording.Observe(knowledge), Array.Empty<ChatExchange>());

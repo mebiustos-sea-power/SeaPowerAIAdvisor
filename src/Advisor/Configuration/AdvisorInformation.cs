@@ -11,7 +11,7 @@ internal enum InformationKind
     CampaignForces, CampaignShips, CampaignFuel, CampaignAmmunition, CampaignDamage, CampaignAviation,
     CampaignContacts, CampaignBases, CampaignOrders, CampaignReports,
     BattleGroundUnits, BattleBases, BattleAviation, CampaignOwnBases, CampaignGroundUnits, BattleNeutralContacts, BattleDestroyedContacts,
-    BattleLaunchedWeapons, BattleWeaponContacts, BattleSensors, BattleSensorPerformance, BattleMovementPlans, BattleWeather
+    BattleLaunchedWeapons, BattleWeaponContacts, BattleSensors, BattleSensorPerformance, BattleMovementPlans, BattleWeather, BattleMissionMessages
 }
 
 internal sealed class InformationItem
@@ -54,6 +54,7 @@ internal sealed class AdvisorInformation
         new InformationItem(InformationKind.BattleDestroyedContacts, "battle_destroyed_contacts", "destroyed", InformationKind.BattleContacts, defaultEnabled: false),
         new InformationItem(InformationKind.BattleThreats, "battle_threats", "threats", InformationKind.BattleContacts),
         new InformationItem(InformationKind.BattleBriefing, "battle_briefing", "briefing"),
+        new InformationItem(InformationKind.BattleMissionMessages, "battle_mission_messages", "mission_messages", defaultEnabled: false),
         new InformationItem(InformationKind.BattleReports, "battle_reports", "reports"),
         new InformationItem(InformationKind.CampaignForces, "campaign_forces", "forces"),
         new InformationItem(InformationKind.CampaignShips, "campaign_ships", "ships", InformationKind.CampaignForces),
@@ -74,7 +75,7 @@ internal sealed class AdvisorInformation
     internal static readonly IReadOnlyList<InformationGroup> Groups = Array.AsReadOnly(new[]
     {
         new InformationGroup(true, "battle_friendly", InformationKind.BattleUnits, InformationKind.BattleGroundUnits, InformationKind.BattleBases, InformationKind.BattleAviation, InformationKind.BattleMovementPlans, InformationKind.BattleFuel, InformationKind.BattleDamage, InformationKind.BattleWeapons, InformationKind.BattleSensors, InformationKind.BattleSensorPerformance, InformationKind.BattleLaunchedWeapons),
-        new InformationGroup(true, "battle_intelligence", InformationKind.BattleContacts, InformationKind.BattleWeaponContacts, InformationKind.BattleNeutralContacts, InformationKind.BattleDestroyedContacts, InformationKind.BattleThreats, InformationKind.BattleBriefing, InformationKind.BattleReports),
+        new InformationGroup(true, "battle_intelligence", InformationKind.BattleContacts, InformationKind.BattleWeaponContacts, InformationKind.BattleNeutralContacts, InformationKind.BattleDestroyedContacts, InformationKind.BattleThreats, InformationKind.BattleBriefing, InformationKind.BattleMissionMessages, InformationKind.BattleReports),
         new InformationGroup(false, "campaign_friendly", InformationKind.CampaignForces, InformationKind.CampaignShips, InformationKind.CampaignFuel, InformationKind.CampaignAmmunition, InformationKind.CampaignDamage, InformationKind.CampaignAviation, InformationKind.CampaignOwnBases, InformationKind.CampaignGroundUnits),
         new InformationGroup(false, "campaign_intelligence", InformationKind.CampaignContacts, InformationKind.CampaignBases, InformationKind.CampaignOrders, InformationKind.CampaignReports)
     });
@@ -181,7 +182,7 @@ internal sealed class AdvisorInformation
         "friendly_launched_weapons" => Allows(InformationKind.BattleLaunchedWeapons),
         "observed_contacts" => Allows(InformationKind.BattleContacts),
         "public_class_threat_references" => Allows(InformationKind.BattleThreats),
-        "mission_briefing" => Allows(InformationKind.BattleBriefing),
+        "mission_briefing" => Allows(InformationKind.BattleBriefing) || Allows(InformationKind.BattleMissionMessages),
         "published_reports" => Allows(InformationKind.BattleReports),
         _ => throw new InvalidOperationException("Unmapped battle category: " + category)
     };
@@ -197,7 +198,7 @@ internal sealed class AdvisorInformation
         "get_unit_capabilities" => BattleSections.Length > 0,
         "list_contacts" or BattleContactAssessment.Query => Allows(InformationKind.BattleContacts),
         "get_contact_threats" => Allows(InformationKind.BattleThreats),
-        "get_briefing" => Allows(InformationKind.BattleBriefing),
+        "get_briefing" => Allows(InformationKind.BattleBriefing) || Allows(InformationKind.BattleMissionMessages),
         "list_reports" or "get_reports" => Allows(InformationKind.BattleReports),
         _ => throw new AdvisorQueryException("unknown_query", "Use a query from the current catalogue.")
     };

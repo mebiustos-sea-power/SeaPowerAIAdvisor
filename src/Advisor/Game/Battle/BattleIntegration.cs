@@ -194,7 +194,7 @@ internal sealed class BattleIntegration
         return reader.Capture(map.MapKnownUnits.AllUnits, player!, MissionManager.Instance.Objectives, MissionManager.Instance.OnMapAreas, EventLog.Instance, SeaPower.Environment.Instance,
             now, SceneCreator.Instance.CurrentMissionName,
             EnemyControlEnabled,
-            new BattleCapabilityReader(references, Atmosphere.SpeedOfSound), briefing.Text, briefing.Unavailable, briefing.FromBase, attackRanges);
+            new BattleCapabilityReader(references, Atmosphere.SpeedOfSound), briefing.Text, briefing.Unavailable, briefing.FromBase, attackRanges, Shared.BattleMissionMessageSource.Capture());
     }
 
     private static BattleReferenceCatalog ReadReferenceCatalog(int year)

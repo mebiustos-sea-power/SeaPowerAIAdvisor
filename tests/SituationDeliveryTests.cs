@@ -72,7 +72,7 @@ internal static partial class ProviderTests
             var policy = AdvisorInformation.All.With(BattleFuel, false).With(BattleDamage, false)
                 .With(BattleWeapons, false).With(BattleSensors, false).With(BattleSensorPerformance, false)
                 .With(BattleThreats, false).With(BattleNeutralContacts, false).With(BattleDestroyedContacts, false)
-                .With(BattleMovementPlans, false).With(BattleBriefing, false);
+                .With(BattleMovementPlans, false).With(BattleBriefing, false).With(BattleMissionMessages, false);
             var knowledge = DeliveryKnowledge(policy: policy);
             var input = AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>()).PrepareStandardInput(AdvisorSituationDelivery.Upfront);
             var data = (JArray)input.Data["situation_data"]!;

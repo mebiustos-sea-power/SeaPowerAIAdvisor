@@ -302,6 +302,8 @@
   "information.threats": "識別済みユニットの公開性能・脅威推定資料",
   "information.threats_tip": "識別された艦級・機種などの装備候補や射程を示す性能資料。",
   "information.briefing": "ブリーフィング",
+  "information.mission_messages": "任務メッセージ",
+  "information.mission_messages_tip": "ロード後に表示された任務メッセージを送信します。",
   "information.reports": "公開済みの報告",
   "information.forces": "艦隊の基本情報・位置・任務",
   "information.ships": "所属艦の基本情報",

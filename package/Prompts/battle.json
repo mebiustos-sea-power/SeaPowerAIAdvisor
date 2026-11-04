@@ -34,7 +34,7 @@
   "catalog_public_class_threat_references": "Possible armament configurations and reference ranges for identified classes.",
   "catalog_identification_candidates": "Candidates from the selected contact information window. Matching features were observed; unconfirmed features are candidate references only. Only this selected contact has candidate data; normal contact lists provide surrounding known context.",
   "catalog_observed_contacts": "Displayed contact classifications, destroyed status, estimated positions, speed/heading, applicable altitude/depth and detection_methods (our detection sources). Weapon contacts include player-visible tracking. Optional kind filter; contact selections apply.",
-  "catalog_mission_briefing": "Displayed mission briefing.",
+  "catalog_mission_briefing": "Mission briefing and mission messages displayed since the current load.",
   "catalog_published_reports": "Retained published reports, oldest first; body by ID.",
   "weapon_reference_delivery": "weapon_references adds definitions once per consultation. Reuse IDs in earlier results; an empty array means no new definitions.",
   "tool_enabled_sections": "get_unit_capabilities only; omit for all enabled sections.",

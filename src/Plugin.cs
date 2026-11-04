@@ -26,7 +26,7 @@ public sealed class Plugin : IAnchorChainMod
     private static Type? campaignFiles;
     private static bool campaignInstallAttempted;
     private static readonly DiagnosticLog Diagnostics = new(Log.LogInfo, Log.LogWarning, Log.LogError);
-    private static bool installed;
+    private static bool installed, missionMessagesInstalled;
     private static readonly AdvisorRuntime BattleRuntime = new("tactical_battle", message => Log.LogError(message), () => battle?.Stop());
     private static readonly AdvisorRuntime CampaignRuntime = new("dynamic_campaign", message => Log.LogError(message), () => campaign?.Stop());
 
@@ -53,6 +53,8 @@ public sealed class Plugin : IAnchorChainMod
             EmbeddedDependencies.LoadMarkdown(typeof(Plugin).Assembly);
             harmony = new Harmony(ModId);
             battle = new BattleIntegration(BattleRuntime, Diagnostics, options, Backends);
+            harmony.Patch(Required(typeof(SeaPower.SceneCreator), "LoadMission"),
+                prefix: new HarmonyMethod(typeof(Plugin), nameof(MissionMessagesBegin)));
             crew = new Crew.CrewIntegration(Path.Combine(UnityEngine.Application.persistentDataPath, "SeaPowerAIAdvisor", "crew-chatter.json"),
                 () => options.Current.CrewEnabled, options.SaveCrew,
                 id => { if (!options.Current.LocalConnections.AllowedIds.Contains(id)) throw new LocalApiException(403, "connection_not_allowed"); },
@@ -161,8 +163,27 @@ public sealed class Plugin : IAnchorChainMod
         crew?.Tick(__instance, battle?.HudControl);
         TryInstallCampaign();
     }
+    private static void MissionMessagesBegin(SeaPower.SceneCreator __instance)
+    {
+        Shared.BattleMissionMessageSource.Begin(__instance);
+        if (missionMessagesInstalled) return;
+        // Harmony compiles the popup factory and initializes its Noesis types. Mission loading follows UI startup.
+        try
+        {
+            harmony!.Patch(Required(typeof(SeaPower.RichMissionMessages), "CreateMissionPopupModal"),
+                postfix: new HarmonyMethod(typeof(Plugin), nameof(MissionMessagePublished)));
+            missionMessagesInstalled = true;
+        }
+        catch (Exception error) { BattleRuntime.Fail(error); }
+    }
+    private static void MissionMessagePublished(SeaPower.MissionPopupData __0, Noesis.UIElement __1, DateTime? __4)
+    {
+        try { Shared.BattleMissionMessageSource.Publish(__0, __1, __4); }
+        catch (Exception error) { BattleRuntime.Fail(error); }
+    }
     private static void BattleDestroyed(MainGameViewModel __instance)
     {
+        Shared.BattleMissionMessageSource.Clear();
         crew?.Destroy(__instance);
         BattleRuntime.Cleanup(() => battle?.Destroy(__instance));
     }

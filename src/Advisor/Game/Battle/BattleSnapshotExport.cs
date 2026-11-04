@@ -24,7 +24,7 @@ internal sealed partial class BattleQuerySession
         if (assessment != null) export.Pages(BattleContactAssessment.Query);
         if (information.BattleQuery("get_briefing"))
         {
-            if ((bool?)snapshot["mission_briefing_unavailable"] == true) export.Unavailable("get_briefing", "briefing_unavailable");
+            if (information.Allows(InformationKind.BattleBriefing) && (bool?)snapshot["mission_briefing_unavailable"] == true && Rows("mission_messages").Count == 0) export.Unavailable("get_briefing", "briefing_unavailable");
             else export.Single("get_briefing");
         }
         return export.Data();

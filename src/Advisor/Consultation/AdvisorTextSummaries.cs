@@ -39,6 +39,9 @@ internal sealed class AdvisorTextSummaryCache
             }
             if (information.Allows(InformationKind.BattleBriefing) && (bool?)snapshot["mission_briefing_unavailable"] != true)
                 Add("briefing", "briefing", "", (string?)snapshot["mission_briefing"] ?? "");
+            if (information.Allows(InformationKind.BattleMissionMessages))
+                foreach (var message in ((JArray)snapshot["mission_messages"]!).OfType<JObject>())
+                    Add((string)message["id"]!, "mission_message", (string)message["published_at_utc"]!, (string)message["text"]!);
             if (information.Allows(InformationKind.BattleReports))
                 foreach (var report in (snapshot["published_reports"] as JArray ?? new JArray()).OfType<JObject>())
                     Add((string)report["id"]!, "report", (string)report["published_at_utc"]!, (string)report["text"]!);

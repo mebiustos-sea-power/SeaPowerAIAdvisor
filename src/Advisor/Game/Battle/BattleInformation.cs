@@ -10,6 +10,7 @@ internal static class BattleInformation
     internal static void Apply(JObject snapshot, AdvisorInformation information)
     {
         if (!information.Allows(InformationKind.BattleWeather)) snapshot.Remove("weather");
+        if (!information.Allows(InformationKind.BattleMissionMessages)) ((JArray)snapshot["mission_messages"]!).Clear();
         var units = (JArray)snapshot["friendly_units"]!;
         foreach (var unit in units.OfType<JObject>().Where(u => !Permitted(u, information)).ToArray()) unit.Remove();
         var ids = units.OfType<JObject>().Select(u => (string)u["id"]!).ToHashSet(System.StringComparer.Ordinal);

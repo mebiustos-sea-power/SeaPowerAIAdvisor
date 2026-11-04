@@ -64,6 +64,31 @@ internal static partial class ProviderTests
                     Require(result.Completed && result.Text == "日本語の回答" && result.ApiRequests == (mode == AdvisorSituationDelivery.Upfront ? 1 : 2), "Compression added a finishing request or exposed its machine text as the answer");
                 }
             }));
+        foreach (var mode in new[] { AdvisorSituationDelivery.OnDemand, AdvisorSituationDelivery.Upfront, AdvisorSituationDelivery.OnRequest })
+            check("Mission-message summaries reuse independently when a new publication arrives in " + mode, () => Async(async () =>
+            {
+                var cache = new AdvisorTextSummaryCache();
+                for (var pass = 0; pass < 2; pass++)
+                {
+                    var messages = new JArray(new JObject { ["id"] = "message_1", ["published_at_utc"] = "1985-06-01T00:00:00Z", ["text"] = "Initial mission orders" });
+                    if (pass == 1) messages.Add(new JObject { ["id"] = "message_2", ["published_at_utc"] = "1985-06-01T00:01:00Z", ["text"] = "New mission orders" });
+                    var knowledge = new BattleQuerySession(new BattleSnapshot(BattleMissionMessageTests.Snapshot(messages)), "ja", "Question",
+                        information: AdvisorInformation.All, summaryCache: cache, summarizeText: true);
+                    var context = AdvisorContext.Create(knowledge, Array.Empty<ChatExchange>());
+                    var provider = new FakeProvider("messages", (session, n, _, _) =>
+                    {
+                        if (n == 1 && mode == AdvisorSituationDelivery.OnDemand) return Task.FromResult(Reply(Call("briefing", "get_briefing")));
+                        if (n == 1 && mode == AdvisorSituationDelivery.OnRequest) return Task.FromResult(Reply(new AiToolCall("snapshot", "get_situation", new JObject())));
+                        var rows = SummaryRows(n == 1 ? session.Input.Data : session.Results[0].Data).ToArray();
+                        Require(rows.Length == (pass == 0 ? 2 : 3) && rows.Count(r => (bool?)r["summary_required"] == true) == (pass == 0 ? 2 : 1),
+                            "A new message caused unchanged sources to be summarized again");
+                        return Task.FromResult(SummaryReply(new JArray(rows.Where(r => (bool?)r["summary_required"] == true)
+                            .Select(r => SummaryRow(r, "compact: " + (string)r["text"]!)))));
+                    });
+                    var result = await new AdvisorEngine(provider, delivery: mode).ConsultAsync(context, CancellationToken.None);
+                    Require(result.Completed && result.ApiRequests == (mode == AdvisorSituationDelivery.Upfront ? 1 : 2), "Mission-message compression added an API round trip");
+                }
+            }));
         check("Standard-to-independent handoff retains compression for the standard engine and restores original query texts for the independent workflow", () => Async(async () =>
         {
             var standard = new Client.StandardExtension(); var independent = IndependentClient();
@@ -185,7 +210,7 @@ internal static partial class ProviderTests
             var id = (string)input.Tools.Single(t => (string?)t["name"] == AdvisorTextSummarySession.CompletionTool)["parameters"]!["properties"]!["summaries"]!["items"]!["properties"]!["summary_ref"]!["enum"]![0]!;
             context.TextSummaries!.ReadReply(SummaryReply(new JArray(new JObject { ["summary_ref"] = id, ["text"] = "invented" })));
             Require(messages.Count > 0, "An unseen source was allowed to seed memory");
-            var hidden = AdvisorInformation.All.With(InformationKind.BattleBriefing, false).With(InformationKind.BattleReports, false);
+            var hidden = AdvisorInformation.All.With(InformationKind.BattleBriefing, false).With(InformationKind.BattleReports, false).With(InformationKind.BattleMissionMessages, false);
             var disabled = new BattleQuerySession(new BattleSnapshot(SummarySnapshot()), "ja", "Question", information: hidden, summaryCache: cache, summarizeText: true);
             var filtered = AdvisorContext.Create(disabled, Array.Empty<ChatExchange>()).PrepareStandardInput(AdvisorSituationDelivery.Upfront);
             Require(SummaryRows(filtered.Data).Count() == 0 && !filtered.Tools.Any(t => (string?)t["name"] == AdvisorTextSummarySession.CompletionTool), "Compression bypassed information permissions");
