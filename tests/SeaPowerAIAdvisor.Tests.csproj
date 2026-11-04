@@ -3,6 +3,7 @@
   <ItemGroup>
     <Compile Include="..\src\Shared\Game\Saving\SaveDataSection.cs" />
     <Compile Include="..\src\Shared\Game\Saving\SaveDataSession.cs" />
+    <Compile Include="..\src\Shared\Game\Saving\SaveDataFormat.cs" />
     <Compile Include="..\src\AdvisorSaveData.cs" />
     <Compile Include="..\src\Shared\Game\UnitStatusFacts.cs" />
     <Compile Include="..\src\Shared\Game\BattleWeatherFacts.cs" />

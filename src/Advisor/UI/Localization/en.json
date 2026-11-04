@@ -1,4 +1,7 @@
 {
+  "save_data.notice_title": "AI Advisor save data",
+  "save_data.unsupported_old": "The AI Advisor data in this save uses an old format that is no longer supported and could not be restored. Play will continue with that data reset. The unrestored data will not be carried over when you next save.",
+  "save_data.continue": "Continue",
   "wip.category": "WIP (experimental)",
   "wip.campaign_alpha": "Enable AI on the campaign screen of Bungalow's Dynamic Campaign Mod (alpha)",
   "failure.restart": "Restart advisor",

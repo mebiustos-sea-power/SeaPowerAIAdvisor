@@ -58,3 +58,11 @@ The normal build runs the existing functional regression suite. Its test-project
 `AiConnectionsView` and `Connections.xaml` own cards, generic field editing, provider drafts, dirty checks and save/copy/delete interactions. `IAiConnectionStore` delegates persistence to the feature. Advisor's optional delivery editor implements `IAiConnectionEditorOptions`; the shared form does not contain battle policy or an Advisor/Creator switch. Role labels and localization are supplied by the host. Game typing ownership, deferred automatic focus and settings-tab navigation are shared game/UI responsibilities.
 
 `LocalApiServer` requires an explicit endpoint and developer request header. Advisor owns `18765` and its existing routes/discovery; Creator owns configurable `18767` and separate routes/discovery; ControlAPI remains separate on `18766`. Mutable server instances, configuration files, credentials and tasks are never shared. Creator's current routes only access detached connection configuration and network tests; any future route that accesses native editor objects must establish its own game-thread boundary.
+
+## Embedded save-data compatibility
+
+The native save bridge owns lifecycle timing and opaque payload storage. The MOD owns its envelope; feature owners own their data and any feature migrations. Format versions are independent of the MOD release number. Normal readers consume only their current format.
+
+Each owner declares a supported minimum and current format. Migrations advance one version at a time on a detached document. Supporting a format does not promise permanent compatibility: retiring the oldest format raises the minimum and removes that format's migration and dedicated tests without changing later steps or the current reader. Unreleased experiments do not require migration support.
+
+Absent MOD data starts normally without a notice. A recognized but retired format starts with initial MOD state, allows play and subsequent saves, and produces one notice per load once the battle UI is available. Loading does not rewrite the source save; the next save contains current state, without the unrestored data. Malformed data, newer formats and broken or missing migrations remain errors, retain diagnostics and block saving unrestored MOD state. They must not be classified as routine retirement.

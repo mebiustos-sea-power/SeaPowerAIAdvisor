@@ -1,4 +1,7 @@
 {
+  "save_data.notice_title": "AIアドバイザー：保存情報",
+  "save_data.unsupported_old": "このセーブに含まれるAIアドバイザーの保存情報は、対応を終了した古い形式のため復元できませんでした。保存情報を初期状態にして続行します。次回保存時、復元できなかった情報は引き継がれません。",
+  "save_data.continue": "続行",
   "wip.category": "WIP（試験的機能）",
   "wip.campaign_alpha": "Bungalow's Dynamic Campaign Mod のキャンペーン画面でAIを有効にする（アルファ版）",
   "failure.restart": "アドバイザーを再起動",

@@ -20,6 +20,7 @@ public sealed class Plugin : IAnchorChainMod
     private static Crew.CrewIntegration? crew;
     private static Shared.GameSaveIntegration? saveIntegration;
     private static readonly AdvisorSaveData SaveData = new();
+    private static readonly AdvisorSaveDataNotice SaveDataNotice = new();
     private static AdvisorOptionsStore? options;
     private static AdvisorBackendRegistry? backends;
     internal static AdvisorLocalApi? LocalApi { get; private set; }
@@ -119,7 +120,7 @@ public sealed class Plugin : IAnchorChainMod
                 if (screenTranslation != null) UnityEngine.Object.Destroy(screenTranslation);
                 Log.LogError("Screen translation initialization failed: " + error);
             }
-            saveIntegration = new Shared.GameSaveIntegration(ModId, SaveData.Reset, SaveData.Capture, SaveData.Restore, Log.LogError);
+            saveIntegration = new Shared.GameSaveIntegration(ModId, SaveData.Reset, SaveData.Capture, RestoreSaveData, Log.LogError);
             installed = true;
             Log.LogInfo("Advisor 0.20.1 ready for tactical battles. DCM is optional. Open AI in the bottom-right battle toolbar.");
             TryInstallCampaign();
@@ -160,10 +161,20 @@ public sealed class Plugin : IAnchorChainMod
         Log.LogInfo("Optional DCM campaign advisor installed.");
     }
 
+    private static void RestoreSaveData(byte[]? bytes)
+    {
+        SaveData.Restore(bytes);
+        if (SaveData.UnsupportedData is { } issue)
+            Log.LogInfo($"AI Advisor save data in retired format {issue.SourceVersion} was not restored; continuing with initial state.");
+    }
     private static void BattleFrame(MainGameViewModel __instance)
     {
         saveIntegration?.Tick();
-        BattleRuntime.Tick(() => battle?.Tick(__instance));
+        BattleRuntime.Tick(() =>
+        {
+            if (!BattleRuntime.Failed) SaveDataNotice.Tick(SaveData, __instance, BattleRuntime.Guard);
+            battle?.Tick(__instance);
+        });
         crew?.Tick(__instance, battle?.HudControl);
         TryInstallCampaign();
     }
