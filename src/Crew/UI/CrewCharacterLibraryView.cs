@@ -13,6 +13,7 @@ internal sealed class CrewCharacterLibraryView : IDisposable
 {
     private const int PageSize = 10;
     private static readonly string[] Genders = { "", "male", "female" };
+    private static readonly string[] AssignmentTargets = { "any", "ship", "aircraft" };
     private static readonly string[] AiModes = { "excluded", "normal", "priority" };
     private readonly FrameworkElement form;
     private readonly CrewCharacterLibrary library;
@@ -29,7 +30,7 @@ internal sealed class CrewCharacterLibraryView : IDisposable
     private readonly Func<CrewCharacter, bool>? canSelect;
     private readonly UiNotice notice;
     private readonly TextBox name, rank, personality, nationality;
-    private readonly ComboBox gender, aiAppointment;
+    private readonly ComboBox gender, aiAppointment, assignmentTarget;
     private readonly CheckBox allowDuplicates;
     private CrewCharacter? editing;
     private bool isNew;
@@ -39,7 +40,7 @@ internal sealed class CrewCharacterLibraryView : IDisposable
     internal bool IsOpen { get; private set; }
     internal int PortraitRevision { get; private set; }
     internal IEnumerable<string?> DisplayedIds => displayed.Append(editing == null ? null : portraitId);
-    private string Values => new JArray(name.Text, rank.Text, personality.Text, nationality.Text, gender.SelectedIndex, aiAppointment.SelectedIndex, allowDuplicates.IsChecked == true, portraitId ?? "").ToString();
+    private string Values => new JArray(name.Text, rank.Text, personality.Text, nationality.Text, gender.SelectedIndex, aiAppointment.SelectedIndex, assignmentTarget.SelectedIndex, allowDuplicates.IsChecked == true, portraitId ?? "").ToString();
     internal bool HasChanges => editing != null && (isNew || Values != baseline);
     private T Find<T>(string id) where T : class => form.FindName(id) as T ?? throw new InvalidOperationException("Missing character control: " + id);
     internal static FrameworkElement Create()
@@ -58,8 +59,10 @@ internal sealed class CrewCharacterLibraryView : IDisposable
         this.run = run; this.canCommit = canCommit; this.confirm = confirm; this.choosePortrait = choosePortrait; this.log = log; this.select = select; this.canSelect = canSelect;
         name = Find<TextBox>("Name"); rank = Find<TextBox>("Rank"); personality = Find<TextBox>("Personality"); nationality = Find<TextBox>("Nationality");
         gender = Find<ComboBox>("Gender"); aiAppointment = Find<ComboBox>("AiAppointment"); allowDuplicates = Find<CheckBox>("AllowDuplicates");
+        assignmentTarget = Find<ComboBox>("AssignmentTarget");
         notice = new UiNotice(Find<TextBlock>("Status"), resources);
         foreach (var code in Genders) gender.Items.Add(new ComboBoxItem { Content = text["character.gender." + (code.Length == 0 ? "unspecified" : code)] });
+        foreach (var code in AssignmentTargets) assignmentTarget.Items.Add(new ComboBoxItem { Content = text["character.assignment." + code] });
         foreach (var code in AiModes) aiAppointment.Items.Add(new ComboBoxItem { Content = text["character.ai." + code] });
         foreach (var input in new[] { name, rank, personality, nationality })
         {
@@ -78,7 +81,7 @@ internal sealed class CrewCharacterLibraryView : IDisposable
         {
             if (editing == null || !canCommit()) return;
             var next = new CrewCharacter(editing.Id, name.Text, rank.Text, personality.Text, Choice(Genders, gender.SelectedIndex), nationality.Text,
-                portraitId, Choice(AiModes, aiAppointment.SelectedIndex), allowDuplicates.IsChecked == true);
+                portraitId, Choice(AiModes, aiAppointment.SelectedIndex), allowDuplicates.IsChecked == true, Choice(AssignmentTargets, assignmentTarget.SelectedIndex));
             library.Save(next); selected = next.Id; OpenForm(next, false); notice.ShowBriefly(common("settings.saved"));
         });
         Bind("ChoosePortrait", () =>
@@ -112,6 +115,7 @@ internal sealed class CrewCharacterLibraryView : IDisposable
         typing.Release(); editing = character; isNew = create; portraitId = character.PortraitId;
         name.Text = character.Name; rank.Text = character.Rank; personality.Text = character.Personality; nationality.Text = character.Nationality;
         gender.SelectedIndex = Array.IndexOf(Genders, character.Gender); aiAppointment.SelectedIndex = Array.IndexOf(AiModes, character.AiAppointment);
+        assignmentTarget.SelectedIndex = Array.IndexOf(AssignmentTargets, character.AssignmentTarget);
         allowDuplicates.IsChecked = character.AllowDuplicates; baseline = Values; notice.Show(""); Controls(); RefreshPortrait();
     }
     private void CloseForm() { typing.Release(); editing = null; Find<Image>("Portrait").Source = null; PortraitRevision++; Draw(); notice.Show(""); }

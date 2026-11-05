@@ -21,15 +21,20 @@ internal sealed class CrewCharacter
     internal string? PortraitId { get; }
     internal string AiAppointment { get; }
     internal bool AllowDuplicates { get; }
+    internal string AssignmentTarget { get; }
     internal bool IsComplete => Name.Length > 0 && Rank.Length > 0 && Personality.Length > 0;
     internal CrewCharacter(string id, string name = "", string rank = "", string personality = "", string gender = "", string nationality = "",
-        string? portraitId = null, string aiAppointment = "normal", bool allowDuplicates = false)
+        string? portraitId = null, string aiAppointment = "normal", bool allowDuplicates = false, string assignmentTarget = "any")
     {
         if (!IsId(id) || gender is not ("" or "male" or "female") || aiAppointment is not ("excluded" or "normal" or "priority") ||
-            portraitId != null && !CrewPortraitLibrary.IsId(portraitId)) throw new CrewException("character_invalid");
+            assignmentTarget is not ("any" or "ship" or "aircraft") || portraitId != null && !CrewPortraitLibrary.IsId(portraitId)) throw new CrewException("character_invalid");
         Id = id; Name = Read(name, 80); Rank = Read(rank, 80); Personality = Read(personality, CrewPerson.MaximumPersonalityLength, true);
-        Gender = gender; Nationality = Read(nationality, 80); PortraitId = portraitId; AiAppointment = aiAppointment; AllowDuplicates = allowDuplicates;
+        Gender = gender; Nationality = Read(nationality, 80); PortraitId = portraitId; AiAppointment = aiAppointment; AllowDuplicates = allowDuplicates; AssignmentTarget = assignmentTarget;
     }
+    // Eligibility for AI-selected appointments; explicit manual assignments do not use this condition.
+    internal bool MatchesAssignmentTarget(string unitKind) => AssignmentTarget == "any" ||
+        AssignmentTarget == "ship" && unitKind is ("vessel" or "submarine") ||
+        AssignmentTarget == "aircraft" && unitKind is ("aircraft" or "helicopter");
     internal static bool IsId(string id) => id != null && id.Length == 32 && Guid.TryParseExact(id, "N", out _);
     private static string Read(string value, int maximum, bool multiline = false)
     {
@@ -42,18 +47,19 @@ internal sealed class CrewCharacter
     internal JObject Json()
     {
         var value = Hints(); value["id"] = Id; value["portrait_id"] = PortraitId; value["ai_appointment"] = AiAppointment; value["allow_duplicates"] = AllowDuplicates;
+        value["assignment_target"] = AssignmentTarget;
         return value;
     }
     internal CrewPerson Person(string name, string rank, string personality) => new(Name.Length == 0 ? name : Name,
         Rank.Length == 0 ? rank : Rank, Personality.Length == 0 ? personality : Personality, PortraitId, Id);
     internal static CrewCharacter Parse(JObject value)
     {
-        if (value.Count != 9 || value.Properties().Any(p => p.Name is not ("id" or "name" or "rank" or "personality" or "gender" or "nationality" or "portrait_id" or "ai_appointment" or "allow_duplicates")))
+        if (value.Count != 10 || value.Properties().Any(p => p.Name is not ("id" or "name" or "rank" or "personality" or "gender" or "nationality" or "portrait_id" or "ai_appointment" or "allow_duplicates" or "assignment_target")))
             throw new CrewException("character_invalid");
         string Text(string key) => value[key]?.Type == JTokenType.String ? (string)value[key]! : throw new CrewException("character_invalid");
         if (value["allow_duplicates"]?.Type != JTokenType.Boolean || value["portrait_id"]?.Type is not (JTokenType.Null or JTokenType.String)) throw new CrewException("character_invalid");
         return new CrewCharacter(Text("id"), Text("name"), Text("rank"), Text("personality"), Text("gender"), Text("nationality"),
-            (string?)value["portrait_id"], Text("ai_appointment"), (bool)value["allow_duplicates"]!);
+            (string?)value["portrait_id"], Text("ai_appointment"), (bool)value["allow_duplicates"]!, Text("assignment_target"));
     }
 }
 

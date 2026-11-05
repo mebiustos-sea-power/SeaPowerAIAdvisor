@@ -150,5 +150,10 @@
   "error.character_library_write_failed": "キャラクターの登録データを保存できません。",
   "error.character_unavailable": "この登録キャラクターは現在利用できません。",
   "error.character_in_use": "このキャラクターは別ユニットへ就任中、または就任待ちです。",
-  "error.character_assignment_unavailable": "このキャラクターは現在このユニットへ就任できません。"
+  "error.character_assignment_unavailable": "このキャラクターは現在このユニットへ就任できません。",
+  "character.assignment_target": "就任先",
+  "character.assignment.any": "無指定",
+  "character.assignment.ship": "船舶",
+  "character.assignment.aircraft": "航空機",
+  "character.assignment_target_hint": "AIが人物を選ぶ就任の対象です。登録からの手動就任は制限しません。"
 }

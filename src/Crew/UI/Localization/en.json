@@ -150,5 +150,10 @@
   "error.character_library_write_failed": "Cannot save the character library.",
   "error.character_unavailable": "This registered character is unavailable.",
   "error.character_in_use": "This character is already assigned or awaiting appointment to another unit.",
-  "error.character_assignment_unavailable": "This character cannot currently be appointed to this unit."
+  "error.character_assignment_unavailable": "This character cannot currently be appointed to this unit.",
+  "character.assignment_target": "Assignment target",
+  "character.assignment.any": "Unspecified",
+  "character.assignment.ship": "Ships",
+  "character.assignment.aircraft": "Aircraft",
+  "character.assignment_target_hint": "Applies when AI selects a character for appointment. Manual appointments from the library are unrestricted."
 }

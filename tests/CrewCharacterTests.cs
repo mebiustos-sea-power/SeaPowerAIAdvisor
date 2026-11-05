@@ -21,13 +21,38 @@ internal static class CrewCharacterTests
             Require(library.Characters.Count == 0 && !File.Exists(Path.Combine(directory, "Crew", "characters.json")), "Opening created a registry");
             var blank = new CrewCharacter(Id(), portraitId: portrait); library.Save(blank);
             var read = new CrewCharacterLibrary(directory).Find(blank.Id)!;
-            Require(read.Name == "" && read.PortraitId == portrait && !read.AllowDuplicates && read.AiAppointment == "normal" && read.Gender == "", "Optional defaults or image link were lost");
-            var full = new CrewCharacter(blank.Id, "Name", "Rank", new string('a', 255), "female", "Fictional nation", portrait, "priority", true);
+            Require(read.Name == "" && read.PortraitId == portrait && !read.AllowDuplicates && read.AiAppointment == "normal" && read.Gender == "" && read.AssignmentTarget == "any", "Optional defaults or image link were lost");
+            var full = new CrewCharacter(blank.Id, "Name", "Rank", new string('a', 255), "female", "Fictional nation", portrait, "priority", true, "aircraft");
             library.Save(full); var reopened = new CrewCharacterLibrary(directory);
             Require(reopened.Characters.Count == 1 && reopened.Find(full.Id)!.Json().ToString() == full.Json().ToString(), "Editing replaced the identity or lost fields");
             library.Delete(full.Id);
             Require(new CrewCharacterLibrary(directory).Characters.Count == 0 && portraits.Contains(portrait), "Deleting a character removed its image or did not persist");
             Throws<CrewException>(() => new CrewCharacter(Id(), personality: new string('a', 256)));
+        }));
+        check("Automatic assignment targets include submarines with ships and helicopters with aircraft and survive save edits", () => Temp(directory =>
+        {
+            var library = new CrewCharacterLibrary(directory); var id = Id();
+            var kinds = new[] { "vessel", "submarine", "aircraft", "helicopter" };
+            var scopes = new[] {
+                (Selected: "any", Eligible: new[] { "vessel", "submarine", "aircraft", "helicopter" }),
+                (Selected: "ship", Eligible: new[] { "vessel", "submarine" }),
+                (Selected: "aircraft", Eligible: new[] { "aircraft", "helicopter" }) };
+            foreach (var scope in scopes)
+            {
+                library.Save(new CrewCharacter(id, assignmentTarget: scope.Selected));
+                var saved = new CrewCharacterLibrary(directory).Find(id)!;
+                Require(saved.AssignmentTarget == scope.Selected && library.Characters.Count == 1, "Editing an assignment target lost the selection or changed identity");
+                foreach (var kind in kinds)
+                    Require(saved.MatchesAssignmentTarget(kind) == scope.Eligible.Contains(kind), "An automatic candidate was assigned to the wrong unit category");
+            }
+            foreach (var invalid in new[] { "", "navy", "air_force" })
+                Throws<CrewException>(() => new CrewCharacter(Id(), assignmentTarget: invalid));
+            foreach (var invalid in new JToken[] { JValue.CreateNull(), new JValue(true), new JValue("navy") })
+            {
+                var value = library.Find(id)!.Json(); value["assignment_target"] = invalid;
+                File.WriteAllText(Path.Combine(directory, "Crew", "characters.json"), new JObject { ["format_version"] = 1, ["characters"] = new JArray(value) }.ToString());
+                Throws<CrewException>(() => new CrewCharacterLibrary(directory));
+            }
         }));
         check("Corrupt character libraries and failed saves remain visible without publishing draft changes", () => Temp(directory =>
         {
@@ -37,7 +62,9 @@ internal static class CrewCharacterTests
             Throws<CrewException>(() => library.Save(new CrewCharacter(original.Id, "Unsaved")));
             Require(library.Find(original.Id)!.Name == "Original" && library.Version == 1, "Failed write published a draft");
             Throws<CrewException>(() => new CrewCharacterLibrary(directory)); Directory.Delete(path);
+            var previousFormat = original.Json(); previousFormat.Remove("assignment_target");
             foreach (var document in new[] {
+                new JObject { ["format_version"] = 1, ["characters"] = new JArray(previousFormat) },
                 new JObject { ["format_version"] = 1, ["characters"] = new JArray(original.Json(), original.Json()) },
                 new JObject { ["format_version"] = 2, ["characters"] = new JArray(original.Json()) },
                 new JObject { ["format_version"] = 1, ["characters"] = new JArray(new JObject { ["id"] = original.Id }) } })
@@ -45,15 +72,17 @@ internal static class CrewCharacterTests
         }));
         check("Complete registered characters appoint without generation and replacements preserve participation and registration identity", () => Temp(directory =>
         {
-            var library = new CrewCharacterLibrary(directory); var first = Full(); library.Save(first); var second = Full(); library.Save(second);
+            var library = new CrewCharacterLibrary(directory); var first = Full(); library.Save(first);
+            var second = new CrewCharacter(Id(), "Registered pilot", "Captain", "Calm", assignmentTarget: "aircraft"); library.Save(second);
             using var rig = new Rig(library); rig.Chatter.AssignCharacter("unit:1", first.Id, 0);
             Require(rig.Chatter.Enabled("unit:1") && rig.Chatter.Person("unit:1")!.RegisteredCharacterId == first.Id && !rig.Chatter.HasPendingAppointments, "Initial local appointment did not complete");
             rig.Tick(0); Require(rig.Requests == 0, "Complete appointment invoked AI while paused");
+            Require(!second.MatchesAssignmentTarget("vessel") && rig.Chatter.CanAssignCharacter("unit:1", second), "An automatic assignment target blocked explicit manual selection");
             rig.Chatter.ApplyTargets(Array.Empty<string>(), 0); rig.Chatter.AssignCharacter("unit:1", second.Id, 0);
             Require(!rig.Chatter.Enabled("unit:1") && rig.Chatter.Person("unit:1")!.RegisteredCharacterId == second.Id, "Replacement changed participation or source identity");
             var current = rig.Chatter.Person("unit:1")!; var draft = new CrewPersonDraft(current) { Name = "Edited locally" };
             rig.Chatter.UpdatePerson("unit:1", current, draft.Build());
-            Require(library.Find(second.Id)!.Name == "Registered" && rig.Chatter.Person("unit:1")!.RegisteredCharacterId == second.Id, "Person edits changed registration or severed its identity");
+            Require(library.Find(second.Id)!.Name == second.Name && rig.Chatter.Person("unit:1")!.RegisteredCharacterId == second.Id, "Person edits changed registration or severed its identity");
             Require(!current.Json().ToString().Contains(second.Id), "A registration ID leaked into speech input");
             library.Delete(second.Id); Require(rig.Chatter.Person("unit:1")!.Name == "Edited locally", "Registration deletion removed the appointed person");
         }));
@@ -75,12 +104,12 @@ internal static class CrewCharacterTests
         {
             var library = new CrewCharacterLibrary(directory);
             var image = "11111111111111111111111111111111.png";
-            var selected = new CrewCharacter(Id(), "登録名 그대로", personality: new string('あ', 255), gender: "female", nationality: "Japan", portraitId: image, aiAppointment: "excluded");
+            var selected = new CrewCharacter(Id(), "登録名 그대로", personality: new string('あ', 255), gender: "female", nationality: "Japan", portraitId: image, aiAppointment: "excluded", assignmentTarget: "aircraft");
             library.Save(selected); var unrelated = Full(); library.Save(unrelated);
             using var rig = new Rig(library); rig.Chatter.AssignCharacter("unit:1", selected.Id, 0);
             Throws<CrewException>(() => rig.Chatter.AssignCharacter("unit:2", selected.Id, 0));
             rig.Tick(1); var batch = rig.Take(); var input = batch.Input(""); var json = input.Data.ToString();
-            Require(json.Contains(selected.Name) && json.Contains("female") && json.Contains("Japan") && !json.Contains(selected.Id) && !json.Contains(image) && !json.Contains(unrelated.Id), "Wrong metadata or unselected characters were sent");
+            Require(json.Contains(selected.Name) && json.Contains("female") && json.Contains("Japan") && !json.Contains(selected.Id) && !json.Contains(image) && !json.Contains(unrelated.Id) && !json.Contains("assignment_target"), "Wrong metadata or unselected characters were sent");
             var result = batch.Read(Reply("unit:1", "Changed by AI", "Commander", "Shortened"));
             rig.Complete(result); rig.Pump(1);
             var person = rig.Chatter.Person("unit:1")!;
@@ -140,7 +169,7 @@ internal static class CrewCharacterTests
         }));
     }
     private static CrewCharacter Full(string? id = null) => new(id ?? Id(), "Registered", "Commander", "Calm");
-    private static CrewTarget Target(int n) => new("unit:" + n, "Ship " + n, "US", "captain", "ship", "Class", false, new[] { n }, true);
+    private static CrewTarget Target(int n) => new("unit:" + n, "Ship " + n, "US", "captain", "vessel", "Class", false, new[] { n }, true);
     private static JObject Row(string id, string name, string rank, string personality) => new()
         { ["id"] = id, ["person_name"] = name, ["rank"] = rank, ["name_with_rank"] = rank + " " + name, ["personality"] = personality };
     private static AiReply Reply(string id, string name, string rank, string personality) => new("", new[] {

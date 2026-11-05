@@ -24,6 +24,7 @@
       <TextBlock Text="{DynamicResource Crew.person_personality_hint}" FontSize="12" Opacity="0.7" Margin="0,0,0,12" />
       <TextBlock Text="{DynamicResource Crew.character.gender}" /><ComboBox x:Name="Gender" Margin="0,4,0,12" />
       <TextBlock Text="{DynamicResource Crew.character.nationality}" /><TextBox x:Name="Nationality" Margin="0,4,0,12" />
+      <TextBlock Text="{DynamicResource Crew.character.assignment_target}" /><ComboBox x:Name="AssignmentTarget" ToolTip="{DynamicResource Crew.character.assignment_target_hint}" Margin="0,4,0,12" />
       <TextBlock Text="{DynamicResource Crew.character.ai_appointment}" /><ComboBox x:Name="AiAppointment" Margin="0,4,0,12" />
       <CheckBox x:Name="AllowDuplicates" Content="{DynamicResource Crew.character.allow_duplicates}" Margin="0,0,0,8" />
     </StackPanel>
