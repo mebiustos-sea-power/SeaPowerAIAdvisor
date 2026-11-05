@@ -6,17 +6,6 @@ using SeaPowerAIAdvisor.Shared;
 
 namespace SeaPowerAIAdvisor.Crew;
 
-internal sealed class CrewPerson
-{
-    internal string Name { get; }
-    internal string Rank { get; }
-    internal string Personality { get; }
-    internal CrewPerson(string name, string rank, string personality)
-    { Name = name; Rank = rank; Personality = personality; }
-    internal string DisplayName(bool showRanks, bool rankBeforeName) => !showRanks ? Name : rankBeforeName ? Rank + " " + Name : Name + " " + Rank;
-    internal JObject Json() => new() { ["name"] = Name, ["rank"] = Rank, ["personality"] = Personality };
-}
-
 // An appointment's vote is transient; the session retains the person and shared vote totals.
 internal sealed class CrewAppointment
 {

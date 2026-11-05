@@ -32,6 +32,8 @@ internal sealed class CrewIntegration
     private ICrewConnections? connections;
     private CrewWindow? window;
     private CrewPresentation? presentation;
+    private CrewPortraits? portraits;
+    private int portraitRevision = -1;
     private HudButton? launcher;
     private string launcherTooltip = "";
     private double nextRefresh;
@@ -70,7 +72,8 @@ internal sealed class CrewIntegration
             var reference = view.FindName("UnitStatusWindow") as ToggleButton ?? throw new InvalidOperationException("The battle HUD toggle is unavailable.");
             launcherTooltip = new CrewText(GameLanguage.Read())["launcher.tooltip"];
             launcher = new HudButton(grid, reference, "CRW", launcherTooltip, 11, before: hudAnchor);
-            presentation = new CrewPresentation(GameUi.FindVisual<Grid>(view) ?? throw new InvalidOperationException("The battle content layout is unavailable."));
+            portraits = new CrewPortraits(System.IO.Path.GetDirectoryName(settingsPath)!, error => log.Error("AI Crew portrait cleanup failed: " + error));
+            presentation = new CrewPresentation(GameUi.FindVisual<Grid>(view) ?? throw new InvalidOperationException("The battle content layout is unavailable."), portraits);
             launcher.Control.Click += (_, _) => Guard(ToggleWindow);
             active = true;
         }
@@ -78,6 +81,10 @@ internal sealed class CrewIntegration
         if (now >= nextRefresh) { chatter!.Refresh(source!.Targets()); nextRefresh = now + 1; }
         chatter!.Tick(now, GameTime.IsPaused(), settings!.Current, GameLanguage.Read(), source!.Capture, source!.CaptureAppointments, connections!.GenerateAsync);
         window?.Tick(); presentation!.Tick(chatter, now, settings.Current.DisplaySeconds, settings.Current.NotificationPosition, settings.Current.ShowRanks, current.IsHudVisible);
+        if (portraitRevision != chatter.Version)
+        {
+            portraits!.Retain(chatter.PortraitFiles.Append(presentation.CurrentPortraitFile).Append(window?.EditingPortraitFile)); portraitRevision = chatter.Version;
+        }
         launcher!.Control.Visibility = current.IsHudVisible ? Visibility.Visible : Visibility.Collapsed;
         launcher.Control.IsChecked = window?.IsOpen == true;
         launcher.Control.ToolTip = chatter.Error == null ? launcherTooltip : launcherTooltip + " / " + chatter.Error;
@@ -86,7 +93,7 @@ internal sealed class CrewIntegration
     {
         var current = model ?? throw new InvalidOperationException("The battle model is unavailable.");
         var host = GameUi.FindWindowHost(current.RootControl) ?? throw new InvalidOperationException("The battle window host is unavailable.");
-        window ??= new CrewWindow(view!, host, chatter!, settings!, connections!, common, new CrewText(GameLanguage.Read()), presentation!.Portrait,
+        window ??= new CrewWindow(view!, host, chatter!, settings!, connections!, common, new CrewText(GameLanguage.Read()), portraits!,
             () => clock.Elapsed.TotalSeconds, Guard, error => log.Error("AI Crew UI failed: " + error));
         window.Toggle(); if (failed) window.Stop(); launcher!.Control.IsChecked = window.IsOpen;
     }
@@ -146,8 +153,9 @@ internal sealed class CrewIntegration
         active = false;
         var oldWindow = window; window = null;
         var oldPresentation = presentation; presentation = null;
+        var oldPortraits = portraits; portraits = null; portraitRevision = -1;
         var oldLauncher = launcher; launcher = null;
-        Cleanup(() => chatter?.Suspend(), () => oldWindow?.Dispose(), () => oldPresentation?.Dispose(), () => oldLauncher?.Dispose());
+        Cleanup(() => chatter?.Suspend(), () => oldWindow?.Dispose(), () => oldPresentation?.Dispose(), () => oldPortraits?.Dispose(), () => oldLauncher?.Dispose());
     }
     internal void Destroy(MainGameViewModel current) { if (ReferenceEquals(model, current)) Guard(Reset); }
     private void Reset()

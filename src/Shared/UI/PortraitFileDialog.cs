@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace SeaPowerAIAdvisor;
+namespace SeaPowerAIAdvisor.Shared;
 
 // The Windows dialog runs on an STA thread; all Noesis and Unity work stays on the game thread.
 internal static class PortraitFileDialog
@@ -17,7 +17,7 @@ internal static class PortraitFileDialog
         {
             try { completion.SetResult(Open(owner, title, filterLabel)); }
             catch (Exception error) { completion.SetException(error); }
-        }) { IsBackground = true, Name = "Advisor portrait selection" };
+        }) { IsBackground = true, Name = "MOD portrait selection" };
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
         return completion.Task;

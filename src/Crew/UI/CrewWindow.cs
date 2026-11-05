@@ -33,7 +33,8 @@ internal sealed class CrewWindow : IDisposable
     private readonly ComboBox selection, notificationPosition;
     private readonly TextBox interval, duration, exchangeChance;
     private readonly CheckBox showHelpTab, showRanks, autoAppointments;
-    private readonly ImageSource portrait;
+    private readonly CrewPortraits portraits;
+    private readonly CrewPersonEditor personEditor;
     private readonly UiNotice settingsNotice, chatterNotice;
     private readonly CrewTargetSelection targetSelection = new();
     private readonly Dictionary<string, CheckBox> informationChoices = new(StringComparer.Ordinal);
@@ -46,6 +47,7 @@ internal sealed class CrewWindow : IDisposable
     private Action? confirmed;
     private CancellationTokenSource? testingCancellation;
     private Task<string>? testing;
+    internal string? EditingPortraitFile => personEditor.PortraitFile;
     internal bool IsOpen => host.Windows.Contains(window);
     private T Find<T>(string name) where T : class => root.FindName(name) as T ?? throw new InvalidOperationException("Missing Chatter control: " + name);
     private string? SelectedId => selection.SelectedIndex <= 0 ? null : ids[selection.SelectedIndex - 1];
@@ -56,13 +58,13 @@ internal sealed class CrewWindow : IDisposable
         "information" => information.Key,
         _ => SelectedId ?? ""
     };
-    private bool Dirty => targetSelection.Dirty || (page == "api" && apiTabs.Current == 1 ? editor.HasChanges : page != null && Values != baseline);
+    private bool Dirty => personEditor.HasChanges || targetSelection.Dirty || (page == "api" && apiTabs.Current == 1 ? editor.HasChanges : page != null && Values != baseline);
 
     internal CrewWindow(FrameworkElement view, WindowHost host, CrewChatter chatter, CrewSettingsStore settings, ICrewConnections connections,
-        Func<string, string> common, CrewText text, ImageSource portrait, Func<double> now, Action<Action> guard, Action<Exception> log)
+        Func<string, string> common, CrewText text, CrewPortraits portraits, Func<double> now, Action<Action> guard, Action<Exception> log)
     {
         this.view = view; this.host = host; this.chatter = chatter; this.settings = settings; this.connections = connections;
-        this.common = common; this.text = text; this.portrait = portrait; this.now = now; this.guard = guard; this.log = log;
+        this.common = common; this.text = text; this.portraits = portraits; this.now = now; this.guard = guard; this.log = log;
         using var source = typeof(CrewWindow).Assembly.GetManifestResourceStream("SeaPowerAIAdvisor.CrewWindow.xaml") ?? throw new FileNotFoundException("The Chatter view is missing.");
         using var reader = new StreamReader(source);
         root = GUI.ParseXaml(reader.ReadToEnd()) as FrameworkElement ?? throw new InvalidOperationException("The Chatter view is invalid.");
@@ -155,6 +157,8 @@ internal sealed class CrewWindow : IDisposable
             settings.Save(new CrewSettings(saved.ConnectionId, saved.IntervalMinutes, saved.DisplaySeconds, saved.NotificationPosition, saved.ShowHelpTab, saved.ExchangeChancePercent, saved.Information, saved.ShowRanks, autoAppointments.IsChecked == true));
             baseline = Values; Saved();
         });
+        personEditor = new CrewPersonEditor(root, chatter, portraits, text, common,
+            typing, CanCommit, Run, action => Confirm(action), () => connections.ValidateSelection(settings.Current.ConnectionId), now, log);
         Bind("CancelConfirmation", HideConfirmation);
         Bind("Confirm", () => { var action = confirmed; HideConfirmation(); action?.Invoke(); });
         foreach (var input in new[] { interval, duration, exchangeChance })
@@ -171,7 +175,11 @@ internal sealed class CrewWindow : IDisposable
         window.Template = view.TryFindResource("WindowLayoutNoScroll") as ControlTemplate ?? throw new InvalidOperationException("The game window template is unavailable.");
         window.ButtonsTemplate = root.Resources["CrewWindowButtons"] as DataTemplate ?? throw new InvalidOperationException("The Chatter window buttons are unavailable.");
         window.CloseAction = new CloseCommand(() => Run(RequestClose));
-        window.OnClosed += (_, _) => { typing.Release(); CancelTest(); };
+        window.OnClosed += (_, _) =>
+        {
+            personEditor.Close(); typing.Release(); CancelTest();
+            Find<StackPanel>("Targets").Children.Clear(); Find<StackPanel>("History").Children.Clear();
+        };
         Home(); ResetTabs(); apiTabs.Reset(); DrawUsage();
     }
     private SettingsTabNavigation Navigation(string name)
@@ -187,6 +195,7 @@ internal sealed class CrewWindow : IDisposable
     {
         try { action(); }
         catch (CrewException e) { log(e); Notice(text["error." + e.Code], true); }
+        catch (PortraitDataException e) { log(e); Notice(e.Code == "portrait_write_failed" ? text["error.portrait_write_failed"] : common("profile.error." + e.Code), true); }
         catch (AiConnectionException e) { log(e); Notice(connections.Error(e), true); }
     });
     private bool CanCommit()
@@ -208,7 +217,7 @@ internal sealed class CrewWindow : IDisposable
     private void Navigate(Action action) { if (Dirty) Confirm(action); else action(); }
     private void Home()
     {
-        typing.Release(); CancelTest(); editor.Close(); targetSelection.Discard(); revision = -1; page = null; baseline = null; settingsNotice.Show("");
+        personEditor.Close(); typing.Release(); CancelTest(); editor.Close(); targetSelection.Discard(); revision = -1; page = null; baseline = null; settingsNotice.Show("");
         Find<FrameworkElement>("SettingsHome").Visibility = Visibility.Visible;
         Find<FrameworkElement>("SettingsPage").Visibility = Visibility.Collapsed;
     }
@@ -270,7 +279,7 @@ internal sealed class CrewWindow : IDisposable
             if (revision != chatter.Version) SyncSelection();
             tabs.Pump(Dirty, () => { Home(); return true; }, action => Confirm(action));
             apiTabs.Pump(Dirty, () => { typing.Release(); CancelTest(); editor.Close(); RefreshConnections(); editor.Open(); return true; }, action => Confirm(action));
-            editor.Tick(); settingsNotice.Tick(); DrawUsage();
+            editor.Tick(); personEditor.Tick(); settingsNotice.Tick(); DrawUsage();
             Find<FrameworkElement>("ChatterStatusPane").Visibility = Find<TabItem>("SettingsTab").IsSelected && page != null ? Visibility.Collapsed : Visibility.Visible;
             if (testing?.IsCompleted == true)
             {
@@ -299,19 +308,29 @@ internal sealed class CrewWindow : IDisposable
     internal string ErrorMessage(string code) => code is "connection_required" or "connection_missing" or "provider_unavailable" or "invalid_response" or "too_large" or "unexpected_error"
         ? text["error." + code] : connections.Error(new AiConnectionException(code));
     private void Saved() => settingsNotice.ShowBriefly(common("settings.saved"));
-    internal void Notice(string message, bool error = false) => (page == null ? chatterNotice : settingsNotice).Show(message, error);
+    internal void Notice(string message, bool error = false)
+    {
+        if (personEditor.IsOpen && error) personEditor.ShowError(message);
+        else (page == null ? chatterNotice : settingsNotice).Show(message, error);
+    }
     private void TestNotice(string message, bool error = false)
     {
         editor.Find<TextBlock>("ConnectionTestStatus").Text = error ? "" : message;
         var failure = editor.Find<TextBlock>("ConnectionTestError"); failure.Text = error ? message : "";
         failure.Visibility = error ? Visibility.Visible : Visibility.Collapsed;
     }
-    private Border Card(string heading, string body)
+    private Border Card(string heading, string body, CrewPerson? person = null, FrameworkElement? action = null)
     {
         var row = new Grid(); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        row.Children.Add(new Image { Source = portrait, Width = 48, Height = 48, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Top });
+        row.Children.Add(new Image { Source = portraits.Get(person), Stretch = Stretch.Uniform, Width = 48, Height = 48, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Top });
         var words = new StackPanel(); words.Children.Add(new TextBlock { Text = heading, FontWeight = FontWeights.Bold, TextWrapping = TextWrapping.Wrap });
         words.Children.Add(new TextBlock { Text = body, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 5, 0, 0) }); Grid.SetColumn(words, 1); row.Children.Add(words);
+        if (action != null)
+        {
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            action.Margin = new Thickness(12, 0, 0, 0); action.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(action, 2); row.Children.Add(action);
+        }
         return new Border { Child = row, BorderBrush = new SolidColorBrush(Color.FromArgb(255, 85, 96, 107)), BorderThickness = new Thickness(1), Padding = new Thickness(10), Margin = new Thickness(0, 0, 0, 8) };
     }
     private void DrawUsage()
@@ -330,7 +349,7 @@ internal sealed class CrewWindow : IDisposable
         var panel = Find<StackPanel>("History"); panel.Children.Clear();
         if (chatter.History.Count == 0) panel.Children.Add(new TextBlock { Text = text["empty_history"], TextWrapping = TextWrapping.Wrap });
         foreach (var remark in chatter.History.Reverse())
-            panel.Children.Add(Card(remark.Target.Name + " / " + remark.Submission.Person.DisplayName(settings.Current.ShowRanks, chatter.RankBeforeName) + " / " + remark.ReceivedAt.ToString("HH:mm:ss"), remark.Submission.Text));
+            panel.Children.Add(Card(remark.Target.Name + " / " + remark.Submission.Person.DisplayName(settings.Current.ShowRanks, chatter.RankBeforeName) + " / " + remark.ReceivedAt.ToString("HH:mm:ss"), remark.Submission.Text, remark.Submission.Person));
     }
     private void SyncSelection() => targetSelection.Sync(chatter.Targets, chatter.Enabled, id => chatter.Person(id) != null);
     private void DrawTargets()
@@ -348,14 +367,22 @@ internal sealed class CrewWindow : IDisposable
             var person = chatter.Person(target.Id);
             var label = target.Name + " / " + target.Nation + " / " + string.Format(CultureInfo.InvariantCulture, text["members"], target.Members.Count);
             if (!target.CanSpeak) label += " / " + text["leader_speaks"];
-            var check = new CheckBox { Content = Card(label, person == null ? text[chatter.AppointmentRequested(target.Id) ? "appointment_pending" : "not_appointed"] : person.DisplayName(settings.Current.ShowRanks, chatter.RankBeforeName) + " / " + person.Personality),
-                IsChecked = targetSelection.Checked(target.Id), IsEnabled = person != null, HorizontalContentAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 0, 0, 8) };
+            var row = new Grid();
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var check = new CheckBox { IsChecked = targetSelection.Checked(target.Id), IsEnabled = person != null,
+                VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 12, 8, 0), ToolTip = text["participation"] };
+            var details = new Button { Content = text["edit_person"], IsEnabled = person != null, Height = 30, Padding = new Thickness(12, 0, 12, 0) };
+            details.Click += (_, _) => Run(() => personEditor.Open(target.Id));
+            var card = Card(label, person == null ? text[chatter.AppointmentRequested(target.Id) ? "appointment_pending" : "not_appointed"] :
+                person.DisplayName(settings.Current.ShowRanks, chatter.RankBeforeName) + " / " + person.Personality, person, details);
+            Grid.SetColumn(card, 1); row.Children.Add(check); row.Children.Add(card);
             check.Click += (_, _) => Run(() =>
             {
                 targetSelection.Set(target.Id, check.IsChecked == true);
                 Find<Button>("ApplyTargets").IsEnabled = targetSelection.Dirty;
             });
-            panel.Children.Add(check);
+            panel.Children.Add(row);
         }
     }
     private void Test()
@@ -373,7 +400,7 @@ internal sealed class CrewWindow : IDisposable
         else _ = old.ContinueWith(t => { if (t.IsFaulted) log(t.Exception!); cancellation?.Dispose(); }, TaskScheduler.Default);
         editor.SetBusy(false); TestNotice("");
     }
-    public void Dispose() { CancelTest(); typing.Release(); if (IsOpen) window.CloseWindowNow(); editor.Close(); }
+    public void Dispose() { personEditor.Dispose(); CancelTest(); typing.Release(); if (IsOpen) window.CloseWindowNow(); editor.Close(); }
     private sealed class CloseCommand : ICommand
     {
         private readonly Action action;

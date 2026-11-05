@@ -1,18 +1,17 @@
 using System;
-using System.IO;
 using Newtonsoft.Json.Linq;
 using Noesis;
-using UnityEngine;
 using Image = Noesis.Image;
 using Grid = Noesis.Grid;
 
 namespace SeaPowerAIAdvisor.Crew;
 
-// One battle owns the portrait texture and click-through notification; neither retains game units.
+// Displays click-through notifications using the battle-owned portraits; never retains game units.
 internal sealed class CrewPresentation : IDisposable
 {
-    private readonly Texture2D texture;
-    internal TextureSource Portrait { get; }
+    private readonly CrewPortraits portraits;
+    private readonly Image portrait;
+    internal string? CurrentPortraitFile => current?.Submission.Person.PortraitFile;
     private readonly Grid layer;
     private readonly Grid host;
     private readonly Border notice;
@@ -21,25 +20,16 @@ internal sealed class CrewPresentation : IDisposable
     private CrewRemark? current;
     private bool showRanks, rankBeforeName;
     private CrewNotificationPosition? position;
-    internal CrewPresentation(Grid host)
+    internal CrewPresentation(Grid host, CrewPortraits portraits)
     {
-        this.host = host;
-        using var image = typeof(CrewPresentation).Assembly.GetManifestResourceStream("SeaPowerAIAdvisor.Crew.png") ?? throw new FileNotFoundException("The crew portrait is missing.");
-        using var bytes = new MemoryStream(); image.CopyTo(bytes);
-        texture = new Texture2D(2, 2, UnityEngine.TextureFormat.RGBA32, false);
-        try
-        {
-            if (!ImageConversion.LoadImage(texture, bytes.ToArray(), true)) throw new InvalidOperationException("The crew portrait is invalid.");
-            texture.name = "AI Crew portrait"; texture.filterMode = FilterMode.Bilinear; texture.wrapMode = TextureWrapMode.Clamp;
-            Portrait = new TextureSource(texture);
-        }
-        catch { UnityEngine.Object.Destroy(texture); throw; }
+        this.host = host; this.portraits = portraits;
         try
         {
             layer = new Grid { IsHitTestVisible = false };
             Grid.SetRowSpan(layer, Math.Max(1, host.RowDefinitions.Count)); Grid.SetColumnSpan(layer, Math.Max(1, host.ColumnDefinitions.Count));
             var content = new Grid(); content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            content.Children.Add(new Image { Source = Portrait, Width = 48, Height = 48, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Top });
+            portrait = new Image { Source = portraits.Common, Width = 48, Height = 48, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Top };
+            content.Children.Add(portrait);
             var words = new StackPanel(); heading = new TextBlock { FontSize = 14, FontWeight = FontWeights.Bold, TextWrapping = TextWrapping.Wrap, Foreground = Brushes.White };
             body = new TextBlock { FontSize = 14, TextWrapping = TextWrapping.Wrap, Foreground = Brushes.White, Margin = new Thickness(0, 5, 0, 0) };
             words.Children.Add(heading); words.Children.Add(body); Grid.SetColumn(words, 1); content.Children.Add(words);
@@ -49,7 +39,7 @@ internal sealed class CrewPresentation : IDisposable
             layer.Children.Add(notice);
             host.Children.Add(layer);
         }
-        catch { Portrait.Dispose(); UnityEngine.Object.Destroy(texture); throw; }
+        catch { if (layer != null) host.Children.Remove(layer); throw; }
     }
 
     private void Place(CrewNotificationPosition value)
@@ -73,12 +63,13 @@ internal sealed class CrewPresentation : IDisposable
         layer.Visibility = hudVisible ? Visibility.Visible : Visibility.Collapsed;
         notice.MaxWidth = Math.Max(1, host.ActualWidth - 36);
         if (chatter.Paused || !chatter.HasEnabledTargets) { Clear(); return; }
+        if (current != null && !chatter.IsCurrent(current)) Clear();
         if (current != null && (this.showRanks != showRanks || rankBeforeName != chatter.RankBeforeName)) SetHeading(current, showRanks, chatter.RankBeforeName);
         if (now < until) return;
-        notice.Visibility = Visibility.Collapsed; current = null;
+        notice.Visibility = Visibility.Collapsed; current = null; portrait.Source = portraits.Common;
         if (!hudVisible) return;
         var remark = chatter.NextNotification(now); if (remark == null) return;
-        current = remark; SetHeading(remark, showRanks, chatter.RankBeforeName); body.Text = remark.Submission.Text;
+        current = remark; portrait.Source = portraits.Get(remark.Submission.Person); SetHeading(remark, showRanks, chatter.RankBeforeName); body.Text = remark.Submission.Text;
         notice.Visibility = Visibility.Visible; until = now + seconds;
     }
     private void SetHeading(CrewRemark remark, bool showRanks, bool rankBeforeName)
@@ -93,6 +84,6 @@ internal sealed class CrewPresentation : IDisposable
             ["heading"] = heading.Text, ["text"] = body.Text, ["position"] = position.HasValue ? CrewSettings.PositionCode(position.Value) : null,
             ["bounds"] = new JObject { ["x"] = bounds.X, ["y"] = bounds.Y, ["width"] = bounds.Width, ["height"] = bounds.Height } };
     }
-    internal void Clear() { until = 0; current = null; notice.Visibility = Visibility.Collapsed; }
-    public void Dispose() { host.Children.Remove(layer); Portrait.Dispose(); UnityEngine.Object.Destroy(texture); }
+    internal void Clear() { until = 0; current = null; portrait.Source = portraits.Common; notice.Visibility = Visibility.Collapsed; }
+    public void Dispose() { Clear(); host.Children.Remove(layer); }
 }

@@ -1,30 +1,17 @@
 using System;
 using Noesis;
-using UnityEngine;
+using SeaPowerAIAdvisor.Shared;
 
 namespace SeaPowerAIAdvisor;
 
-// Construct, replace and dispose only on Unity's main thread. Every reload creates a fresh texture.
 internal sealed class AdvisorPortrait : IDisposable
 {
-    private readonly Texture2D texture;
-    internal TextureSource Source { get; }
+    private readonly PortraitTexture portrait;
+    internal TextureSource Source => portrait.Source;
     internal AdvisorPortrait(byte[] image)
     {
-        texture = new Texture2D(2, 2, UnityEngine.TextureFormat.RGBA32, false);
-        try
-        {
-            if (!ImageConversion.LoadImage(texture, image, true)) throw new AdvisorProfileException("portrait_invalid");
-            texture.name = "SeaPowerAIAdvisor portrait";
-            texture.filterMode = FilterMode.Bilinear;
-            texture.wrapMode = TextureWrapMode.Clamp;
-            Source = new TextureSource(texture);
-        }
-        catch { UnityEngine.Object.Destroy(texture); throw; }
+        try { portrait = new PortraitTexture(image); }
+        catch (PortraitDataException e) { throw new AdvisorProfileException(e.Code); }
     }
-    public void Dispose()
-    {
-        Source.Dispose();
-        UnityEngine.Object.Destroy(texture);
-    }
+    public void Dispose() => portrait.Dispose();
 }
