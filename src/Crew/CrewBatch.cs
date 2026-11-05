@@ -45,10 +45,13 @@ internal sealed class CrewBatch
     private readonly JObject data;
     private readonly IReadOnlyDictionary<string, CrewPerson?> people;
     private readonly HashSet<string> appointments;
-    internal CrewBatch(JObject data, IReadOnlyDictionary<string, CrewPerson?> people, IEnumerable<string> appointments, bool preferExchange = false)
+    private readonly IReadOnlyDictionary<string, CrewCharacter> characters;
+    internal CrewBatch(JObject data, IReadOnlyDictionary<string, CrewPerson?> people, IEnumerable<string> appointments, bool preferExchange = false, IReadOnlyDictionary<string, CrewCharacter>? characters = null)
     {
         this.data = (JObject)data.DeepClone(); this.data["prefer_exchange"] = preferExchange; this.people = new Dictionary<string, CrewPerson?>(people);
         this.appointments = new HashSet<string>(appointments, StringComparer.Ordinal);
+        this.characters = characters == null ? new Dictionary<string, CrewCharacter>() : new Dictionary<string, CrewCharacter>(characters);
+        if (this.characters.Keys.Any(id => !this.appointments.Contains(id))) throw new ArgumentException("Character supplied for an unrequested appointment.", nameof(characters));
     }
     internal AiProviderInput Input(string connectionPrompt)
     {
@@ -67,6 +70,8 @@ internal sealed class CrewBatch
             "Missing values are unknown; ammunition counts are inventory, not launch readiness, and launched_weapons counts are current weapons, not new launches or hits. Never invent events, damage, detections, or mission completion, or claim or announce actions or orders. " +
             "Describe unit facts only for the speaker's own unit or, for leaders, its listed formation members. " +
             "Use submit_chatter once, without questions or other commentary.";
+        if (characters.Count > 0)
+            instruction += " For appointments with character, preserve every nonempty registered name, rank and personality exactly, without translation or shortening. Fill only empty fields; gender and nationality are optional generation hints. A registered personality may be longer than one word. The selected character and unit are already fixed; do not change the assignment.";
         if (!string.IsNullOrWhiteSpace(connectionPrompt))
             instruction += "\nSupplemental instructions for this connection take priority if they conflict:\n" + connectionPrompt;
         var id = new JObject { ["type"] = "string", ["description"] = "The supplied unit ID." };
@@ -120,8 +125,13 @@ internal sealed class CrewBatch
             if (!appointments.Contains(key) || persons.ContainsKey(key)) throw new CrewException("invalid_response");
             // A missing or unusable display hint is an invalid vote, not a failed appointment.
             var form = row["name_with_rank"];
-            persons.Add(key, new CrewAppointment(new CrewPerson(Read(row, "person_name", 80), Read(row, "rank", 80), Read(row, "personality", 40)),
-                form?.Type == JTokenType.String ? (string)form! : null));
+            CrewPerson person;
+            if (characters.TryGetValue(key, out var character))
+                person = character.Person(character.Name.Length == 0 ? Read(row, "person_name", 80) : character.Name,
+                    character.Rank.Length == 0 ? Read(row, "rank", 80) : character.Rank,
+                    character.Personality.Length == 0 ? Read(row, "personality", 40) : character.Personality);
+            else person = new CrewPerson(Read(row, "person_name", 80), Read(row, "rank", 80), Read(row, "personality", 40));
+            persons.Add(key, new CrewAppointment(person, form?.Type == JTokenType.String ? (string)form! : null));
         }
         var seen = new HashSet<string>(StringComparer.Ordinal); var remarks = new List<CrewSubmission>();
         foreach (var item in rows)

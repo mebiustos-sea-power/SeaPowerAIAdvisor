@@ -16,6 +16,7 @@
     <Compile Include="..\src\ChatterConnections.cs" />
     <Compile Include="..\src\Crew\CrewPerson.cs" />
     <Compile Include="..\src\Crew\CrewPortraitLibrary.cs" />
+    <Compile Include="..\src\Crew\CrewCharacterLibrary.cs" />
     <Compile Include="..\src\Shared\Images\PortraitData.cs" />
     <Compile Include="..\src\Crew\CrewBatch.cs" />
     <Compile Include="..\src\Crew\CrewChatter.cs" />

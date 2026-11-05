@@ -71,7 +71,7 @@ internal static class CrewPortraitLibraryTests
     }
     internal static void RunViews(string advisorPath, Action<string, Action> check)
     {
-        check("The portrait gallery has well-formed markup and resolves its UI strings in both embedded localizations", () =>
+        check("Crew library views resolve their own and host-supplied UI strings in both embedded localizations", () =>
         {
             using var assembly = AssemblyDefinition.ReadAssembly(advisorPath);
             string Read(string name)
@@ -79,14 +79,16 @@ internal static class CrewPortraitLibraryTests
                 var resource = assembly.MainModule.Resources.OfType<EmbeddedResource>().Single(r => r.Name == name);
                 using var stream = resource.GetResourceStream(); using var reader = new StreamReader(stream); return reader.ReadToEnd();
             }
-            var view = XDocument.Parse(Read("SeaPowerAIAdvisor.CrewPortraitLibrary.xaml"));
+            var views = new[] { "SeaPowerAIAdvisor.CrewPortraitLibrary.xaml", "SeaPowerAIAdvisor.CrewCharacterLibrary.xaml" }.Select(name => XDocument.Parse(Read(name))).ToArray();
             foreach (var language in new[] { "en", "ja" })
             {
                 var text = JObject.Parse(Read("SeaPowerAIAdvisor.Crew.Localization." + language + ".json"));
-                foreach (var value in view.Descendants().Attributes().Select(a => a.Value).Where(v => v.StartsWith("{DynamicResource Crew.", StringComparison.Ordinal)))
+                // The host supplies shared form actions from the Advisor's localization resources.
+                text["save"] = JObject.Parse(Read("SeaPowerAIAdvisor.Localization." + language + ".json"))["settings.save_form"]?.DeepClone();
+                foreach (var value in views.SelectMany(view => view.Descendants()).Attributes().Select(a => a.Value).Where(v => v.StartsWith("{DynamicResource Crew.", StringComparison.Ordinal)))
                 {
                     var key = value.Substring("{DynamicResource Crew.".Length).TrimEnd('}');
-                    Require(text[key]?.Type == JTokenType.String, "A portrait gallery string is unavailable: " + language + "/" + key);
+                    Require(text[key]?.Type == JTokenType.String, "A Crew library string is unavailable: " + language + "/" + key);
                 }
                 _ = string.Format((string)text["portrait.count"]!, 12); _ = string.Format((string)text["portrait.page"]!, 1, 2);
             }

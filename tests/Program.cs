@@ -38,6 +38,7 @@ internal static class Program
         TranslationTests.Run(Check);
         CrewTests.Run(Check);
         CrewPortraitLibraryTests.Run(Check);
+        CrewCharacterTests.Run(Check);
         CrewWeaponTests.Run(Check);
         CrewThreatTests.Run(Check);
         CrewStateFactsTests.Run(Check);
@@ -185,6 +186,7 @@ internal static class Program
         TranslationTests.Run(Check);
         CrewTests.Run(Check);
         CrewPortraitLibraryTests.Run(Check);
+        CrewCharacterTests.Run(Check);
         CrewWeaponTests.Run(Check);
         CrewThreatTests.Run(Check);
         CrewStateFactsTests.Run(Check);

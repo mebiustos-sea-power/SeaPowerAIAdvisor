@@ -106,5 +106,5 @@ internal sealed class CrewSettingsStore
 internal sealed class CrewException : Exception
 {
     internal string Code { get; }
-    internal CrewException(string code) : base(code) => Code = code;
+    internal CrewException(string code, Exception? inner = null) : base(code, inner) => Code = code;
 }

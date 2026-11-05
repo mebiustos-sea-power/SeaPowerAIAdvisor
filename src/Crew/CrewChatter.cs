@@ -42,6 +42,7 @@ internal sealed class CrewChatter : IDisposable
         internal CrewTarget Target;
         internal bool Enabled;
         internal AppointmentRequest Appointment;
+        internal CrewCharacter? Character;
         internal int Revision;
         internal long LastConsidered;
         internal State(CrewTarget target) => Target = target;
@@ -52,9 +53,10 @@ internal sealed class CrewChatter : IDisposable
     private readonly Queue<CrewRemark> pending = new();
     private readonly Random random;
     private readonly Action<Exception> log;
+    private readonly CrewCharacterLibrary? characters;
     private CancellationTokenSource? cancellation;
     private Task<CrewGeneration>? task;
-    private (State State, int Revision, CrewTarget Target, AppointmentRequest Appointment)[] active = Array.Empty<(State, int, CrewTarget, AppointmentRequest)>();
+    private (State State, int Revision, CrewTarget Target, AppointmentRequest Appointment, CrewCharacter? Character)[] active = Array.Empty<(State, int, CrewTarget, AppointmentRequest, CrewCharacter?)>();
     private bool retired, speechInFlight;
     private double startedAt, nextOpportunity = double.PositiveInfinity, nextAppointments = double.PositiveInfinity;
     private double gamePauseOffset;
@@ -87,19 +89,41 @@ internal sealed class CrewChatter : IDisposable
     {
         if (!states.TryGetValue(id, out var state) || !people.TryGetValue(id, out var current)) throw new CrewException("person_unavailable");
         if (!ReferenceEquals(current, expected)) throw new CrewException("person_changed");
-        state.Appointment = AppointmentRequest.None; state.Revision++; Version++;
+        if (current.RegisteredCharacterId != person.RegisteredCharacterId) throw new CrewException("person_invalid");
+        state.Appointment = AppointmentRequest.None; state.Character = null; state.Revision++; Version++;
         people[id] = person;
     }
     internal void RequestReappointment(string id, double now)
     {
         if (!states.TryGetValue(id, out var state) || !people.ContainsKey(id)) throw new CrewException("person_unavailable");
         if (Paused || Busy) throw new CrewException("person_busy");
-        state.Appointment = AppointmentRequest.Replacement; state.Revision++;
+        state.Appointment = AppointmentRequest.Replacement; state.Character = null; state.Revision++;
         nextAppointments = now + 1; Error = null; Version++;
     }
     internal bool Enabled(string id) => states.TryGetValue(id, out var s) && s.Enabled;
-    internal CrewChatter(Action<Exception> log, Random? random = null)
-    { this.log = log; this.random = random ?? new Random(); }
+    internal CrewChatter(Action<Exception> log, Random? random = null, CrewCharacterLibrary? characters = null)
+    { this.log = log; this.random = random ?? new Random(); this.characters = characters; }
+    internal bool CanAssignCharacter(string unitId, CrewCharacter character) => states.ContainsKey(unitId) &&
+        (character.AllowDuplicates || Person(unitId)?.RegisteredCharacterId == character.Id || !states.Values.Any(s => s.Target.Id != unitId &&
+            (Person(s.Target.Id)?.RegisteredCharacterId == character.Id || s.Character?.Id == character.Id)));
+    internal void AssignCharacter(string unitId, string characterId, double now)
+    {
+        if (!states.TryGetValue(unitId, out var state)) throw new CrewException("person_unavailable");
+        var character = characters?.Find(characterId) ?? throw new CrewException("character_unavailable");
+        if (!CanAssignCharacter(unitId, character)) throw new CrewException("character_in_use");
+        if (Busy || !character.IsComplete && Paused) throw new CrewException("person_busy");
+        if (!character.IsComplete)
+        {
+            // Reserve the selected immutable definition. Later library edits affect new requests only.
+            state.Character = character; state.Appointment = people.ContainsKey(unitId) ? AppointmentRequest.Replacement : AppointmentRequest.Manual;
+            state.Revision++; nextAppointments = Math.Min(nextAppointments, now + 1); Error = null; Version++; return;
+        }
+        var replacement = people.ContainsKey(unitId);
+        people[unitId] = character.Person("", "", ""); state.Character = null; state.Appointment = AppointmentRequest.None;
+        if (!replacement) state.Enabled = true;
+        state.Revision++; state.LastConsidered = 0; Error = null; Version++;
+        if (HasSpeakers && double.IsPositiveInfinity(nextOpportunity)) nextOpportunity = OpportunityTime(now) + 1;
+    }
     internal void Refresh(IReadOnlyList<CrewTarget> targets)
     {
         var ids = new HashSet<string>(targets.Select(t => t.Id), StringComparer.Ordinal);
@@ -187,8 +211,8 @@ internal sealed class CrewChatter : IDisposable
         {
             var completed = task; task = null; var work = active; var hadSpeech = speechInFlight;
             var hadAutomaticAppointments = work.Any(w => w.Appointment == AppointmentRequest.Automatic);
-            active = Array.Empty<(State, int, CrewTarget, AppointmentRequest)>(); speechInFlight = false;
-            bool Valid((State State, int Revision, CrewTarget Target, AppointmentRequest Appointment) entry) =>
+            active = Array.Empty<(State, int, CrewTarget, AppointmentRequest, CrewCharacter?)>(); speechInFlight = false;
+            bool Valid((State State, int Revision, CrewTarget Target, AppointmentRequest Appointment, CrewCharacter? Character) entry) =>
                 states.TryGetValue(entry.Target.Id, out var current) && ReferenceEquals(current, entry.State) && now - startedAt <= 180;
             try
             {
@@ -196,11 +220,11 @@ internal sealed class CrewChatter : IDisposable
                 foreach (var appointment in result.Appointments)
                 {
                     var entry = work.Single(w => w.Target.Id == appointment.Key);
-                    if (!Valid(entry) || entry.State.Appointment == AppointmentRequest.None) continue;
+                    if (!Valid(entry) || entry.State.Appointment == AppointmentRequest.None || !ReferenceEquals(entry.Character, entry.State.Character)) continue;
                     var replacement = entry.Appointment == AppointmentRequest.Replacement;
                     if ((entry.State.Appointment == AppointmentRequest.Replacement) != replacement || people.ContainsKey(appointment.Key) != replacement) continue;
                     people[appointment.Key] = appointment.Value.Person;
-                    entry.State.Appointment = AppointmentRequest.None;
+                    entry.State.Appointment = AppointmentRequest.None; entry.State.Character = null;
                     if (!replacement) entry.State.Enabled = true;
                     entry.State.Revision++; entry.State.LastConsidered = 0;
                     if (appointment.Value.RankBeforeName is bool before)
@@ -274,7 +298,9 @@ internal sealed class CrewChatter : IDisposable
         data["appointments"] = new JArray(appointments.Select(s =>
         {
             var row = Identity(s); row["kind"] = s.Target.Kind; row["class_name"] = s.Target.ClassName;
-            row["formation_leader"] = s.Target.FormationLeader; return row;
+            row["formation_leader"] = s.Target.FormationLeader;
+            if (s.Character != null) row["character"] = s.Character.Hints();
+            return row;
         }));
         data["speakers"] = new JArray(candidates.Select(s =>
         {
@@ -284,11 +310,12 @@ internal sealed class CrewChatter : IDisposable
             return row;
         }));
         if (candidates.Length > 0) data["recent_remarks"] = new JArray(history.Where(r => r.InformationRevision == informationRevision && ReferenceEquals(r.Submission.Person, Person(r.Target.Id))).TakeLast(3).Select(r => new JObject { ["id"] = r.Target.Id, ["text"] = r.Submission.Text }));
-        active = appointments.Concat(candidates).Distinct().Select(s => (s, s.Revision, s.Target, s.Appointment)).ToArray(); startedAt = now; speechInFlight = candidates.Length > 0;
+        active = appointments.Concat(candidates).Distinct().Select(s => (s, s.Revision, s.Target, s.Appointment, s.Character)).ToArray(); startedAt = now; speechInFlight = candidates.Length > 0;
         activeInformationRevision = informationRevision;
         cancellation = new CancellationTokenSource();
         var batch = new CrewBatch(data, candidates.ToDictionary(s => s.Target.Id, s => Person(s.Target.Id)), appointments.Select(s => s.Target.Id),
-            preferExchange: candidates.Length >= 2 && random.NextDouble() < settings.ExchangeChancePercent / 100.0);
+            preferExchange: candidates.Length >= 2 && random.NextDouble() < settings.ExchangeChancePercent / 100.0,
+            characters: appointments.Where(s => s.Character != null).ToDictionary(s => s.Target.Id, s => s.Character!));
         var token = cancellation.Token; var connectionId = settings.ConnectionId;
         task = Task.Run(() => generate(batch, connectionId, token, Usage.Record), token); Version++;
     }
@@ -307,7 +334,7 @@ internal sealed class CrewChatter : IDisposable
     private void CancelGeneration()
     {
         cancellation?.Cancel();
-        var oldTask = task; task = null; active = Array.Empty<(State, int, CrewTarget, AppointmentRequest)>(); speechInFlight = false;
+        var oldTask = task; task = null; active = Array.Empty<(State, int, CrewTarget, AppointmentRequest, CrewCharacter?)>(); speechInFlight = false;
         var oldCancellation = cancellation; cancellation = null;
         if (oldTask == null) oldCancellation?.Dispose();
         else _ = oldTask.ContinueWith(t => { if (t.IsFaulted) log(t.Exception!); oldCancellation?.Dispose(); }, TaskScheduler.Default);
@@ -316,7 +343,7 @@ internal sealed class CrewChatter : IDisposable
     }
     internal void Suspend()
     {
-        CancelGeneration(); foreach (var state in states.Values) { state.Enabled = false; state.Appointment = AppointmentRequest.None; }
+        CancelGeneration(); foreach (var state in states.Values) { state.Enabled = false; state.Appointment = AppointmentRequest.None; state.Character = null; }
         Paused = false; Error = null; Version++;
     }
     public void Dispose() { retired = true; Suspend(); states.Clear(); people.Clear(); history.Clear(); }

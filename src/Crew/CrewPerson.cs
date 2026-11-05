@@ -12,12 +12,14 @@ internal sealed class CrewPerson
     internal string Rank { get; }
     internal string Personality { get; }
     internal string? PortraitId { get; }
-    internal CrewPerson(string name, string rank, string personality, string? portraitId = null)
+    internal string? RegisteredCharacterId { get; }
+    internal CrewPerson(string name, string rank, string personality, string? portraitId = null, string? registeredCharacterId = null)
     {
         Name = Read(name, 80, false, false); Rank = Read(rank, 80, true, false);
         Personality = Read(personality, MaximumPersonalityLength, true, true);
         if (portraitId != null && !CrewPortraitLibrary.IsId(portraitId)) throw new CrewPortraitLibraryException("portrait_id_invalid");
-        PortraitId = portraitId;
+        if (registeredCharacterId != null && !CrewCharacter.IsId(registeredCharacterId)) throw new CrewException("character_invalid");
+        PortraitId = portraitId; RegisteredCharacterId = registeredCharacterId;
     }
     private static string Read(string value, int maximum, bool allowEmpty, bool multiline)
     {
@@ -43,5 +45,5 @@ internal sealed class CrewPersonDraft
     internal bool HasChanges => Name != Original.Name || Rank != Original.Rank || Personality != Original.Personality ||
         PortraitId != Original.PortraitId;
     internal void SelectPortrait(string? id) => PortraitId = id;
-    internal CrewPerson Build() => new(Name, Rank, Personality, PortraitId);
+    internal CrewPerson Build() => new(Name, Rank, Personality, PortraitId, Original.RegisteredCharacterId);
 }

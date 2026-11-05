@@ -30,6 +30,7 @@ internal sealed class CrewIntegration
     private CrewLocalApi? local;
     private CrewBattleSource? source;
     private CrewSettingsStore? settings;
+    private CrewCharacterLibrary? characters;
     private ICrewConnections? connections;
     private CrewWindow? window;
     private CrewPresentation? presentation;
@@ -66,7 +67,8 @@ internal sealed class CrewIntegration
         {
             settings ??= new CrewSettingsStore(settingsPath); connections ??= connect(settings);
             source ??= new CrewBattleSource(current, error => log.Warning("AI Crew mission briefing unavailable: " + error));
-            chatter ??= new CrewChatter(error => log.Error("AI Crew Chatter failed: " + error));
+            characters ??= new CrewCharacterLibrary(System.IO.Path.GetDirectoryName(settingsPath)!);
+            chatter ??= new CrewChatter(error => log.Error("AI Crew Chatter failed: " + error), characters: characters);
             local ??= new CrewLocalApi(chatter, () => clock.Elapsed.TotalSeconds, () =>
             {
                 connections.ValidateSelection(settings.Current.ConnectionId);
@@ -101,7 +103,7 @@ internal sealed class CrewIntegration
     {
         var current = model ?? throw new InvalidOperationException("The battle model is unavailable.");
         var host = GameUi.FindWindowHost(current.RootControl) ?? throw new InvalidOperationException("The battle window host is unavailable.");
-        window ??= new CrewWindow(view!, host, chatter!, settings!, connections!, common, new CrewText(GameLanguage.Read()), portraits!,
+        window ??= new CrewWindow(view!, host, chatter!, settings!, connections!, common, new CrewText(GameLanguage.Read()), portraits!, characters!,
             () => clock.Elapsed.TotalSeconds, Guard, error => log.Error("AI Crew UI failed: " + error));
         window.Toggle(); if (failed) window.Stop(); launcher!.Control.IsChecked = window.IsOpen;
     }

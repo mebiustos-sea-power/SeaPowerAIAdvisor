@@ -29,12 +29,15 @@ internal sealed class CrewWindow : IDisposable
     private readonly Func<double> now;
     private readonly TypingScope typing = new();
     private readonly AiConnectionsView editor;
-    private readonly SettingsTabNavigation tabs, apiTabs;
+    private readonly SettingsTabNavigation tabs, apiTabs, libraryTabs;
     private readonly ComboBox selection, notificationPosition;
     private readonly TextBox interval, duration, exchangeChance;
     private readonly CheckBox showHelpTab, showRanks, autoAppointments;
     private readonly CrewPortraits portraits;
     private readonly CrewPersonEditor personEditor;
+    private readonly CrewCharacterLibrary characters;
+    private readonly CrewCharacterLibraryView characterView, characterPicker;
+    private string? assigningTarget;
     private readonly CrewPortraitLibraryView libraryView, portraitPicker;
     private readonly UiNotice settingsNotice, chatterNotice;
     private readonly CrewTargetSelection targetSelection = new();
@@ -50,8 +53,8 @@ internal sealed class CrewWindow : IDisposable
     private Action? confirmed;
     private CancellationTokenSource? testingCancellation;
     private Task<string>? testing;
-    internal IEnumerable<string?> DisplayPortraitIds => new[] { personEditor.PortraitId }.Concat(libraryView.DisplayedIds).Concat(portraitPicker.DisplayedIds);
-    internal int PortraitRevision => personEditor.PortraitRevision + libraryView.PortraitRevision + portraitPicker.PortraitRevision;
+    internal IEnumerable<string?> DisplayPortraitIds => new[] { personEditor.PortraitId }.Concat(libraryView.DisplayedIds).Concat(portraitPicker.DisplayedIds).Concat(characterView.DisplayedIds).Concat(characterPicker.DisplayedIds);
+    internal int PortraitRevision => personEditor.PortraitRevision + libraryView.PortraitRevision + portraitPicker.PortraitRevision + characterView.PortraitRevision + characterPicker.PortraitRevision;
     internal bool IsOpen => host.Windows.Contains(window);
     private T Find<T>(string name) where T : class => root.FindName(name) as T ?? throw new InvalidOperationException("Missing Chatter control: " + name);
     private string? SelectedId => selection.SelectedIndex <= 0 ? null : ids[selection.SelectedIndex - 1];
@@ -62,13 +65,13 @@ internal sealed class CrewWindow : IDisposable
         "information" => information.Key,
         _ => SelectedId ?? ""
     };
-    private bool Dirty => personEditor.HasChanges || libraryView.HasChanges || portraitPicker.HasChanges || targetSelection.Dirty || (page == "api" && apiTabs.Current == 1 ? editor.HasChanges : page != null && Values != baseline);
+    private bool Dirty => characterView.HasChanges || personEditor.HasChanges || libraryView.HasChanges || portraitPicker.HasChanges || targetSelection.Dirty || (page == "api" && apiTabs.Current == 1 ? editor.HasChanges : page != null && Values != baseline);
 
     internal CrewWindow(FrameworkElement view, WindowHost host, CrewChatter chatter, CrewSettingsStore settings, ICrewConnections connections,
-        Func<string, string> common, CrewText text, CrewPortraits portraits, Func<double> now, Action<Action> guard, Action<Exception> log)
+        Func<string, string> common, CrewText text, CrewPortraits portraits, CrewCharacterLibrary characters, Func<double> now, Action<Action> guard, Action<Exception> log)
     {
         this.view = view; this.host = host; this.chatter = chatter; this.settings = settings; this.connections = connections;
-        this.common = common; this.text = text; this.portraits = portraits; this.now = now; this.guard = guard; this.log = log;
+        this.common = common; this.text = text; this.portraits = portraits; this.characters = characters; this.now = now; this.guard = guard; this.log = log;
         using var source = typeof(CrewWindow).Assembly.GetManifestResourceStream("SeaPowerAIAdvisor.CrewWindow.xaml") ?? throw new FileNotFoundException("The Chatter view is missing.");
         using var reader = new StreamReader(source);
         root = GUI.ParseXaml(reader.ReadToEnd()) as FrameworkElement ?? throw new InvalidOperationException("The Chatter view is invalid.");
@@ -107,7 +110,7 @@ internal sealed class CrewWindow : IDisposable
         editor.Saved += () => { RefreshConnections(); Saved(); };
         editor.Changed += () => { if (testing == null) TestNotice(""); };
         editor.Find<Button>("TestConnection").Click += (_, _) => Run(Test);
-        tabs = Navigation("Tabs"); apiTabs = Navigation("ApiTabs");
+        tabs = Navigation("Tabs"); apiTabs = Navigation("ApiTabs"); libraryTabs = Navigation("LibraryTabs");
         Bind("OpenConnections", () => OpenPage("api")); Bind("OpenChatter", () => OpenPage("chatter"));
         Bind("OpenInformation", () => OpenPage("information"));
         Bind("OpenAppointments", () => OpenPage("appointments"));
@@ -171,6 +174,14 @@ internal sealed class CrewWindow : IDisposable
             back: BackPortraitPicker);
         personEditor = new CrewPersonEditor(root, chatter, portraits, text, common,
             typing, CanCommit, Run, action => Confirm(action), OpenPortraitPicker, () => connections.ValidateSelection(settings.Current.ConnectionId), now);
+        var characterForm = CrewCharacterLibraryView.Create(); Find<ContentControl>("CharacterLibrary").Content = characterForm;
+        characterView = new CrewCharacterLibraryView(characterForm, root, characters, portraits, text, common, typing, CanCommit, Run,
+            (action, message, caption) => Confirm(action, message, caption, common("settings.cancel")), OpenPortraitPicker, log);
+        var characterChoice = CrewCharacterLibraryView.Create(); Find<ContentControl>("CharacterPicker").Content = characterChoice;
+        characterPicker = new CrewCharacterLibraryView(characterChoice, root, characters, portraits, text, common, typing, CanCommit, Run,
+            (action, message, caption) => Confirm(action, message, caption, common("settings.cancel")), OpenPortraitPicker, log,
+            select: AssignCharacter, back: CloseCharacterPicker,
+            canSelect: character => assigningTarget != null && !chatter.Busy && (!chatter.Paused || character.IsComplete) && chatter.CanAssignCharacter(assigningTarget, character));
         Bind("CancelConfirmation", HideConfirmation);
         Bind("Confirm", () => { var action = confirmed; HideConfirmation(); action?.Invoke(); });
         foreach (var input in new[] { interval, duration, exchangeChance })
@@ -189,10 +200,10 @@ internal sealed class CrewWindow : IDisposable
         window.CloseAction = new CloseCommand(() => Run(RequestClose));
         window.OnClosed += (_, _) =>
         {
-            personEditor.Close(); libraryView.Close(); ClosePortraitPicker(); typing.Release(); CancelTest();
+            personEditor.Close(); libraryView.Close(); characterView.Close(); CloseCharacterPicker(); ClosePortraitPicker(); typing.Release(); CancelTest();
             Find<StackPanel>("Targets").Children.Clear(); Find<StackPanel>("History").Children.Clear();
         };
-        Home(); ResetTabs(); apiTabs.Reset(); DrawUsage();
+        Home(); ResetTabs(); apiTabs.Reset(); libraryTabs.Reset(); DrawUsage();
     }
     private SettingsTabNavigation Navigation(string name)
     {
@@ -224,14 +235,15 @@ internal sealed class CrewWindow : IDisposable
         Find<Button>("CancelConfirmation").Content = cancel ?? common("settings.continue_editing");
         Find<TabControl>("Tabs").IsEnabled = false;
         Find<FrameworkElement>("PortraitPicker").IsEnabled = false;
+        Find<FrameworkElement>("CharacterPicker").IsEnabled = false;
         Find<FrameworkElement>("Confirmation").Visibility = Visibility.Visible;
         Find<Button>("CancelConfirmation").Focus();
     }
-    private void HideConfirmation() { confirmed = null; Find<FrameworkElement>("Confirmation").Visibility = Visibility.Collapsed; Find<TabControl>("Tabs").IsEnabled = true; Find<FrameworkElement>("PortraitPicker").IsEnabled = true; }
+    private void HideConfirmation() { confirmed = null; Find<FrameworkElement>("Confirmation").Visibility = Visibility.Collapsed; Find<TabControl>("Tabs").IsEnabled = true; Find<FrameworkElement>("PortraitPicker").IsEnabled = true; Find<FrameworkElement>("CharacterPicker").IsEnabled = true; }
     private void Navigate(Action action) { if (Dirty) Confirm(action); else action(); }
     private void Home()
     {
-        ClosePortraitPicker(); libraryView.Close(); personEditor.Close(); typing.Release(); CancelTest(); editor.Close(); targetSelection.Discard(); revision = -1; page = null; baseline = null; settingsNotice.Show("");
+        ClosePortraitPicker(); CloseCharacterPicker(); libraryView.Close(); characterView.Close(); personEditor.Close(); typing.Release(); CancelTest(); editor.Close(); targetSelection.Discard(); revision = -1; page = null; baseline = null; settingsNotice.Show("");
         Find<FrameworkElement>("SettingsHome").Visibility = Visibility.Visible;
         Find<FrameworkElement>("SettingsPage").Visibility = Visibility.Collapsed;
     }
@@ -297,6 +309,30 @@ internal sealed class CrewWindow : IDisposable
         Find<FrameworkElement>("PortraitPicker").Visibility = Visibility.Collapsed; Find<TabControl>("Tabs").Visibility = Visibility.Visible;
     }
     private void BackPortraitPicker() { if (portraitPicker.HasChanges) Confirm(ClosePortraitPicker); else ClosePortraitPicker(); }
+    private void OpenCharacterPicker(string unitId)
+    {
+        if (!CanCommit()) return;
+        assigningTarget = unitId; typing.Release();
+        Find<TabControl>("Tabs").Visibility = Visibility.Collapsed;
+        Find<FrameworkElement>("CharacterPicker").Visibility = Visibility.Visible;
+        characterPicker.Open(chatter.Person(unitId)?.RegisteredCharacterId);
+    }
+    private void CloseCharacterPicker()
+    {
+        characterPicker.Close(); assigningTarget = null;
+        Find<FrameworkElement>("CharacterPicker").Visibility = Visibility.Collapsed;
+        if (!choosingPortrait) Find<TabControl>("Tabs").Visibility = Visibility.Visible;
+    }
+    private void AssignCharacter(string characterId)
+    {
+        if (!CanCommit()) return;
+        var character = characters.Find(characterId) ?? throw new CrewException("character_unavailable");
+        var target = assigningTarget ?? throw new CrewException("person_unavailable");
+        if (!character.IsComplete) connections.ValidateSelection(settings.Current.ConnectionId);
+        chatter.AssignCharacter(target, characterId, now());
+        CloseCharacterPicker(); revision = -1;
+        Notice(character.IsComplete ? common("settings.saved") : text["appointment_pending"]);
+    }
     internal void Tick()
     {
         if (!IsOpen) return;
@@ -305,11 +341,17 @@ internal sealed class CrewWindow : IDisposable
             if (revision != chatter.Version) SyncSelection();
             tabs.Pump(Dirty, () => { Home(); return true; }, action => Confirm(action));
             apiTabs.Pump(Dirty, () => { typing.Release(); CancelTest(); editor.Close(); RefreshConnections(); editor.Open(); return true; }, action => Confirm(action));
-            if (Find<TabItem>("LibraryTab").IsSelected && !choosingPortrait)
+            libraryTabs.Pump(Dirty, () => { libraryView.Close(); characterView.Close(); return true; }, action => Confirm(action));
+            var libraryOpen = Find<TabItem>("LibraryTab").IsSelected && assigningTarget == null;
+            if (libraryOpen && libraryTabs.Current == 1 && !choosingPortrait)
             { if (!libraryView.IsOpen) libraryView.Open(); libraryView.Tick(); }
             else if (libraryView.IsOpen) libraryView.Close();
-            portraitPicker.Tick(); editor.Tick(); personEditor.Tick(); settingsNotice.Tick(); DrawUsage();
-            Find<FrameworkElement>("ChatterStatusPane").Visibility = choosingPortrait || Find<TabItem>("LibraryTab").IsSelected || (Find<TabItem>("SettingsTab").IsSelected && page != null) ? Visibility.Collapsed : Visibility.Visible;
+            if (libraryOpen && libraryTabs.Current == 0)
+            { if (!characterView.IsOpen) characterView.Open(); characterView.Tick(); }
+            else if (characterView.IsOpen) characterView.Close();
+            if (revision != chatter.Version) characterPicker.RefreshSelection();
+            characterPicker.Tick(); portraitPicker.Tick(); editor.Tick(); personEditor.Tick(); settingsNotice.Tick(); DrawUsage();
+            Find<FrameworkElement>("ChatterStatusPane").Visibility = choosingPortrait || assigningTarget != null || Find<TabItem>("LibraryTab").IsSelected || (Find<TabItem>("SettingsTab").IsSelected && page != null) ? Visibility.Collapsed : Visibility.Visible;
             if (testing?.IsCompleted == true)
             {
                 var completed = testing; testing = null; testingCancellation?.Dispose(); testingCancellation = null; editor.SetBusy(false);
@@ -342,7 +384,9 @@ internal sealed class CrewWindow : IDisposable
     internal void Notice(string message, bool error = false)
     {
         if (choosingPortrait && error) portraitPicker.ShowError(message);
-        else if (Find<TabItem>("LibraryTab").IsSelected && error) libraryView.ShowError(message);
+        else if (assigningTarget != null && error) characterPicker.ShowError(message);
+        else if (Find<TabItem>("LibraryTab").IsSelected && error)
+        { if (libraryTabs.Current == 0) characterView.ShowError(message); else libraryView.ShowError(message); }
         else if (personEditor.IsOpen && error) personEditor.ShowError(message);
         else (page == null ? chatterNotice : settingsNotice).Show(message, error);
     }
@@ -407,8 +451,12 @@ internal sealed class CrewWindow : IDisposable
                 VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 12, 8, 0), ToolTip = text["participation"] };
             var details = new Button { Content = text["edit_person"], IsEnabled = person != null, Height = 30, Padding = new Thickness(12, 0, 12, 0) };
             details.Click += (_, _) => Run(() => personEditor.Open(target.Id));
+            var appoint = new Button { Content = text["character.appoint_from"], Height = 30, Padding = new Thickness(12, 0, 12, 0),
+                Margin = new Thickness(0, 6, 0, 0), IsEnabled = !chatter.Busy };
+            appoint.Click += (_, _) => Run(() => OpenCharacterPicker(target.Id));
+            var actions = new StackPanel(); actions.Children.Add(details); actions.Children.Add(appoint);
             var card = Card(label, person == null ? text[chatter.AppointmentRequested(target.Id) ? "appointment_pending" : "not_appointed"] :
-                person.DisplayName(settings.Current.ShowRanks, chatter.RankBeforeName) + " / " + person.Personality, person, details);
+                person.DisplayName(settings.Current.ShowRanks, chatter.RankBeforeName) + (person.Personality.Length == 0 ? "" : "\n" + person.Personality), person, actions);
             Grid.SetColumn(card, 1); row.Children.Add(check); row.Children.Add(card);
             check.Click += (_, _) => Run(() =>
             {
@@ -433,7 +481,7 @@ internal sealed class CrewWindow : IDisposable
         else _ = old.ContinueWith(t => { if (t.IsFaulted) log(t.Exception!); cancellation?.Dispose(); }, TaskScheduler.Default);
         editor.SetBusy(false); TestNotice("");
     }
-    public void Dispose() { personEditor.Dispose(); libraryView.Dispose(); ClosePortraitPicker(); CancelTest(); typing.Release(); if (IsOpen) window.CloseWindowNow(); editor.Close(); }
+    public void Dispose() { characterView.Dispose(); CloseCharacterPicker(); personEditor.Dispose(); libraryView.Dispose(); ClosePortraitPicker(); CancelTest(); typing.Release(); if (IsOpen) window.CloseWindowNow(); editor.Close(); }
     private sealed class CloseCommand : ICommand
     {
         private readonly Action action;

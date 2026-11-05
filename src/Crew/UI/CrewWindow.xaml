@@ -67,7 +67,14 @@
       </Grid>
     </TabItem>
     <TabItem x:Name="LibraryTab" Header="{DynamicResource Crew.library}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
-      <ContentControl x:Name="PortraitLibrary" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
+      <TabControl x:Name="LibraryTabs" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+        <TabItem Header="{DynamicResource Crew.characters}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+          <ContentControl x:Name="CharacterLibrary" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
+        </TabItem>
+        <TabItem Header="{DynamicResource Crew.portraits}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+          <ContentControl x:Name="PortraitLibrary" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
+        </TabItem>
+      </TabControl>
     </TabItem>
     <TabItem x:Name="SettingsTab" Header="{DynamicResource Crew.settings}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
       <Grid Margin="0,8,0,0">
@@ -164,6 +171,7 @@
   <Border x:Name="ChatterStatusPane" Grid.Row="1">
     <TextBlock x:Name="ChatterStatus" TextWrapping="Wrap" FontSize="12" Margin="0,8,0,0" Visibility="Collapsed" />
   </Border>
+  <ContentControl x:Name="CharacterPicker" Grid.RowSpan="2" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Visibility="Collapsed" />
   <ContentControl x:Name="PortraitPicker" Grid.RowSpan="2" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Visibility="Collapsed" />
   <Grid x:Name="Confirmation" Grid.RowSpan="2" Background="#B0000000" Visibility="Collapsed">
     <Border Background="#202B38" BorderBrush="#607080" BorderThickness="1" Padding="20" MaxWidth="420" HorizontalAlignment="Center" VerticalAlignment="Center">
