@@ -11,11 +11,13 @@ internal sealed class CrewPerson
     internal string Name { get; }
     internal string Rank { get; }
     internal string Personality { get; }
-    internal string? PortraitFile { get; }
-    internal CrewPerson(string name, string rank, string personality, string? portraitFile = null)
+    internal string? PortraitId { get; }
+    internal CrewPerson(string name, string rank, string personality, string? portraitId = null)
     {
         Name = Read(name, 80, false, false); Rank = Read(rank, 80, true, false);
-        Personality = Read(personality, MaximumPersonalityLength, true, true); PortraitFile = portraitFile;
+        Personality = Read(personality, MaximumPersonalityLength, true, true);
+        if (portraitId != null && !CrewPortraitLibrary.IsId(portraitId)) throw new CrewPortraitLibraryException("portrait_id_invalid");
+        PortraitId = portraitId;
     }
     private static string Read(string value, int maximum, bool allowEmpty, bool multiline)
     {
@@ -35,13 +37,11 @@ internal sealed class CrewPersonDraft
     internal string Name { get; set; }
     internal string Rank { get; set; }
     internal string Personality { get; set; }
-    internal string? PortraitFile { get; private set; }
-    internal byte[]? SelectedPortrait { get; private set; }
+    internal string? PortraitId { get; private set; }
     internal CrewPersonDraft(CrewPerson original)
-    { Original = original; Name = original.Name; Rank = original.Rank; Personality = original.Personality; PortraitFile = original.PortraitFile; }
+    { Original = original; Name = original.Name; Rank = original.Rank; Personality = original.Personality; PortraitId = original.PortraitId; }
     internal bool HasChanges => Name != Original.Name || Rank != Original.Rank || Personality != Original.Personality ||
-        PortraitFile != Original.PortraitFile || SelectedPortrait != null;
-    internal void SelectPortrait(byte[] bytes) => SelectedPortrait = (byte[])bytes.Clone();
-    internal void UseCommonPortrait() { SelectedPortrait = null; PortraitFile = null; }
-    internal CrewPerson Build(string? importedPortrait = null) => new(Name, Rank, Personality, importedPortrait ?? PortraitFile);
+        PortraitId != Original.PortraitId;
+    internal void SelectPortrait(string? id) => PortraitId = id;
+    internal CrewPerson Build() => new(Name, Rank, Personality, PortraitId);
 }

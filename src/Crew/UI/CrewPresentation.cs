@@ -11,7 +11,7 @@ internal sealed class CrewPresentation : IDisposable
 {
     private readonly CrewPortraits portraits;
     private readonly Image portrait;
-    internal string? CurrentPortraitFile => current?.Submission.Person.PortraitFile;
+    internal string? CurrentPortraitId => current?.Submission.Person.PortraitId;
     private readonly Grid layer;
     private readonly Grid host;
     private readonly Border notice;
@@ -19,6 +19,7 @@ internal sealed class CrewPresentation : IDisposable
     private double until;
     private CrewRemark? current;
     private bool showRanks, rankBeforeName;
+    private int portraitRevision = -1;
     private CrewNotificationPosition? position;
     internal CrewPresentation(Grid host, CrewPortraits portraits)
     {
@@ -64,6 +65,8 @@ internal sealed class CrewPresentation : IDisposable
         notice.MaxWidth = Math.Max(1, host.ActualWidth - 36);
         if (chatter.Paused || !chatter.HasEnabledTargets) { Clear(); return; }
         if (current != null && !chatter.IsCurrent(current)) Clear();
+        if (portraitRevision != portraits.Library.Version)
+        { portrait.Source = portraits.Get(current?.Submission.Person); portraitRevision = portraits.Library.Version; }
         if (current != null && (this.showRanks != showRanks || rankBeforeName != chatter.RankBeforeName)) SetHeading(current, showRanks, chatter.RankBeforeName);
         if (now < until) return;
         notice.Visibility = Visibility.Collapsed; current = null; portrait.Source = portraits.Common;

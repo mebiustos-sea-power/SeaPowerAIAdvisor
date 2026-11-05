@@ -12,22 +12,22 @@ internal sealed class CrewPortraits : IDisposable
 {
     private readonly PortraitTexture common;
     private readonly Dictionary<string, PortraitTexture> images = new(StringComparer.OrdinalIgnoreCase);
-    internal CrewPortraitFiles Files { get; }
+    internal CrewPortraitLibrary Library { get; }
     internal ImageSource Common => common.Source;
-    internal CrewPortraits(string directory, Action<Exception> log)
+    internal CrewPortraits(CrewPortraitLibrary library)
     {
-        Files = new CrewPortraitFiles(directory, log);
+        Library = library;
         using var image = typeof(CrewPortraits).Assembly.GetManifestResourceStream("SeaPowerAIAdvisor.Crew.png") ?? throw new FileNotFoundException("The crew portrait is missing.");
         using var bytes = new MemoryStream(); image.CopyTo(bytes); common = new PortraitTexture(bytes.ToArray());
     }
-    internal ImageSource Get(CrewPerson? person) => GetFile(person?.PortraitFile);
-    internal ImageSource GetFile(string? file)
+    internal ImageSource Get(CrewPerson? person) => GetImage(person?.PortraitId);
+    internal ImageSource GetImage(string? id)
     {
-        if (file == null) return Common;
-        if (images.TryGetValue(file, out var image)) return image.Source;
-        var bytes = Files.Read(file);
+        if (id == null) return Common;
+        if (images.TryGetValue(id, out var image)) return Library.Contains(id) ? image.Source : Common;
+        var bytes = Library.Read(id);
         if (bytes == null) return Common;
-        image = new PortraitTexture(bytes); images.Add(file, image); return image.Source;
+        image = new PortraitTexture(bytes); images.Add(id, image); return image.Source;
     }
     internal void Retain(IEnumerable<string?> references)
     {

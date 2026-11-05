@@ -35,6 +35,7 @@ internal sealed class CrewWindow : IDisposable
     private readonly CheckBox showHelpTab, showRanks, autoAppointments;
     private readonly CrewPortraits portraits;
     private readonly CrewPersonEditor personEditor;
+    private readonly CrewPortraitLibraryView libraryView, portraitPicker;
     private readonly UiNotice settingsNotice, chatterNotice;
     private readonly CrewTargetSelection targetSelection = new();
     private readonly Dictionary<string, CheckBox> informationChoices = new(StringComparer.Ordinal);
@@ -42,12 +43,15 @@ internal sealed class CrewWindow : IDisposable
     private string[] ids = Array.Empty<string>();
     private string? page, baseline;
     private bool changing, stopped;
-    private int revision = -1;
+    private int revision = -1, libraryRevision = -1;
+    private bool choosingPortrait;
+    private Action<string?>? portraitSelected;
     private CrewUsageSnapshot? displayedUsage;
     private Action? confirmed;
     private CancellationTokenSource? testingCancellation;
     private Task<string>? testing;
-    internal string? EditingPortraitFile => personEditor.PortraitFile;
+    internal IEnumerable<string?> DisplayPortraitIds => new[] { personEditor.PortraitId }.Concat(libraryView.DisplayedIds).Concat(portraitPicker.DisplayedIds);
+    internal int PortraitRevision => personEditor.PortraitRevision + libraryView.PortraitRevision + portraitPicker.PortraitRevision;
     internal bool IsOpen => host.Windows.Contains(window);
     private T Find<T>(string name) where T : class => root.FindName(name) as T ?? throw new InvalidOperationException("Missing Chatter control: " + name);
     private string? SelectedId => selection.SelectedIndex <= 0 ? null : ids[selection.SelectedIndex - 1];
@@ -58,7 +62,7 @@ internal sealed class CrewWindow : IDisposable
         "information" => information.Key,
         _ => SelectedId ?? ""
     };
-    private bool Dirty => personEditor.HasChanges || targetSelection.Dirty || (page == "api" && apiTabs.Current == 1 ? editor.HasChanges : page != null && Values != baseline);
+    private bool Dirty => personEditor.HasChanges || libraryView.HasChanges || portraitPicker.HasChanges || targetSelection.Dirty || (page == "api" && apiTabs.Current == 1 ? editor.HasChanges : page != null && Values != baseline);
 
     internal CrewWindow(FrameworkElement view, WindowHost host, CrewChatter chatter, CrewSettingsStore settings, ICrewConnections connections,
         Func<string, string> common, CrewText text, CrewPortraits portraits, Func<double> now, Action<Action> guard, Action<Exception> log)
@@ -157,8 +161,16 @@ internal sealed class CrewWindow : IDisposable
             settings.Save(new CrewSettings(saved.ConnectionId, saved.IntervalMinutes, saved.DisplaySeconds, saved.NotificationPosition, saved.ShowHelpTab, saved.ExchangeChancePercent, saved.Information, saved.ShowRanks, autoAppointments.IsChecked == true));
             baseline = Values; Saved();
         });
+        var gallery = CrewPortraitLibraryView.Create(); Find<ContentControl>("PortraitLibrary").Content = gallery;
+        libraryView = new CrewPortraitLibraryView(gallery, root, portraits, text, common, Run,
+            (action, message, caption) => Confirm(action, message, caption, common("settings.cancel")), log);
+        var picker = CrewPortraitLibraryView.Create(); Find<ContentControl>("PortraitPicker").Content = picker;
+        portraitPicker = new CrewPortraitLibraryView(picker, root, portraits, text, common, Run,
+            (action, message, caption) => Confirm(action, message, caption, common("settings.cancel")), log,
+            select: id => { var selected = portraitSelected; ClosePortraitPicker(); selected?.Invoke(id); },
+            back: BackPortraitPicker);
         personEditor = new CrewPersonEditor(root, chatter, portraits, text, common,
-            typing, CanCommit, Run, action => Confirm(action), () => connections.ValidateSelection(settings.Current.ConnectionId), now, log);
+            typing, CanCommit, Run, action => Confirm(action), OpenPortraitPicker, () => connections.ValidateSelection(settings.Current.ConnectionId), now);
         Bind("CancelConfirmation", HideConfirmation);
         Bind("Confirm", () => { var action = confirmed; HideConfirmation(); action?.Invoke(); });
         foreach (var input in new[] { interval, duration, exchangeChance })
@@ -177,7 +189,7 @@ internal sealed class CrewWindow : IDisposable
         window.CloseAction = new CloseCommand(() => Run(RequestClose));
         window.OnClosed += (_, _) =>
         {
-            personEditor.Close(); typing.Release(); CancelTest();
+            personEditor.Close(); libraryView.Close(); ClosePortraitPicker(); typing.Release(); CancelTest();
             Find<StackPanel>("Targets").Children.Clear(); Find<StackPanel>("History").Children.Clear();
         };
         Home(); ResetTabs(); apiTabs.Reset(); DrawUsage();
@@ -195,7 +207,8 @@ internal sealed class CrewWindow : IDisposable
     {
         try { action(); }
         catch (CrewException e) { log(e); Notice(text["error." + e.Code], true); }
-        catch (PortraitDataException e) { log(e); Notice(e.Code == "portrait_write_failed" ? text["error.portrait_write_failed"] : common("profile.error." + e.Code), true); }
+        catch (PortraitDataException e) { log(e); Notice(common("profile.error." + e.Code), true); }
+        catch (CrewPortraitLibraryException e) { log(e); Notice(text["error." + e.Code], true); }
         catch (AiConnectionException e) { log(e); Notice(connections.Error(e), true); }
     });
     private bool CanCommit()
@@ -210,14 +223,15 @@ internal sealed class CrewWindow : IDisposable
         Find<Button>("Confirm").Content = caption ?? common("settings.discard_action");
         Find<Button>("CancelConfirmation").Content = cancel ?? common("settings.continue_editing");
         Find<TabControl>("Tabs").IsEnabled = false;
+        Find<FrameworkElement>("PortraitPicker").IsEnabled = false;
         Find<FrameworkElement>("Confirmation").Visibility = Visibility.Visible;
         Find<Button>("CancelConfirmation").Focus();
     }
-    private void HideConfirmation() { confirmed = null; Find<FrameworkElement>("Confirmation").Visibility = Visibility.Collapsed; Find<TabControl>("Tabs").IsEnabled = true; }
+    private void HideConfirmation() { confirmed = null; Find<FrameworkElement>("Confirmation").Visibility = Visibility.Collapsed; Find<TabControl>("Tabs").IsEnabled = true; Find<FrameworkElement>("PortraitPicker").IsEnabled = true; }
     private void Navigate(Action action) { if (Dirty) Confirm(action); else action(); }
     private void Home()
     {
-        personEditor.Close(); typing.Release(); CancelTest(); editor.Close(); targetSelection.Discard(); revision = -1; page = null; baseline = null; settingsNotice.Show("");
+        ClosePortraitPicker(); libraryView.Close(); personEditor.Close(); typing.Release(); CancelTest(); editor.Close(); targetSelection.Discard(); revision = -1; page = null; baseline = null; settingsNotice.Show("");
         Find<FrameworkElement>("SettingsHome").Visibility = Visibility.Visible;
         Find<FrameworkElement>("SettingsPage").Visibility = Visibility.Collapsed;
     }
@@ -271,6 +285,18 @@ internal sealed class CrewWindow : IDisposable
         tabs.Reset(Find<TabControl>("Tabs").Items.IndexOf(initial));
     }
     private void RequestClose() => Navigate(() => { Home(); window.CloseWindowNow(); });
+    private void OpenPortraitPicker(string? initial, Action<string?> selected)
+    {
+        choosingPortrait = true; portraitSelected = selected; typing.Release();
+        Find<TabControl>("Tabs").Visibility = Visibility.Collapsed; Find<FrameworkElement>("PortraitPicker").Visibility = Visibility.Visible;
+        portraitPicker.Open(initial);
+    }
+    private void ClosePortraitPicker()
+    {
+        portraitPicker.Close(); choosingPortrait = false; portraitSelected = null;
+        Find<FrameworkElement>("PortraitPicker").Visibility = Visibility.Collapsed; Find<TabControl>("Tabs").Visibility = Visibility.Visible;
+    }
+    private void BackPortraitPicker() { if (portraitPicker.HasChanges) Confirm(ClosePortraitPicker); else ClosePortraitPicker(); }
     internal void Tick()
     {
         if (!IsOpen) return;
@@ -279,8 +305,11 @@ internal sealed class CrewWindow : IDisposable
             if (revision != chatter.Version) SyncSelection();
             tabs.Pump(Dirty, () => { Home(); return true; }, action => Confirm(action));
             apiTabs.Pump(Dirty, () => { typing.Release(); CancelTest(); editor.Close(); RefreshConnections(); editor.Open(); return true; }, action => Confirm(action));
-            editor.Tick(); personEditor.Tick(); settingsNotice.Tick(); DrawUsage();
-            Find<FrameworkElement>("ChatterStatusPane").Visibility = Find<TabItem>("SettingsTab").IsSelected && page != null ? Visibility.Collapsed : Visibility.Visible;
+            if (Find<TabItem>("LibraryTab").IsSelected && !choosingPortrait)
+            { if (!libraryView.IsOpen) libraryView.Open(); libraryView.Tick(); }
+            else if (libraryView.IsOpen) libraryView.Close();
+            portraitPicker.Tick(); editor.Tick(); personEditor.Tick(); settingsNotice.Tick(); DrawUsage();
+            Find<FrameworkElement>("ChatterStatusPane").Visibility = choosingPortrait || Find<TabItem>("LibraryTab").IsSelected || (Find<TabItem>("SettingsTab").IsSelected && page != null) ? Visibility.Collapsed : Visibility.Visible;
             if (testing?.IsCompleted == true)
             {
                 var completed = testing; testing = null; testingCancellation?.Dispose(); testingCancellation = null; editor.SetBusy(false);
@@ -288,7 +317,9 @@ internal sealed class CrewWindow : IDisposable
                 catch (OperationCanceledException) { TestNotice(common("connection.test_cancelled")); }
                 catch (Exception e) { log(e); if (e is AiConnectionException ai) TestNotice(connections.Error(ai), true); else throw; }
             }
-            if (revision == chatter.Version) return;
+            var portraitsChanged = libraryRevision != portraits.Library.Version;
+            if (portraitsChanged) { libraryRevision = portraits.Library.Version; personEditor.RefreshPortrait(); }
+            if (revision == chatter.Version && !portraitsChanged) return;
             revision = chatter.Version; DrawHistory(); DrawTargets();
             Find<Button>("PauseChatter").Content = text[chatter.Paused ? "resume" : "pause"];
             if (!stopped)
@@ -310,7 +341,9 @@ internal sealed class CrewWindow : IDisposable
     private void Saved() => settingsNotice.ShowBriefly(common("settings.saved"));
     internal void Notice(string message, bool error = false)
     {
-        if (personEditor.IsOpen && error) personEditor.ShowError(message);
+        if (choosingPortrait && error) portraitPicker.ShowError(message);
+        else if (Find<TabItem>("LibraryTab").IsSelected && error) libraryView.ShowError(message);
+        else if (personEditor.IsOpen && error) personEditor.ShowError(message);
         else (page == null ? chatterNotice : settingsNotice).Show(message, error);
     }
     private void TestNotice(string message, bool error = false)
@@ -400,7 +433,7 @@ internal sealed class CrewWindow : IDisposable
         else _ = old.ContinueWith(t => { if (t.IsFaulted) log(t.Exception!); cancellation?.Dispose(); }, TaskScheduler.Default);
         editor.SetBusy(false); TestNotice("");
     }
-    public void Dispose() { personEditor.Dispose(); CancelTest(); typing.Release(); if (IsOpen) window.CloseWindowNow(); editor.Close(); }
+    public void Dispose() { personEditor.Dispose(); libraryView.Dispose(); ClosePortraitPicker(); CancelTest(); typing.Release(); if (IsOpen) window.CloseWindowNow(); editor.Close(); }
     private sealed class CloseCommand : ICommand
     {
         private readonly Action action;

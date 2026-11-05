@@ -45,6 +45,7 @@
   <ItemGroup>
     <EmbeddedResource Include="$(PkgMarkdig)\lib\netstandard2.1\Markdig.dll" LogicalName="SeaPowerAIAdvisor.Markdig.dll" />
     <EmbeddedResource Include="Crew\UI\CrewWindow.xaml" LogicalName="SeaPowerAIAdvisor.CrewWindow.xaml" />
+    <EmbeddedResource Include="Crew\UI\CrewPortraitLibrary.xaml" LogicalName="SeaPowerAIAdvisor.CrewPortraitLibrary.xaml" />
     <EmbeddedResource Include="Crew\UI\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Crew.Localization.%(Filename).json" />
     <EmbeddedResource Include="Crew\UI\Assets\crew.png" LogicalName="SeaPowerAIAdvisor.Crew.png" />
     <EmbeddedResource Include="Translation\UI\TranslationOverlay.xaml" LogicalName="SeaPowerAIAdvisor.TranslationOverlay.xaml" />

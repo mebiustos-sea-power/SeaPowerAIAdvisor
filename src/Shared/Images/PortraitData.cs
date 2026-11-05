@@ -18,7 +18,9 @@ internal static class PortraitData
             string.Equals(extension, ".jpeg", StringComparison.OrdinalIgnoreCase);
     }
 
-    internal static string Extension(byte[] bytes)
+    internal static string Extension(byte[] bytes) => Inspect(bytes).Extension;
+
+    internal static (string Extension, int Width, int Height) Inspect(byte[] bytes)
     {
         if (bytes.Length < 2 || bytes.Length > MaxBytes) throw Invalid();
         if (bytes.Length >= 33 && bytes.Take(8).SequenceEqual(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }) &&
@@ -26,8 +28,7 @@ internal static class PortraitData
         {
             uint Number(int offset) => ((uint)bytes[offset] << 24) | ((uint)bytes[offset + 1] << 16) |
                 ((uint)bytes[offset + 2] << 8) | bytes[offset + 3];
-            Dimensions(Number(16), Number(20));
-            return ".png";
+            return Dimensions(".png", Number(16), Number(20));
         }
         if (bytes[0] != 0xff || bytes[1] != 0xd8) throw Invalid();
         var position = 2;
@@ -46,9 +47,8 @@ internal static class PortraitData
             if (marker >= 0xc0 && marker <= 0xcf && marker != 0xc4 && marker != 0xc8 && marker != 0xcc)
             {
                 if (length < 8 || bytes[position + 7] == 0 || length != 8 + 3 * bytes[position + 7]) throw Invalid();
-                Dimensions((uint)((bytes[position + 5] << 8) | bytes[position + 6]),
+                return Dimensions(".jpg", (uint)((bytes[position + 5] << 8) | bytes[position + 6]),
                     (uint)((bytes[position + 3] << 8) | bytes[position + 4]));
-                return ".jpg";
             }
             // Skip metadata and tables by their declared lengths, including any marker-like bytes inside.
             position += length;
@@ -69,9 +69,20 @@ internal static class PortraitData
         { throw new PortraitDataException("portrait_unreadable", e); }
     }
 
-    private static void Dimensions(uint width, uint height)
+    internal static (int Width, int Height) FitSize(int width, int height, int maximum)
+    {
+        if (width <= 0 || height <= 0) throw new ArgumentOutOfRangeException(nameof(width));
+        if (maximum <= 0 || maximum > MaxDimension) throw new ArgumentOutOfRangeException(nameof(maximum));
+        var longest = Math.Max(width, height);
+        if (longest <= maximum) return (width, height);
+        return (Math.Max(1, (int)(((long)width * maximum + longest / 2) / longest)),
+            Math.Max(1, (int)(((long)height * maximum + longest / 2) / longest)));
+    }
+
+    private static (string Extension, int Width, int Height) Dimensions(string extension, uint width, uint height)
     {
         if (width == 0 || height == 0 || width > MaxDimension || height > MaxDimension) throw Invalid();
+        return (extension, (int)width, (int)height);
     }
 
     private static PortraitDataException Invalid() => new("portrait_invalid");

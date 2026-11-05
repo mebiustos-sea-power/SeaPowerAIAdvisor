@@ -20,6 +20,7 @@ internal sealed class CrewIntegration
     private readonly Func<string, string> common;
     private readonly DiagnosticLog log;
     private readonly string settingsPath;
+    private readonly CrewPortraitLibrary portraitLibrary;
     private readonly Stopwatch clock = Stopwatch.StartNew();
     private MainGameViewModel? model;
     private object? mission, player;
@@ -33,13 +34,16 @@ internal sealed class CrewIntegration
     private CrewWindow? window;
     private CrewPresentation? presentation;
     private CrewPortraits? portraits;
-    private int portraitRevision = -1;
+    private int portraitRevision = -1, libraryRevision = -1, windowPortraitRevision = -1;
     private HudButton? launcher;
     private string launcherTooltip = "";
     private double nextRefresh;
     private bool active, failed;
     internal CrewIntegration(string settingsPath, Func<bool> enabled, Action<bool> saveEnabled, Action<string> checkLocalConnection, Func<CrewSettingsStore, ICrewConnections> connect, Func<string, string> common, DiagnosticLog log)
-    { this.settingsPath = settingsPath; this.enabled = enabled; this.saveEnabled = saveEnabled; this.checkLocalConnection = checkLocalConnection; this.connect = connect; this.common = common; this.log = log; }
+    {
+        this.settingsPath = settingsPath; this.enabled = enabled; this.saveEnabled = saveEnabled; this.checkLocalConnection = checkLocalConnection; this.connect = connect; this.common = common; this.log = log;
+        portraitLibrary = new CrewPortraitLibrary(System.IO.Path.GetDirectoryName(settingsPath)!);
+    }
     internal void Tick(MainGameViewModel current, ToggleButton? hudAnchor) => Guard(() => Update(current, hudAnchor));
     private void Update(MainGameViewModel current, ToggleButton? hudAnchor)
     {
@@ -61,7 +65,8 @@ internal sealed class CrewIntegration
         if (!active)
         {
             settings ??= new CrewSettingsStore(settingsPath); connections ??= connect(settings);
-            source ??= new CrewBattleSource(current, error => log.Warning("AI Crew mission briefing unavailable: " + error)); chatter ??= new CrewChatter(error => log.Error("AI Crew Chatter failed: " + error));
+            source ??= new CrewBattleSource(current, error => log.Warning("AI Crew mission briefing unavailable: " + error));
+            chatter ??= new CrewChatter(error => log.Error("AI Crew Chatter failed: " + error));
             local ??= new CrewLocalApi(chatter, () => clock.Elapsed.TotalSeconds, () =>
             {
                 connections.ValidateSelection(settings.Current.ConnectionId);
@@ -72,7 +77,7 @@ internal sealed class CrewIntegration
             var reference = view.FindName("UnitStatusWindow") as ToggleButton ?? throw new InvalidOperationException("The battle HUD toggle is unavailable.");
             launcherTooltip = new CrewText(GameLanguage.Read())["launcher.tooltip"];
             launcher = new HudButton(grid, reference, "CRW", launcherTooltip, 11, before: hudAnchor);
-            portraits = new CrewPortraits(System.IO.Path.GetDirectoryName(settingsPath)!, error => log.Error("AI Crew portrait cleanup failed: " + error));
+            portraits = new CrewPortraits(portraitLibrary);
             presentation = new CrewPresentation(GameUi.FindVisual<Grid>(view) ?? throw new InvalidOperationException("The battle content layout is unavailable."), portraits);
             launcher.Control.Click += (_, _) => Guard(ToggleWindow);
             active = true;
@@ -81,9 +86,12 @@ internal sealed class CrewIntegration
         if (now >= nextRefresh) { chatter!.Refresh(source!.Targets()); nextRefresh = now + 1; }
         chatter!.Tick(now, GameTime.IsPaused(), settings!.Current, GameLanguage.Read(), source!.Capture, source!.CaptureAppointments, connections!.GenerateAsync);
         window?.Tick(); presentation!.Tick(chatter, now, settings.Current.DisplaySeconds, settings.Current.NotificationPosition, settings.Current.ShowRanks, current.IsHudVisible);
-        if (portraitRevision != chatter.Version)
+        var viewRevision = window?.PortraitRevision ?? 0;
+        if (portraitRevision != chatter.Version || libraryRevision != portraitLibrary.Version || windowPortraitRevision != viewRevision)
         {
-            portraits!.Retain(chatter.PortraitFiles.Append(presentation.CurrentPortraitFile).Append(window?.EditingPortraitFile)); portraitRevision = chatter.Version;
+            var displayed = chatter.DisplayPortraitIds.Where(id => id != null && portraitLibrary.Contains(id));
+            portraits!.Retain(displayed.Append(presentation.CurrentPortraitId).Concat(window?.DisplayPortraitIds ?? Array.Empty<string?>()));
+            portraitRevision = chatter.Version; libraryRevision = portraitLibrary.Version; windowPortraitRevision = viewRevision;
         }
         launcher!.Control.Visibility = current.IsHudVisible ? Visibility.Visible : Visibility.Collapsed;
         launcher.Control.IsChecked = window?.IsOpen == true;
@@ -153,7 +161,7 @@ internal sealed class CrewIntegration
         active = false;
         var oldWindow = window; window = null;
         var oldPresentation = presentation; presentation = null;
-        var oldPortraits = portraits; portraits = null; portraitRevision = -1;
+        var oldPortraits = portraits; portraits = null; portraitRevision = libraryRevision = windowPortraitRevision = -1;
         var oldLauncher = launcher; launcher = null;
         Cleanup(() => chatter?.Suspend(), () => oldWindow?.Dispose(), () => oldPresentation?.Dispose(), () => oldPortraits?.Dispose(), () => oldLauncher?.Dispose());
     }

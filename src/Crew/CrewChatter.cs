@@ -81,12 +81,14 @@ internal sealed class CrewChatter : IDisposable
     internal IReadOnlyList<CrewRemark> History => history;
     internal IReadOnlyList<CrewTarget> Targets => states.Values.Select(s => s.Target).OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
     internal CrewPerson? Person(string id) => people.TryGetValue(id, out var person) ? person : null;
-    internal IEnumerable<string?> PortraitFiles => people.Values.Select(p => p.PortraitFile).Concat(history.Select(r => r.Submission.Person.PortraitFile));
+    // UI resources may still be displayed by history; image files belong to the library.
+    internal IEnumerable<string?> DisplayPortraitIds => people.Values.Select(p => p.PortraitId).Concat(history.Select(r => r.Submission.Person.PortraitId));
     internal void UpdatePerson(string id, CrewPerson expected, CrewPerson person)
     {
         if (!states.TryGetValue(id, out var state) || !people.TryGetValue(id, out var current)) throw new CrewException("person_unavailable");
         if (!ReferenceEquals(current, expected)) throw new CrewException("person_changed");
-        people[id] = person; state.Appointment = AppointmentRequest.None; state.Revision++; Version++;
+        state.Appointment = AppointmentRequest.None; state.Revision++; Version++;
+        people[id] = person;
     }
     internal void RequestReappointment(string id, double now)
     {
@@ -96,7 +98,8 @@ internal sealed class CrewChatter : IDisposable
         nextAppointments = now + 1; Error = null; Version++;
     }
     internal bool Enabled(string id) => states.TryGetValue(id, out var s) && s.Enabled;
-    internal CrewChatter(Action<Exception> log, Random? random = null) { this.log = log; this.random = random ?? new Random(); }
+    internal CrewChatter(Action<Exception> log, Random? random = null)
+    { this.log = log; this.random = random ?? new Random(); }
     internal void Refresh(IReadOnlyList<CrewTarget> targets)
     {
         var ids = new HashSet<string>(targets.Select(t => t.Id), StringComparer.Ordinal);

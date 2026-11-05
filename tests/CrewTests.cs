@@ -820,7 +820,7 @@ internal static class CrewTests
             using var rig = new Rig(); rig.Chatter.Refresh(new[] { Target(1), Target(2) }); rig.PreparePeople();
             var other = rig.Chatter.Person("unit:2"); var original = rig.Chatter.Person("unit:1")!;
             var personality = "Speak gently.\n" + new string('x', 241);
-            var edited = new CrewPerson("Edited Person", "", personality, "Crew/portraits/local.png");
+            var edited = new CrewPerson("Edited Person", "", personality, "11111111111111111111111111111111.png");
             rig.Chatter.UpdatePerson("unit:1", original, edited);
             Require(!rig.Chatter.Enabled("unit:1") && ReferenceEquals(other, rig.Chatter.Person("unit:2")) && rig.Requests == rig.SetupRequests,
                 "Editing enrolled a unit, replaced someone else or sent an AI request");
@@ -828,7 +828,7 @@ internal static class CrewTests
             rig.Chatter.ApplyTargets(new[] { "unit:1" }, 0); rig.Tick(1); var call = rig.Take(); var data = call.Batch.Input("").Data;
             var person = data["speakers"]![0]!["person"]!;
             Require((string?)person["personality"] == personality && (string?)person["name"] == edited.Name &&
-                ((JArray)data["appointments"]!).Count == 0 && !person.ToString().Contains("local.png"), "Future Chatter lost the edited persona or sent local image references");
+                ((JArray)data["appointments"]!).Count == 0 && !person.ToString().Contains(edited.PortraitId!), "Future Chatter lost the edited persona or sent local image references");
             rig.Complete(call); rig.Pump(1);
         });
         check("Editing retains historical people but invalidates their pending notifications and current popup eligibility", () =>
@@ -857,7 +857,7 @@ internal static class CrewTests
         {
             using var rig = new Rig(); rig.GamePaused = true; rig.Chatter.Refresh(new[] { Target(1), Target(2) }); rig.PreparePeople();
             var other = rig.Chatter.Person("unit:2");
-            var original = new CrewPerson("Old Person", "Lt.", "Quiet", "Crew/portraits/old.png");
+            var original = new CrewPerson("Old Person", "Lt.", "Quiet", "22222222222222222222222222222222.png");
             rig.Chatter.UpdatePerson("unit:1", rig.Chatter.Person("unit:1")!, original);
             rig.Chatter.RequestReappointment("unit:1", 0); rig.Tick(1); var call = rig.Take(); var data = call.Batch.Input("").Data;
             Require(ReferenceEquals(original, rig.Chatter.Person("unit:1")) && !rig.Chatter.Enabled("unit:1") &&
@@ -865,7 +865,7 @@ internal static class CrewTests
                 ((JArray)data["speakers"]!).Count == 0 && data["appointment_context"] != null,
                 "Replacement started with the wrong person, unit or request context");
             call.Completion.SetResult(call.Batch.Read(Reply(new JArray(), new JArray(AppointmentRow("unit:1", "Replacement"))))); rig.Pump(1);
-            Require(rig.Chatter.Person("unit:1")!.Name == "Replacement" && rig.Chatter.Person("unit:1")!.PortraitFile == null &&
+            Require(rig.Chatter.Person("unit:1")!.Name == "Replacement" && rig.Chatter.Person("unit:1")!.PortraitId == null &&
                 !rig.Chatter.Enabled("unit:1") && ReferenceEquals(other, rig.Chatter.Person("unit:2")) && !rig.Chatter.AppointmentRequested("unit:1"),
                 "Reappointment changed participation, another person, or inherited the previous face");
         });
@@ -910,32 +910,72 @@ internal static class CrewTests
         });
         check("Person drafts allow free multiline personality and reject overflow without truncating or changing the original", () =>
         {
-            var original = new CrewPerson("Original", "Cmdr.", "Calm", "old.png"); var draft = new CrewPersonDraft(original);
+            var original = new CrewPerson("Original", "Cmdr.", "Calm", "22222222222222222222222222222222.png"); var draft = new CrewPersonDraft(original);
             draft.Name = "New"; draft.Rank = ""; draft.Personality = "Talk softly.\n" + new string('a', 242);
             var built = draft.Build(); Require(built.Personality.Length == 255 && built.Rank == "" && original.Name == "Original", "Editing changed the source or trimmed a valid personality");
             draft.Personality += "x"; Throws<CrewException>(() => draft.Build());
             Require(draft.Personality.Length == 256 && original.Personality == "Calm", "Invalid input was truncated or applied");
-            var selected = new byte[] { 1, 2, 3 }; draft.SelectPortrait(selected); selected[0] = 9;
-            Require(draft.SelectedPortrait![0] == 1, "The draft retained a caller-owned mutable image");
-            draft.UseCommonPortrait(); Require(draft.PortraitFile == null && draft.SelectedPortrait == null && original.PortraitFile == "old.png", "Resetting the image changed the original person");
+            draft.SelectPortrait("11111111111111111111111111111111.png");
+            Require(draft.PortraitId != original.PortraitId && original.PortraitId == "22222222222222222222222222222222.png", "Selecting an image changed the original person");
+            draft.SelectPortrait(null); Require(draft.PortraitId == null && original.PortraitId != null, "Resetting the image changed the original person");
         });
-        check("Portrait imports keep source and referenced files, prune only owned copies and expose invalid images", () => Temp(directory =>
+        check("Portrait fitting preserves aspect ratio, bounds both orientations and never enlarges small images", () =>
         {
-            var errors = new List<Exception>(); var files = new CrewPortraitFiles(directory, errors.Add);
-            var bytes = new byte[33]; new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }.CopyTo(bytes, 0);
-            Encoding.ASCII.GetBytes("IHDR").CopyTo(bytes, 12); bytes[19] = 1; bytes[23] = 1;
-            var source = Path.Combine(directory, "source.png"); File.WriteAllBytes(source, bytes);
-            var first = files.Import(bytes); var second = files.Import(bytes);
-            Require(!Path.IsPathRooted(first) && files.Read(first)!.SequenceEqual(bytes), "An imported portrait could not be read from its relative reference");
-            var custom = Path.Combine(directory, "Crew", "portraits", "user.png"); File.WriteAllBytes(custom, bytes);
-            files.Prune(new[] { first });
-            Require(File.Exists(source) && File.Exists(custom) && File.Exists(Path.Combine(directory, first)) && !File.Exists(Path.Combine(directory, second)),
-                "Cleanup removed source/custom/referenced images or retained an unused owned copy");
-            File.Delete(Path.Combine(directory, first)); Require(files.Read(first) == null, "A missing optional portrait did not allow the common icon");
-            File.WriteAllText(custom, "not an image"); Throws<SeaPowerAIAdvisor.Shared.PortraitDataException>(() => files.Read(custom));
-            Require(errors.Count == 0, "Normal image management produced diagnostics");
+            var size = SeaPowerAIAdvisor.Shared.PortraitData.FitSize(1200, 800, CrewPortraitLibrary.MaximumDimension);
+            Require(size == (256, 171), "A landscape portrait was cropped or fitted incorrectly");
+            size = SeaPowerAIAdvisor.Shared.PortraitData.FitSize(800, 1200, CrewPortraitLibrary.MaximumDimension);
+            Require(size == (171, 256), "A tall portrait was cropped or fitted incorrectly");
+            Require(SeaPowerAIAdvisor.Shared.PortraitData.FitSize(4096, 4096, CrewPortraitLibrary.MaximumDimension) == (256, 256), "A square portrait exceeded the Crew limit");
+            Require(SeaPowerAIAdvisor.Shared.PortraitData.FitSize(96, 192, CrewPortraitLibrary.MaximumDimension) == (96, 192), "A small portrait was enlarged");
+            Require(SeaPowerAIAdvisor.Shared.PortraitData.FitSize(256, 256, CrewPortraitLibrary.MaximumDimension) == (256, 256), "A boundary image was unnecessarily resized");
+            Require(SeaPowerAIAdvisor.Shared.PortraitData.FitSize(1, 4096, CrewPortraitLibrary.MaximumDimension) == (1, 256), "An extreme aspect ratio produced a zero-sized image");
+        });
+        check("Portrait inspection reads PNG and JPEG dimensions in the correct orientation before fitting", () =>
+        {
+            var png = SeaPowerAIAdvisor.Shared.PortraitData.Inspect(PortraitHeader(800, 1200));
+            var jpeg = SeaPowerAIAdvisor.Shared.PortraitData.Inspect(new byte[]
+                { 0xff, 0xd8, 0xff, 0xc0, 0, 11, 8, 3, 0x20, 4, 0xb0, 1, 1, 0x11, 0 });
+            Require(png == (".png", 800, 1200) && jpeg == (".jpg", 1200, 800), "Dimensions were swapped or lost for a supported input format");
+        });
+        check("Portrait changes keep historical image IDs and never remove library assets", () => Temp(directory =>
+        {
+            var library = new CrewPortraitLibrary(directory); var first = library.Add(PortraitHeader(256, 128)); var second = library.Add(PortraitHeader(128, 256));
+            using var rig = new Rig(); rig.Chatter.Refresh(new[] { Target(1) }); rig.PreparePeople();
+            var original = new CrewPerson("Original", "Capt.", "Calm", first);
+            rig.Chatter.UpdatePerson("unit:1", rig.Chatter.Person("unit:1")!, original);
+            rig.SetEnabled("unit:1", true, 0); rig.Tick(1); rig.Complete(rig.Take(), "unit:1"); rig.Pump(1);
+            var remark = rig.Chatter.History.Single(); var message = remark.Submission.Text;
+            var draft = new CrewPersonDraft(original); draft.SelectPortrait(second);
+            Require(rig.Chatter.Person("unit:1")!.PortraitId == first, "An unsaved selection changed the person");
+            rig.Chatter.UpdatePerson("unit:1", original, draft.Build());
+            Require(rig.Chatter.Person("unit:1")!.PortraitId == second && remark.Submission.Person.PortraitId == first &&
+                remark.Submission.Text == message && library.Contains(first) && library.Contains(second), "An edit relabeled history or removed an image");
+            rig.Chatter.UpdatePerson("unit:1", rig.Chatter.Person("unit:1")!, new CrewPerson("Common", "", ""));
+            Require(library.Contains(first) && library.Contains(second), "Using the common icon deleted library assets");
+            library.Delete(first);
+            Require(remark.Submission.Person.PortraitId == first && library.Read(first) == null && library.Contains(second), "Deleting an image rewrote history or another image");
+        }));
+        check("Reappointment and session disposal release people without deleting their library images", () => Temp(directory =>
+        {
+            var library = new CrewPortraitLibrary(directory); var id = library.Add(PortraitHeader(256, 256));
+            using (var rig = new Rig())
+            {
+                rig.Chatter.Refresh(new[] { Target(1) }); rig.PreparePeople();
+                rig.Chatter.UpdatePerson("unit:1", rig.Chatter.Person("unit:1")!, new CrewPerson("Original", "", "", id));
+                rig.Chatter.RequestReappointment("unit:1", 0); rig.Tick(1); rig.Complete(rig.Take()); rig.Pump(1);
+                Require(rig.Chatter.Person("unit:1")!.PortraitId == null && library.Contains(id), "Reappointment removed a persistent image");
+            }
+            Require(new CrewPortraitLibrary(directory).Read(id) != null, "Session disposal removed an image needed after restart");
         }));
 
+    }
+    internal static byte[] PortraitHeader(int width, int height)
+    {
+        var bytes = new byte[33]; new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }.CopyTo(bytes, 0);
+        Encoding.ASCII.GetBytes("IHDR").CopyTo(bytes, 12);
+        void Number(int offset, int value)
+        { for (var i = 0; i < 4; i++) bytes[offset + i] = (byte)(value >> (24 - i * 8)); }
+        Number(16, width); Number(20, height); return bytes;
     }
     private static JObject Row(string id) => new() { ["id"] = id, ["text"] = "Maintaining station." };
     private static JObject ChatterSituation() => JObject.Parse("""
