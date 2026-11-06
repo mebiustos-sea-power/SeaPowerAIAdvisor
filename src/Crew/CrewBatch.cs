@@ -62,7 +62,7 @@ internal sealed class CrewBatch
             .OrderByDescending(g => g.First().Character.AiAppointment == "priority").ThenBy(g => g.Key, StringComparer.Ordinal).ToArray();
         if (offered.Length > 0) this.data["registered_characters"] = new JArray(offered.Select(g =>
         {
-            var character = g.First().Character; var row = character.Hints(); row["id"] = character.Id;
+            var character = g.First().Character; var row = character.Identity(); row["id"] = character.Id;
             row["priority"] = character.AiAppointment == "priority"; row["allow_duplicates"] = character.AllowDuplicates;
             row["unit_ids"] = new JArray(g.Select(p => p.UnitId));
             return row;
@@ -73,7 +73,7 @@ internal sealed class CrewBatch
         var exchange = (bool)data["prefer_exchange"]! ?
             "Create a short exchange: one speaker voices a feeling about the supplied situation; a second responds to that person with acknowledgment, empathy or a contrasting feeling, not advice, orders or new factual claims. If no natural exchange fits, use independent remarks or silence. " : "";
         var instruction = "Use reply_language for crew names, ranks, personality labels and remarks, rendering names in that language's usual script. " +
-            "Appoint only the units listed in input appointments, each exactly once, with a fictional full personal name, an appropriate military rank and a one-word personality. Consider the unit's nation, type, role and appointment_context when appointing crew. " +
+            "Appoint each unit listed in input appointments exactly once. Create a fictional full personal name, an appropriate military rank and a one-word personality only for fields that need generation. Use the unit's type, role and appointment_context; infer nationality from its nation only for a new person or an unspecified nationality. " +
             "For each appointment, return character_id: new for a new fictional person, or the selected registered character ID. If fixed_character_id is supplied, return that exact ID. " +
             "If input appointments is empty, return appointments: []. " +
             "Choose which, if any, of the input speakers would naturally speak now; if empty, return remarks: []. Use their existing or newly appointed personality. " + exchange +
@@ -87,11 +87,12 @@ internal sealed class CrewBatch
             "Describe unit facts only for the speaker's own unit or, for leaders, its listed formation members. " +
             "Use submit_chatter once, without questions or other commentary.";
         if (automaticCharacters.Count > 0)
-            instruction += " registered_characters are optional candidates: choose only characters whose unit_ids include that appointment. Prefer priority candidates when suitable; use new when no candidate fits. Unless allow_duplicates is true, assign a character at most once in this response.";
+            instruction += " For automatic appointments, first assess each registered candidate's nationality and whether the actual role on this unit is plausible for that person in appointment_context. A reasonable cross-national assignment is allowed. Select only candidates whose unit_ids include this unit's id, preferring priority candidates; choose new if none fits. Unless allow_duplicates is true, assign a character at most once in this response.";
         if (characters.Count > 0 || automaticCharacters.Count > 0)
-            instruction += " For a selected registered character, preserve every nonempty name, rank and personality exactly, without translation or shortening. Fill only empty fields; gender and nationality are optional generation hints. A registered personality may be longer than one word. Appointments with fixed_character_id already have a chosen character; do not change it.";
+            instruction += " Registered character fields are user-specified facts. Preserve nonempty name, rank and personality exactly, without translation or shortening. Fill only empty fields, respecting specified gender and nationality. The unit's nation and reply_language do not override that person's specified identity. A registered personality may be longer than one word. fixed_character_id is an explicit user choice; keep that ID.";
         if (!string.IsNullOrWhiteSpace(connectionPrompt))
             instruction += "\nSupplemental instructions for this connection take priority if they conflict:\n" + connectionPrompt;
+        instruction += " For each appointment, write appointment_background before generating missing name, rank or personality. This is brief fictional character setup, not a report of mission events.";
         var id = new JObject { ["type"] = "string", ["description"] = "The supplied unit ID." };
         var speakerId = new JObject { ["type"] = "string", ["description"] = "A unit ID from input speakers." };
         if (people.Count > 0) speakerId["enum"] = new JArray(people.Keys);
@@ -111,6 +112,7 @@ internal sealed class CrewBatch
                         ["character_id"] = new JObject { ["type"] = "string", ["enum"] = new JArray(new[] { "new" }.Concat(characters.Values.Select(c => c.Id))
                             .Concat(automaticCharacters.Values.SelectMany(cs => cs.Keys)).Distinct(StringComparer.Ordinal)),
                             ["description"] = "The chosen registered character ID, or new to create a fictional person. Use fixed_character_id when supplied." },
+                        ["appointment_background"] = new JObject { ["type"] = "string", ["description"] = "One brief sentence about this person's own service background and why they hold this role. State their specified nationality and gender, preserving both even on a foreign unit. Describe the person, not the unit or mission. Fictional personal setup, not a mission event." },
                         ["person_name"] = new JObject { ["type"] = "string", ["description"] = "The fictional person's full personal name without rank, not a unit name or callsign." },
                         ["rank"] = new JObject { ["type"] = "string", ["description"] = "The military rank only, in reply_language; abbreviations are allowed." },
                         ["name_with_rank"] = new JObject { ["type"] = "string", ["description"] = "The person's full name from person_name, with rank placed naturally in reply_language; use rank exactly." },
@@ -142,7 +144,8 @@ internal sealed class CrewBatch
         var claimed = new HashSet<string>(characters.Values.Select(c => c.Id), StringComparer.Ordinal);
         foreach (var item in appointed)
         {
-            if (item is not JObject row || row.Properties().Any(p => p.Name is not ("id" or "character_id" or "person_name" or "rank" or "name_with_rank" or "personality")))
+            // appointment_background guides generation only; it is not part of the crew state.
+            if (item is not JObject row || row.Properties().Any(p => p.Name is not ("id" or "character_id" or "appointment_background" or "person_name" or "rank" or "name_with_rank" or "personality")))
                 throw new CrewException("invalid_response");
             var key = Read(row, "id", 80);
             if (!appointments.Contains(key) || persons.ContainsKey(key)) throw new CrewException("invalid_response");

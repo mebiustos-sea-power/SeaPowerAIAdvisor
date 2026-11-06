@@ -299,7 +299,7 @@ internal sealed class CrewChatter : IDisposable
         {
             var row = Identity(s); row["kind"] = s.Target.Kind; row["class_name"] = s.Target.ClassName;
             row["formation_leader"] = s.Target.FormationLeader;
-            if (s.Character != null) { row["fixed_character_id"] = s.Character.Id; row["character"] = s.Character.Hints(); }
+            if (s.Character != null) { row["fixed_character_id"] = s.Character.Id; row["character"] = s.Character.Identity(); }
             return row;
         }));
         data["speakers"] = new JArray(candidates.Select(s =>

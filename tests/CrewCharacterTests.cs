@@ -100,7 +100,7 @@ internal static class CrewCharacterTests
             rig.Chatter.Refresh(new[] { Target(1), Target(3) }); rig.Chatter.AssignCharacter("unit:3", character.Id, 0);
             Require(rig.Chatter.Person("unit:3")!.RegisteredCharacterId == character.Id, "Removed or replaced assignments blocked reuse");
         }));
-        check("Pending appointments reserve nonduplicate characters and send only selected generation hints", () => Temp(directory =>
+        check("Pending appointments reserve nonduplicate characters and send only selected identity fields", () => Temp(directory =>
         {
             var library = new CrewCharacterLibrary(directory);
             var image = "11111111111111111111111111111111.png";
@@ -272,17 +272,20 @@ internal static class CrewCharacterTests
             rig.Chatter.RequestReappointment("unit:1", 0); rig.Tick(1); var replacement = rig.Take();
             Require(replacement.Input("").Data["registered_characters"] == null, "Individual AI replacement became automatic registry selection");
             Throws<CrewException>(() => replacement.Read(Reply("unit:1", "Other", "Rank", "Calm", candidate.Id)));
-            rig.Complete(replacement.Read(Reply("unit:1", "New person", "Rank", "Calm"))); rig.Pump(1);
+            var reply = Reply("unit:1", "New person", "Rank", "Calm");
+            reply.Calls[0].Arguments["appointments"]![0]!["appointment_background"] = "Private appointment background that must not enter speech.";
+            rig.Complete(replacement.Read(reply)); rig.Pump(1);
             rig.GamePaused = false; rig.Tick(2); rig.Tick(3); var speech = rig.Take(); var data = speech.Input("").Data;
             Require(rig.Chatter.Person("unit:1")!.RegisteredCharacterId == null && data["registered_characters"] == null && data["appointment_context"] == null &&
-                data["appointments"] is JArray { Count: 0 }, "Individual replacement retained the registration or routine speech resent appointment metadata");
+                data["appointments"] is JArray { Count: 0 } && !data.ToString().Contains("Private appointment background", StringComparison.Ordinal),
+                "Individual replacement retained the registration or routine speech resent appointment metadata or background");
             rig.Complete(speech.Read(ReplyRows())); rig.Pump(3);
         }));
     }
     private static CrewCharacter Full(string? id = null) => new(id ?? Id(), "Registered", "Commander", "Calm");
     private static CrewTarget Target(int n, string kind = "vessel") => new("unit:" + n, "Unit " + n, "US", kind is "aircraft" or "helicopter" ? "pilot" : "captain", kind, "Class", false, new[] { n }, true);
     private static JObject Row(string id, string name, string rank, string personality, string characterId = "new") => new()
-        { ["id"] = id, ["character_id"] = characterId, ["person_name"] = name, ["rank"] = rank, ["name_with_rank"] = rank + " " + name, ["personality"] = personality };
+        { ["id"] = id, ["character_id"] = characterId, ["appointment_background"] = "Fictional service background.", ["person_name"] = name, ["rank"] = rank, ["name_with_rank"] = rank + " " + name, ["personality"] = personality };
     private static AiReply Reply(string id, string name, string rank, string personality, string characterId = "new") => new("", new[] {
         new AiToolCall("test", CrewBatch.ToolName, new JObject { ["appointments"] = new JArray(Row(id, name, rank, personality, characterId)), ["remarks"] = new JArray() }) }, null);
     private static AiReply ReplyRows(params JObject[] appointments) => new("", new[] {

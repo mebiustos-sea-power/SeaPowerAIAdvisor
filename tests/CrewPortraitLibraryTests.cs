@@ -33,6 +33,46 @@ internal static class CrewPortraitLibraryTests
             Throws<PortraitDataException>(() => library.Add(large));
             Require(library.Version == before && library.Ids().Count == 2 && library.Contains(first) && library.Contains(second), "Invalid input published an image or affected existing assets");
         }));
+        check("Replacing a portrait preserves its ID and references across format changes and reopening without changing other assets or the source", () => Temp(directory =>
+        {
+            var library = new CrewPortraitLibrary(directory); var original = CrewTests.PortraitHeader(128, 256);
+            var id = library.Add(original); var other = library.Add(original);
+            var person = new CrewPerson("Person", "Rank", "Calm", id);
+            var replacement = new byte[] { 0xff, 0xd8, 0xff, 0xc0, 0, 11, 8, 0, 128, 1, 0, 1, 1, 0x11, 0 };
+            var source = Path.Combine(directory, "source.jpg"); File.WriteAllBytes(source, replacement);
+            library.Replace(id, PortraitData.Read(source));
+            Require(library.Ids().Count == 2 && library.Contains(id) && person.PortraitId == id && library.Read(id)!.SequenceEqual(replacement),
+                "Replacement changed identity, added an asset or failed to publish the new format");
+            Require(library.Read(other)!.SequenceEqual(original) && File.ReadAllBytes(source).SequenceEqual(replacement), "Replacement changed another asset or its source");
+            var reopened = new CrewPortraitLibrary(directory);
+            Require(reopened.Read(id)!.SequenceEqual(replacement), "A replacement depended on session-only metadata");
+            reopened.Replace(id, original);
+            Require(new CrewPortraitLibrary(directory).Read(id)!.SequenceEqual(original), "Switching back to PNG changed or lost the stored identity");
+        }));
+        check("Invalid and missing replacements never publish data or recreate deleted portrait IDs", () => Temp(directory =>
+        {
+            var library = new CrewPortraitLibrary(directory); var original = CrewTests.PortraitHeader(128, 256); var id = library.Add(original); var version = library.Version;
+            foreach (var invalid in new[] { new byte[] { 1, 2 }, CrewTests.PortraitHeader(512, 512) })
+                Throws<PortraitDataException>(() => library.Replace(id, invalid));
+            Throws<CrewPortraitLibraryException>(() => library.Replace("../outside.png", original));
+            Require(library.Version == version && library.Read(id)!.SequenceEqual(original), "Rejected replacements changed published data");
+            library.Delete(id); version = library.Version;
+            var missing = Throws<CrewPortraitLibraryException>(() => library.Replace(id, original));
+            Require(missing.Code == "portrait_selection_missing" && library.Version == version && library.Ids().Count == 0 &&
+                !Directory.EnumerateFiles(Path.Combine(directory, "Crew", "PortraitLibrary")).Any(), "A missing replacement recreated an asset or left a staged file");
+        }));
+        check("A blocked portrait replacement retains the previous image and does not invalidate its cache version", () => Temp(directory =>
+        {
+            var library = new CrewPortraitLibrary(directory); var original = CrewTests.PortraitHeader(128, 256); var id = library.Add(original);
+            var version = library.Version; var contentVersion = library.ContentVersion(id);
+            using (var locked = new FileStream(Path.Combine(directory, "Crew", "PortraitLibrary", id), FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                var error = Throws<CrewPortraitLibraryException>(() => library.Replace(id, CrewTests.PortraitHeader(256, 128)));
+                Require(error.Code == "portrait_library_write_failed" && error.InnerException is IOException, "A write failure lost its original cause");
+            }
+            Require(library.Version == version && library.ContentVersion(id) == contentVersion && library.Read(id)!.SequenceEqual(original), "A failed replacement changed the image or published a new version");
+            Require(Directory.EnumerateFiles(Path.Combine(directory, "Crew", "PortraitLibrary")).Count() == 1, "Failed replacement left a staged image");
+        }));
         check("Only explicit library deletion removes an image while source and other image files remain intact", () => Temp(directory =>
         {
             var library = new CrewPortraitLibrary(directory); var bytes = CrewTests.PortraitHeader(256, 256);

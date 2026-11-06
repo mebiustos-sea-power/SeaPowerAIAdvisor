@@ -11,6 +11,7 @@ internal sealed class CrewPortraitLibrary
 {
     internal const int MaximumDimension = 256;
     private readonly string directory;
+    private readonly Dictionary<string, int> contentVersions = new(StringComparer.OrdinalIgnoreCase);
     internal int Version { get; private set; }
     internal CrewPortraitLibrary(string settingsDirectory) => directory = Path.Combine(settingsDirectory, "Crew", "PortraitLibrary");
     internal IReadOnlyList<string> Ids()
@@ -29,6 +30,7 @@ internal sealed class CrewPortraitLibrary
         { throw new CrewPortraitLibraryException("portrait_library_read_failed", e); }
     }
     internal bool Contains(string id) => File.Exists(Resolve(id));
+    internal int ContentVersion(string id) => contentVersions.TryGetValue(id, out var version) ? version : 0;
     internal byte[]? Read(string id)
     {
         var path = Resolve(id);
@@ -44,30 +46,43 @@ internal sealed class CrewPortraitLibrary
     {
         var extension = Validate(preparedImage);
         var id = Guid.NewGuid().ToString("N") + extension;
-        var path = Resolve(id); var temporary = path + ".tmp";
+        Write(id, preparedImage, replace: false); return id;
+    }
+    internal void Replace(string id, byte[] preparedImage)
+    {
+        Validate(preparedImage);
+        // IDs remain opaque references; the current payload's signature determines PNG or JPEG decoding.
+        Write(id, preparedImage, replace: true);
+    }
+    private void Write(string id, byte[] bytes, bool replace)
+    {
+        var path = Resolve(id); var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
-            Directory.CreateDirectory(directory);
+            if (!replace) Directory.CreateDirectory(directory);
             using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-                stream.Write(preparedImage, 0, preparedImage.Length);
-            // Publish a new asset only after writing it completely; never replace an existing image ID.
-            File.Move(temporary, path);
+                stream.Write(bytes, 0, bytes.Length);
+            // Publish a complete payload; replacement must find an existing asset.
+            if (replace) File.Replace(temporary, path, null);
+            else File.Move(temporary, path);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             try { if (File.Exists(temporary)) File.Delete(temporary); }
             catch (Exception cleanup) when (cleanup is IOException or UnauthorizedAccessException)
             { throw new CrewPortraitLibraryException("portrait_library_write_failed", new AggregateException(e, cleanup)); }
-            throw new CrewPortraitLibraryException("portrait_library_write_failed", e);
+            throw new CrewPortraitLibraryException(replace && e is (FileNotFoundException or DirectoryNotFoundException)
+                ? "portrait_selection_missing" : "portrait_library_write_failed", e);
         }
-        Version++; return id;
+        Version++;
+        if (replace) contentVersions[id] = Version;
     }
     internal void Delete(string id)
     {
         try { File.Delete(Resolve(id)); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         { throw new CrewPortraitLibraryException("portrait_library_delete_failed", e); }
-        Version++;
+        contentVersions.Remove(id); Version++;
     }
     private string Resolve(string id)
     {

@@ -16,6 +16,9 @@
     <Compile Include="..\src\ChatterConnections.cs" />
     <Compile Include="..\src\Crew\CrewPerson.cs" />
     <Compile Include="..\src\Crew\CrewPortraitLibrary.cs" />
+    <Compile Include="..\src\Crew\UI\CrewPortraits.cs" />
+    <Compile Include="..\src\Shared\UI\PortraitTexture.cs" />
+    <EmbeddedResource Include="..\src\Crew\UI\Assets\crew.png" LogicalName="SeaPowerAIAdvisor.Crew.png" />
     <Compile Include="..\src\Crew\CrewCharacterLibrary.cs" />
     <Compile Include="..\src\Shared\Images\PortraitData.cs" />
     <Compile Include="..\src\Crew\CrewBatch.cs" />

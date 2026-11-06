@@ -42,11 +42,11 @@ internal sealed class CrewCharacter
             throw new CrewException("character_invalid");
         return value.Trim();
     }
-    // Only generation hints go to AI; local IDs, portraits and eligibility belong to the MOD.
-    internal JObject Hints() => new() { ["name"] = Name, ["rank"] = Rank, ["personality"] = Personality, ["gender"] = Gender, ["nationality"] = Nationality };
+    // Specified identity for selection and completion; references and eligibility are added separately.
+    internal JObject Identity() => new() { ["name"] = Name, ["rank"] = Rank, ["personality"] = Personality, ["gender"] = Gender, ["nationality"] = Nationality };
     internal JObject Json()
     {
-        var value = Hints(); value["id"] = Id; value["portrait_id"] = PortraitId; value["ai_appointment"] = AiAppointment; value["allow_duplicates"] = AllowDuplicates;
+        var value = Identity(); value["id"] = Id; value["portrait_id"] = PortraitId; value["ai_appointment"] = AiAppointment; value["allow_duplicates"] = AllowDuplicates;
         value["assignment_target"] = AssignmentTarget;
         return value;
     }

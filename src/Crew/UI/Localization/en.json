@@ -103,6 +103,8 @@
   "library": "Library",
   "portraits": "Portraits",
   "portrait.add": "Add image",
+  "portrait.replace": "Replace image",
+  "portrait.replace_confirm": "Replace",
   "portrait.delete": "Delete",
   "portrait.select_title": "Choose image",
   "portrait.choose_title": "Add a crew portrait",

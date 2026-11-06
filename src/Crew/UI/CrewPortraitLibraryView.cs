@@ -9,7 +9,7 @@ using SeaPowerAIAdvisor.Shared;
 
 namespace SeaPowerAIAdvisor.Crew;
 
-// The same paged gallery serves library management and image selection. Only Add/Delete change storage.
+// The same paged gallery serves library management and image selection. Import previews stay local until confirmed.
 internal sealed class CrewPortraitLibraryView : IDisposable
 {
     private const int PageSize = 12;
@@ -27,7 +27,7 @@ internal sealed class CrewPortraitLibraryView : IDisposable
     private PortraitTexture? preview;
     private byte[]? prepared;
     private string[] ids = Array.Empty<string>(), displayed = Array.Empty<string>();
-    private string? selected;
+    private string? selected, replacing;
     private int page, libraryRevision = -1;
     internal bool IsOpen { get; private set; }
     internal bool HasChanges => selection != null || prepared != null;
@@ -51,16 +51,20 @@ internal sealed class CrewPortraitLibraryView : IDisposable
         notice = new UiNotice(Find<TextBlock>("Status"), resources); previewImage = Find<Image>("Preview");
         Find<TextBlock>("Title").Text = text[select == null ? "portraits" : "portrait.select_title"];
         Find<FrameworkElement>("Selection").Visibility = select == null ? Visibility.Collapsed : Visibility.Visible;
-        Bind("Add", () =>
+        Bind("Add", () => BeginImport(null));
+        Bind("Replace", () =>
         {
-            if (HasChanges) return;
-            selection = PortraitFileDialog.OpenAsync(text["portrait.choose_title"], common("profile.image_filter")); Controls();
+            if (selected == null || HasChanges) return;
+            if (!Library.Contains(selected)) { Refresh(); notice.Show(text["error.portrait_selection_missing"], true); return; }
+            BeginImport(selected);
         });
         Bind("CancelImport", () => { ClearImport(); Controls(); });
         Bind("SaveImport", () =>
         {
             if (prepared == null) return;
-            selected = Library.Add(prepared); ClearImport(); Refresh(true); notice.ShowBriefly(common("settings.saved"));
+            if (replacing == null) selected = Library.Add(prepared);
+            else { Library.Replace(replacing, prepared); selected = replacing; }
+            ClearImport(); Refresh(true); notice.ShowBriefly(common("settings.saved"));
         });
         Bind("Delete", () =>
         {
@@ -72,6 +76,12 @@ internal sealed class CrewPortraitLibraryView : IDisposable
         Bind("Previous", () => { if (page > 0) { page--; Draw(); } });
         Bind("Next", () => { if ((page + 1) * PageSize < ids.Length) { page++; Draw(); } });
         Bind("Back", () => back?.Invoke());
+    }
+    private void BeginImport(string? target)
+    {
+        if (HasChanges) return;
+        var pending = PortraitFileDialog.OpenAsync(text[target == null ? "portrait.choose_title" : "portrait.replace"], common("profile.image_filter"));
+        replacing = target; selection = pending; Controls();
     }
     private void Bind(string name, Action action) => Find<Button>(name).Click += (_, _) => run(action);
     internal void Open(string? initial = null)
@@ -123,6 +133,9 @@ internal sealed class CrewPortraitLibraryView : IDisposable
     private void Controls()
     {
         Find<Button>("Add").IsEnabled = !HasChanges;
+        Find<Button>("Replace").Visibility = select == null ? Visibility.Visible : Visibility.Collapsed;
+        Find<Button>("Replace").IsEnabled = !HasChanges && selected != null && ids.Contains(selected);
+        Find<Button>("SaveImport").Content = text[replacing == null ? "portrait.import" : "portrait.replace_confirm"];
         Find<Button>("Delete").IsEnabled = !HasChanges && selected != null && ids.Contains(selected);
         Find<FrameworkElement>("GalleryScroll").Visibility = prepared == null ? Visibility.Visible : Visibility.Collapsed;
         Find<FrameworkElement>("ImportScroll").Visibility = prepared == null ? Visibility.Collapsed : Visibility.Visible;
@@ -138,7 +151,7 @@ internal sealed class CrewPortraitLibraryView : IDisposable
         notice.Tick();
         if (selection?.IsCompleted == true)
         {
-            var completed = selection; selection = null;
+            var completed = selection; selection = null; var target = replacing; replacing = null;
             try
             {
                 var file = completed.GetAwaiter().GetResult();
@@ -146,7 +159,7 @@ internal sealed class CrewPortraitLibraryView : IDisposable
                 {
                     var bytes = PortraitResize.Fit(PortraitData.Read(file), CrewPortraitLibrary.MaximumDimension);
                     var next = new PortraitTexture(bytes);
-                    previewImage.Source = next.Source; var old = preview; preview = next; old?.Dispose(); prepared = bytes;
+                    previewImage.Source = next.Source; var old = preview; preview = next; old?.Dispose(); prepared = bytes; replacing = target;
                     Find<TextBlock>("SourceName").Text = System.IO.Path.GetFileName(file); notice.Show("");
                 }
             }
@@ -157,7 +170,7 @@ internal sealed class CrewPortraitLibraryView : IDisposable
     }
     private void ClearImport()
     {
-        previewImage.Source = null; preview?.Dispose(); preview = null; prepared = null;
+        previewImage.Source = null; preview?.Dispose(); preview = null; prepared = null; replacing = null;
         Find<TextBlock>("SourceName").Text = "";
     }
     internal void Close()

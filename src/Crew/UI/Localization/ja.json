@@ -103,6 +103,8 @@
   "library": "ライブラリ",
   "portraits": "顔画像",
   "portrait.add": "画像を追加",
+  "portrait.replace": "画像を置き換え",
+  "portrait.replace_confirm": "置き換え",
   "portrait.delete": "削除",
   "portrait.select_title": "画像を選択",
   "portrait.choose_title": "顔画像を追加",

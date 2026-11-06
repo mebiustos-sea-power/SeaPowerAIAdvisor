@@ -6,9 +6,10 @@
     <TextBlock x:Name="Count" Grid.Column="1" FontSize="12" Opacity="0.7" VerticalAlignment="Center" />
   </Grid>
   <Grid Grid.Row="1" Margin="0,10,0,10">
-    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
     <Button x:Name="Add" Content="{DynamicResource Crew.portrait.add}" Height="30" Padding="12,0" />
-    <Button x:Name="Delete" Grid.Column="2" Content="{DynamicResource Crew.portrait.delete}" Height="30" Padding="12,0" IsEnabled="False" />
+    <Button x:Name="Replace" Grid.Column="2" Content="{DynamicResource Crew.portrait.replace}" Height="30" Padding="12,0" Margin="0,0,8,0" IsEnabled="False" />
+    <Button x:Name="Delete" Grid.Column="3" Content="{DynamicResource Crew.portrait.delete}" Height="30" Padding="12,0" IsEnabled="False" />
   </Grid>
   <Grid Grid.Row="2">
     <ScrollViewer x:Name="GalleryScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
