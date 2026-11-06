@@ -27,7 +27,6 @@ internal sealed class CrewPortraitLibraryView : IDisposable
     private PortraitTexture? preview;
     private byte[]? prepared;
     private string[] ids = Array.Empty<string>(), displayed = Array.Empty<string>();
-    private readonly HashSet<string> unreadable = new(StringComparer.Ordinal);
     private string? selected;
     private int page, libraryRevision = -1;
     internal bool IsOpen { get; private set; }
@@ -73,12 +72,6 @@ internal sealed class CrewPortraitLibraryView : IDisposable
         Bind("Previous", () => { if (page > 0) { page--; Draw(); } });
         Bind("Next", () => { if ((page + 1) * PageSize < ids.Length) { page++; Draw(); } });
         Bind("Back", () => back?.Invoke());
-        Bind("Select", () =>
-        {
-            if (selected == null || !Library.Contains(selected))
-            { Refresh(); notice.Show(text["error.portrait_selection_missing"], true); return; }
-            select?.Invoke(selected);
-        });
     }
     private void Bind(string name, Action action) => Find<Button>(name).Click += (_, _) => run(action);
     internal void Open(string? initial = null)
@@ -88,7 +81,7 @@ internal sealed class CrewPortraitLibraryView : IDisposable
     private void Refresh(bool locateSelection = false)
     {
         libraryRevision = Library.Version;
-        ids = Library.Ids().ToArray(); unreadable.Clear();
+        ids = Library.Ids().ToArray();
         if (locateSelection && selected != null) page = Math.Max(0, Array.IndexOf(ids, selected)) / PageSize;
         page = Math.Min(page, Math.Max(0, (ids.Length - 1) / PageSize));
         Draw();
@@ -99,21 +92,28 @@ internal sealed class CrewPortraitLibraryView : IDisposable
         displayed = ids.Skip(page * PageSize).Take(PageSize).ToArray(); PortraitRevision++;
         foreach (var id in displayed)
         {
-            FrameworkElement content;
+            FrameworkElement content; var readable = true;
             try
             {
                 content = new Image { Source = portraits.GetImage(id), Width = 96, Height = 96, Stretch = Stretch.Uniform };
-                unreadable.Remove(id);
             }
             catch (PortraitDataException error)
             {
-                log(error); unreadable.Add(id);
+                log(error); readable = false;
                 content = new TextBlock { Text = text["portrait.unreadable"], TextWrapping = TextWrapping.Wrap, Width = 96, VerticalAlignment = VerticalAlignment.Center };
             }
             var border = new Border { Child = content, BorderThickness = new Thickness(2), Padding = new Thickness(3),
                 BorderBrush = selected == id ? new SolidColorBrush(Color.FromArgb(255, 235, 151, 64)) : Brushes.Transparent };
             var button = new Button { Content = border, Width = 116, Height = 116, Margin = new Thickness(4), Padding = new Thickness(2), ToolTip = text["portrait.select"] };
-            button.Click += (_, _) => run(() => { selected = id; Draw(); }); panel.Children.Add(button);
+            button.IsEnabled = select == null || readable;
+            button.Click += (_, _) => run(() =>
+            {
+                if (HasChanges) return;
+                if (select == null) { selected = id; Draw(); return; }
+                if (!Library.Contains(id)) { Refresh(); notice.Show(text["error.portrait_selection_missing"], true); return; }
+                select(id);
+            });
+            panel.Children.Add(button);
         }
         Find<TextBlock>("Count").Text = string.Format(text["portrait.count"], ids.Length);
         Find<TextBlock>("Page").Text = string.Format(text["portrait.page"], ids.Length == 0 ? 0 : page + 1, (ids.Length + PageSize - 1) / PageSize);
@@ -129,7 +129,6 @@ internal sealed class CrewPortraitLibraryView : IDisposable
         Find<FrameworkElement>("Paging").Visibility = prepared == null ? Visibility.Visible : Visibility.Collapsed;
         Find<Button>("Previous").IsEnabled = !HasChanges && page > 0;
         Find<Button>("Next").IsEnabled = !HasChanges && (page + 1) * PageSize < ids.Length;
-        Find<Button>("Select").IsEnabled = !HasChanges && selected != null && ids.Contains(selected) && !unreadable.Contains(selected);
         Find<Button>("Back").IsEnabled = selection == null;
     }
     internal void ShowError(string message) => notice.Show(message, true);
@@ -163,7 +162,7 @@ internal sealed class CrewPortraitLibraryView : IDisposable
     }
     internal void Close()
     {
-        IsOpen = false; ClearImport(); Find<WrapPanel>("Images").Children.Clear(); displayed = Array.Empty<string>(); unreadable.Clear(); PortraitRevision++;
+        IsOpen = false; ClearImport(); Find<WrapPanel>("Images").Children.Clear(); displayed = Array.Empty<string>(); PortraitRevision++;
         var old = selection; selection = null;
         if (old != null) _ = old.ContinueWith(t => { if (t.IsFaulted) log(t.Exception!); }, TaskScheduler.Default);
     }

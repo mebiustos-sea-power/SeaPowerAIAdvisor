@@ -3,8 +3,6 @@
   <TextBlock x:Name="Title" FontSize="18" TextWrapping="Wrap" Margin="0,0,0,10" />
   <WrapPanel x:Name="Actions" Grid.Row="1" Margin="0,0,0,10">
     <Button x:Name="Add" Content="{DynamicResource Crew.character.add}" Height="30" Padding="12,0" />
-    <Button x:Name="Edit" Content="{DynamicResource Crew.edit_person}" Height="30" Padding="12,0" Margin="8,0,0,0" />
-    <Button x:Name="Delete" Content="{DynamicResource Crew.portrait.delete}" Height="30" Padding="12,0" Margin="8,0,0,0" />
   </WrapPanel>
   <ScrollViewer x:Name="ListScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
     <StackPanel><TextBlock x:Name="Empty" Text="{DynamicResource Crew.character.empty}" TextWrapping="Wrap" /><StackPanel x:Name="Characters" /></StackPanel>
@@ -37,10 +35,12 @@
       <TextBlock x:Name="Page" VerticalAlignment="Center" Margin="10,0" />
       <Button x:Name="Next" Content="{DynamicResource Crew.portrait.next}" Height="30" Padding="12,0" />
     </WrapPanel>
-    <WrapPanel x:Name="FormButtons" Grid.Row="1" HorizontalAlignment="Right" Visibility="Collapsed">
-      <Button x:Name="BackForm" Content="{DynamicResource Crew.person_back}" Height="30" Padding="12,0" />
-      <Button x:Name="Save" Content="{DynamicResource Crew.save}" Height="30" Padding="12,0" Margin="8,0,0,0" />
-    </WrapPanel>
+    <Grid x:Name="FormButtons" Grid.Row="1" Visibility="Collapsed">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+      <Button x:Name="Delete" Content="{DynamicResource Crew.portrait.delete}" Height="30" Padding="12,0" Visibility="Collapsed" />
+      <Button x:Name="BackForm" Grid.Column="2" Content="{DynamicResource Crew.person_back}" Height="30" Padding="12,0" />
+      <Button x:Name="Save" Grid.Column="3" Content="{DynamicResource Crew.save}" Height="30" Padding="12,0" Margin="8,0,0,0" />
+    </Grid>
     <WrapPanel x:Name="Selection" Grid.Row="1" HorizontalAlignment="Right" Visibility="Collapsed" Margin="0,10,0,0">
       <Button x:Name="Back" Content="{DynamicResource Crew.person_back}" Height="30" Padding="12,0" />
       <Button x:Name="Select" Content="{DynamicResource Crew.character.appoint}" Height="30" Padding="12,0" Margin="8,0,0,0" />

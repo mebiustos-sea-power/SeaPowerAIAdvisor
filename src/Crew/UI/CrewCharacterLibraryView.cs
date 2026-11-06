@@ -70,11 +70,11 @@ internal sealed class CrewCharacterLibraryView : IDisposable
             input.LostKeyboardFocus += (_, _) => run(() => typing.Release(input));
         }
         Bind("Add", () => OpenForm(new CrewCharacter(Guid.NewGuid().ToString("N")), true));
-        Bind("Edit", () => OpenForm(Selected() ?? throw new CrewException("character_unavailable"), false));
         Bind("Delete", () =>
         {
-            var id = Selected()?.Id ?? throw new CrewException("character_unavailable");
-            confirm(() => { library.Delete(id); selected = null; Draw(); notice.ShowBriefly(text["character.deleted"]); }, text["character.delete_question"], text["portrait.delete"]);
+            if (editing == null || isNew || !canCommit()) return;
+            var id = editing.Id;
+            confirm(() => { library.Delete(id); selected = null; CloseForm(); notice.ShowBriefly(text["character.deleted"]); }, text["character.delete_question"], text["portrait.delete"]);
         });
         Bind("BackForm", () => { if (HasChanges) confirm(CloseForm, common("settings.discard_question"), common("settings.discard_action")); else CloseForm(); });
         Bind("Save", () =>
@@ -82,7 +82,9 @@ internal sealed class CrewCharacterLibraryView : IDisposable
             if (editing == null || !canCommit()) return;
             var next = new CrewCharacter(editing.Id, name.Text, rank.Text, personality.Text, Choice(Genders, gender.SelectedIndex), nationality.Text,
                 portraitId, Choice(AiModes, aiAppointment.SelectedIndex), allowDuplicates.IsChecked == true, Choice(AssignmentTargets, assignmentTarget.SelectedIndex));
-            library.Save(next); selected = next.Id; OpenForm(next, false); notice.ShowBriefly(common("settings.saved"));
+            library.Save(next); selected = next.Id;
+            page = library.Characters.TakeWhile(c => c.Id != next.Id).Count() / PageSize;
+            CloseForm(); notice.ShowBriefly(common("settings.saved"));
         });
         Bind("ChoosePortrait", () =>
         {
@@ -138,18 +140,32 @@ internal sealed class CrewCharacterLibraryView : IDisposable
         var ordinal = page * PageSize;
         foreach (var character in shown)
         {
-            ordinal++; var row = new StackPanel { Orientation = Orientation.Horizontal };
-            try { row.Children.Add(new Image { Source = portraits.GetImage(character.PortraitId), Width = 48, Height = 48, Stretch = Stretch.Uniform, Margin = new Thickness(0, 0, 12, 0) }); }
+            ordinal++; var row = new Grid();
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            try { row.Children.Add(new Image { Source = portraits.GetImage(character.PortraitId), Width = 48, Height = 48, Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 0, 12, 0) }); }
             catch (PortraitDataException e) { log(e); row.Children.Add(new TextBlock { Text = text["portrait.unreadable"], Width = 60, TextWrapping = TextWrapping.Wrap }); }
             var label = character.Name.Length == 0 ? string.Format(text["character.unnamed"], ordinal) : character.Name;
-            var words = new StackPanel(); words.Children.Add(new TextBlock { Text = label, FontWeight = FontWeights.Bold });
-            if (character.Rank.Length > 0) words.Children.Add(new TextBlock { Text = character.Rank });
-            if (select != null && canSelect?.Invoke(character) == false) words.Children.Add(new TextBlock { Text = text["character.unavailable"], FontSize = 12, Opacity = .7f });
-            row.Children.Add(words);
+            var words = new StackPanel(); words.Children.Add(new TextBlock { Text = label, FontWeight = FontWeights.Bold, TextWrapping = TextWrapping.Wrap });
+            var identity = string.Join(" / ", new[] { character.Rank, character.Gender.Length == 0 ? "" : text["character.gender." + character.Gender], character.Nationality }.Where(value => value.Length > 0));
+            if (identity.Length > 0) words.Children.Add(new TextBlock { Text = identity, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) });
+            words.Children.Add(new TextBlock { Text = string.Format(text["character.list_conditions"], text["character.assignment." + character.AssignmentTarget],
+                text["character.ai." + character.AiAppointment], text[character.AllowDuplicates ? "character.duplicates_allowed" : "character.duplicates_disallowed"]),
+                FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) });
+            words.Children.Add(new TextBlock { Text = "ID: " + character.Id.Substring(0, 4) + "…" + character.Id.Substring(character.Id.Length - 4),
+                ToolTip = character.Id, FontSize = 10, Opacity = .65f, Margin = new Thickness(0, 2, 0, 0) });
+            if (select != null && canSelect?.Invoke(character) == false) words.Children.Add(new TextBlock { Text = text["character.unavailable"], FontSize = 12, TextWrapping = TextWrapping.Wrap, Opacity = .7f });
+            Grid.SetColumn(words, 1); row.Children.Add(words);
             var button = new Button { Content = new Border { Child = row, BorderThickness = new Thickness(2), Padding = new Thickness(5),
                 BorderBrush = selected == character.Id ? new SolidColorBrush(Color.FromArgb(255, 235, 151, 64)) : Brushes.Transparent },
                 HorizontalContentAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 0, 8, 8) };
-            button.Click += (_, _) => run(() => { selected = character.Id; Draw(); }); panel.Children.Add(button);
+            button.Click += (_, _) => run(() =>
+            {
+                selected = character.Id;
+                if (select == null) OpenForm(Selected() ?? throw new CrewException("character_unavailable"), false);
+                else Draw();
+            });
+            panel.Children.Add(button);
         }
         Find<TextBlock>("Empty").Visibility = items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         Find<TextBlock>("Page").Text = string.Format(text["portrait.page"], items.Count == 0 ? 0 : page + 1, (items.Count + PageSize - 1) / PageSize);
@@ -164,7 +180,7 @@ internal sealed class CrewCharacterLibraryView : IDisposable
         Find<FrameworkElement>("FormButtons").Visibility = formOpen ? Visibility.Visible : Visibility.Collapsed;
         Find<FrameworkElement>("Paging").Visibility = formOpen ? Visibility.Collapsed : Visibility.Visible;
         Find<FrameworkElement>("Selection").Visibility = select != null ? Visibility.Visible : Visibility.Collapsed;
-        Find<Button>("Edit").IsEnabled = Find<Button>("Delete").IsEnabled = Selected() != null;
+        Find<Button>("Delete").Visibility = formOpen && !isNew ? Visibility.Visible : Visibility.Collapsed;
         Find<Button>("Previous").IsEnabled = page > 0;
         Find<Button>("Next").IsEnabled = (page + 1) * PageSize < library.Characters.Count;
         Find<Button>("Select").IsEnabled = Selected() is CrewCharacter character && canSelect?.Invoke(character) != false;
