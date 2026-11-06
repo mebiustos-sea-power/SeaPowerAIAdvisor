@@ -49,6 +49,7 @@
     <EmbeddedResource Include="Crew\UI\CrewCharacterLibrary.xaml" LogicalName="SeaPowerAIAdvisor.CrewCharacterLibrary.xaml" />
     <EmbeddedResource Include="Crew\UI\Localization\*.json" LogicalName="SeaPowerAIAdvisor.Crew.Localization.%(Filename).json" />
     <EmbeddedResource Include="Crew\UI\Assets\crew.png" LogicalName="SeaPowerAIAdvisor.Crew.png" />
+    <EmbeddedResource Include="Crew\Samples\*.json;Crew\Samples\*.png" LogicalName="SeaPowerAIAdvisor.Crew.Samples.%(Filename)%(Extension)" />
     <EmbeddedResource Include="Translation\UI\TranslationOverlay.xaml" LogicalName="SeaPowerAIAdvisor.TranslationOverlay.xaml" />
     <EmbeddedResource Include="Advisor\UI\Views\Advisor.xaml" LogicalName="SeaPowerAIAdvisor.Advisor.xaml" />
     <EmbeddedResource Include="Shared\UI\Connections.xaml" LogicalName="SeaPowerAIAdvisor.Shared.Connections.xaml" />

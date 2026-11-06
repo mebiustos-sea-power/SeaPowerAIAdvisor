@@ -20,6 +20,8 @@
     <Compile Include="..\src\Shared\UI\PortraitTexture.cs" />
     <EmbeddedResource Include="..\src\Crew\UI\Assets\crew.png" LogicalName="SeaPowerAIAdvisor.Crew.png" />
     <Compile Include="..\src\Crew\CrewCharacterLibrary.cs" />
+    <Compile Include="..\src\Crew\CrewSampleCharacters.cs" />
+    <EmbeddedResource Include="..\src\Crew\Samples\*.json;..\src\Crew\Samples\*.png" LogicalName="SeaPowerAIAdvisor.Crew.Samples.%(Filename)%(Extension)" />
     <Compile Include="..\src\Shared\Images\PortraitData.cs" />
     <Compile Include="..\src\Crew\CrewBatch.cs" />
     <Compile Include="..\src\Crew\CrewAppointments.cs" />

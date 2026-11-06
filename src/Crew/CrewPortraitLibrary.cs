@@ -48,6 +48,12 @@ internal sealed class CrewPortraitLibrary
         var id = Guid.NewGuid().ToString("N") + extension;
         Write(id, preparedImage, replace: false); return id;
     }
+    // Initial imports keep stable references and preserve any already imported or user-replaced asset.
+    internal void Import(string id, byte[] preparedImage)
+    {
+        Validate(preparedImage);
+        if (Read(id) == null) Write(id, preparedImage, replace: false);
+    }
     internal void Replace(string id, byte[] preparedImage)
     {
         Validate(preparedImage);

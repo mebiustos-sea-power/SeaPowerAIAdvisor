@@ -1,0 +1,53 @@
+{
+  "format_version": 1,
+  "characters": [
+    {
+      "name": "",
+      "rank": "",
+      "personality": "",
+      "gender": "male",
+      "nationality": "US",
+      "id": "ac02845a021e491d8c3f6450d81c37e0",
+      "portrait_id": "1fccbbc5494241ccaf96359865a0f83c.png",
+      "ai_appointment": "normal",
+      "allow_duplicates": false,
+      "assignment_target": "ship"
+    },
+    {
+      "name": "",
+      "rank": "",
+      "personality": "",
+      "gender": "female",
+      "nationality": "US",
+      "id": "f8d8273a712c4371bd1bcac708108810",
+      "portrait_id": "6c25c8ba15e84bd2ae27fce6a433a91e.png",
+      "ai_appointment": "normal",
+      "allow_duplicates": false,
+      "assignment_target": "ship"
+    },
+    {
+      "name": "",
+      "rank": "",
+      "personality": "",
+      "gender": "male",
+      "nationality": "US",
+      "id": "54df1c4d40314330bda07f20702524d7",
+      "portrait_id": "d1b97ce7a89b48c38179ad819913fcb3.png",
+      "ai_appointment": "normal",
+      "allow_duplicates": false,
+      "assignment_target": "aircraft"
+    },
+    {
+      "name": "",
+      "rank": "",
+      "personality": "",
+      "gender": "female",
+      "nationality": "US",
+      "id": "8966eebe2bb54768827f4d5dabc0fa92",
+      "portrait_id": "43c9b9c16943437cb4a7298b3aa6b010.png",
+      "ai_appointment": "normal",
+      "allow_duplicates": false,
+      "assignment_target": "aircraft"
+    }
+  ]
+}

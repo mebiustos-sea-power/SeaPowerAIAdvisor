@@ -66,6 +66,7 @@ internal sealed class CrewCharacter
 internal sealed class CrewCharacterLibrary
 {
     private readonly string path;
+    private bool stored;
     private IReadOnlyList<CrewCharacter> characters = Array.Empty<CrewCharacter>();
     internal IReadOnlyList<CrewCharacter> Characters => characters;
     internal int Version { get; private set; }
@@ -76,15 +77,27 @@ internal sealed class CrewCharacterLibrary
         {
             if (Directory.Exists(path)) throw new IOException("The character library path is not a file.");
             var bytes = ConfigFile.Backup(path); if (bytes == null) return;
+            characters = Read(bytes); stored = true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { throw new CrewException("character_library_read_failed", e); }
+    }
+    internal static IReadOnlyList<CrewCharacter> Read(byte[] bytes)
+    {
+        try
+        {
             var value = JObject.Parse(ConfigFile.Decode(bytes));
             if (value.Count != 2 || value["format_version"]?.Type != JTokenType.Integer || (long)value["format_version"]! != 1 || value["characters"] is not JArray rows)
                 throw new CrewException("character_library_invalid");
             var loaded = rows.Select(row => row is JObject obj ? CrewCharacter.Parse(obj) : throw new CrewException("character_library_invalid")).ToArray();
             if (loaded.Select(c => c.Id).Distinct(StringComparer.Ordinal).Count() != loaded.Length) throw new CrewException("character_library_invalid");
-            characters = Array.AsReadOnly(loaded);
+            return Array.AsReadOnly(loaded);
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { throw new CrewException("character_library_read_failed", e); }
         catch (Exception e) when (e is JsonException or DecoderFallbackException or OverflowException) { throw new CrewException("character_library_invalid", e); }
+    }
+    // An existing empty registry is intentional. Produce and commit initial contents only when no registry was loaded or saved.
+    internal void Initialize(Func<IReadOnlyList<CrewCharacter>> create)
+    {
+        if (!stored) Commit(create());
     }
     internal CrewCharacter? Find(string id) => characters.FirstOrDefault(c => c.Id == id);
     internal void Save(CrewCharacter character)
@@ -104,6 +117,6 @@ internal sealed class CrewCharacterLibrary
         var value = new JObject { ["format_version"] = 1, ["characters"] = new JArray(list.Select(c => c.Json())) };
         try { ConfigFile.Write(path, Encoding.UTF8.GetBytes(value.ToString(Formatting.Indented) + Environment.NewLine)); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { throw new CrewException("character_library_write_failed", e); }
-        characters = Array.AsReadOnly(list); Version++;
+        characters = Array.AsReadOnly(list); stored = true; Version++;
     }
 }

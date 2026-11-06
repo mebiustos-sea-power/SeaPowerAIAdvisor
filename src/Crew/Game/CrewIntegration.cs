@@ -68,7 +68,7 @@ internal sealed class CrewIntegration
         {
             settings ??= new CrewSettingsStore(settingsPath); connections ??= connect(settings);
             source ??= new CrewBattleSource(current, error => log.Warning("AI Crew mission briefing unavailable: " + error));
-            characters ??= new CrewCharacterLibrary(System.IO.Path.GetDirectoryName(settingsPath)!);
+            characters ??= CrewSampleCharacters.Open(System.IO.Path.GetDirectoryName(settingsPath)!, portraitLibrary);
             if (chatter == null)
             {
                 chatter = new CrewChatter(error => log.Error("AI Crew Chatter failed: " + error), characters: characters);

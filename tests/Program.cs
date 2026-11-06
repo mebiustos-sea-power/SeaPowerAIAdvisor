@@ -40,6 +40,7 @@ internal static class Program
         CrewPortraitLibraryTests.Run(Check);
         CrewPortraitCacheTests.Run(Check);
         CrewCharacterTests.Run(Check);
+        CrewSampleCharacterTests.Run(Check);
         CrewWeaponTests.Run(Check);
         CrewThreatTests.Run(Check);
         CrewStateFactsTests.Run(Check);
@@ -164,6 +165,7 @@ internal static class Program
         GeminiTests.Run(args[0], Check);
         ProfileTests.Run(args[1], Check);
         CrewPortraitLibraryTests.RunViews(args[1], Check);
+        CrewSampleCharacterTests.RunBundle(args[1], Check);
         SettingsOperationsTests.Run(Check);
         SettingsNavigationTests.Run(Check);
         TemplateTests.Run(Check);
@@ -191,6 +193,7 @@ internal static class Program
         CrewPortraitLibraryTests.Run(Check);
         CrewPortraitCacheTests.Run(Check);
         CrewCharacterTests.Run(Check);
+        CrewSampleCharacterTests.Run(Check);
         CrewWeaponTests.Run(Check);
         CrewThreatTests.Run(Check);
         CrewStateFactsTests.Run(Check);
