@@ -109,8 +109,8 @@ internal static class CrewCharacterTests
             using var rig = new Rig(library); rig.Chatter.AssignCharacter("unit:1", selected.Id, 0);
             Throws<CrewException>(() => rig.Chatter.AssignCharacter("unit:2", selected.Id, 0));
             rig.Tick(1); var batch = rig.Take(); var input = batch.Input(""); var json = input.Data.ToString();
-            Require(json.Contains(selected.Name) && json.Contains("female") && json.Contains("Japan") && !json.Contains(selected.Id) && !json.Contains(image) && !json.Contains(unrelated.Id) && !json.Contains("assignment_target"), "Wrong metadata or unselected characters were sent");
-            var result = batch.Read(Reply("unit:1", "Changed by AI", "Commander", "Shortened"));
+            Require(json.Contains(selected.Name) && json.Contains("female") && json.Contains("Japan") && json.Contains(selected.Id) && !json.Contains(image) && !json.Contains(unrelated.Id) && !json.Contains("assignment_target"), "Wrong metadata or unselected characters were sent");
+            var result = batch.Read(Reply("unit:1", "Changed by AI", "Commander", "Shortened", selected.Id));
             rig.Complete(result); rig.Pump(1);
             var person = rig.Chatter.Person("unit:1")!;
             Require(person.Name == selected.Name && person.Rank == "Commander" && person.Personality == selected.Personality && person.PortraitId == image && person.RegisteredCharacterId == selected.Id,
@@ -122,8 +122,8 @@ internal static class CrewCharacterTests
             var library = new CrewCharacterLibrary(directory); var character = new CrewCharacter(Id(), allowDuplicates: true); library.Save(character);
             using var rig = new Rig(library); rig.Chatter.AssignCharacter("unit:1", character.Id, 0); rig.Chatter.AssignCharacter("unit:2", character.Id, 0);
             rig.Tick(1); var batch = rig.Take(); library.Save(Full(character.Id)); library.Delete(character.Id);
-            var reply = Reply("unit:1", "First", "Rank", "Calm");
-            ((JArray)reply.Calls[0].Arguments["appointments"]!).Add(Row("unit:2", "Second", "Rank", "Bold"));
+            var reply = Reply("unit:1", "First", "Rank", "Calm", character.Id);
+            ((JArray)reply.Calls[0].Arguments["appointments"]!).Add(Row("unit:2", "Second", "Rank", "Bold", character.Id));
             rig.Complete(batch.Read(reply)); rig.Pump(1);
             Require(rig.Chatter.Person("unit:1")!.Name == "First" && rig.Chatter.Person("unit:2")!.Name == "Second" &&
                 rig.Chatter.Person("unit:1")!.RegisteredCharacterId == character.Id && rig.Chatter.Person("unit:2")!.RegisteredCharacterId == character.Id,
@@ -138,7 +138,7 @@ internal static class CrewCharacterTests
             Require(rig.Chatter.Paused && ReferenceEquals(prior, rig.Chatter.Person("unit:1")) && !rig.Chatter.Enabled("unit:1"), "Failure changed the current person or participation");
             rig.Chatter.SetPaused(false, 2); rig.Tick(3); var batch = rig.Take();
             var draft = new CrewPersonDraft(prior) { Name = "Local edit" }; rig.Chatter.SetPaused(true, 3); rig.Chatter.UpdatePerson("unit:1", prior, draft.Build());
-            rig.Complete(batch.Read(Reply("unit:1", "Stale", "Rank", "Calm")));
+            rig.Complete(batch.Read(Reply("unit:1", "Stale", "Rank", "Calm", next.Id)));
             rig.Chatter.SetPaused(false, 4); rig.Tick(4);
             Require(rig.Chatter.Person("unit:1")!.Name == "Local edit" && rig.Chatter.Person("unit:1")!.RegisteredCharacterId == old.Id, "Stale replacement overwrote an edit or changed the source ID");
         }));
@@ -162,18 +162,131 @@ internal static class CrewCharacterTests
             var library = new CrewCharacterLibrary(directory); var character = new CrewCharacter(Id()); library.Save(character);
             using var rig = new Rig(library); rig.Chatter.AssignCharacter("unit:1", character.Id, 0); rig.Chatter.Suspend();
             rig.Chatter.AssignCharacter("unit:2", character.Id, 0); rig.Tick(1); var batch = rig.Take();
-            rig.Chatter.Refresh(new[] { Target(1), Target(3) }); rig.Complete(batch.Read(Reply("unit:2", "Removed", "Rank", "Calm"))); rig.Pump(1);
+            rig.Chatter.Refresh(new[] { Target(1), Target(3) }); rig.Complete(batch.Read(Reply("unit:2", "Removed", "Rank", "Calm", character.Id))); rig.Pump(1);
             Require(rig.Chatter.Person("unit:2") == null, "A removed target accepted a late appointment");
             rig.Chatter.AssignCharacter("unit:3", character.Id, 2);
             Require(rig.Chatter.AppointmentRequested("unit:3"), "A removed pending assignment blocked reuse");
         }));
+        check("Bulk appointments offer each eligible registration once with unit scopes and preserve registered fields in one generation", () => Temp(directory =>
+        {
+            var library = new CrewCharacterLibrary(directory);
+            var occupied = Full(); var reserved = new CrewCharacter(Id(), "Fixed");
+            var excluded = new CrewCharacter(Id(), aiAppointment: "excluded");
+            var ship = new CrewCharacter(Id(), "登録名 그대로", personality: new string('あ', 255), gender: "female", nationality: "Japan", aiAppointment: "priority", assignmentTarget: "ship");
+            var air = new CrewCharacter(Id(), "Pilot", "Captain", "Bold", assignmentTarget: "aircraft");
+            var any = new CrewCharacter(Id(), portraitId: "11111111111111111111111111111111.png");
+            foreach (var c in new[] { occupied, reserved, excluded, ship, air, any }) library.Save(c);
+            using var rig = new Rig(library);
+            rig.Chatter.Refresh(new[] { Target(1), Target(2, "submarine"), Target(3, "aircraft"), Target(4, "helicopter"), Target(5) });
+            rig.Chatter.AssignCharacter("unit:5", occupied.Id, 0); rig.Chatter.AssignCharacter("unit:1", reserved.Id, 0);
+            rig.Chatter.RequestAppointments(0); rig.Tick(1); var batch = rig.Take(); var data = batch.Input("").Data;
+            var offered = ((JArray)data["registered_characters"]!).Cast<JObject>().ToArray();
+            Require(offered.Length == 3 && (string?)offered[0]["id"] == ship.Id && (bool?)offered[0]["priority"] == true,
+                "Priority or occupied, pending and excluded candidate filtering failed");
+            string[] Units(string id) => offered.Single(c => (string?)c["id"] == id)["unit_ids"]!.Values<string>().OrderBy(v => v).ToArray()!;
+            Require(Units(ship.Id).SequenceEqual(new[] { "unit:2" }) && Units(air.Id).SequenceEqual(new[] { "unit:3", "unit:4" }) &&
+                Units(any.Id).SequenceEqual(new[] { "unit:2", "unit:3", "unit:4" }), "An automatic candidate escaped its unit scope");
+            Require((string?)offered[0]["gender"] == "female" && (string?)offered[0]["nationality"] == "Japan" &&
+                !data.ToString().Contains(any.PortraitId!) && (string?)data["appointments"]![0]!["fixed_character_id"] == reserved.Id,
+                "Selection hints or fixed selection were missing, or image metadata was sent to AI");
+            rig.Complete(batch.Read(ReplyRows(Row("unit:1", "Ignored", "Commander", "Calm", reserved.Id),
+                Row("unit:2", "Ignored", "Lieutenant", "Ignored", ship.Id), Row("unit:3", "Ignored", "Ignored", "Ignored", air.Id),
+                Row("unit:4", "Generated pilot", "Captain", "Cheerful", any.Id)))); rig.Pump(1);
+            Require(rig.Requests == 1 && !rig.Chatter.HasPendingAppointments && rig.Chatter.Targets.All(t => rig.Chatter.Enabled(t.Id)), "Selection required another request or failed to enroll appointments");
+            var person = rig.Chatter.Person("unit:2")!;
+            Require(person.Name == ship.Name && person.Personality == ship.Personality && person.Rank == "Lieutenant" && person.RegisteredCharacterId == ship.Id &&
+                rig.Chatter.Person("unit:4")!.PortraitId == any.PortraitId && library.Find(ship.Id)!.Rank == "", "Registered fields or local image links were lost, or completion changed the template");
+            var status = new CrewLocalApi(rig.Chatter, () => 1, () => { }).Status();
+            Require((string?)status["targets"]!.Single(t => (string?)t["id"] == "unit:2")["registered_character_id"] == ship.Id && !person.Json().ToString().Contains(ship.Id),
+                "The dev status lost source identity or speech input gained registration metadata");
+        }));
+        check("Automatic selection rejects unknown, wrong-unit and duplicate registrations but may choose a normal candidate or a new person", () => Temp(directory =>
+        {
+            var library = new CrewCharacterLibrary(directory); var priority = new CrewCharacter(Id(), aiAppointment: "priority", assignmentTarget: "ship");
+            var normal = new CrewCharacter(Id()); library.Save(priority); library.Save(normal);
+            using var rig = new Rig(library); rig.Chatter.Refresh(new[] { Target(1), Target(2), Target(3, "aircraft") });
+            rig.Chatter.RequestAppointments(0); rig.Tick(1); var batch = rig.Take();
+            AiReply Choices(string first, string second, string third) => ReplyRows(Row("unit:1", "One", "Rank", "Calm", first),
+                Row("unit:2", "Two", "Rank", "Bold", second), Row("unit:3", "Three", "Rank", "Calm", third));
+            Throws<CrewException>(() => batch.Read(Choices(Id(), "new", "new")));
+            Throws<CrewException>(() => batch.Read(Choices("new", "new", priority.Id)));
+            Throws<CrewException>(() => batch.Read(Choices(normal.Id, normal.Id, "new")));
+            var missing = Choices("new", "new", "new"); ((JObject)missing.Calls[0].Arguments["appointments"]![0]!).Remove("character_id");
+            Throws<CrewException>(() => batch.Read(missing));
+            Require(rig.Chatter.Person("unit:1") == null, "Invalid responses published partial assignments");
+            rig.Complete(batch.Read(Choices("new", normal.Id, "new"))); rig.Pump(1);
+            Require(!rig.Chatter.Paused && rig.Chatter.Person("unit:1")!.RegisteredCharacterId == null && rig.Chatter.Person("unit:2")!.RegisteredCharacterId == normal.Id &&
+                rig.Chatter.Person("unit:3")!.RegisteredCharacterId == null, "Priority was forced or choosing a new person failed");
+        }));
+        check("Duplicate-enabled automatic registrations complete independently and retain their captured definitions", () => Temp(directory =>
+        {
+            var library = new CrewCharacterLibrary(directory); var original = new CrewCharacter(Id(), rank: "Registered rank", allowDuplicates: true); library.Save(original);
+            using var rig = new Rig(library); rig.Chatter.Refresh(new[] { Target(1), Target(2) });
+            rig.Chatter.RequestAppointments(0); rig.Tick(1); var batch = rig.Take();
+            library.Save(Full(original.Id)); library.Delete(original.Id);
+            rig.Complete(batch.Read(ReplyRows(Row("unit:2", "Second", "Ignored", "Bold", original.Id), Row("unit:1", "First", "Ignored", "Calm", original.Id)))); rig.Pump(1);
+            Require(rig.Chatter.Person("unit:1")!.Name == "First" && rig.Chatter.Person("unit:2")!.Name == "Second" &&
+                rig.Chatter.Person("unit:1")!.Personality == "Calm" && rig.Chatter.Person("unit:2")!.Personality == "Bold" &&
+                rig.Chatter.Targets.All(t => rig.Chatter.Person(t.Id)!.RegisteredCharacterId == original.Id && rig.Chatter.Person(t.Id)!.Rank == original.Rank),
+                "Duplicate completions were shared or overwritten by a later library edit");
+        }));
+        check("Later appointment batches exclude newly occupied registrations and reserve fixed assignments outside the first batch", () => Temp(directory =>
+        {
+            var library = new CrewCharacterLibrary(directory); var first = new CrewCharacter(Id()); var fixedLater = new CrewCharacter(Id()); var remaining = new CrewCharacter(Id());
+            foreach (var c in new[] { first, fixedLater, remaining }) library.Save(c);
+            using var rig = new Rig(library); rig.Chatter.Refresh(Enumerable.Range(1, CrewBatch.MaximumAppointments + 2).Select(n => Target(n)).ToArray());
+            rig.Chatter.AssignCharacter("unit:34", fixedLater.Id, 0); rig.Chatter.RequestAppointments(0); rig.Tick(1); var initial = rig.Take();
+            Require(initial.Input("").Data["registered_characters"]!.All(c => (string?)c["id"] != fixedLater.Id), "A fixed pending assignment was offered in an earlier batch");
+            rig.Complete(initial.Read(ReplyRows(Enumerable.Range(1, CrewBatch.MaximumAppointments)
+                .Select(n => Row("unit:" + n, "Person " + n, "Rank", "Calm", n == 1 ? first.Id : "new")).ToArray()))); rig.Pump(1);
+            rig.Tick(2); var next = rig.Take(); var offered = next.Input("").Data["registered_characters"]!;
+            Require(offered.Count() == 1 && (string?)offered[0]!["id"] == remaining.Id, "A used or pending nonduplicate registration was offered again");
+            var wrongFixed = ReplyRows(Row("unit:33", "Next", "Rank", "Calm", remaining.Id), Row("unit:34", "Wrong", "Rank", "Calm"));
+            Throws<CrewException>(() => next.Read(wrongFixed));
+            rig.Complete(next.Read(ReplyRows(Row("unit:33", "Next", "Rank", "Calm", remaining.Id), Row("unit:34", "Fixed", "Rank", "Calm", fixedLater.Id)))); rig.Pump(2);
+            Require(rig.Requests == 2 && !rig.Chatter.HasUnappointedTargets && rig.Chatter.Person("unit:34")!.RegisteredCharacterId == fixedLater.Id,
+                "Batch continuation lost a fixed request or required another selection round");
+        }));
+        check("Additional-unit automatic appointments use registrations without changing existing OFF choices and release removed-unit assignments", () => Temp(directory =>
+        {
+            var library = new CrewCharacterLibrary(directory); var seed = new CrewCharacter(Id(), "Seed", "Rank", "Calm", aiAppointment: "excluded"); var added = Full();
+            library.Save(seed); library.Save(added);
+            using var rig = new Rig(library); rig.Chatter.Refresh(new[] { Target(1) }); rig.Settings = new CrewSettings("test", 1, autoAppointments: true);
+            rig.Chatter.AssignCharacter("unit:1", seed.Id, 0); var existing = rig.Chatter.Person("unit:1"); rig.Chatter.ApplyTargets(Array.Empty<string>(), 0);
+            rig.Tick(0); rig.GamePaused = false; rig.Tick(1); rig.Chatter.Refresh(new[] { Target(1), Target(2) }); rig.Tick(60);
+            Require(rig.Requests == 0, "Automatic selection bypassed the configured countdown");
+            rig.Tick(61); var batch = rig.Take();
+            Require(batch.Input("").Data["registered_characters"] is JArray { Count: 1 }, "Additional units did not receive the registry candidate");
+            rig.Complete(batch.Read(Reply("unit:2", "Ignored", "Ignored", "Ignored", added.Id))); rig.Pump(61);
+            Require(ReferenceEquals(existing, rig.Chatter.Person("unit:1")) && !rig.Chatter.Enabled("unit:1") && rig.Chatter.Enabled("unit:2") &&
+                rig.Chatter.Person("unit:2")!.RegisteredCharacterId == added.Id, "Automatic selection changed existing participation or failed to assign the registration");
+            rig.Chatter.ApplyTargets(Array.Empty<string>(), 61); rig.Chatter.Refresh(new[] { Target(1), Target(3) }); rig.Tick(121); var reused = rig.Take();
+            Require(reused.Input("").Data["registered_characters"]!.Any(c => (string?)c["id"] == added.Id), "A disappeared unit's retained person blocked registry reuse");
+            rig.Complete(reused.Read(Reply("unit:3", "Ignored", "Ignored", "Ignored", added.Id))); rig.Pump(121);
+            Require(rig.Chatter.Person("unit:3")!.RegisteredCharacterId == added.Id, "A released registration could not be reused automatically");
+        }));
+        check("Individual AI replacement generates a new person and speech requests omit the registration library", () => Temp(directory =>
+        {
+            var library = new CrewCharacterLibrary(directory); var current = Full(); var candidate = Full(); library.Save(current); library.Save(candidate);
+            using var rig = new Rig(library); rig.Chatter.Refresh(new[] { Target(1) }); rig.Chatter.AssignCharacter("unit:1", current.Id, 0);
+            rig.Chatter.RequestReappointment("unit:1", 0); rig.Tick(1); var replacement = rig.Take();
+            Require(replacement.Input("").Data["registered_characters"] == null, "Individual AI replacement became automatic registry selection");
+            Throws<CrewException>(() => replacement.Read(Reply("unit:1", "Other", "Rank", "Calm", candidate.Id)));
+            rig.Complete(replacement.Read(Reply("unit:1", "New person", "Rank", "Calm"))); rig.Pump(1);
+            rig.GamePaused = false; rig.Tick(2); rig.Tick(3); var speech = rig.Take(); var data = speech.Input("").Data;
+            Require(rig.Chatter.Person("unit:1")!.RegisteredCharacterId == null && data["registered_characters"] == null && data["appointment_context"] == null &&
+                data["appointments"] is JArray { Count: 0 }, "Individual replacement retained the registration or routine speech resent appointment metadata");
+            rig.Complete(speech.Read(ReplyRows())); rig.Pump(3);
+        }));
     }
     private static CrewCharacter Full(string? id = null) => new(id ?? Id(), "Registered", "Commander", "Calm");
-    private static CrewTarget Target(int n) => new("unit:" + n, "Ship " + n, "US", "captain", "vessel", "Class", false, new[] { n }, true);
-    private static JObject Row(string id, string name, string rank, string personality) => new()
-        { ["id"] = id, ["person_name"] = name, ["rank"] = rank, ["name_with_rank"] = rank + " " + name, ["personality"] = personality };
-    private static AiReply Reply(string id, string name, string rank, string personality) => new("", new[] {
-        new AiToolCall("test", CrewBatch.ToolName, new JObject { ["appointments"] = new JArray(Row(id, name, rank, personality)), ["remarks"] = new JArray() }) }, null);
+    private static CrewTarget Target(int n, string kind = "vessel") => new("unit:" + n, "Unit " + n, "US", kind is "aircraft" or "helicopter" ? "pilot" : "captain", kind, "Class", false, new[] { n }, true);
+    private static JObject Row(string id, string name, string rank, string personality, string characterId = "new") => new()
+        { ["id"] = id, ["character_id"] = characterId, ["person_name"] = name, ["rank"] = rank, ["name_with_rank"] = rank + " " + name, ["personality"] = personality };
+    private static AiReply Reply(string id, string name, string rank, string personality, string characterId = "new") => new("", new[] {
+        new AiToolCall("test", CrewBatch.ToolName, new JObject { ["appointments"] = new JArray(Row(id, name, rank, personality, characterId)), ["remarks"] = new JArray() }) }, null);
+    private static AiReply ReplyRows(params JObject[] appointments) => new("", new[] {
+        new AiToolCall("test", CrewBatch.ToolName, new JObject { ["appointments"] = new JArray(appointments), ["remarks"] = new JArray() }) }, null);
     private sealed class Rig : IDisposable
     {
         internal readonly CrewChatter Chatter;
@@ -181,8 +294,9 @@ internal static class CrewCharacterTests
         private TaskCompletionSource<CrewGeneration>? completion;
         internal int Requests;
         internal bool GamePaused = true;
+        internal CrewSettings Settings = new("test");
         internal Rig(CrewCharacterLibrary library) { Chatter = new CrewChatter(_ => { }, characters: library); Chatter.Refresh(new[] { Target(1), Target(2), Target(3) }); }
-        internal void Tick(double now) => Chatter.Tick(now, GamePaused, new CrewSettings("test"), "ja", _ => new JObject(), _ => new JObject(),
+        internal void Tick(double now) => Chatter.Tick(now, GamePaused, Settings, "ja", _ => new JObject(), _ => new JObject(),
             (batch, _, _, _) => { Interlocked.Increment(ref Requests); var next = new TaskCompletionSource<CrewGeneration>(); completion = next; calls.Enqueue(batch); return next.Task; });
         internal CrewBatch Take() { CrewBatch? batch = null; Require(SpinWait.SpinUntil(() => calls.TryDequeue(out batch), 3000), "Generation did not start"); return batch!; }
         internal void Complete(CrewGeneration value) => completion!.SetResult(value);

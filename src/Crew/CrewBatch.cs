@@ -46,12 +46,27 @@ internal sealed class CrewBatch
     private readonly IReadOnlyDictionary<string, CrewPerson?> people;
     private readonly HashSet<string> appointments;
     private readonly IReadOnlyDictionary<string, CrewCharacter> characters;
-    internal CrewBatch(JObject data, IReadOnlyDictionary<string, CrewPerson?> people, IEnumerable<string> appointments, bool preferExchange = false, IReadOnlyDictionary<string, CrewCharacter>? characters = null)
+    private readonly IReadOnlyDictionary<string, Dictionary<string, CrewCharacter>> automaticCharacters;
+    internal CrewBatch(JObject data, IReadOnlyDictionary<string, CrewPerson?> people, IEnumerable<string> appointments, bool preferExchange = false, IReadOnlyDictionary<string, CrewCharacter>? characters = null,
+        IReadOnlyDictionary<string, CrewCharacter[]>? automaticCharacters = null)
     {
         this.data = (JObject)data.DeepClone(); this.data["prefer_exchange"] = preferExchange; this.people = new Dictionary<string, CrewPerson?>(people);
         this.appointments = new HashSet<string>(appointments, StringComparer.Ordinal);
         this.characters = characters == null ? new Dictionary<string, CrewCharacter>() : new Dictionary<string, CrewCharacter>(characters);
         if (this.characters.Keys.Any(id => !this.appointments.Contains(id))) throw new ArgumentException("Character supplied for an unrequested appointment.", nameof(characters));
+        this.automaticCharacters = automaticCharacters == null ? new Dictionary<string, Dictionary<string, CrewCharacter>>() :
+            automaticCharacters.ToDictionary(p => p.Key, p => p.Value.ToDictionary(c => c.Id, StringComparer.Ordinal), StringComparer.Ordinal);
+        if (this.automaticCharacters.Keys.Any(id => !this.appointments.Contains(id) || this.characters.ContainsKey(id)))
+            throw new ArgumentException("Automatic candidates supplied for a fixed or unrequested appointment.", nameof(automaticCharacters));
+        var offered = this.automaticCharacters.SelectMany(p => p.Value.Values.Select(c => (UnitId: p.Key, Character: c))).GroupBy(p => p.Character.Id)
+            .OrderByDescending(g => g.First().Character.AiAppointment == "priority").ThenBy(g => g.Key, StringComparer.Ordinal).ToArray();
+        if (offered.Length > 0) this.data["registered_characters"] = new JArray(offered.Select(g =>
+        {
+            var character = g.First().Character; var row = character.Hints(); row["id"] = character.Id;
+            row["priority"] = character.AiAppointment == "priority"; row["allow_duplicates"] = character.AllowDuplicates;
+            row["unit_ids"] = new JArray(g.Select(p => p.UnitId));
+            return row;
+        }));
     }
     internal AiProviderInput Input(string connectionPrompt)
     {
@@ -59,6 +74,7 @@ internal sealed class CrewBatch
             "Create a short exchange: one speaker voices a feeling about the supplied situation; a second responds to that person with acknowledgment, empathy or a contrasting feeling, not advice, orders or new factual claims. If no natural exchange fits, use independent remarks or silence. " : "";
         var instruction = "Use reply_language for crew names, ranks, personality labels and remarks, rendering names in that language's usual script. " +
             "Appoint only the units listed in input appointments, each exactly once, with a fictional full personal name, an appropriate military rank and a one-word personality. Consider the unit's nation, type, role and appointment_context when appointing crew. " +
+            "For each appointment, return character_id: new for a new fictional person, or the selected registered character ID. If fixed_character_id is supplied, return that exact ID. " +
             "If input appointments is empty, return appointments: []. " +
             "Choose which, if any, of the input speakers would naturally speak now; if empty, return remarks: []. Use their existing or newly appointed personality. " + exchange +
             "Generate only spoken dialogue, without private thoughts or narration. Use one brief in-character sentence, occasionally two: a restrained feeling, concern, or impression rather than a status summary or tactical advice. " +
@@ -70,8 +86,10 @@ internal sealed class CrewBatch
             "Missing values are unknown; ammunition counts are inventory, not launch readiness, and launched_weapons counts are current weapons, not new launches or hits. Never invent events, damage, detections, or mission completion, or claim or announce actions or orders. " +
             "Describe unit facts only for the speaker's own unit or, for leaders, its listed formation members. " +
             "Use submit_chatter once, without questions or other commentary.";
-        if (characters.Count > 0)
-            instruction += " For appointments with character, preserve every nonempty registered name, rank and personality exactly, without translation or shortening. Fill only empty fields; gender and nationality are optional generation hints. A registered personality may be longer than one word. The selected character and unit are already fixed; do not change the assignment.";
+        if (automaticCharacters.Count > 0)
+            instruction += " registered_characters are optional candidates: choose only characters whose unit_ids include that appointment. Prefer priority candidates when suitable; use new when no candidate fits. Unless allow_duplicates is true, assign a character at most once in this response.";
+        if (characters.Count > 0 || automaticCharacters.Count > 0)
+            instruction += " For a selected registered character, preserve every nonempty name, rank and personality exactly, without translation or shortening. Fill only empty fields; gender and nationality are optional generation hints. A registered personality may be longer than one word. Appointments with fixed_character_id already have a chosen character; do not change it.";
         if (!string.IsNullOrWhiteSpace(connectionPrompt))
             instruction += "\nSupplemental instructions for this connection take priority if they conflict:\n" + connectionPrompt;
         var id = new JObject { ["type"] = "string", ["description"] = "The supplied unit ID." };
@@ -90,6 +108,9 @@ internal sealed class CrewBatch
                     ["appointments"] = Rows(new JObject
                     {
                         ["id"] = id.DeepClone(),
+                        ["character_id"] = new JObject { ["type"] = "string", ["enum"] = new JArray(new[] { "new" }.Concat(characters.Values.Select(c => c.Id))
+                            .Concat(automaticCharacters.Values.SelectMany(cs => cs.Keys)).Distinct(StringComparer.Ordinal)),
+                            ["description"] = "The chosen registered character ID, or new to create a fictional person. Use fixed_character_id when supplied." },
                         ["person_name"] = new JObject { ["type"] = "string", ["description"] = "The fictional person's full personal name without rank, not a unit name or callsign." },
                         ["rank"] = new JObject { ["type"] = "string", ["description"] = "The military rank only, in reply_language; abbreviations are allowed." },
                         ["name_with_rank"] = new JObject { ["type"] = "string", ["description"] = "The person's full name from person_name, with rank placed naturally in reply_language; use rank exactly." },
@@ -117,16 +138,31 @@ internal sealed class CrewBatch
             return value;
         }
         var persons = new Dictionary<string, CrewAppointment>(StringComparer.Ordinal);
+        // Fixed requests were accepted before this batch; reserve them even when they appear later in the response.
+        var claimed = new HashSet<string>(characters.Values.Select(c => c.Id), StringComparer.Ordinal);
         foreach (var item in appointed)
         {
-            if (item is not JObject row || row.Properties().Any(p => p.Name is not ("id" or "person_name" or "rank" or "name_with_rank" or "personality")))
+            if (item is not JObject row || row.Properties().Any(p => p.Name is not ("id" or "character_id" or "person_name" or "rank" or "name_with_rank" or "personality")))
                 throw new CrewException("invalid_response");
             var key = Read(row, "id", 80);
             if (!appointments.Contains(key) || persons.ContainsKey(key)) throw new CrewException("invalid_response");
+            var characterId = Read(row, "character_id", 80);
+            CrewCharacter? character;
+            if (characters.TryGetValue(key, out character))
+            {
+                if (characterId != character.Id) throw new CrewException("invalid_response");
+            }
+            else if (characterId == "new") character = null;
+            else
+            {
+                if (!automaticCharacters.TryGetValue(key, out var offered) || !offered.TryGetValue(characterId, out character) ||
+                    !character.AllowDuplicates && claimed.Contains(characterId)) throw new CrewException("invalid_response");
+                claimed.Add(characterId);
+            }
             // A missing or unusable display hint is an invalid vote, not a failed appointment.
             var form = row["name_with_rank"];
             CrewPerson person;
-            if (characters.TryGetValue(key, out var character))
+            if (character != null)
                 person = character.Person(character.Name.Length == 0 ? Read(row, "person_name", 80) : character.Name,
                     character.Rank.Length == 0 ? Read(row, "rank", 80) : character.Rank,
                     character.Personality.Length == 0 ? Read(row, "personality", 40) : character.Personality);

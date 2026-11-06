@@ -31,6 +31,7 @@ internal sealed class CrewLocalApi
                 ["id"] = t.Id, ["display_name"] = t.Name, ["nation"] = t.Nation, ["role"] = t.Role,
                 ["member_unit_ids"] = new JArray(t.Members), ["enabled"] = chatter.Enabled(t.Id), ["can_speak"] = t.CanSpeak,
                 ["appointment_pending"] = chatter.AppointmentRequested(t.Id),
+                ["registered_character_id"] = chatter.Person(t.Id)?.RegisteredCharacterId,
                 ["person"] = chatter.Person(t.Id) is CrewPerson person ? person.Json() : JValue.CreateNull()
             })),
             ["history"] = new JArray(chatter.History.Select(r => new JObject

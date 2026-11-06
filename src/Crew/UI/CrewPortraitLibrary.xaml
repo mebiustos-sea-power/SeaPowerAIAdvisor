@@ -23,7 +23,7 @@
         <TextBlock x:Name="SourceName" TextWrapping="Wrap" Margin="0,8,0,0" />
         <TextBlock Text="{DynamicResource Crew.portrait.requirements}" FontSize="12" TextWrapping="Wrap" Opacity="0.85" Margin="0,8,0,12" />
         <WrapPanel HorizontalAlignment="Right">
-          <Button x:Name="CancelImport" Content="{DynamicResource Crew.person_back}" Height="30" Padding="12,0" />
+          <Button x:Name="CancelImport" Content="{DynamicResource Crew.cancel}" Height="30" Padding="12,0" />
           <Button x:Name="SaveImport" Content="{DynamicResource Crew.portrait.import}" Height="30" Padding="12,0" Margin="8,0,0,0" />
         </WrapPanel>
       </StackPanel>
@@ -38,10 +38,9 @@
       <Button x:Name="Next" Content="{DynamicResource Crew.portrait.next}" Height="30" Padding="12,0" />
     </WrapPanel>
     <Grid x:Name="Selection" Grid.Row="1" Margin="0,10,0,0" Visibility="Collapsed">
-      <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-      <Button x:Name="Common" Content="{DynamicResource Crew.portrait.common}" Height="30" Padding="12,0" />
-      <Button x:Name="Back" Grid.Column="2" Content="{DynamicResource Crew.person_back}" Height="30" Padding="12,0" />
-      <Button x:Name="Select" Grid.Column="3" Content="{DynamicResource Crew.portrait.select}" Height="30" Padding="12,0" Margin="8,0,0,0" IsEnabled="False" />
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+      <Button x:Name="Back" Grid.Column="1" Content="{DynamicResource Crew.person_back}" Height="30" Padding="12,0" />
+      <Button x:Name="Select" Grid.Column="2" Content="{DynamicResource Crew.portrait.select}" Height="30" Padding="12,0" Margin="8,0,0,0" IsEnabled="False" />
     </Grid>
   </Grid>
 </Grid>

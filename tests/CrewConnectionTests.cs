@@ -147,7 +147,7 @@ internal static class CrewConnectionTests
     private static HttpResponseMessage Response(HttpStatusCode status, long? tokens = 10, bool silent = false, bool invalid = false, bool invalidRankForm = false)
     {
         var rows = silent ? new JArray() : new JArray(new JObject { ["id"] = invalid ? "unit:99" : "unit:1", ["text"] = "Maintaining station." });
-        var appointments = new JArray(new JObject { ["id"] = "unit:1", ["person_name"] = "Fictional", ["rank"] = "Cmdr.", ["name_with_rank"] = invalidRankForm ? JValue.CreateNull() : new JValue("Cmdr. Fictional"), ["personality"] = "Calm" });
+        var appointments = new JArray(new JObject { ["id"] = "unit:1", ["character_id"] = "new", ["person_name"] = "Fictional", ["rank"] = "Cmdr.", ["name_with_rank"] = invalidRankForm ? JValue.CreateNull() : new JValue("Cmdr. Fictional"), ["personality"] = "Calm" });
         var result = new JObject { ["choices"] = new JArray(new JObject { ["finish_reason"] = "tool_calls", ["message"] = new JObject { ["role"] = "assistant", ["tool_calls"] = new JArray(new JObject { ["id"] = "chatter", ["type"] = "function", ["function"] = new JObject { ["name"] = CrewBatch.ToolName, ["arguments"] = new JObject { ["appointments"] = appointments, ["remarks"] = rows }.ToString(Newtonsoft.Json.Formatting.None) } }) } }), ["usage"] = tokens.HasValue ? new JObject { ["total_tokens"] = tokens.Value } : JValue.CreateNull() };
         return new HttpResponseMessage(status) { Content = new StringContent(result.ToString(), Encoding.UTF8, "application/json") };
     }

@@ -72,7 +72,6 @@ internal sealed class CrewPortraitLibraryView : IDisposable
         });
         Bind("Previous", () => { if (page > 0) { page--; Draw(); } });
         Bind("Next", () => { if ((page + 1) * PageSize < ids.Length) { page++; Draw(); } });
-        Bind("Common", () => select?.Invoke(null));
         Bind("Back", () => back?.Invoke());
         Bind("Select", () =>
         {
@@ -131,7 +130,6 @@ internal sealed class CrewPortraitLibraryView : IDisposable
         Find<Button>("Previous").IsEnabled = !HasChanges && page > 0;
         Find<Button>("Next").IsEnabled = !HasChanges && (page + 1) * PageSize < ids.Length;
         Find<Button>("Select").IsEnabled = !HasChanges && selected != null && ids.Contains(selected) && !unreadable.Contains(selected);
-        Find<Button>("Common").IsEnabled = !HasChanges;
         Find<Button>("Back").IsEnabled = selection == null;
     }
     internal void ShowError(string message) => notice.Show(message, true);

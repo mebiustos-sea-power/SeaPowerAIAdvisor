@@ -77,6 +77,7 @@ internal sealed class CrewWindow : IDisposable
         root = GUI.ParseXaml(reader.ReadToEnd()) as FrameworkElement ?? throw new InvalidOperationException("The Chatter view is invalid.");
         foreach (var item in text.Values) root.Resources["Crew." + item.Key] = item.Value;
         root.Resources["Crew.save"] = common("settings.save_form");
+        root.Resources["Crew.cancel"] = common("settings.cancel");
         root.Resources["Crew.back_categories"] = common("settings.back_categories");
         root.Resources["Crew.connection_selection"] = common("settings.selection_tab");
         root.Resources["Crew.registration"] = common("settings.registration_tab");

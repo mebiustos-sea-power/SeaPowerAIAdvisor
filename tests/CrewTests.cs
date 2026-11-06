@@ -134,7 +134,7 @@ internal static class CrewTests
         {
             using var rig = new Rig(); rig.GamePaused = true; var targets = Enumerable.Range(1, 5).Select(i => Target(i)).ToArray();
             rig.Chatter.Refresh(targets.Take(1).ToArray()); rig.Chatter.RequestAppointments(0); rig.Tick(1); var first = rig.Take();
-            JObject Captured(string id, string name, string rank, string form) => new() { ["id"] = id, ["person_name"] = name, ["rank"] = rank, ["name_with_rank"] = form, ["personality"] = "Calm" };
+            JObject Captured(string id, string name, string rank, string form) => new() { ["id"] = id, ["character_id"] = "new", ["person_name"] = name, ["rank"] = rank, ["name_with_rank"] = form, ["personality"] = "Calm" };
             first.Completion.SetResult(first.Batch.Read(Reply(new JArray(), new JArray(Captured("unit:1", "佐伯 健一郎", "大尉", "大尉 佐伯 健一郎"))))); rig.Pump(1);
             Require(rig.Chatter.RankBeforeVotes == 1 && rig.Chatter.RankPosition == "before", "The initial prefix was not counted");
             rig.Chatter.Refresh(targets); rig.Chatter.RequestAppointments(1); rig.Tick(2); var next = rig.Take();
@@ -159,7 +159,7 @@ internal static class CrewTests
             var missing = AppointmentRow("unit:1"); missing.Remove("name_with_rank");
             Require(batch.Read(Reply(new JArray(), new JArray(missing))).Appointments["unit:1"].RankBeforeName == null,
                 "Absent display hints prevented appointment");
-            foreach (var field in new[] { "id", "person_name", "rank", "personality" })
+            foreach (var field in new[] { "id", "character_id", "person_name", "rank", "personality" })
             {
                 var bad = AppointmentRow("unit:1"); bad.Remove(field); Throws<CrewException>(() => batch.Read(Reply(new JArray(), new JArray(bad))));
                 bad = AppointmentRow("unit:1"); bad[field] = JValue.CreateNull(); Throws<CrewException>(() => batch.Read(Reply(new JArray(), new JArray(bad))));
@@ -989,7 +989,7 @@ internal static class CrewTests
         ],"contacts":[{"track_number":7017,"posture":"enemy","position":{"latitude_deg":26.8,"longitude_deg":126.5}}],
         "launched_weapons":[{"posture":"enemy","kind":"missile","count":2,"launch_platform":null,"tracked_target":{"id":"unit:1","display_name":"Helicopter"}}]}
         """);
-    private static JObject AppointmentRow(string id, string name = "Fictional", string position = "before") => new() { ["id"] = id, ["person_name"] = name, ["rank"] = "Cmdr.", ["name_with_rank"] = position switch { "before" => "Cmdr. " + name, "after" => name + " Cmdr.", _ => name }, ["personality"] = "Calm" };
+    private static JObject AppointmentRow(string id, string name = "Fictional", string position = "before") => new() { ["id"] = id, ["character_id"] = "new", ["person_name"] = name, ["rank"] = "Cmdr.", ["name_with_rank"] = position switch { "before" => "Cmdr. " + name, "after" => name + " Cmdr.", _ => name }, ["personality"] = "Calm" };
     private static AiReply Reply(JArray rows, JArray? appointments = null) => new("", new[] { new AiToolCall("chatter", CrewBatch.ToolName, new JObject { ["appointments"] = appointments ?? new JArray(), ["remarks"] = rows }) }, 12);
     private static CrewTarget Target(int id, params int[] members) => new("unit:" + id, "Unit " + id, "US", "captain", "vessel", "Destroyer", members.Length > 1, members.Length == 0 ? new[] { id } : members, true);
     private static CrewTarget Follower(int id) => new("unit:" + id, "Unit " + id, "US", "captain", "vessel", "Destroyer", false, new[] { id }, false);

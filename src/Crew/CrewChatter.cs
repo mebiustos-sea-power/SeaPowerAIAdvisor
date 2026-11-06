@@ -299,7 +299,7 @@ internal sealed class CrewChatter : IDisposable
         {
             var row = Identity(s); row["kind"] = s.Target.Kind; row["class_name"] = s.Target.ClassName;
             row["formation_leader"] = s.Target.FormationLeader;
-            if (s.Character != null) row["character"] = s.Character.Hints();
+            if (s.Character != null) { row["fixed_character_id"] = s.Character.Id; row["character"] = s.Character.Hints(); }
             return row;
         }));
         data["speakers"] = new JArray(candidates.Select(s =>
@@ -315,9 +315,20 @@ internal sealed class CrewChatter : IDisposable
         cancellation = new CancellationTokenSource();
         var batch = new CrewBatch(data, candidates.ToDictionary(s => s.Target.Id, s => Person(s.Target.Id)), appointments.Select(s => s.Target.Id),
             preferExchange: candidates.Length >= 2 && random.NextDouble() < settings.ExchangeChancePercent / 100.0,
-            characters: appointments.Where(s => s.Character != null).ToDictionary(s => s.Target.Id, s => s.Character!));
+            characters: appointments.Where(s => s.Character != null).ToDictionary(s => s.Target.Id, s => s.Character!),
+            automaticCharacters: AppointmentCandidates(appointments));
         var token = cancellation.Token; var connectionId = settings.ConnectionId;
         task = Task.Run(() => generate(batch, connectionId, token, Usage.Record), token); Version++;
+    }
+    private IReadOnlyDictionary<string, CrewCharacter[]> AppointmentCandidates(State[] appointments)
+    {
+        var automatic = appointments.Where(s => s.Character == null && s.Appointment != AppointmentRequest.Replacement).ToArray();
+        if (automatic.Length == 0 || characters == null) return new Dictionary<string, CrewCharacter[]>();
+        var inUse = new HashSet<string>(states.Values.SelectMany(s => new[] { Person(s.Target.Id)?.RegisteredCharacterId, s.Character?.Id })
+            .OfType<string>(), StringComparer.Ordinal);
+        var available = characters.Characters.Where(c => c.AiAppointment != "excluded" && (c.AllowDuplicates || !inUse.Contains(c.Id))).ToArray();
+        return automatic.Select(s => (Id: s.Target.Id, Characters: available.Where(c => c.MatchesAssignmentTarget(s.Target.Kind)).ToArray()))
+            .Where(p => p.Characters.Length > 0).ToDictionary(p => p.Id, p => p.Characters);
     }
     internal CrewRemark? NextNotification(double now)
     {

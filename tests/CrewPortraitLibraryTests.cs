@@ -84,7 +84,9 @@ internal static class CrewPortraitLibraryTests
             {
                 var text = JObject.Parse(Read("SeaPowerAIAdvisor.Crew.Localization." + language + ".json"));
                 // The host supplies shared form actions from the Advisor's localization resources.
-                text["save"] = JObject.Parse(Read("SeaPowerAIAdvisor.Localization." + language + ".json"))["settings.save_form"]?.DeepClone();
+                var host = JObject.Parse(Read("SeaPowerAIAdvisor.Localization." + language + ".json"));
+                text["save"] = host["settings.save_form"]?.DeepClone();
+                text["cancel"] = host["settings.cancel"]?.DeepClone();
                 foreach (var value in views.SelectMany(view => view.Descendants()).Attributes().Select(a => a.Value).Where(v => v.StartsWith("{DynamicResource Crew.", StringComparison.Ordinal)))
                 {
                     var key = value.Substring("{DynamicResource Crew.".Length).TrimEnd('}');
