@@ -25,6 +25,8 @@
     <Compile Include="..\src\Crew\CrewAppointments.cs" />
     <Compile Include="..\src\Crew\CrewProtocol.cs" />
     <Compile Include="..\src\Crew\CrewChatter.cs" />
+    <Compile Include="..\src\Crew\CrewSaveData.cs" />
+    <Compile Include="..\src\Crew\CrewState.cs" />
     <Compile Include="..\src\Crew\CrewUsage.cs" />
     <Compile Include="..\src\Crew\UI\CrewTargetSelection.cs" />
     <Compile Include="..\src\Crew\Development\CrewLocalApi.cs" />

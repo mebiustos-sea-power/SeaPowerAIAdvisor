@@ -914,7 +914,7 @@ internal static class CrewTests
             using var rig = new Rig(); rig.Chatter.Refresh(new[] { Target(1) }); rig.PreparePeople();
             var old = rig.Chatter.Person("unit:1"); rig.Chatter.RequestReappointment("unit:1", 0); rig.Tick(1); var call = rig.Take();
             rig.Chatter.Refresh(Array.Empty<CrewTarget>()); rig.Complete(call); rig.Pump(1);
-            Require(ReferenceEquals(old, rig.Chatter.Person("unit:1")) && !rig.Chatter.Paused, "Replacement was applied to a removed unit");
+            Require(ReferenceEquals(old, rig.Chatter.CaptureSaveState().People.Single(p => p.UnitId == "unit:1").Person) && !rig.Chatter.Paused, "Replacement was applied to a removed unit");
         });
         check("Person drafts allow free multiline personality and reject overflow without truncating or changing the original", () =>
         {

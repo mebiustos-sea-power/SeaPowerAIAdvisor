@@ -21,6 +21,7 @@ internal sealed class CrewIntegration
     private readonly DiagnosticLog log;
     private readonly string settingsPath;
     private readonly CrewPortraitLibrary portraitLibrary;
+    private readonly CrewSaveData saveData;
     private readonly Stopwatch clock = Stopwatch.StartNew();
     private MainGameViewModel? model;
     private object? mission, player;
@@ -40,9 +41,9 @@ internal sealed class CrewIntegration
     private string launcherTooltip = "";
     private double nextRefresh;
     private bool active, failed;
-    internal CrewIntegration(string settingsPath, Func<bool> enabled, Action<bool> saveEnabled, Action<string> checkLocalConnection, Func<CrewSettingsStore, ICrewConnections> connect, Func<string, string> common, DiagnosticLog log)
+    internal CrewIntegration(string settingsPath, Func<bool> enabled, Action<bool> saveEnabled, Action<string> checkLocalConnection, Func<CrewSettingsStore, ICrewConnections> connect, Func<string, string> common, DiagnosticLog log, CrewSaveData saveData)
     {
-        this.settingsPath = settingsPath; this.enabled = enabled; this.saveEnabled = saveEnabled; this.checkLocalConnection = checkLocalConnection; this.connect = connect; this.common = common; this.log = log;
+        this.saveData = saveData; this.settingsPath = settingsPath; this.enabled = enabled; this.saveEnabled = saveEnabled; this.checkLocalConnection = checkLocalConnection; this.connect = connect; this.common = common; this.log = log;
         portraitLibrary = new CrewPortraitLibrary(System.IO.Path.GetDirectoryName(settingsPath)!);
     }
     internal void Tick(MainGameViewModel current, ToggleButton? hudAnchor) => Guard(() => Update(current, hudAnchor));
@@ -50,7 +51,7 @@ internal sealed class CrewIntegration
     {
         if (current.RootControl == null || !SceneCreator.InstanceExists(false) || !SceneCreator.Instance.IsLoadingDone || Globals._playerTaskforce == null)
         { Reset(); return; }
-        if (!ReferenceEquals(model, current) || !ReferenceEquals(root, current.RootControl) || !ReferenceEquals(mission, SceneCreator.Instance) || !ReferenceEquals(player, Globals._playerTaskforce))
+        if (!ReferenceEquals(model, current) || !ReferenceEquals(root, current.RootControl) || !ReferenceEquals(mission, SceneCreator.Instance) || !ReferenceEquals(player, Globals._playerTaskforce) || chatter != null && !saveData.IsAttached(chatter))
         {
             Reset(); model = current; root = current.RootControl; mission = SceneCreator.Instance; player = Globals._playerTaskforce;
         }
@@ -68,7 +69,11 @@ internal sealed class CrewIntegration
             settings ??= new CrewSettingsStore(settingsPath); connections ??= connect(settings);
             source ??= new CrewBattleSource(current, error => log.Warning("AI Crew mission briefing unavailable: " + error));
             characters ??= new CrewCharacterLibrary(System.IO.Path.GetDirectoryName(settingsPath)!);
-            chatter ??= new CrewChatter(error => log.Error("AI Crew Chatter failed: " + error), characters: characters);
+            if (chatter == null)
+            {
+                chatter = new CrewChatter(error => log.Error("AI Crew Chatter failed: " + error), characters: characters);
+                saveData.Attach(chatter, clock.Elapsed.TotalSeconds);
+            }
             local ??= new CrewLocalApi(chatter, () => clock.Elapsed.TotalSeconds, () =>
             {
                 connections.ValidateSelection(settings.Current.ConnectionId);
@@ -170,6 +175,7 @@ internal sealed class CrewIntegration
     internal void Destroy(MainGameViewModel current) { if (ReferenceEquals(model, current)) Guard(Reset); }
     private void Reset()
     {
+        if (chatter != null) saveData.Detach(chatter);
         Suspend(); var oldChatter = chatter; chatter = null; Cleanup(() => oldChatter?.Dispose()); local = null; source = null; connections = null; settings = null;
         model = null; root = null; view = null; mission = null; player = null; failed = false; nextRefresh = 0;
     }

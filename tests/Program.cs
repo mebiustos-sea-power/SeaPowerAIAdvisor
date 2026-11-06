@@ -45,6 +45,7 @@ internal static class Program
         CrewStateFactsTests.Run(Check);
         CrewConnectionTests.Run(Check);
         CrewAppointmentTests.Run(Check);
+        CrewSaveTests.Run(Check);
             OperationDocumentationTests.Run(Check);
             CommandSdkTests.Run(Check);
             BattleTests.Run(Check);
@@ -195,6 +196,7 @@ internal static class Program
         CrewStateFactsTests.Run(Check);
         CrewConnectionTests.Run(Check);
         CrewAppointmentTests.Run(Check);
+        CrewSaveTests.Run(Check);
         OperationDocumentationTests.Run(Check);
         CommandSdkTests.Run(Check);
         OptionsTests.Run(args[0], Check);

@@ -10,6 +10,7 @@ namespace SeaPowerAIAdvisor.Crew;
 internal sealed class CrewTarget
 {
     internal string Id { get; }
+    internal string PersistentId { get; }
     internal string Name { get; }
     internal string Nation { get; }
     internal string Role { get; }
@@ -18,8 +19,8 @@ internal sealed class CrewTarget
     internal bool FormationLeader { get; }
     internal IReadOnlyList<int> Members { get; }
     internal bool CanSpeak { get; }
-    internal CrewTarget(string id, string name, string nation, string role, string kind, string className, bool formationLeader, IReadOnlyList<int> members, bool canSpeak)
-    { Id = id; Name = name; Nation = nation; Role = role; Kind = kind; ClassName = className; FormationLeader = formationLeader; Members = members; CanSpeak = canSpeak; }
+    internal CrewTarget(string id, string name, string nation, string role, string kind, string className, bool formationLeader, IReadOnlyList<int> members, bool canSpeak, string? persistentId = null)
+    { PersistentId = persistentId ?? id; Id = id; Name = name; Nation = nation; Role = role; Kind = kind; ClassName = className; FormationLeader = formationLeader; Members = members; CanSpeak = canSpeak; }
 }
 internal sealed class CrewRemark
 {
@@ -40,7 +41,6 @@ internal sealed class CrewChatter : IDisposable
     private sealed class State
     {
         internal CrewTarget Target;
-        internal bool Enabled;
         internal AppointmentRequest Appointment;
         internal CrewCharacter? Character;
         internal int Revision;
@@ -48,7 +48,7 @@ internal sealed class CrewChatter : IDisposable
         internal State(CrewTarget target) => Target = target;
     }
     private readonly Dictionary<string, State> states = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, CrewPerson> people = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, CrewAssignment> people = new(StringComparer.Ordinal);
     private readonly List<CrewRemark> history = new();
     private readonly Queue<CrewRemark> pending = new();
     private readonly Random random;
@@ -74,33 +74,44 @@ internal sealed class CrewChatter : IDisposable
     internal bool RankBeforeName { get; private set; } = true;
     internal string? RankPosition => people.Count == 0 ? null : RankBeforeName ? "before" : "after";
     internal bool Paused { get; private set; }
-    internal bool HasEnabledTargets => states.Values.Any(s => s.Enabled);
-    private bool HasSpeakers => states.Values.Any(s => s.Enabled && s.Target.CanSpeak);
+    internal bool HasEnabledTargets => states.Values.Any(s => Enabled(s.Target.Id));
+    private bool HasSpeakers => states.Values.Any(s => Enabled(s.Target.Id) && s.Target.CanSpeak);
     internal bool HasPendingAppointments => states.Values.Any(s => s.Appointment != AppointmentRequest.None);
-    internal bool HasUnappointedTargets => states.Values.Any(s => !people.ContainsKey(s.Target.Id));
+    internal bool HasUnappointedTargets => states.Values.Any(s => !people.ContainsKey(s.Target.PersistentId));
     internal bool AppointmentRequested(string id) => states.TryGetValue(id, out var s) && s.Appointment != AppointmentRequest.None;
     internal int Version { get; private set; }
     internal IReadOnlyList<CrewRemark> History => history;
     internal IReadOnlyList<CrewTarget> Targets => states.Values.Select(s => s.Target).OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
-    internal CrewPerson? Person(string id) => people.TryGetValue(id, out var person) ? person : null;
+    private CrewAssignment? Assignment(string id) => states.TryGetValue(id, out var state) && people.TryGetValue(state.Target.PersistentId, out var person) ? person : null;
+    internal CrewPerson? Person(string id) => Assignment(id)?.Person;
     // UI resources may still be displayed by history; image files belong to the library.
-    internal IEnumerable<string?> DisplayPortraitIds => people.Values.Select(p => p.PortraitId).Concat(history.Select(r => r.Submission.Person.PortraitId));
+    internal IEnumerable<string?> DisplayPortraitIds => people.Values.Select(p => p.Person.PortraitId).Concat(history.Select(r => r.Submission.Person.PortraitId));
     internal void UpdatePerson(string id, CrewPerson expected, CrewPerson person)
     {
-        if (!states.TryGetValue(id, out var state) || !people.TryGetValue(id, out var current)) throw new CrewException("person_unavailable");
-        if (!ReferenceEquals(current, expected)) throw new CrewException("person_changed");
-        if (current.RegisteredCharacterId != person.RegisteredCharacterId) throw new CrewException("person_invalid");
+        if (!states.TryGetValue(id, out var state) || !people.TryGetValue(state.Target.PersistentId, out var current)) throw new CrewException("person_unavailable");
+        if (!ReferenceEquals(current.Person, expected)) throw new CrewException("person_changed");
+        if (current.Person.RegisteredCharacterId != person.RegisteredCharacterId) throw new CrewException("person_invalid");
         state.Appointment = AppointmentRequest.None; state.Character = null; state.Revision++; Version++;
-        people[id] = person;
+        people[state.Target.PersistentId] = new CrewAssignment(state.Target.PersistentId, person, current.Enabled);
+    }
+    internal CrewSavedState CaptureSaveState() => new(people.Values, Paused, RankBeforeVotes, RankAfterVotes, RankInvalidVotes, RankBeforeName);
+    internal void Restore(CrewSavedState saved, double now)
+    {
+        if (retired || task != null || people.Count != 0 || history.Count != 0)
+            throw new InvalidOperationException("Crew data must be restored into a new session.");
+        foreach (var person in saved.People) people.Add(person.UnitId, person);
+        Paused = saved.Paused; RankBeforeVotes = saved.BeforeVotes; RankAfterVotes = saved.AfterVotes;
+        RankInvalidVotes = saved.InvalidVotes; RankBeforeName = saved.RankBeforeName;
+        nextOpportunity = now; Version++;
     }
     internal void RequestReappointment(string id, double now)
     {
-        if (!states.TryGetValue(id, out var state) || !people.ContainsKey(id)) throw new CrewException("person_unavailable");
+        if (!states.TryGetValue(id, out var state) || Person(id) == null) throw new CrewException("person_unavailable");
         if (Paused || Busy) throw new CrewException("person_busy");
         state.Appointment = AppointmentRequest.Replacement; state.Character = null; state.Revision++;
         nextAppointments = now + 1; Error = null; Version++;
     }
-    internal bool Enabled(string id) => states.TryGetValue(id, out var s) && s.Enabled;
+    internal bool Enabled(string id) => Assignment(id)?.Enabled == true;
     internal CrewChatter(Action<Exception> log, Random? random = null, CrewCharacterLibrary? characters = null)
     { this.log = log; this.random = random ?? new Random(); this.characters = characters; }
     internal bool CanAssignCharacter(string unitId, CrewCharacter character) => states.ContainsKey(unitId) &&
@@ -115,23 +126,27 @@ internal sealed class CrewChatter : IDisposable
         if (!character.IsComplete)
         {
             // Reserve the selected immutable definition. Later library edits affect new requests only.
-            state.Character = character; state.Appointment = people.ContainsKey(unitId) ? AppointmentRequest.Replacement : AppointmentRequest.Manual;
+            state.Character = character; state.Appointment = Person(unitId) != null ? AppointmentRequest.Replacement : AppointmentRequest.Manual;
             state.Revision++; nextAppointments = Math.Min(nextAppointments, now + 1); Error = null; Version++; return;
         }
-        var replacement = people.ContainsKey(unitId);
-        people[unitId] = character.Person("", "", ""); state.Character = null; state.Appointment = AppointmentRequest.None;
-        if (!replacement) state.Enabled = true;
+        var replacement = Person(unitId) != null;
+        people[state.Target.PersistentId] = new CrewAssignment(state.Target.PersistentId, character.Person("", "", ""), !replacement || Enabled(unitId));
+        state.Character = null; state.Appointment = AppointmentRequest.None;
         state.Revision++; state.LastConsidered = 0; Error = null; Version++;
         if (HasSpeakers && double.IsPositiveInfinity(nextOpportunity)) nextOpportunity = OpportunityTime(now) + 1;
     }
     internal void Refresh(IReadOnlyList<CrewTarget> targets)
     {
         var ids = new HashSet<string>(targets.Select(t => t.Id), StringComparer.Ordinal);
+        var persistentIds = new HashSet<string>(targets.Select(t => t.PersistentId), StringComparer.Ordinal);
+        foreach (var removed in states.Values.Where(s => !persistentIds.Contains(s.Target.PersistentId)))
+            if (people.TryGetValue(removed.Target.PersistentId, out var assignment))
+                people[assignment.UnitId] = new CrewAssignment(assignment.UnitId, assignment.Person, false);
         foreach (var id in states.Keys.Where(id => !ids.Contains(id)).ToArray()) { states.Remove(id); Version++; }
         foreach (var target in targets)
-            if (states.TryGetValue(target.Id, out var state))
+            if (states.TryGetValue(target.Id, out var state) && state.Target.PersistentId == target.PersistentId)
             { if (state.Target.Name != target.Name || state.Target.CanSpeak != target.CanSpeak || !state.Target.Members.SequenceEqual(target.Members)) Version++; state.Target = target; }
-            else { states.Add(target.Id, new State(target)); Version++; }
+            else { states[target.Id] = new State(target); Version++; }
         if (!HasEnabledTargets)
         {
             if (speechInFlight) CancelGeneration();
@@ -143,7 +158,7 @@ internal sealed class CrewChatter : IDisposable
     private void QueueAppointments(double when, AppointmentRequest request)
     {
         var changed = false;
-        foreach (var state in states.Values.Where(s => !people.ContainsKey(s.Target.Id) &&
+        foreach (var state in states.Values.Where(s => !people.ContainsKey(s.Target.PersistentId) &&
             (s.Appointment == AppointmentRequest.None || request == AppointmentRequest.Manual && s.Appointment == AppointmentRequest.Automatic)))
         { state.Appointment = request; changed = true; }
         if (!changed) return;
@@ -153,13 +168,15 @@ internal sealed class CrewChatter : IDisposable
     internal void ApplyTargets(IReadOnlyCollection<string> selected, double now)
     {
         var ids = new HashSet<string>(selected, StringComparer.Ordinal);
-        if (ids.Count != selected.Count || ids.Any(id => !states.ContainsKey(id) || !people.ContainsKey(id))) throw new ArgumentException("Invalid Chatter selection.", nameof(selected));
-        if (states.Values.All(s => s.Enabled == ids.Contains(s.Target.Id))) return;
+        if (ids.Count != selected.Count || ids.Any(id => !states.ContainsKey(id) || Person(id) == null)) throw new ArgumentException("Invalid Chatter selection.", nameof(selected));
+        if (states.Values.All(s => Enabled(s.Target.Id) == ids.Contains(s.Target.Id))) return;
         var wasActive = HasEnabledTargets;
         foreach (var state in states.Values)
         {
-            var value = ids.Contains(state.Target.Id); if (state.Enabled == value) continue;
-            state.Enabled = value; state.Revision++; state.LastConsidered = 0;
+            var value = ids.Contains(state.Target.Id); if (Enabled(state.Target.Id) == value) continue;
+            var assignment = people[state.Target.PersistentId];
+            people[state.Target.PersistentId] = new CrewAssignment(assignment.UnitId, assignment.Person, value);
+            state.Revision++; state.LastConsidered = 0;
         }
         if (!HasEnabledTargets)
         {
@@ -222,10 +239,9 @@ internal sealed class CrewChatter : IDisposable
                     var entry = work.Single(w => w.Target.Id == appointment.Key);
                     if (!Valid(entry) || entry.State.Appointment == AppointmentRequest.None || !ReferenceEquals(entry.Character, entry.State.Character)) continue;
                     var replacement = entry.Appointment == AppointmentRequest.Replacement;
-                    if ((entry.State.Appointment == AppointmentRequest.Replacement) != replacement || people.ContainsKey(appointment.Key) != replacement) continue;
-                    people[appointment.Key] = appointment.Value.Person;
+                    if ((entry.State.Appointment == AppointmentRequest.Replacement) != replacement || people.ContainsKey(entry.State.Target.PersistentId) != replacement) continue;
+                    people[entry.State.Target.PersistentId] = new CrewAssignment(entry.State.Target.PersistentId, appointment.Value.Person, !replacement || Enabled(appointment.Key));
                     entry.State.Appointment = AppointmentRequest.None; entry.State.Character = null;
-                    if (!replacement) entry.State.Enabled = true;
                     entry.State.Revision++; entry.State.LastConsidered = 0;
                     if (appointment.Value.RankBeforeName is bool before)
                     { if (before) RankBeforeVotes++; else RankAfterVotes++; }
@@ -237,8 +253,8 @@ internal sealed class CrewChatter : IDisposable
                 foreach (var submission in result.Remarks)
                 {
                     var entry = work.Single(w => w.Target.Id == submission.Id);
-                    if (!Valid(entry) || now - startedAt > 180 || !entry.State.Enabled || entry.State.Revision != entry.Revision || !entry.State.Target.CanSpeak || !entry.State.Target.Members.SequenceEqual(entry.Target.Members)) continue;
-                    var bound = new CrewSubmission(submission.Id, people[submission.Id], submission.Text);
+                    if (!Valid(entry) || now - startedAt > 180 || !Enabled(entry.Target.Id) || entry.State.Revision != entry.Revision || !entry.State.Target.CanSpeak || !entry.State.Target.Members.SequenceEqual(entry.Target.Members)) continue;
+                    var bound = new CrewSubmission(submission.Id, Person(submission.Id)!, submission.Text);
                     var remark = new CrewRemark(entry.Target, bound, now + 120, entry.Revision, activeInformationRevision);
                     history.Add(remark); if (history.Count > 200) history.RemoveAt(0);
                     pending.Enqueue(remark); while (pending.Count > 16) pending.Dequeue();
@@ -277,7 +293,7 @@ internal sealed class CrewChatter : IDisposable
         if (!opportunityDue && now < nextAppointments) return;
         var appointments = now < nextAppointments ? Array.Empty<State>() : states.Values.Where(s => s.Appointment != AppointmentRequest.None &&
             (!simulationPaused || s.Appointment is AppointmentRequest.Manual or AppointmentRequest.Replacement)).Take(CrewBatch.MaximumAppointments).ToArray();
-        var candidates = HasPendingAppointments || !opportunityDue ? Array.Empty<State>() : states.Values.Where(s => s.Enabled && s.Target.CanSpeak && people.ContainsKey(s.Target.Id))
+        var candidates = HasPendingAppointments || !opportunityDue ? Array.Empty<State>() : states.Values.Where(s => Enabled(s.Target.Id) && s.Target.CanSpeak && people.ContainsKey(s.Target.PersistentId))
             .OrderBy(s => s.LastConsidered).ThenBy(_ => random.NextDouble()).Take(4).ToArray();
         if (appointments.Length == 0 && candidates.Length == 0) return;
         if (settings.ConnectionId == null) { Error = "connection_required"; SetPaused(true, now); return; }
@@ -339,7 +355,7 @@ internal sealed class CrewChatter : IDisposable
         }
         return null;
     }
-    internal bool IsCurrent(CrewRemark remark) => states.TryGetValue(remark.Target.Id, out var state) && state.Enabled && state.Target.CanSpeak &&
+    internal bool IsCurrent(CrewRemark remark) => states.TryGetValue(remark.Target.Id, out var state) && Enabled(remark.Target.Id) && state.Target.CanSpeak &&
         state.Revision == remark.Revision && state.Target.Members.SequenceEqual(remark.Target.Members);
     private void CancelGeneration()
     {
@@ -353,7 +369,10 @@ internal sealed class CrewChatter : IDisposable
     }
     internal void Suspend()
     {
-        CancelGeneration(); foreach (var state in states.Values) { state.Enabled = false; state.Appointment = AppointmentRequest.None; state.Character = null; }
+        CancelGeneration();
+        foreach (var assignment in people.Values.ToArray())
+            people[assignment.UnitId] = new CrewAssignment(assignment.UnitId, assignment.Person, false);
+        foreach (var state in states.Values) { state.Appointment = AppointmentRequest.None; state.Character = null; }
         Paused = false; Error = null; Version++;
     }
     public void Dispose() { retired = true; Suspend(); states.Clear(); people.Clear(); history.Clear(); }

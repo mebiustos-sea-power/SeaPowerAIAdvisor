@@ -34,7 +34,8 @@ internal sealed class CrewBattleSource
             var kind = Code(Required(unit.Unit, "_type"));
             result.Add(new CrewTarget("unit:" + unit.Id.ToString(CultureInfo.InvariantCulture), unit.Unit.Name.Value, unit.Unit.Nation.Value,
                 kind is "aircraft" or "helicopter" ? "pilot" : "captain", kind, unit.Unit.ClassName,
-                unit.Unit.Formation != null && unit.Unit.IsFormationLeader, members, canSpeak));
+                unit.Unit.Formation != null && unit.Unit.IsFormationLeader, members, canSpeak,
+                "unit:" + unit.Unit.UniqueID.ToString(CultureInfo.InvariantCulture)));
         }
         return result;
     }

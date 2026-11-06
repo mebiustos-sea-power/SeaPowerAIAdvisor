@@ -19,7 +19,8 @@ public sealed class Plugin : IAnchorChainMod
     private static BattleIntegration? battle;
     private static Crew.CrewIntegration? crew;
     private static Shared.GameSaveIntegration? saveIntegration;
-    private static readonly AdvisorSaveData SaveData = new(missionMessages: Shared.BattleMissionMessageSource.History);
+    private static readonly Crew.CrewSaveData CrewSaveData = new();
+    private static readonly AdvisorSaveData SaveData = new(missionMessages: Shared.BattleMissionMessageSource.History, crew: CrewSaveData);
     private static readonly AdvisorSaveDataNotice SaveDataNotice = new();
     private static AdvisorOptionsStore? options;
     private static AdvisorBackendRegistry? backends;
@@ -62,7 +63,7 @@ public sealed class Plugin : IAnchorChainMod
                 () => options.Current.CrewEnabled, options.SaveCrew,
                 id => { if (!options.Current.LocalConnections.AllowedIds.Contains(id)) throw new LocalApiException(403, "connection_not_allowed"); },
                 saved => new ChatterConnections(settingsPath, AdvisorTrace.DirectoryIn(UnityEngine.Application.persistentDataPath), saved, () => AdvisorText.Load(GameLanguage.Read())),
-                key => AdvisorText.Load(GameLanguage.Read())[key], Diagnostics);
+                key => AdvisorText.Load(GameLanguage.Read())[key], Diagnostics, CrewSaveData);
             harmony.Patch(Required(typeof(MainGameViewModel), "OnLateUpdate"), postfix: new HarmonyMethod(typeof(Plugin), nameof(BattleFrame)));
             harmony.Patch(Required(typeof(MainGameViewModel), "OnDestroy"), prefix: new HarmonyMethod(typeof(Plugin), nameof(BattleDestroyed)));
             SeaPowerAIAdvisor.Api.AdvisorApi.Attach(extension =>

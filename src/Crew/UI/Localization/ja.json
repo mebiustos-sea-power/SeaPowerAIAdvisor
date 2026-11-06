@@ -45,7 +45,7 @@
   "paused": "交信を一時停止中",
   "leader_speaks": "編隊長が発言",
   "chatter": "交信",
-  "usage.summary": "このミッションの使用量: {0} tokens / API: {1}回",
+  "usage.summary": "使用量（開始・ロード後）: {0} tokens / API: {1}回",
   "usage.unknown": " / 使用量不明: {0}回",
   "usage.latest": "直近: {0}",
   "usage.unavailable": "不明",

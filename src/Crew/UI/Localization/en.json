@@ -45,7 +45,7 @@
   "paused": "Chatter paused",
   "leader_speaks": "Formation leader speaks",
   "chatter": "Chatter",
-  "usage.summary": "Mission usage: {0} tokens / API requests: {1}",
+  "usage.summary": "Usage since start/load: {0} tokens / API requests: {1}",
   "usage.unknown": " / Usage unavailable: {0}",
   "usage.latest": "Latest: {0}",
   "usage.unavailable": "Unavailable",
