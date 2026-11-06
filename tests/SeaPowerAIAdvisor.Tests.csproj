@@ -22,6 +22,8 @@
     <Compile Include="..\src\Crew\CrewCharacterLibrary.cs" />
     <Compile Include="..\src\Shared\Images\PortraitData.cs" />
     <Compile Include="..\src\Crew\CrewBatch.cs" />
+    <Compile Include="..\src\Crew\CrewAppointments.cs" />
+    <Compile Include="..\src\Crew\CrewProtocol.cs" />
     <Compile Include="..\src\Crew\CrewChatter.cs" />
     <Compile Include="..\src\Crew\CrewUsage.cs" />
     <Compile Include="..\src\Crew\UI\CrewTargetSelection.cs" />

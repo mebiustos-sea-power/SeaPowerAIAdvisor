@@ -213,7 +213,7 @@ internal sealed class CrewChatter : IDisposable
             var hadAutomaticAppointments = work.Any(w => w.Appointment == AppointmentRequest.Automatic);
             active = Array.Empty<(State, int, CrewTarget, AppointmentRequest, CrewCharacter?)>(); speechInFlight = false;
             bool Valid((State State, int Revision, CrewTarget Target, AppointmentRequest Appointment, CrewCharacter? Character) entry) =>
-                states.TryGetValue(entry.Target.Id, out var current) && ReferenceEquals(current, entry.State) && now - startedAt <= 180;
+                states.TryGetValue(entry.Target.Id, out var current) && ReferenceEquals(current, entry.State);
             try
             {
                 var result = completed.GetAwaiter().GetResult();
@@ -237,7 +237,7 @@ internal sealed class CrewChatter : IDisposable
                 foreach (var submission in result.Remarks)
                 {
                     var entry = work.Single(w => w.Target.Id == submission.Id);
-                    if (!Valid(entry) || !entry.State.Enabled || entry.State.Revision != entry.Revision || !entry.State.Target.CanSpeak || !entry.State.Target.Members.SequenceEqual(entry.Target.Members)) continue;
+                    if (!Valid(entry) || now - startedAt > 180 || !entry.State.Enabled || entry.State.Revision != entry.Revision || !entry.State.Target.CanSpeak || !entry.State.Target.Members.SequenceEqual(entry.Target.Members)) continue;
                     var bound = new CrewSubmission(submission.Id, people[submission.Id], submission.Text);
                     var remark = new CrewRemark(entry.Target, bound, now + 120, entry.Revision, activeInformationRevision);
                     history.Add(remark); if (history.Count > 200) history.RemoveAt(0);
@@ -299,7 +299,6 @@ internal sealed class CrewChatter : IDisposable
         {
             var row = Identity(s); row["kind"] = s.Target.Kind; row["class_name"] = s.Target.ClassName;
             row["formation_leader"] = s.Target.FormationLeader;
-            if (s.Character != null) { row["fixed_character_id"] = s.Character.Id; row["character"] = s.Character.Identity(); }
             return row;
         }));
         data["speakers"] = new JArray(candidates.Select(s =>

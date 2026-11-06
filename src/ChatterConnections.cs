@@ -45,29 +45,42 @@ internal sealed class ChatterConnections : ICrewConnections
             AdvisorServices.Diagnostics(saved.Options, profile, null, catalog), "crew_chatter", new JObject());
         using var transport = transportFactory(trace);
         AdvisorServices.ObserveErrors(transport, profile, null, catalog, "crew_chatter", null);
-        var requested = false; long? tokens = null;
+        var requests = 0; long totalTokens = 0; var completeUsage = true;
+        JObject Outcome(string outcome) => new() { ["outcome"] = outcome, ["api_requests"] = requests, ["model"] = profile.Model,
+            ["total_tokens"] = completeUsage && requests > 0 ? new JValue(totalTokens) : JValue.CreateNull() };
         try
         {
-            using var connection = new AiConnection(service.Open(profile, saved.Options, false, transport), null,
-                batch.Input(profile.Prompt), _ => throw new InvalidOperationException("Chatter has no fallback assignment."));
-            var reply = await connection.GenerateAsync(true, null, cancellation, (_, _, _, bytes) =>
-            { if (bytes > 1_000_000) throw new CrewException("too_large"); requested = true; }).ConfigureAwait(false);
-            tokens = reply.TotalTokens;
-            cancellation.ThrowIfCancellationRequested();
-            var result = batch.Read(reply);
-            trace?.FinishOperation(new JObject { ["outcome"] = "completed", ["api_requests"] = connection.ApiRequests,
-                ["model"] = connection.Model, ["total_tokens"] = reply.TotalTokens,
-                ["invalid_rank_votes"] = result.Appointments.Values.Count(a => !a.RankBeforeName.HasValue) });
-            return result;
+            var backend = service.Open(profile, saved.Options, false, transport);
+            async Task<AiReply> Send(AiProviderInput input)
+            {
+                using var connection = new AiConnection(backend, null, input, _ => throw new InvalidOperationException("Chatter has no fallback assignment."));
+                var requested = false; long? tokens = null;
+                try
+                {
+                    var reply = await connection.GenerateAsync(true, null, cancellation, (_, _, _, bytes) =>
+                    { if (bytes > 1_000_000) throw new CrewException("too_large"); requested = true; requests++; }).ConfigureAwait(false);
+                    tokens = reply.TotalTokens; return reply;
+                }
+                finally
+                {
+                    if (requested)
+                    {
+                        if (tokens.HasValue) totalTokens += tokens.Value; else completeUsage = false;
+                        recordUsage(tokens);
+                    }
+                }
+            }
+            var result = await batch.GenerateAsync(profile.Prompt, Send, cancellation).ConfigureAwait(false);
+            var outcome = Outcome("completed"); outcome["invalid_rank_votes"] = result.Appointments.Values.Count(a => !a.RankBeforeName.HasValue);
+            trace?.FinishOperation(outcome); return result;
         }
-        catch (OperationCanceledException) { trace?.FinishOperation(new JObject { ["outcome"] = "cancelled" }); throw; }
+        catch (OperationCanceledException) { trace?.FinishOperation(Outcome("cancelled")); throw; }
         catch (Exception error)
         {
             transport.CaptureFailure(error);
-            trace?.FinishOperation(new JObject { ["outcome"] = "failed", ["error_code"] = error is CrewException crew ? crew.Code : error is AiConnectionException ai ? ai.Code : "unexpected_error" });
-            throw;
+            var outcome = Outcome("failed"); outcome["error_code"] = error is CrewException crew ? crew.Code : error is AiConnectionException ai ? ai.Code : "unexpected_error";
+            trace?.FinishOperation(outcome); throw;
         }
-        finally { if (requested) recordUsage(tokens); }
     }
     public async Task<string> TestAsync(AiConnectionDraft draft, CancellationToken cancellation)
     {

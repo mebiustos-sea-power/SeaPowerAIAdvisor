@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using SeaPowerAIAdvisor.Shared;
 
@@ -36,7 +38,7 @@ internal sealed class CrewGeneration
     { Appointments = new Dictionary<string, CrewAppointment>(appointments); Remarks = Array.AsReadOnly(remarks.ToArray()); }
 }
 
-// One immutable batch can appoint crew and independently select remarks; it has no game operations or retrieval gateway.
+// A detached job is either an appointment batch or a speech batch. Results publish only after generation completes.
 internal sealed class CrewBatch
 {
     internal const string ToolName = "submit_chatter";
@@ -44,147 +46,64 @@ internal sealed class CrewBatch
     internal const int MaximumAppointments = 32;
     private readonly JObject data;
     private readonly IReadOnlyDictionary<string, CrewPerson?> people;
-    private readonly HashSet<string> appointments;
-    private readonly IReadOnlyDictionary<string, CrewCharacter> characters;
-    private readonly IReadOnlyDictionary<string, Dictionary<string, CrewCharacter>> automaticCharacters;
-    internal CrewBatch(JObject data, IReadOnlyDictionary<string, CrewPerson?> people, IEnumerable<string> appointments, bool preferExchange = false, IReadOnlyDictionary<string, CrewCharacter>? characters = null,
-        IReadOnlyDictionary<string, CrewCharacter[]>? automaticCharacters = null)
+    private readonly CrewAppointments? appointments;
+    internal JObject Snapshot => (JObject)data.DeepClone();
+    internal bool HasAppointments => appointments != null;
+    internal CrewBatch(JObject data, IReadOnlyDictionary<string, CrewPerson?> people, IEnumerable<string> appointments, bool preferExchange = false,
+        IReadOnlyDictionary<string, CrewCharacter>? characters = null, IReadOnlyDictionary<string, CrewCharacter[]>? automaticCharacters = null)
     {
-        this.data = (JObject)data.DeepClone(); this.data["prefer_exchange"] = preferExchange; this.people = new Dictionary<string, CrewPerson?>(people);
-        this.appointments = new HashSet<string>(appointments, StringComparer.Ordinal);
-        this.characters = characters == null ? new Dictionary<string, CrewCharacter>() : new Dictionary<string, CrewCharacter>(characters);
-        if (this.characters.Keys.Any(id => !this.appointments.Contains(id))) throw new ArgumentException("Character supplied for an unrequested appointment.", nameof(characters));
-        this.automaticCharacters = automaticCharacters == null ? new Dictionary<string, Dictionary<string, CrewCharacter>>() :
-            automaticCharacters.ToDictionary(p => p.Key, p => p.Value.ToDictionary(c => c.Id, StringComparer.Ordinal), StringComparer.Ordinal);
-        if (this.automaticCharacters.Keys.Any(id => !this.appointments.Contains(id) || this.characters.ContainsKey(id)))
-            throw new ArgumentException("Automatic candidates supplied for a fixed or unrequested appointment.", nameof(automaticCharacters));
-        var offered = this.automaticCharacters.SelectMany(p => p.Value.Values.Select(c => (UnitId: p.Key, Character: c))).GroupBy(p => p.Character.Id)
-            .OrderByDescending(g => g.First().Character.AiAppointment == "priority").ThenBy(g => g.Key, StringComparer.Ordinal).ToArray();
-        if (offered.Length > 0) this.data["registered_characters"] = new JArray(offered.Select(g =>
-        {
-            var character = g.First().Character; var row = character.Identity(); row["id"] = character.Id;
-            row["priority"] = character.AiAppointment == "priority"; row["allow_duplicates"] = character.AllowDuplicates;
-            row["unit_ids"] = new JArray(g.Select(p => p.UnitId));
-            return row;
-        }));
+        this.data = (JObject)data.DeepClone(); this.data["prefer_exchange"] = preferExchange;
+        this.people = new Dictionary<string, CrewPerson?>(people);
+        var ids = appointments.ToArray();
+        if (ids.Length > 0) this.appointments = new CrewAppointments(this.data, ids, characters, automaticCharacters);
+        else if (characters?.Count > 0 || automaticCharacters?.Count > 0) throw new ArgumentException("Characters supplied without appointments.");
+        if (ids.Length > 0 && people.Count > 0 || people.Values.Any(p => p == null)) throw new ArgumentException("Appointment and speech jobs must be separate.");
+    }
+    internal async Task<CrewGeneration> GenerateAsync(string prompt, Func<AiProviderInput, Task<AiReply>> send, CancellationToken cancellation)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        if (appointments != null) return await appointments.GenerateAsync(prompt, send, cancellation).ConfigureAwait(false);
+        var reply = await send(Input(prompt)).ConfigureAwait(false);
+        cancellation.ThrowIfCancellationRequested();
+        return Read(reply);
     }
     internal AiProviderInput Input(string connectionPrompt)
     {
+        if (appointments != null) throw new InvalidOperationException("Appointments use staged generation.");
         var exchange = (bool)data["prefer_exchange"]! ?
             "Create a short exchange: one speaker voices a feeling about the supplied situation; a second responds to that person with acknowledgment, empathy or a contrasting feeling, not advice, orders or new factual claims. If no natural exchange fits, use independent remarks or silence. " : "";
-        var instruction = "Use reply_language for crew names, ranks, personality labels and remarks, rendering names in that language's usual script. " +
-            "Appoint each unit listed in input appointments exactly once. Create a fictional full personal name, an appropriate military rank and a one-word personality only for fields that need generation. Use the unit's type, role and appointment_context; infer nationality from its nation only for a new person or an unspecified nationality. " +
-            "For each appointment, return character_id: new for a new fictional person, or the selected registered character ID. If fixed_character_id is supplied, return that exact ID. " +
-            "If input appointments is empty, return appointments: []. " +
-            "Choose which, if any, of the input speakers would naturally speak now; if empty, return remarks: []. Use their existing or newly appointed personality. " + exchange +
+        var instruction = "Use reply_language for remarks. " +
+            "Choose which, if any, of the input speakers would naturally speak now; if empty, return remarks: []. Use their existing personality. " + exchange +
             "Generate only spoken dialogue, without private thoughts or narration. Use one brief in-character sentence, occasionally two: a restrained feeling, concern, or impression rather than a status summary or tactical advice. " +
             "Let personality shape the remark; feelings are fictional, but their factual basis must come from the supplied player-known situation. " +
-            "Silence is preferable to filler or repetition; submit an empty remarks array when no speaker has a worthwhile remark. Appoint the requested units even when they remain silent. " +
+            "Silence is preferable to filler or repetition; submit an empty remarks array when no speaker has a worthwhile remark. " +
             "Use recent_remarks to avoid repetition, not as current observations. Make this response self-contained. Shared fleet contacts do not prove personal detection. active_threat_alerts are current warnings, not hits or sensor failure; illumination alone does not establish a missile launch. " +
             "air_operations flags include handling and waiting, not completed launches or recoveries. " +
             "posture states allegiance: enemy is confirmed hostile, unknown is undetermined. class_identified describes only class/type recognition. " +
             "Missing values are unknown; ammunition counts are inventory, not launch readiness, and launched_weapons counts are current weapons, not new launches or hits. Never invent events, damage, detections, or mission completion, or claim or announce actions or orders. " +
             "Describe unit facts only for the speaker's own unit or, for leaders, its listed formation members. " +
             "Use submit_chatter once, without questions or other commentary.";
-        if (automaticCharacters.Count > 0)
-            instruction += " For automatic appointments, first assess each registered candidate's nationality and whether the actual role on this unit is plausible for that person in appointment_context. A reasonable cross-national assignment is allowed. Select only candidates whose unit_ids include this unit's id, preferring priority candidates; choose new if none fits. Unless allow_duplicates is true, assign a character at most once in this response.";
-        if (characters.Count > 0 || automaticCharacters.Count > 0)
-            instruction += " Registered character fields are user-specified facts. Preserve nonempty name, rank and personality exactly, without translation or shortening. Fill only empty fields, respecting specified gender and nationality. The unit's nation and reply_language do not override that person's specified identity. A registered personality may be longer than one word. fixed_character_id is an explicit user choice; keep that ID.";
-        if (!string.IsNullOrWhiteSpace(connectionPrompt))
-            instruction += "\nSupplemental instructions for this connection take priority if they conflict:\n" + connectionPrompt;
-        instruction += " For each appointment, write appointment_background before generating missing name, rank or personality. This is brief fictional character setup, not a report of mission events.";
-        var id = new JObject { ["type"] = "string", ["description"] = "The supplied unit ID." };
         var speakerId = new JObject { ["type"] = "string", ["description"] = "A unit ID from input speakers." };
         if (people.Count > 0) speakerId["enum"] = new JArray(people.Keys);
-        JObject Rows(JObject fields, int maximum, int minimum = 0) => new()
-        {
-            ["type"] = "array", ["minItems"] = minimum, ["maxItems"] = maximum,
-            ["items"] = new JObject { ["type"] = "object", ["additionalProperties"] = false,
-                ["required"] = new JArray(fields.Properties().Select(p => p.Name)), ["properties"] = fields }
-        };
-        var tool = new JObject { ["name"] = ToolName, ["description"] = "Submit all requested appointments and optional remarks. Either array may be empty when none are requested or no one speaks.",
-            ["parameters"] = new JObject { ["type"] = "object", ["additionalProperties"] = false, ["required"] = new JArray("appointments", "remarks"),
-                ["properties"] = new JObject
-                {
-                    ["appointments"] = Rows(new JObject
-                    {
-                        ["id"] = id.DeepClone(),
-                        ["character_id"] = new JObject { ["type"] = "string", ["enum"] = new JArray(new[] { "new" }.Concat(characters.Values.Select(c => c.Id))
-                            .Concat(automaticCharacters.Values.SelectMany(cs => cs.Keys)).Distinct(StringComparer.Ordinal)),
-                            ["description"] = "The chosen registered character ID, or new to create a fictional person. Use fixed_character_id when supplied." },
-                        ["appointment_background"] = new JObject { ["type"] = "string", ["description"] = "One brief sentence about this person's own service background and why they hold this role. State their specified nationality and gender, preserving both even on a foreign unit. Describe the person, not the unit or mission. Fictional personal setup, not a mission event." },
-                        ["person_name"] = new JObject { ["type"] = "string", ["description"] = "The fictional person's full personal name without rank, not a unit name or callsign." },
-                        ["rank"] = new JObject { ["type"] = "string", ["description"] = "The military rank only, in reply_language; abbreviations are allowed." },
-                        ["name_with_rank"] = new JObject { ["type"] = "string", ["description"] = "The person's full name from person_name, with rank placed naturally in reply_language; use rank exactly." },
-                        ["personality"] = new JObject { ["type"] = "string", ["description"] = "The person's one-word personality." }
-                    }, appointments.Count, appointments.Count),
-                    ["remarks"] = Rows(new JObject
-                    {
-                        ["id"] = speakerId, ["text"] = new JObject { ["type"] = "string", ["description"] = "The person's remark, in display order within this response." }
-                    }, Math.Min(MaximumSpeakers, people.Count))
-                } } };
-        return new AiProviderInput(data, instruction, tool);
+        var input = (JObject)data.DeepClone(); input.Remove("appointments");
+        return CrewProtocol.Input(input, instruction, connectionPrompt, ToolName, "Submit optional spoken remarks in display order; an empty remarks array means silence.", "remarks",
+            CrewProtocol.Rows(new JObject { ["id"] = speakerId, ["text"] = CrewProtocol.Text("The person's remark, in display order within this response.") }, Math.Min(MaximumSpeakers, people.Count)));
     }
     internal CrewGeneration Read(AiReply reply)
     {
-        if (reply.Calls.Count != 1 || reply.Calls[0].Name != ToolName) throw new CrewException("invalid_response");
-        var args = reply.Calls[0].Arguments;
-        if (args.Count != 2 || args["appointments"] is not JArray appointed || appointed.Count != appointments.Count ||
-            args["remarks"] is not JArray rows || rows.Count > Math.Min(MaximumSpeakers, people.Count)) throw new CrewException("invalid_response");
-        string Read(JObject row, string key, int max)
-        {
-            if (row[key]?.Type != JTokenType.String) throw new CrewException("invalid_response");
-            var value = ((string)row[key]!).Trim();
-            if (value.Length == 0 || value.Length > max || value.Any(c => char.IsControl(c) && c != '\n' && c != '\r' && c != '\t'))
-                throw new CrewException("invalid_response");
-            return value;
-        }
-        var persons = new Dictionary<string, CrewAppointment>(StringComparer.Ordinal);
-        // Fixed requests were accepted before this batch; reserve them even when they appear later in the response.
-        var claimed = new HashSet<string>(characters.Values.Select(c => c.Id), StringComparer.Ordinal);
-        foreach (var item in appointed)
-        {
-            // appointment_background guides generation only; it is not part of the crew state.
-            if (item is not JObject row || row.Properties().Any(p => p.Name is not ("id" or "character_id" or "appointment_background" or "person_name" or "rank" or "name_with_rank" or "personality")))
-                throw new CrewException("invalid_response");
-            var key = Read(row, "id", 80);
-            if (!appointments.Contains(key) || persons.ContainsKey(key)) throw new CrewException("invalid_response");
-            var characterId = Read(row, "character_id", 80);
-            CrewCharacter? character;
-            if (characters.TryGetValue(key, out character))
-            {
-                if (characterId != character.Id) throw new CrewException("invalid_response");
-            }
-            else if (characterId == "new") character = null;
-            else
-            {
-                if (!automaticCharacters.TryGetValue(key, out var offered) || !offered.TryGetValue(characterId, out character) ||
-                    !character.AllowDuplicates && claimed.Contains(characterId)) throw new CrewException("invalid_response");
-                claimed.Add(characterId);
-            }
-            // A missing or unusable display hint is an invalid vote, not a failed appointment.
-            var form = row["name_with_rank"];
-            CrewPerson person;
-            if (character != null)
-                person = character.Person(character.Name.Length == 0 ? Read(row, "person_name", 80) : character.Name,
-                    character.Rank.Length == 0 ? Read(row, "rank", 80) : character.Rank,
-                    character.Personality.Length == 0 ? Read(row, "personality", 40) : character.Personality);
-            else person = new CrewPerson(Read(row, "person_name", 80), Read(row, "rank", 80), Read(row, "personality", 40));
-            persons.Add(key, new CrewAppointment(person, form?.Type == JTokenType.String ? (string)form! : null));
-        }
+        if (appointments != null) throw new InvalidOperationException("Appointments use staged generation.");
+        var rows = CrewProtocol.Read(reply, ToolName, "remarks", Math.Min(MaximumSpeakers, people.Count));
         var seen = new HashSet<string>(StringComparer.Ordinal); var remarks = new List<CrewSubmission>();
         foreach (var item in rows)
         {
             if (item is not JObject row || row.Count != 2) throw new CrewException("invalid_response");
-            var key = Read(row, "id", 80);
+            var key = CrewProtocol.Text(row, "id", 80);
             if (!people.TryGetValue(key, out var person) || !seen.Add(key)) throw new CrewException("invalid_response");
-            if (person == null)
-            {
-                if (!persons.TryGetValue(key, out var appointment)) throw new CrewException("invalid_response");
-                person = appointment.Person;
-            }
-            remarks.Add(new CrewSubmission(key, person!, Read(row, "text", 1200)));
+            if (row["text"]?.Type != JTokenType.String) throw new CrewException("invalid_response");
+            var value = ((string)row["text"]!).Trim();
+            if (value.Length == 0 || value.Length > 1200 || value.Any(c => char.IsControl(c) && c is not ('\n' or '\r' or '\t'))) throw new CrewException("invalid_response");
+            remarks.Add(new CrewSubmission(key, person!, value));
         }
-        return new CrewGeneration(persons, remarks);
+        return new CrewGeneration(new Dictionary<string, CrewAppointment>(), remarks);
     }
 }
