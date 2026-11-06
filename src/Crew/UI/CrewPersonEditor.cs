@@ -15,8 +15,6 @@ internal sealed class CrewPersonEditor : IDisposable
     private readonly Func<bool> canCommit;
     private readonly Action<Action> run, confirm;
     private readonly Action<string?, Action<string?>> choosePortrait;
-    private readonly Action validateConnection;
-    private readonly Func<double> now;
     private readonly TypingScope typing;
     private readonly TextBox name, rank, personality;
     private readonly Image image;
@@ -32,11 +30,11 @@ internal sealed class CrewPersonEditor : IDisposable
     private T Find<T>(string value) where T : class => root.FindName(value) as T ?? throw new InvalidOperationException("Missing Crew person control: " + value);
     internal CrewPersonEditor(FrameworkElement root, CrewChatter chatter, CrewPortraits portraits, CrewText text,
         Func<string, string> common, TypingScope typing, Func<bool> canCommit, Action<Action> run, Action<Action> confirm,
-        Action<string?, Action<string?>> choosePortrait, Action validateConnection, Func<double> now)
+        Action<string?, Action<string?>> choosePortrait)
     {
         this.root = root; form = Find<FrameworkElement>("PersonPage"); list = Find<FrameworkElement>("TargetsList"); this.chatter = chatter; this.portraits = portraits; this.text = text; this.common = common;
         this.typing = typing; this.canCommit = canCommit; this.run = run; this.confirm = confirm;
-        this.choosePortrait = choosePortrait; this.validateConnection = validateConnection; this.now = now;
+        this.choosePortrait = choosePortrait;
         name = Find<TextBox>("PersonName"); rank = Find<TextBox>("PersonRank"); personality = Find<TextBox>("PersonPersonality");
         image = Find<Image>("PersonPortrait"); notice = new UiNotice(Find<TextBlock>("PersonStatus"), root);
         foreach (var input in new[] { name, rank, personality })
@@ -57,12 +55,6 @@ internal sealed class CrewPersonEditor : IDisposable
             });
         });
         Bind("CommonPersonPortrait", () => { draft!.SelectPortrait(null); RefreshPortrait(); notice.Show(""); });
-        Bind("ReappointPerson", () => Leave(() =>
-        {
-            if (!canCommit() || chatter.Paused || chatter.Busy || id == null) return;
-            validateConnection(); chatter.RequestReappointment(id, now());
-            Load(chatter.Person(id) ?? throw new CrewException("person_unavailable")); Controls();
-        }));
     }
     private void Bind(string control, Action action) => Find<Button>(control).Click += (_, _) => run(action);
     private void Leave(Action action) { if (draft?.HasChanges == true) confirm(action); else action(); }
@@ -96,7 +88,6 @@ internal sealed class CrewPersonEditor : IDisposable
         var editable = target != null && (!waiting || chatter.Paused);
         Find<FrameworkElement>("PersonFields").IsEnabled = editable;
         Find<Button>("SavePerson").IsEnabled = editable;
-        Find<Button>("ReappointPerson").IsEnabled = editable && !chatter.Busy && !chatter.Paused;
     }
     private void Save()
     {

@@ -57,12 +57,10 @@
           </StackPanel>
         </ScrollViewer>
         <TextBlock x:Name="PersonStatus" Grid.Row="3" TextWrapping="Wrap" FontSize="12" Margin="0,8,0,0" Visibility="Collapsed" />
-        <Grid Grid.Row="4" Margin="0,12,0,0">
-          <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-          <Button x:Name="ReappointPerson" Content="{DynamicResource Crew.reappoint}" Height="30" Padding="12,0" />
-          <Button x:Name="BackPerson" Grid.Column="2" Content="{DynamicResource Crew.person_back}" Height="30" Padding="12,0" />
-          <Button x:Name="SavePerson" Grid.Column="3" Content="{DynamicResource Crew.save}" Height="30" Padding="12,0" Margin="8,0,0,0" />
-        </Grid>
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+          <Button x:Name="BackPerson" Content="{DynamicResource Crew.person_back}" Height="30" Padding="12,0" />
+          <Button x:Name="SavePerson" Content="{DynamicResource Crew.save}" Height="30" Padding="12,0" Margin="8,0,0,0" />
+        </StackPanel>
       </Grid>
       </Grid>
     </TabItem>

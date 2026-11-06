@@ -174,7 +174,7 @@ internal sealed class CrewWindow : IDisposable
             select: id => { var selected = portraitSelected; ClosePortraitPicker(); selected?.Invoke(id); },
             back: BackPortraitPicker);
         personEditor = new CrewPersonEditor(root, chatter, portraits, text, common,
-            typing, CanCommit, Run, action => Confirm(action), OpenPortraitPicker, () => connections.ValidateSelection(settings.Current.ConnectionId), now);
+            typing, CanCommit, Run, action => Confirm(action), OpenPortraitPicker);
         var characterForm = CrewCharacterLibraryView.Create(); Find<ContentControl>("CharacterLibrary").Content = characterForm;
         characterView = new CrewCharacterLibraryView(characterForm, root, characters, portraits, text, common, typing, CanCommit, Run,
             (action, message, caption) => Confirm(action, message, caption, common("settings.cancel")), OpenPortraitPicker, log);
@@ -318,6 +318,12 @@ internal sealed class CrewWindow : IDisposable
         Find<FrameworkElement>("CharacterPicker").Visibility = Visibility.Visible;
         characterPicker.Open(chatter.Person(unitId)?.RegisteredCharacterId);
     }
+    private void Reappoint(string unitId)
+    {
+        if (!CanCommit() || chatter.Paused || chatter.Busy || chatter.AppointmentRequested(unitId)) return;
+        connections.ValidateSelection(settings.Current.ConnectionId);
+        chatter.RequestReappointment(unitId, now()); DrawTargets(); Notice("");
+    }
     private void CloseCharacterPicker()
     {
         characterPicker.Close(); assigningTarget = null;
@@ -450,14 +456,22 @@ internal sealed class CrewWindow : IDisposable
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             var check = new CheckBox { IsChecked = targetSelection.Checked(target.Id), IsEnabled = person != null,
                 VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 12, 8, 0), ToolTip = text["participation"] };
-            var details = new Button { Content = text["edit_person"], IsEnabled = person != null, Height = 30, Padding = new Thickness(12, 0, 12, 0) };
+            var waiting = chatter.AppointmentRequested(target.Id);
+            var details = new Button { Content = text["edit_person"], IsEnabled = person != null, Height = 30, Padding = new Thickness(12, 0, 12, 0),
+                HorizontalAlignment = HorizontalAlignment.Right };
             details.Click += (_, _) => Run(() => personEditor.Open(target.Id));
-            var appoint = new Button { Content = text["character.appoint_from"], Height = 30, Padding = new Thickness(12, 0, 12, 0),
-                Margin = new Thickness(0, 6, 0, 0), IsEnabled = !chatter.Busy };
+            var reappoint = new Button { Content = text["reappoint"], Height = 30, Padding = new Thickness(12, 0, 12, 0),
+                Margin = new Thickness(0, 0, 8, 0), IsEnabled = person != null && !waiting && !chatter.Paused && !chatter.Busy };
+            reappoint.Click += (_, _) => Run(() => Reappoint(target.Id));
+            var appoint = new Button { Content = text["character.appoint_from"], Height = 30, Padding = new Thickness(12, 0, 12, 0), IsEnabled = !chatter.Busy };
             appoint.Click += (_, _) => Run(() => OpenCharacterPicker(target.Id));
-            var actions = new StackPanel(); actions.Children.Add(details); actions.Children.Add(appoint);
-            var card = Card(label, person == null ? text[chatter.AppointmentRequested(target.Id) ? "appointment_pending" : "not_appointed"] :
-                person.DisplayName(settings.Current.ShowRanks, chatter.RankBeforeName) + (person.Personality.Length == 0 ? "" : "\n" + person.Personality), person, actions);
+            var replacements = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 6, 0, 0) };
+            replacements.Children.Add(reappoint); replacements.Children.Add(appoint);
+            var actions = new StackPanel(); actions.Children.Add(details); actions.Children.Add(replacements);
+            var description = person == null ? text[waiting ? "appointment_pending" : "not_appointed"] :
+                person.DisplayName(settings.Current.ShowRanks, chatter.RankBeforeName) + (person.Personality.Length == 0 ? "" : "\n" + person.Personality);
+            if (person != null && waiting) description += "\n" + text[chatter.Busy ? "reappointing" : "appointment_pending"];
+            var card = Card(label, description, person, actions);
             Grid.SetColumn(card, 1); row.Children.Add(check); row.Children.Add(card);
             check.Click += (_, _) => Run(() =>
             {
