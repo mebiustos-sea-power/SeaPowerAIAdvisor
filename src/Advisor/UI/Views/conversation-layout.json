@@ -1,0 +1,24 @@
+{
+  "rows": [
+    {
+      "height": "*",
+      "columns": [
+        { "width": "150", "sections": ["profile", "shortcuts"], "scroll": true },
+        { "width": "16", "sections": [] },
+        { "width": "*", "sections": ["conversation"] }
+      ]
+    },
+    {
+      "height": "Auto",
+      "columns": [
+        { "width": "*", "sections": ["composer"] }
+      ]
+    },
+    {
+      "height": "Auto",
+      "columns": [
+        { "width": "*", "sections": ["status"] }
+      ]
+    }
+  ]
+}

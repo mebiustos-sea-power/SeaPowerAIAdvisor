@@ -77,6 +77,8 @@
     <Compile Include="..\src\Advisor\Configuration\AdvisorTemplateOptions.cs" Link="AdvisorTemplateOptions.cs" />
     <Compile Include="..\src\Advisor\UI\AdvisorSystemTemplates.cs" Link="AdvisorSystemTemplates.cs" />
     <Compile Include="..\src\Advisor\UI\AdvisorConversationLayout.cs" />
+    <Compile Include="..\src\Advisor\UI\AdvisorLayoutDefinition.cs" />
+    <EmbeddedResource Include="..\src\Advisor\UI\Views\conversation-layout.json" LogicalName="SeaPowerAIAdvisor.conversation-layout.json" />
     <Compile Include="..\src\Shared\UI\SettingsTabNavigation.cs" Link="SettingsTabNavigation.cs" />
     <Compile Include="..\src\Advisor\Consultation\AdvisorSnapshotExport.cs" Link="AdvisorSnapshotExport.cs" />
     <Compile Include="..\src\Advisor\Game\Battle\BattleSnapshotExport.cs" Link="BattleSnapshotExport.cs" />

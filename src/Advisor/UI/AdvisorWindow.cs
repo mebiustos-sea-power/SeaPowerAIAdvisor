@@ -74,7 +74,8 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         speakerName = text["speaker.advisor"];
         using var viewSource = typeof(AdvisorWindow).Assembly.GetManifestResourceStream("SeaPowerAIAdvisor.Advisor.xaml")
             ?? throw new FileNotFoundException("The embedded advisor view is missing.");
-        var markup = AdvisorConversationLayout.Assemble(viewSource);
+        var layout = AdvisorLayoutDefinition.Load(UnityEngine.Application.persistentDataPath);
+        var markup = AdvisorConversationLayout.Assemble(viewSource, layout);
         content = GUI.ParseXaml(markup.ToString(SaveOptions.DisableFormatting)) as FrameworkElement
             ?? throw new InvalidOperationException("The advisor view is not a FrameworkElement.");
         UiResources.Apply(content);

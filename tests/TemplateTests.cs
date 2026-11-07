@@ -136,7 +136,7 @@ internal static class TemplateTests
         {
             using var assembly = AssemblyDefinition.ReadAssembly(assemblyPath);
             var resource = assembly.MainModule.Resources.OfType<EmbeddedResource>().Single(r => r.Name == "SeaPowerAIAdvisor.Advisor.xaml");
-            using var stream = resource.GetResourceStream(); var view = AdvisorConversationLayout.Assemble(stream);
+            using var stream = resource.GetResourceStream(); var view = AdvisorConversationLayout.Assemble(stream, AdvisorLayoutDefinition.Standard());
             XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
             XElement Named(string name) => view.DescendantsAndSelf().Single(e => (string?)e.Attribute(x + "Name") == name);
             var menu = Named("OtherConsultationsPane"); var transcript = Named("Transcript"); var history = Named("ConversationHistory");

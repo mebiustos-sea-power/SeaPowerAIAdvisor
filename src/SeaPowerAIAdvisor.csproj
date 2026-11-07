@@ -52,6 +52,7 @@
     <EmbeddedResource Include="Crew\Samples\*.json;Crew\Samples\*.png" LogicalName="SeaPowerAIAdvisor.Crew.Samples.%(Filename)%(Extension)" />
     <EmbeddedResource Include="Translation\UI\TranslationOverlay.xaml" LogicalName="SeaPowerAIAdvisor.TranslationOverlay.xaml" />
     <EmbeddedResource Include="Advisor\UI\Views\Advisor.xaml" LogicalName="SeaPowerAIAdvisor.Advisor.xaml" />
+    <EmbeddedResource Include="Advisor\UI\Views\conversation-layout.json" LogicalName="SeaPowerAIAdvisor.conversation-layout.json" />
     <EmbeddedResource Include="Shared\UI\Connections.xaml" LogicalName="SeaPowerAIAdvisor.Shared.Connections.xaml" />
     <EmbeddedResource Include="Shared\UI\Controls.xaml" LogicalName="SeaPowerAIAdvisor.AdvisorControls.xaml" />
     <EmbeddedResource Include="Shared\UI\HudButton.xaml" LogicalName="SeaPowerAIAdvisor.Shared.HudButton.xaml" />

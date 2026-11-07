@@ -48,7 +48,7 @@ internal static class PresentationTests
                 .ToDictionary(r => r.Name.Substring("SeaPowerAIAdvisor.Localization.".Length).Replace(".json", ""), r =>
                 { using var reader = new StreamReader(r.GetResourceStream()); return reader.ReadToEnd(); });
             using var view = resources.Single(r => r.Name == "SeaPowerAIAdvisor.Advisor.xaml").GetResourceStream();
-            var document = AdvisorConversationLayout.Assemble(view);
+            var document = AdvisorConversationLayout.Assemble(view, AdvisorLayoutDefinition.Standard());
             var previous = CultureInfo.CurrentCulture;
             try
             {
@@ -66,6 +66,93 @@ internal static class PresentationTests
                 }
             }
             finally { CultureInfo.CurrentCulture = previous; }
+        });
+        check("An external conversation layout repositions sections while preserving the input and unit picker", () =>
+        {
+            var directory = Directory.CreateTempSubdirectory("advisor-layout-");
+            try
+            {
+                using var assembly = AssemblyDefinition.ReadAssembly(advisorPath);
+                var resource = assembly.MainModule.Resources.OfType<EmbeddedResource>().Single(r => r.Name == "SeaPowerAIAdvisor.Advisor.xaml");
+                XElement Assemble()
+                {
+                    using var view = resource.GetResourceStream();
+                    return AdvisorConversationLayout.Assemble(view, AdvisorLayoutDefinition.Load(directory.FullName));
+                }
+
+                XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+                XElement Find(XElement view, string name) =>
+                    view.Descendants().Single(element => (string?)element.Attribute(xaml + "Name") == name);
+
+                var standard = Assemble();
+                var standardConversation = Find(standard, "ConsultationContent");
+                var standardProfile = Find(standard, "ConsultationProfile");
+                var standardShortcuts = Find(standard, "ConsultationShortcuts");
+                Require((string?)standardConversation.Attribute("Grid.Column") == "2" &&
+                    standardProfile.Parent == standardShortcuts.Parent &&
+                    standardProfile.Ancestors().Any(element => element.Name.LocalName == "ScrollViewer"),
+                    "The embedded layout did not restore the standard conversation and scrolling sidebar");
+
+                var customDirectory = directory.CreateSubdirectory("SeaPowerAIAdvisor");
+                File.WriteAllText(Path.Combine(customDirectory.FullName, "conversation-layout.json"), """
+                    {
+                      "rows": [
+                        { "height": "*", "columns": [
+                          { "width": "*", "sections": ["conversation"] },
+                          { "width": "132", "sections": ["profile"] }
+                        ] },
+                        { "height": "Auto", "columns": [
+                          { "width": "2*", "sections": ["composer"] },
+                          { "width": "*", "sections": ["shortcuts", "status"] }
+                        ] }
+                      ]
+                    }
+                    """);
+                var custom = Assemble();
+                var conversation = Find(custom, "ConsultationContent");
+                var profile = Find(custom, "ConsultationProfile");
+                var composer = Find(custom, "ConsultationComposer");
+                var shortcuts = Find(custom, "ConsultationShortcuts");
+                var status = Find(custom, "Status");
+                Require(conversation.Parent == profile.Parent && (int?)conversation.Attribute("Grid.Column") == null &&
+                    (int?)profile.Attribute("Grid.Column") == 1 && (int?)composer.Parent!.Attribute("Grid.Row") == 1 &&
+                    status.Parent == shortcuts.Parent && shortcuts.ElementsAfterSelf().Single() == status &&
+                    (int?)shortcuts.Parent!.Attribute("Grid.Column") == 1,
+                    "The advisor did not use the external section positions and order");
+                var originalComposer = new XElement(Find(standard, "ConsultationComposer"));
+                originalComposer.SetAttributeValue("Grid.Row", null);
+                Require(XNode.DeepEquals(composer, originalComposer) &&
+                    (string?)Find(custom, "UnitPickerPopup").Attribute("PlacementTarget") == "{Binding ElementName=InsertUnitButtons}",
+                    "External placement changed the composer or the picker binding");
+            }
+            finally { directory.Delete(recursive: true); }
+        });
+        check("An invalid external conversation layout reports its location instead of silently using the default", () =>
+        {
+            var directory = Directory.CreateTempSubdirectory("advisor-layout-");
+            try
+            {
+                var path = Path.Combine(directory.CreateSubdirectory("SeaPowerAIAdvisor").FullName, "conversation-layout.json");
+                foreach (var (definition, expected) in new[]
+                {
+                    ("""{"rows":[]}""", "rows"),
+                    ("""{"rows":[{"height":"*","columns":[{"width":"NaN","sections":[]}]}]}""", "rows[0].columns[0].width"),
+                    ("""{"rows":[{"height":"*","columns":[{"width":"*","sections":["profile","profile"]}]}]}""", "is repeated"),
+                    ("""{"rows":[{"height":"*","columns":[{"width":"*","sections":["unknown"]}]}]}""", "Unknown section"),
+                    ("""{"rows":[{"height":"*","columns":[{"width":"*","sections":["profile"]}]}]}""", "Missing sections")
+                })
+                {
+                    File.WriteAllText(path, definition);
+                    try { _ = AdvisorLayoutDefinition.Load(directory.FullName); }
+                    catch (InvalidDataException error)
+                    {
+                        Require(error.Message.Contains(path) && error.Message.Contains(expected), error.Message);
+                        continue;
+                    }
+                    throw new InvalidOperationException("An invalid layout was accepted.");
+                }
+            }
+            finally { directory.Delete(recursive: true); }
         });
         check("Localized diagnostics preserve game names, source reports and unknown observations", () =>
         {
