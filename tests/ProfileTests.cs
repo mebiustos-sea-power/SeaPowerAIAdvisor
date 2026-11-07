@@ -362,7 +362,7 @@ internal static class ProfileTests
         check("Settings categories replace the conversation area, isolate form actions and keep API keys masked", () =>
         {
             var view = assembly.MainModule.Resources.OfType<EmbeddedResource>().Single(r => r.Name == "SeaPowerAIAdvisor.Advisor.xaml");
-            using var stream = view.GetResourceStream(); var root = XDocument.Load(stream).Root!;
+            using var stream = view.GetResourceStream(); var root = AdvisorConversationLayout.Assemble(stream);
             XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
             var registration = assembly.MainModule.Resources.OfType<EmbeddedResource>().Single(r => r.Name == "SeaPowerAIAdvisor.Shared.Connections.xaml");
             using var registrationStream = registration.GetResourceStream();

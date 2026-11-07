@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Text;
+using System.Xml.Linq;
 using Noesis;
 using Newtonsoft.Json.Linq;
 using SeapowerUI;
@@ -74,8 +74,8 @@ internal sealed class AdvisorWindow : IAdvisorLocalTarget
         speakerName = text["speaker.advisor"];
         using var viewSource = typeof(AdvisorWindow).Assembly.GetManifestResourceStream("SeaPowerAIAdvisor.Advisor.xaml")
             ?? throw new FileNotFoundException("The embedded advisor view is missing.");
-        using var reader = new StreamReader(viewSource, Encoding.UTF8);
-        content = GUI.ParseXaml(reader.ReadToEnd()) as FrameworkElement
+        var markup = AdvisorConversationLayout.Assemble(viewSource);
+        content = GUI.ParseXaml(markup.ToString(SaveOptions.DisableFormatting)) as FrameworkElement
             ?? throw new InvalidOperationException("The advisor view is not a FrameworkElement.");
         UiResources.Apply(content);
         ApplyTextResources();

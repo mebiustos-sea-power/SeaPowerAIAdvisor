@@ -48,7 +48,7 @@ internal static class PresentationTests
                 .ToDictionary(r => r.Name.Substring("SeaPowerAIAdvisor.Localization.".Length).Replace(".json", ""), r =>
                 { using var reader = new StreamReader(r.GetResourceStream()); return reader.ReadToEnd(); });
             using var view = resources.Single(r => r.Name == "SeaPowerAIAdvisor.Advisor.xaml").GetResourceStream();
-            var document = XDocument.Load(view);
+            var document = AdvisorConversationLayout.Assemble(view);
             var previous = CultureInfo.CurrentCulture;
             try
             {
