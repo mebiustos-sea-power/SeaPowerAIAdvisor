@@ -91,9 +91,26 @@ internal static class CrewAppointmentTests
                 Require(calls == 2, "Invalid selection progressed to completion: " + kind);
             }
         });
-        check("Completion cannot change chosen rank or unit scope and incomplete final people never publish a partial generation", () =>
+        check("Completion ignores extra person fields and preserves the selected rank and character", () =>
         {
-            foreach (var kind in new[] { "missing", "unknown", "duplicate", "rank_override", "character_override" })
+            var result = Batch(new CrewCharacter(CharacterId)).GenerateAsync("", input =>
+            {
+                var name = Name(input);
+                if (name == "assess_crew_fit") return Task.FromResult(Reply(name, Fit("unit:1")));
+                if (name == "select_crew") return Task.FromResult(Reply(name, Selections(CharacterId, "new")));
+                var rows = People();
+                rows[0]!["peoples_name"] = "Different name";
+                rows[0]!["rank"] = "Admiral";
+                rows[0]!["character_id"] = "new";
+                return Task.FromResult(Reply(name, rows));
+            }, CancellationToken.None).GetAwaiter().GetResult();
+            var person = result.Appointments["unit:1"].Person;
+            Require(result.Appointments.Count == 2 && person.Name == "Alex Morgan" && person.Rank == "Lt." && person.RegisteredCharacterId == CharacterId,
+                "Extra fields overrode the completed name or the selected identity");
+        });
+        check("Completion rejects invalid unit scope and missing or invalid required person fields", () =>
+        {
+            foreach (var kind in new[] { "missing_unit", "unknown_unit", "duplicate_unit", "missing_name", "invalid_personality" })
             {
                 var calls = 0;
                 Throws<CrewException>(() => Batch(new CrewCharacter(CharacterId)).GenerateAsync("", input =>
@@ -102,11 +119,16 @@ internal static class CrewAppointmentTests
                     if (name == "assess_crew_fit") return Task.FromResult(Reply(name, Fit("unit:1")));
                     if (name == "select_crew") return Task.FromResult(Reply(name, Selections(CharacterId, "new")));
                     var rows = People();
-                    if (kind == "missing") rows.RemoveAt(1);
-                    if (kind == "unknown") rows[1]!["id"] = "unit:99";
-                    if (kind == "duplicate") rows[1]!["id"] = "unit:1";
-                    if (kind == "rank_override") rows[0]!["rank"] = "Admiral";
-                    if (kind == "character_override") rows[0]!["character_id"] = "new";
+                    if (kind == "missing_unit") rows.RemoveAt(1);
+                    if (kind == "unknown_unit") rows[1]!["id"] = "unit:99";
+                    if (kind == "duplicate_unit") rows[1]!["id"] = "unit:1";
+                    if (kind == "missing_name")
+                    {
+                        var person = (JObject)rows[1]!;
+                        person["peoples_name"] = person["person_name"];
+                        person.Remove("person_name");
+                    }
+                    if (kind == "invalid_personality") rows[1]!["personality"] = new JArray("Calm");
                     return Task.FromResult(Reply(name, rows));
                 }, CancellationToken.None).GetAwaiter().GetResult());
                 Require(calls == 3, "The completion failure was retried or returned early");

@@ -162,7 +162,7 @@ internal sealed class CrewAppointments
         var result = new Dictionary<string, CrewAppointment>(StringComparer.Ordinal);
         foreach (var item in rows)
         {
-            if (item is not JObject row || row.Properties().Any(p => p.Name is not ("id" or "person_name" or "name_with_rank" or "personality"))) throw new CrewException("invalid_response");
+            if (item is not JObject row) throw new CrewException("invalid_response");
             var id = CrewProtocol.Text(row, "id", 80);
             if (!identities.TryGetValue(id, out var identity) || result.ContainsKey(id)) throw new CrewException("invalid_response");
             var character = identity.Character;
